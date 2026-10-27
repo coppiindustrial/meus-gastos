@@ -11,7 +11,7 @@ import {
   atualizarCampos, criarLancamentos, excluirLancamentos, restaurarLancamentos,
 } from '../../api/lancamentos.js';
 import {
-  COLUNAS, colunaEditavel, faixaDe, interpretar, lerBloco, limparFaixa, naFaixa, planejarColagem, preencherAbaixo,
+  COLUNAS, colunaEditavel, faixaDe, interpretar, ladrilhar, lerBloco, limparFaixa, naFaixa, planejarColagem, preencherAbaixo,
   resumoSelecao, textoDaFaixa, textoOrigem,
 } from '../../lib/planilha.js';
 import { formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
@@ -289,15 +289,10 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   const colarTexto = (texto, inicio = { r: faixa.r0, c: faixa.c0 }) => {
     const matriz = lerBloco(texto);
     if (!matriz.length || (matriz.length === 1 && matriz[0].length === 1 && !matriz[0][0])) return;
-    // Um valor só, com uma faixa selecionada: vai para todas as células dela (como o Excel).
-    let plano;
-    if (matriz.length === 1 && matriz[0].length === 1 && multi) {
-      const blocos = [];
-      for (let r = faixa.r0; r <= Math.min(faixa.r1, n - 1); r++) blocos.push(Array(faixa.c1 - faixa.c0 + 1).fill(matriz[0][0]));
-      plano = planejarColagem({ matriz: blocos, linhas, inicio, categorias, anoBase });
-    } else {
-      plano = planejarColagem({ matriz, linhas, inicio, categorias, anoBase });
-    }
+    // Numa seleção maior, o bloco se repete como no Excel (um valor só enche a seleção inteira). A linha
+    // em branco do fim não conta como parte da seleção.
+    const nLin = Math.max(1, Math.min(faixa.r1, n - 1) - faixa.r0 + 1);
+    const plano = planejarColagem({ matriz: ladrilhar(matriz, nLin, faixa.c1 - faixa.c0 + 1), linhas, inicio, categorias, anoBase });
     const { mudancas, fora, entradas, alcance, foraDaGrade } = plano;
     setSel({ r: alcance.r0, c: alcance.c0 });
     setExt({ r: alcance.r1, c: alcance.c1 });

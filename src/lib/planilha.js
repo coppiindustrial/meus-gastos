@@ -221,3 +221,13 @@ export function resumoSelecao(linhas, f) {
   }
   return { celulas, ...t };
 }
+
+// COLAR NUMA SELEÇÃO MAIOR repete o bloco, como o Excel: um valor só preenche a seleção inteira, e um
+// bloco se repete quando a seleção tem um MÚLTIPLO das linhas e das colunas dele (2 linhas copiadas
+// numa seleção de 6 viram 3 vezes o par). Seleção que não é múltiplo (ou menor) cola o bloco uma vez.
+export function ladrilhar(matriz, linhas, colunas) {
+  const bh = matriz.length;
+  const bw = Math.max(1, ...matriz.map((c) => c.length));
+  if (!bh || (linhas <= bh && colunas <= bw) || linhas % bh || colunas % bw) return matriz;
+  return Array.from({ length: linhas }, (_, r) => Array.from({ length: colunas }, (_, c) => matriz[r % bh][c % bw] ?? ''));
+}

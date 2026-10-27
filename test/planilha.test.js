@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  faixaDe, interpretar, lerBloco, lerData, limparFaixa, planejarColagem, preencherAbaixo, resumoSelecao, textoDaFaixa,
+  faixaDe, interpretar, ladrilhar, lerBloco, lerData, limparFaixa, planejarColagem, preencherAbaixo, resumoSelecao, textoDaFaixa,
 } from '../src/lib/planilha.js';
 
 // Dados FICTÍCIOS. Colunas: 0 Data · 1 Descrição · 2 Categoria · 3 Origem · 4 Valor · 5 Observação.
@@ -86,4 +86,11 @@ test('limparFaixa: data e valor não esvaziam', () => {
 test('resumoSelecao: gasto e entrada em totais separados', () => {
   const s = resumoSelecao(linhas, faixaDe({ r: 0, c: 3 }, { r: 2, c: 4 }));
   assert.deepEqual(s, { celulas: 6, gastos: 8190, entradas: 850000, nGastos: 2, nEntradas: 1 });
+});
+
+test('ladrilhar: um valor enche a seleção; um bloco se repete só em múltiplos', () => {
+  assert.deepEqual(ladrilhar([['5']], 3, 2), [['5', '5'], ['5', '5'], ['5', '5']]);
+  assert.deepEqual(ladrilhar([['a'], ['b']], 4, 1), [['a'], ['b'], ['a'], ['b']]);
+  assert.deepEqual(ladrilhar([['a'], ['b']], 3, 1), [['a'], ['b']]);  // 3 não é múltiplo de 2: cola uma vez
+  assert.deepEqual(ladrilhar([['a', 'b']], 1, 1), [['a', 'b']]);      // seleção menor: cola o bloco inteiro
 });

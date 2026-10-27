@@ -8,7 +8,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { atualizarCampos, buscarPorIds, excluirLancamentos, restaurarLancamentos } from '../../api/lancamentos.js';
 import { excluirRecorrencia, lancarFixo, salvarRecorrencia } from '../../api/fixos.js';
-import { faixaDe, lerBloco, naFaixa } from '../../lib/planilha.js';
+import { faixaDe, ladrilhar, lerBloco, naFaixa } from '../../lib/planilha.js';
 import { formatBRL, parseValor, valorParaCampo } from '../../lib/dinheiro.js';
 import { addMeses, competenciaCurta, nomeCompetencia } from '../../lib/format.js';
 import { lsSet } from '../../lib/storage.js';
@@ -217,7 +217,8 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
   };
 
   const colar = (texto) => {
-    const matrizTxt = lerBloco(texto);
+    // Numa seleção maior, o bloco se repete como no Excel (um valor só enche a seleção inteira).
+    const matrizTxt = ladrilhar(lerBloco(texto), faixa.r1 - faixa.r0 + 1, faixa.c1 - faixa.c0 + 1);
     const mudancas = [];
     let invalidos = 0;
     matrizTxt.forEach((cols, i) => cols.forEach((t, j) => {
