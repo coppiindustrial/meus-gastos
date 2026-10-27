@@ -299,6 +299,16 @@ export default function VisaoGeral() {
   const compsAnt = useMemo(() => anoAnterior(comps), [comps]);
   const rAnt = useMemo(() => (comparar === 'anterior' ? resumoPeriodo(filtradas, compsAnt) : null), [filtradas, compsAnt, comparar]);
   const grupos = useMemo(() => gruposPorMes(filtradas, comps, categorias, competenciaAtual()), [filtradas, comps, categorias]);
+  // O total de cada grupo e categoria no mesmo período um ano antes (a variação das barras por grupo).
+  const gruposAnt = useMemo(() => {
+    if (comparar !== 'anterior') return null;
+    const m = new Map();
+    gruposPorMes(filtradas, compsAnt, categorias).forEach((g) => {
+      m.set(`g:${g.id}`, g.total);
+      g.categorias.forEach((c) => m.set(`c:${g.id}:${c.id}`, c.total));
+    });
+    return m;
+  }, [filtradas, compsAnt, categorias, comparar]);
 
   const opcoesAnos = useMemo(() => {
     const s = new Set((linhas ?? []).map((l) => Number(l.competencia.slice(0, 4))));
@@ -451,14 +461,14 @@ export default function VisaoGeral() {
           <section className="card flex flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-auto p-4">
               <div className="mb-3"><Titulo>Gastos por origem</Titulo></div>
-              <RoscaOrigem itens={ORIGENS.map(([key, rotulo]) => ({ key, rotulo, valor: r.porOrigem[key] }))} marcadas={origens} onClicar={alternarOrigem} />
+              <RoscaOrigem itens={ORIGENS.map(([key, rotulo]) => ({ key, rotulo, valor: r.porOrigem[key], antes: rAnt?.porOrigem[key] }))} marcadas={origens} onClicar={alternarOrigem} />
             </div>
           </section>
         );
       case 'vg_grupos':
         return (
           <section className="card flex flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-auto p-4"><BarrasGrupos grupos={grupos} total={r.gastos} meses={textoPer} /></div>
+            <div className="min-h-0 flex-1 overflow-auto p-4"><BarrasGrupos grupos={grupos} total={r.gastos} meses={textoPer} comps={comDado.map((m) => m.competencia)} anterior={gruposAnt} /></div>
           </section>
         );
       case 'vg_tabela':

@@ -111,6 +111,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   com `y`/`h` dobrados (`ESCOPO_ANTIGO` no topo do grid).
 - MÉDIAS POR MÊS (toda tela): só os meses em que o valor aparece (mês sem entrada cadastrada não é "entrada zero")
   e sem o mês em andamento quando há outros — `mediaPorMes`/`mesesDaMedia` em `lib/visaoGeral.js` (testadas).
+- Gastos por origem = rosca com UMA COR POR ORIGEM (`--origem-cartao/-fixo/-manual` no index.css, validadas nos
+  dois temas) e o centro que conta a fatia sob o cursor. Gastos por grupo = barras na cor do grupo + curva dos meses
+  + variação contra o ano anterior (só aparece com dado no mesmo período do ano anterior). As duas são a opção A dos
+  mockups; a pílula de variação mora em `components/graficos/Variacao.jsx`.
 - Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos). "Entradas × gastos" tem 4 formas
   (colunas, linhas, saldo, acumulado), escolhidas no próprio bloco.
 

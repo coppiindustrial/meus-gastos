@@ -604,6 +604,20 @@ html[data-tema='escuro'] {
   --serie-entradas: #199e70;
 }
 
+/* AS ORIGENS DOS GASTOS (a rosca da Visão geral): uma cor por origem — azul (cartão), laranja (fixos) e
+   violeta (avulsos), a ordem da paleta categórica de referência sem o verde, que é das entradas. Passou
+   no validador do skill de dataviz nos dois temas (daltonismo ΔE ≥ 24, contraste ≥ 3:1). */
+:root {
+  --origem-cartao: #2a78d6;
+  --origem-fixo: #eb6834;
+  --origem-manual: #6250d6;
+}
+html[data-tema='escuro'] {
+  --origem-cartao: #3987e5;
+  --origem-fixo: #d95926;
+  --origem-manual: #9085e9;
+}
+
 /* A GRADE DE LANÇAMENTOS (planilha, `components/planilha/GradeLancamentos.jsx`): o azul da seleção, o
    mesmo #2563eb do anel da grade do DRE do Gestor, e a hachura das células que ficaram de fora de uma
    colagem (o motivo aparece no hover). */

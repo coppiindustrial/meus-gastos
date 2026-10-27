@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import BalaoGrafico, { useBalao } from './BalaoGrafico.jsx';
 import AbasPilula from '../AbasPilula.jsx';
+import Variacao from './Variacao.jsx';
 import { COR_ENTRADAS, COR_GASTOS, CALHA, Grade } from './Graficos.jsx';
 import { escalaLinear } from '../../lib/escala.js';
-import { tomAno } from '../../lib/coresGrafico.js';
 import { varCor } from '../../lib/varCor.js';
 import { brlCurto, formatBRL } from '../../lib/dinheiro.js';
 import { competenciaCurta, nomeCompetencia } from '../../lib/format.js';
@@ -280,91 +280,154 @@ export function SaldoMensal({ meses, onMes }) {
 
 // ------------------------------------------------------------ rosca (gastos por origem)
 
-// `itens`: [{ key, rotulo, valor }] na ordem do maior peso; a cor é a rampa do azul dos gastos (a
-// origem é parte de UM total, então é tom do mesmo azul, e o nome está sempre escrito na legenda).
-// `marcadas`: as origens do filtro; clicar numa fatia (ou na linha da legenda) chama `onClicar(key)`.
+// A ROSCA COM UMA COR POR ORIGEM (a opção A do mockup): azul, laranja e violeta, com um respiro entre as
+// fatias. Passar o mouse numa fatia (ou na linha da legenda) a destaca e o CENTRO passa a contar aquela
+// origem — sem balão por cima do gráfico. Clicar filtra a tela pela origem.
+//
+// `itens`: [{ key, rotulo, valor, antes? }] (`antes`: o mesmo período um ano antes, para a variação).
+// `marcadas`: as origens do filtro.
+export const CORES_ORIGEM = { cartao: 'var(--origem-cartao)', fixo: 'var(--origem-fixo)', manual: 'var(--origem-manual)' };
+const corOrigem = (k) => CORES_ORIGEM[k] ?? COR_GASTOS;
+
 export function RoscaOrigem({ itens, marcadas = [], onClicar }) {
-  const balao = useBalao(220, 90);
+  const [ativo, setAtivo] = useState(null);
   const total = itens.reduce((s, it) => s + it.valor, 0);
-  const R = 62;
+  const R = 66;
   const C = 2 * Math.PI * R;
-  const cor = (i) => tomAno(COR_GASTOS, itens.length - 1 - i, itens.length);
+  const comValor = itens.filter((x) => x.valor > 0).length;
+  const pctDe = (v) => (total ? Math.round((v / total) * 100) : 0);
+  const sel = itens.find((it) => it.key === ativo);
+  const apagado = (k) => (ativo !== null && ativo !== k) || (ativo === null && marcadas.length > 0 && !marcadas.includes(k));
   let acumulado = 0;
-  const ativo = itens.find((it) => it.key === balao.ativo);
-  const apagado = (k) => balao.esmaecido(k) || (marcadas.length > 0 && !marcadas.includes(k) && balao.ativo === null);
   return (
-    <div className="flex flex-wrap items-center gap-5">
-      <svg width="168" height="168" viewBox="0 0 168 168" className="shrink-0" onMouseLeave={balao.aoSair} role="img" aria-label="Gastos por origem">
-        {total > 0 && itens.map((it, i) => {
+    <div className="flex flex-wrap items-center gap-5" onMouseLeave={() => setAtivo(null)}>
+      <svg width="176" height="176" viewBox="0 0 176 176" className="shrink-0" role="img" aria-label="Gastos por origem">
+        {total > 0 && itens.map((it) => {
           const frac = it.valor / total;
-          const len = Math.max(0, frac * C - (itens.filter((x) => x.valor > 0).length > 1 ? 2.5 : 0));
+          const len = Math.max(0, frac * C - (comValor > 1 ? 3 : 0));
           const desloc = -acumulado * C;
           acumulado += frac;
           if (!it.valor) return null;
           return (
-            <circle key={it.key} r={R} cx="84" cy="84" fill="none" stroke={cor(i)} strokeWidth={balao.ativo === it.key ? 27 : 24}
-              strokeDasharray={`${len} ${C - len}`} strokeDashoffset={desloc} transform="rotate(-90 84 84)"
-              className="cursor-pointer transition-[opacity,stroke-width] duration-150" style={{ opacity: apagado(it.key) ? 0.35 : 1 }}
-              onMouseMove={balao.aoMover(it.key)} onClick={() => onClicar?.(it.key)} />
+            <circle key={it.key} r={R} cx="88" cy="88" fill="none" stroke={corOrigem(it.key)} strokeWidth={ativo === it.key ? 27 : 21}
+              strokeDasharray={`${len} ${C - len}`} strokeDashoffset={desloc} transform="rotate(-90 88 88)"
+              className="cursor-pointer transition-[opacity,stroke-width] duration-200 ease-out" style={{ opacity: apagado(it.key) ? 0.3 : 1 }}
+              onMouseEnter={() => setAtivo(it.key)} onClick={() => onClicar?.(it.key)} />
           );
         })}
-        {total === 0 && <circle r={R} cx="84" cy="84" fill="none" stroke={varCor('#f3f4f6', 'fundo')} strokeWidth="24" />}
-        <text x="84" y="79" textAnchor="middle" className="fill-gray-500 text-[10.5px]">Total</text>
-        <text x="84" y="96" textAnchor="middle" className="fill-gray-900 text-[13px] font-bold">{brlCurto(total)}</text>
+        {total === 0 && <circle r={R} cx="88" cy="88" fill="none" stroke={varCor('#f3f4f6', 'fundo')} strokeWidth="21" />}
+        {/* O CENTRO CONTA a fatia sob o cursor; sem cursor, o total. */}
+        <text x="88" y={sel ? 74 : 80} textAnchor="middle" className="fill-gray-500 text-[11px]">{sel ? sel.rotulo.replace(/ \(.*\)$/, '') : 'Total'}</text>
+        {sel ? (
+          <>
+            <text x="88" y="96" textAnchor="middle" className="fill-gray-900 text-[19px] font-bold">{pctDe(sel.valor)}%</text>
+            <text x="88" y="113" textAnchor="middle" className="fill-gray-600 text-[11px]">{brlCurto(sel.valor)}</text>
+          </>
+        ) : (
+          <text x="88" y="98" textAnchor="middle" className="fill-gray-900 text-[14px] font-bold">{brlCurto(total)}</text>
+        )}
       </svg>
-      <ul className="min-w-[200px] flex-1 space-y-0.5">
-        {itens.map((it, i) => (
-          <li key={it.key}>
-            <button type="button" onClick={() => onClicar?.(it.key)} onMouseEnter={(e) => balao.aoMover(it.key)(e)} onMouseLeave={balao.aoSair}
-              className={`flex w-full items-center gap-2 rounded-[4px] px-1.5 py-1.5 text-left text-[12.5px] transition-opacity hover:bg-gray-50 ${apagado(it.key) ? 'opacity-50' : ''} ${marcadas.includes(it.key) ? 'bg-gray-100 font-semibold' : ''}`}>
-              <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: cor(i) }} />
-              <span className="min-w-0 flex-1 truncate text-gray-700">{it.rotulo}</span>
-              <span className="tabular-nums text-gray-900">{formatBRL(it.valor)}</span>
-              <span className="w-9 text-right text-[11.5px] tabular-nums text-gray-500">{total ? Math.round((it.valor / total) * 100) : 0}%</span>
-            </button>
-          </li>
-        ))}
+      <ul className="min-w-[210px] flex-1 space-y-1">
+        {itens.map((it) => {
+          const v = it.antes ? variacao(it.valor, it.antes) : null;
+          return (
+            <li key={it.key}>
+              <button type="button" onClick={() => onClicar?.(it.key)} onMouseEnter={() => setAtivo(it.key)} onFocus={() => setAtivo(it.key)}
+                title="Clique para filtrar a tela por esta origem"
+                className={`grid w-full grid-cols-[4px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-[8px] px-2.5 py-[7px] text-left transition-[background-color,opacity] duration-150 ${
+                  ativo === it.key ? 'bg-gray-100' : 'hover:bg-gray-50'} ${apagado(it.key) ? 'opacity-50' : ''} ${marcadas.includes(it.key) ? 'ring-1 ring-inset ring-gray-300' : ''}`}>
+                <span className="h-[30px] w-1 rounded-full" style={{ background: corOrigem(it.key) }} />
+                <span className="min-w-0">
+                  <span className="block truncate text-[12.5px] text-gray-800">{it.rotulo}</span>
+                  <span className="block text-[11.5px] tabular-nums text-gray-500">{formatBRL(it.valor)}</span>
+                </span>
+                <span className="flex flex-col items-end gap-[3px]">
+                  <b className="text-[13px] font-semibold tabular-nums text-gray-900">{pctDe(it.valor)}%</b>
+                  <Variacao v={v} sobeBom={false} titulo="Contra o mesmo período do ano anterior" />
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
-      {ativo && (
-        <BalaoGrafico pos={balao.pos} largura={220} titulo={ativo.rotulo}
-          itens={[{ rotulo: 'Gastos', valor: formatBRL(ativo.valor), cor: cor(itens.indexOf(ativo)) }]}
-          nota={`${total ? Math.round((ativo.valor / total) * 100) : 0}% dos gastos do período. Clique para filtrar a tela por esta origem.`} />
-      )}
     </div>
   );
 }
 
 // ------------------------------------------------------------ barras por grupo (e categorias)
 
-// `grupos`: o `gruposPorMes`. Mostra os grupos; clicar num grupo ABRE as categorias dele (com "‹ Todos
-// os grupos" para voltar); "Categorias" lista as maiores categorias de todos os grupos.
-const MAX_CATEGORIAS = 12;
+// A curva miúda dos meses de um grupo (a coluna "tendência"). O último ponto tem a bolinha.
+export function MiniCurva({ valores, cor, largura = 74, altura = 22 }) {
+  if (valores.length < 2) return <span style={{ width: largura }} />;
+  const max = Math.max(1, ...valores);
+  const min = Math.min(...valores);
+  const x = (i) => 2 + (i / (valores.length - 1)) * (largura - 4);
+  const y = (v) => altura - 3 - ((v - min) / (max - min || 1)) * (altura - 7);
+  const pts = valores.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  return (
+    <svg width={largura} height={altura} viewBox={`0 0 ${largura} ${altura}`} className="block overflow-visible" aria-hidden="true">
+      <polygon points={`${x(0)},${altura} ${pts} ${x(valores.length - 1)},${altura}`} fill={cor} fillOpacity=".14" />
+      <polyline points={pts} fill="none" stroke={cor} strokeWidth="1.6" strokeLinejoin="round" />
+      <circle cx={x(valores.length - 1)} cy={y(valores[valores.length - 1])} r="2.5" fill={cor} />
+    </svg>
+  );
+}
 
-export function BarrasGrupos({ grupos, total, meses }) {
+// A largura de um elemento, medida (as colunas de tendência e variação só entram quando cabem).
+function useLargura(ref) {
+  const [w, setW] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(([e]) => setW(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return w;
+}
+
+// AS BARRAS POR GRUPO (a opção A do mockup): a barra na COR DO GRUPO, o valor, o %, a curva dos meses e
+// a variação contra o mesmo período do ano anterior. Mostra os maiores (`VISIVEIS`) e "Mostrar os
+// outros"; o hover acende a linha e o balão lista as maiores categorias; clicar num grupo ABRE as
+// categorias dele (com "‹ Todos os grupos" para voltar); "Categorias" lista as maiores de todos.
+//
+// `grupos`: o `gruposPorMes`. `comps`: os meses do período (a curva). `anterior`: Map de "g:<id>" e
+// "c:<grupo>:<categoria>" → total um ano antes (sem ele, não há a coluna da variação).
+const MAX_CATEGORIAS = 12;
+const VISIVEIS = 7;
+
+export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null }) {
   const balao = useBalao(250, 150);
+  const caixaRef = useRef(null);
+  const largura = useLargura(caixaRef);
   const [modo, setModo] = useState('grupos');
   const [aberto, setAberto] = useState(null);
+  const [todos, setTodos] = useState(false);
   const grupo = grupos.find((g) => g.id === aberto);
-  let itens;
-  if (grupo) itens = grupo.categorias.map((c) => ({ ...c, cor: grupo.cor, grupo }));
+  let lista;
+  if (grupo) lista = grupo.categorias.map((c) => ({ ...c, chave: `c:${grupo.id}:${c.id}`, cor: grupo.cor, grupo }));
   else if (modo === 'categorias') {
-    const todas = grupos.flatMap((g) => g.categorias.map((c) => ({ ...c, id: `${g.id}:${c.id}`, cor: g.cor, grupo: g }))).sort((a, b) => b.total - a.total);
-    itens = todas.slice(0, MAX_CATEGORIAS);
-    const resto = todas.slice(MAX_CATEGORIAS);
-    if (resto.length) itens.push({ id: 'resto', nome: `Outras ${resto.length} categorias`, total: resto.reduce((s, c) => s + c.total, 0), qtd: resto.reduce((s, c) => s + c.qtd, 0), cor: varCor('#d1d5db', 'fundo'), resto: true });
-  } else itens = grupos;
-  const max = Math.max(1, ...itens.map((it) => it.total));
+    lista = grupos.flatMap((g) => g.categorias.map((c) => ({ ...c, id: `${g.id}:${c.id}`, chave: `c:${g.id}:${c.id}`, cor: g.cor, grupo: g })))
+      .sort((a, b) => b.total - a.total).slice(0, MAX_CATEGORIAS);
+  } else lista = grupos.map((g) => ({ ...g, chave: `g:${g.id}` }));
+  const escondidos = todos ? [] : lista.slice(VISIVEIS);
+  const itens = todos ? lista : lista.slice(0, VISIVEIS);
+  const max = Math.max(1, ...lista.map((it) => it.total));
   const ativo = itens.find((it) => it.id === balao.ativo);
-
+  const comTendencia = largura >= 640 && comps.length > 1;
+  const comVariacao = largura >= 560 && !!anterior;
+  const colunas = `minmax(0,11rem) 1fr auto 2.6rem${comTendencia ? ' 74px' : ''}${comVariacao ? ' 4.2rem' : ''}`;
 
   let nota;
-  if (ativo && !ativo.resto) {
+  if (ativo) {
     const parte = `${total ? Math.round((ativo.total / total) * 100) : 0}% dos gastos · média ${formatBRL(ativo.media)}/mês`;
-    nota = ativo.categorias ? `${parte}. Clique para abrir as categorias.` : `${parte} · ${ativo.qtd} lançamento(s).`;
+    const v = anterior?.get(ativo.chave) ? variacao(ativo.total, anterior.get(ativo.chave)) : null;
+    const vs = v === null ? '' : ` · ${v > 0 ? '+' : ''}${v}% sobre o ano anterior`;
+    nota = ativo.categorias ? `${parte}${vs}. Clique para abrir as categorias.` : `${parte}${vs} · ${ativo.qtd} lançamento(s).`;
   }
 
   return (
-    <div>
+    <div ref={caixaRef}>
       <div className="mb-2 flex items-center gap-2">
         <h2 className="m-0 flex-1 text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500">
           {grupo ? (
@@ -374,32 +437,50 @@ export function BarrasGrupos({ grupos, total, meses }) {
             </>
           ) : 'Gastos por grupo'}
         </h2>
+        {(comTendencia || comVariacao) && (
+          <span className="hidden text-[11px] text-gray-400 sm:inline">{[comTendencia && 'tendência', comVariacao && 'vs. ano anterior'].filter(Boolean).join(' · ')}</span>
+        )}
         <AbasPilula abas={[{ key: 'grupos', label: 'Grupos' }, { key: 'categorias', label: 'Categorias' }]} valor={modo}
-          onChange={(m) => { setModo(m); setAberto(null); }} variante="claro" altura={30} folga={2} />
+          onChange={(m) => { setModo(m); setAberto(null); setTodos(false); }} variante="claro" altura={30} folga={2} />
       </div>
       {itens.length === 0 ? <p className="py-6 text-center text-sm text-gray-400">Nenhum gasto no período.</p> : (
         <ul className="space-y-0.5" onMouseLeave={balao.aoSair}>
-          {itens.map((it) => (
-            <li key={it.id}>
-              <button type="button" onMouseMove={balao.aoMover(it.id)}
-                onClick={() => { if (it.categorias) setAberto(it.id); }}
-                className={`grid w-full grid-cols-[minmax(0,10rem)_1fr_auto_2.5rem] items-center gap-3 rounded-[4px] px-1.5 py-[5px] text-left transition-opacity duration-150 hover:bg-gray-50 ${
-                  balao.esmaecido(it.id) ? 'opacity-45' : ''} ${it.categorias ? 'cursor-pointer' : 'cursor-default'}`}>
-                <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-gray-700">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: it.cor }} />
-                  <span className="truncate">{it.nome}</span>
-                </span>
-                <span className="h-3 rounded-r-[4px] bg-gray-100">
-                  <span className="block h-full rounded-r-[4px]" style={{ width: pct(it.total / max), background: grupo || modo === 'categorias' ? it.cor : COR_GASTOS }} />
-                </span>
-                <span className="whitespace-nowrap text-right text-[12.5px] tabular-nums text-gray-900">{formatBRL(it.total)}</span>
-                <span className="text-right text-[11.5px] tabular-nums text-gray-500">{total ? Math.round((it.total / total) * 100) : 0}%</span>
-              </button>
-            </li>
-          ))}
+          {itens.map((it) => {
+            const v = anterior?.get(it.chave) ? variacao(it.total, anterior.get(it.chave)) : null;
+            return (
+              <li key={it.id}>
+                <button type="button" onMouseMove={balao.aoMover(it.id)}
+                  onClick={() => { if (it.categorias) { setAberto(it.id); setTodos(false); } }}
+                  style={{ gridTemplateColumns: colunas }}
+                  className={`grid w-full items-center gap-3 rounded-[7px] px-2 py-[6px] text-left transition-[background-color,opacity] duration-150 ${
+                    balao.ativo === it.id ? 'bg-gray-100' : 'hover:bg-gray-50'} ${balao.esmaecido(it.id) ? 'opacity-50' : ''} ${it.categorias ? 'cursor-pointer' : 'cursor-default'}`}>
+                  <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-gray-800">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: it.cor }} />
+                    <span className="truncate">{it.nome}</span>
+                  </span>
+                  {/* A barra na COR DO GRUPO, num degradê que nasce mais claro (a cor identifica; o
+                      comprimento é o valor). */}
+                  <span className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                    <span className="block h-full rounded-full transition-[width] duration-300 ease-out"
+                      style={{ width: pct(it.total / max), background: `linear-gradient(90deg, color-mix(in srgb, ${it.cor} 50%, transparent), ${it.cor})` }} />
+                  </span>
+                  <span className="whitespace-nowrap text-right text-[12.5px] font-medium tabular-nums text-gray-900">{formatBRL(it.total)}</span>
+                  <span className="text-right text-[11.5px] tabular-nums text-gray-500">{total ? Math.round((it.total / total) * 100) : 0}%</span>
+                  {comTendencia && <MiniCurva valores={comps.map((c) => it.meses?.[c] ?? 0)} cor={it.cor} />}
+                  {comVariacao && <span className="flex justify-end"><Variacao v={v} sobeBom={false} titulo="Contra o mesmo período do ano anterior" /></span>}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
-      {ativo && !ativo.resto && (
+      {(escondidos.length > 0 || todos) && lista.length > VISIVEIS && (
+        <button type="button" onClick={() => setTodos((t) => !t)}
+          className="mt-1 rounded-[6px] px-2 py-1 text-[12px] font-medium text-hx-2563eb transition-colors hover:bg-gray-50">
+          {todos ? 'Mostrar só os maiores' : `Mostrar ${escondidos.length === 1 ? 'o outro' : `os outros ${escondidos.length}`} (${formatBRL(escondidos.reduce((s, x) => s + x.total, 0))})`}
+        </button>
+      )}
+      {ativo && (
         <BalaoGrafico pos={balao.pos} largura={250} titulo={`${ativo.grupo && !grupo ? `${ativo.grupo.nome} · ` : ''}${ativo.nome} · ${meses}`}
           itens={ativo.categorias
             ? [...ativo.categorias.slice(0, 3).map((c) => ({ rotulo: c.nome, valor: formatBRL(c.total) })),
@@ -410,4 +491,3 @@ export function BarrasGrupos({ grupos, total, meses }) {
     </div>
   );
 }
-

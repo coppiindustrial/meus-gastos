@@ -3,6 +3,9 @@ import BalaoGrafico, { posicaoBalao } from './BalaoGrafico.jsx';
 import { COR_ENTRADAS, COR_GASTOS } from './Graficos.jsx';
 import { COR_SALDO } from './GraficosVisao.jsx';
 import { varCor } from '../../lib/varCor.js';
+import Variacao from './Variacao.jsx';
+
+export { Variacao };
 import { brlCurto, formatBRL } from '../../lib/dinheiro.js';
 import { competenciaAtual, competenciaCurta, nomeCompetencia } from '../../lib/format.js';
 import { mediaPorMes, variacao } from '../../lib/visaoGeral.js';
@@ -28,20 +31,6 @@ export const CORES_KPI = { entradas: COR_ENTRADAS, gastos: COR_GASTOS, saldo: CO
 // sobre a raiz de 87,5% = 12,25px) o desenho caía entre pixels e o "+" do saldo saía borrado e torto.
 const ICONE = { normal: [26, 14], compacto: [22, 12] };
 const W = 300; // a largura do desenho da curva (o SVG estica para o cartão)
-
-// A variação em %, numa pílula verde (bom) ou vermelha (ruim). `sobeBom`: para entrada e saldo subir é
-// bom; para gasto, não.
-export function Variacao({ v, sobeBom, titulo = 'Contra o mês anterior' }) {
-  if (v === null || v === undefined) return null;
-  const bom = sobeBom ? v >= 0 : v <= 0;
-  return (
-    <span className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-[7px] py-[2px] text-[11px] font-semibold tabular-nums ${
-      v === 0 ? 'bg-gray-100 text-gray-600' : bom ? 'bg-hx-dcfce7 text-hx-166534' : 'bg-hx-fee2e2 text-hx-991b1b'}`}
-      title={titulo}>
-      {v > 0 ? '▲' : v < 0 ? '▼' : ''} {Math.abs(v).toLocaleString('pt-BR')}%
-    </span>
-  );
-}
 
 // A variação de um saldo (que pode ser negativo): sobre o valor absoluto do anterior.
 export const variacaoSaldo = (atual, antes) => (antes ? Math.round(((atual - antes) / Math.abs(antes)) * 100) : null);
