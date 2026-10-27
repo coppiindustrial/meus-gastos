@@ -18,7 +18,7 @@ import { listarCategorias } from '../api/cadastros.js';
 import { listarLancamentosDeFixos, listarRecorrencias } from '../api/fixos.js';
 import { comprometidoPorMes } from '../lib/resumo.js';
 import { situacaoDoMes } from '../lib/fixos.js';
-import { anoAnterior, filtrar, gruposPorMes, periodo, resumoPeriodo, variacao } from '../lib/visaoGeral.js';
+import { anoAnterior, filtrar, gruposPorMes, mediaPorMes, periodo, resumoPeriodo, variacao } from '../lib/visaoGeral.js';
 import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
 import { exportCsv } from '../lib/exportCsv.js';
@@ -237,15 +237,15 @@ function TabelaGrupoMes({ grupos, comps, total, porMes, onExportar }) {
 
 // OS BLOCOS DA VISÃO GERAL no `GridPersonalizavel` (o grid do Dashboard Comercial do Gestor): cada um se
 // arrasta, redimensiona, minimiza e liga/desliga em "Personalizar". `x/y/w/h` é a disposição padrão
-// (12 colunas; uma linha = 60px). Os números e a faixa "Agora" têm a ALTURA MEDIDA (crescem com o
+// (12 colunas; uma linha = 22px + 16 de vão, a metade da do Gestor). Os números e a faixa "Agora" têm a ALTURA MEDIDA (crescem com o
 // conteúdo); os gráficos têm `minPx`, o piso de largura em que ainda se leem.
 const CATALOGO = [
-  { id: 'vg_kpis', titulo: 'Indicadores', area: 'vg_numeros', x: 0, y: 0, w: 12, h: 2, alturaMedida: true, minPx: 300 },
-  { id: 'vg_agora', titulo: 'Agora, no mês atual', area: 'vg_numeros', x: 0, y: 2, w: 12, h: 1, alturaMedida: true, minPx: 300 },
-  { id: 'vg_meses', titulo: 'Entradas × gastos por mês', area: 'vg_graficos', x: 0, y: 3, w: 8, h: 5, minH: 4, minPx: 420 },
-  { id: 'vg_origem', titulo: 'Gastos por origem', area: 'vg_graficos', x: 8, y: 3, w: 4, h: 5, minH: 4, minPx: 300 },
-  { id: 'vg_grupos', titulo: 'Gastos por grupo', area: 'vg_graficos', x: 0, y: 8, w: 12, h: 6, minH: 3, minPx: 360 },
-  { id: 'vg_tabela', titulo: 'Grupo × mês', area: 'vg_tabelas', x: 0, y: 14, w: 12, h: 7, minH: 4, minPx: 520 },
+  { id: 'vg_kpis', titulo: 'Indicadores', area: 'vg_numeros', x: 0, y: 0, w: 12, h: 4, alturaMedida: true, minPx: 300 },
+  { id: 'vg_agora', titulo: 'Agora, no mês atual', area: 'vg_numeros', x: 0, y: 4, w: 12, h: 2, alturaMedida: true, minPx: 300 },
+  { id: 'vg_meses', titulo: 'Entradas × gastos por mês', area: 'vg_graficos', x: 0, y: 6, w: 8, h: 10, minH: 7, minPx: 420 },
+  { id: 'vg_origem', titulo: 'Gastos por origem', area: 'vg_graficos', x: 8, y: 6, w: 4, h: 10, minH: 6, minPx: 300 },
+  { id: 'vg_grupos', titulo: 'Gastos por grupo', area: 'vg_graficos', x: 0, y: 16, w: 12, h: 12, minH: 5, minPx: 360 },
+  { id: 'vg_tabela', titulo: 'Grupo × mês', area: 'vg_tabelas', x: 0, y: 28, w: 12, h: 14, minH: 6, minPx: 520 },
 ];
 
 // AS FORMAS DO "ENTRADAS × GASTOS": a escolha fica no próprio bloco (e lembrada no navegador).
@@ -297,7 +297,7 @@ export default function VisaoGeral() {
   const r = useMemo(() => resumoPeriodo(filtradas, comps), [filtradas, comps]);
   const compsAnt = useMemo(() => anoAnterior(comps), [comps]);
   const rAnt = useMemo(() => (comparar === 'anterior' ? resumoPeriodo(filtradas, compsAnt) : null), [filtradas, compsAnt, comparar]);
-  const grupos = useMemo(() => gruposPorMes(filtradas, comps, categorias), [filtradas, comps, categorias]);
+  const grupos = useMemo(() => gruposPorMes(filtradas, comps, categorias, competenciaAtual()), [filtradas, comps, categorias]);
 
   const opcoesAnos = useMemo(() => {
     const s = new Set((linhas ?? []).map((l) => Number(l.competencia.slice(0, 4))));
@@ -328,7 +328,14 @@ export default function VisaoGeral() {
 
   const textoPer = textoPeriodo(anos, meses);
   const anterior = rAnt ? Object.fromEntries(comps.map((c, i) => [c, rAnt.porMes[i].gastos])) : null;
-  const mediaMes = (v) => (r.meses ? Math.round(v / r.meses) : 0);
+  // AS MÉDIAS POR MÊS (`mediaPorMes`): só os meses em que o valor aparece — mês sem entrada cadastrada não
+  // é "entrada zero" — e sem o mês em andamento quando há outros (pela metade, puxaria a média para baixo).
+  const hojeComp = competenciaAtual();
+  const mEnt = mediaPorMes(r.porMes, 'entradas', { emAndamento: hojeComp });
+  const mGas = mediaPorMes(r.porMes, 'gastos', { emAndamento: hojeComp });
+  const mQtd = mediaPorMes(r.porMes, 'qtd', { emAndamento: hojeComp });
+  const textoMedia = (m) => (m.meses ? `média ${formatBRL(m.media)}/mês · ${m.meses} ${m.meses === 1 ? 'mês' : 'meses'}` : 'nada no período');
+  const tituloMedia = (oQue) => `A média conta só os meses com ${oQue} lançados${r.porMes.some((m) => m.competencia === hojeComp) ? ', sem o mês atual (em andamento)' : ''}.`;
   const gastosPorMes = Object.fromEntries(r.porMes.map((m) => [m.competencia, m.gastos]));
   const comDado = r.porMes.filter((m) => m.temDado);
   const series = [
@@ -367,7 +374,8 @@ export default function VisaoGeral() {
   );
 
   // Os indicadores, no molde dos cartões dos Lançamentos (versão compacta): a curva é a do período.
-  const serieDe = (campo) => comDado.map((m) => ({ competencia: m.competencia, valor: m[campo] }));
+  // A curva de entradas e de gastos pula o mês sem nenhum lançamento daquele tipo (pela mesma razão da média).
+  const serieDe = (campo, soComValor = false) => comDado.filter((m) => !soComValor || m[campo] > 0).map((m) => ({ competencia: m.competencia, valor: m[campo] }));
   const vsAnt = (atual, antes) => (rAnt && antes ? variacao(atual, antes) : null);
   const tituloVs = 'Contra o mesmo período do ano anterior';
   // O `.card` por fora é o que o grid estica; a MEDIDA é do miolo, na altura natural (medir o card
@@ -377,18 +385,18 @@ export default function VisaoGeral() {
     <CardAutoAltura id="vg_kpis">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
         <CartaoKpi compacto icone="entradas" cor={CORES_KPI.entradas} rotulo="Entradas" valor={formatBRL(r.entradas)} valorCurto={brlCurto(r.entradas)} corValor="text-green-700"
-          variacao={vsAnt(r.entradas, rAnt?.entradas)} tituloVariacao={tituloVs} sub={`média ${formatBRL(mediaMes(r.entradas))}/mês`}
-          serie={serieDe('entradas')} onMes={abrirMes} ativo={tipo === 'entrada'} onClicar={() => setTipo(tipo === 'entrada' ? '' : 'entrada')} titulo="Clique para ver só as entradas" />
+          variacao={vsAnt(r.entradas, rAnt?.entradas)} tituloVariacao={tituloVs} sub={textoMedia(mEnt)}
+          serie={serieDe('entradas', true)} onMes={abrirMes} ativo={tipo === 'entrada'} onClicar={() => setTipo(tipo === 'entrada' ? '' : 'entrada')} titulo={`${tituloMedia('entradas')} Clique para ver só as entradas.`} />
         <CartaoKpi compacto icone="gastos" cor={CORES_KPI.gastos} rotulo="Gastos" valor={formatBRL(r.gastos)} valorCurto={brlCurto(r.gastos)}
-          variacao={vsAnt(r.gastos, rAnt?.gastos)} sobeBom={false} tituloVariacao={tituloVs} sub={`média ${formatBRL(mediaMes(r.gastos))}/mês`}
-          serie={serieDe('gastos')} onMes={abrirMes} ativo={tipo === 'saida'} onClicar={() => setTipo(tipo === 'saida' ? '' : 'saida')} titulo="Clique para ver só os gastos" />
+          variacao={vsAnt(r.gastos, rAnt?.gastos)} sobeBom={false} tituloVariacao={tituloVs} sub={textoMedia(mGas)}
+          serie={serieDe('gastos', true)} onMes={abrirMes} ativo={tipo === 'saida'} onClicar={() => setTipo(tipo === 'saida' ? '' : 'saida')} titulo={`${tituloMedia('gastos')} Clique para ver só os gastos.`} />
         <CartaoKpi compacto icone="saldo" cor={CORES_KPI.saldo} rotulo="Saldo" valor={formatBRL(r.saldo)} valorCurto={brlCurto(r.saldo)}
           corValor={r.saldo < 0 ? 'text-hx-c0393d' : 'text-gray-900'}
           variacao={rAnt ? variacaoSaldo(r.saldo, rAnt.saldo) : null} tituloVariacao={tituloVs}
           sub={r.entradas ? `${Math.round((r.saldo / r.entradas) * 100)}% das entradas` : 'sem entradas no período'}
           serie={serieDe('saldo')} onMes={abrirMes} onClicar={() => setTipo('')} titulo="Clique para ver entradas e gastos" />
         <CartaoKpi compacto icone="lancamentos" cor={varCor('#6b7280', 'texto')} rotulo="Lançamentos" valor={r.qtd.toLocaleString('pt-BR')}
-          variacao={vsAnt(r.qtd, rAnt?.qtd)} tituloVariacao={tituloVs} sub={`${r.meses ? Math.round(r.qtd / r.meses) : 0} por mês`}
+          variacao={vsAnt(r.qtd, rAnt?.qtd)} tituloVariacao={tituloVs} sub={`${mQtd.media.toLocaleString('pt-BR')} por mês`}
           serie={serieDe('qtd')} formatar={(v) => `${v.toLocaleString('pt-BR')} lançamentos`} onMes={abrirMes} />
         <CartaoKpi compacto icone="mes" cor={varCor('#ca8a04', 'texto')} rotulo="Mês mais caro"
           valor={r.maisCaro ? nomeCompetencia(r.maisCaro.competencia).replace(/ de \d+$/, '') : '—'}
@@ -492,7 +500,7 @@ export default function VisaoGeral() {
 
   return (
     <>
-      <GridPersonalizavel escopo="visao" titulo="Visão geral"
+      <GridPersonalizavel escopo="visao_v2" titulo="Visão geral"
         acessorio={linhas && <span className="hidden text-sm text-gray-500 sm:inline">{textoPer.replace(/^./, (c) => c.toUpperCase())} · {r.meses} {r.meses === 1 ? 'mês' : 'meses'} com lançamentos</span>}
         catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={renderWidget} abaixo={filtros}
         pronto={!!linhas} onAtualizar={carregar} atualizando={carregando} />

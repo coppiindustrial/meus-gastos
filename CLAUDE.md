@@ -106,6 +106,11 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   uma vez por valor — no 2.2.3 a altura nova nem sempre chega ao desenho e o pedido repetido virava laço. Por isso
   os blocos ROLAM POR DENTRO (`.card` com `overflow-hidden` e o miolo `min-h-0 flex-1 overflow-auto`). Bloco de
   altura medida: `.card` por fora e `CardAutoAltura` no miolo, na altura natural (nunca medir o card esticado).
+- A LINHA DA GRADE é metade da do Gestor (22px + 16 de vão = 38; item de h linhas = `38h − 16`), para mover e
+  redimensionar em passos menores. Escopo `visao_v2`: a disposição salva no escopo antigo (`visao`) é lida uma vez
+  com `y`/`h` dobrados (`ESCOPO_ANTIGO` no topo do grid).
+- MÉDIAS POR MÊS (toda tela): só os meses em que o valor aparece (mês sem entrada cadastrada não é "entrada zero")
+  e sem o mês em andamento quando há outros — `mediaPorMes`/`mesesDaMedia` em `lib/visaoGeral.js` (testadas).
 - Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos). "Entradas × gastos" tem 4 formas
   (colunas, linhas, saldo, acumulado), escolhidas no próprio bloco.
 

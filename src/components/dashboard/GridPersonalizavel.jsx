@@ -23,9 +23,12 @@ import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 // (3) "Atualizar" chama `onAtualizar` da página (aqui não há o `useAutoRefresh` do Gestor).
 
 // ---- Geometria ------------------------------------------------------------------------------
+// DIFERENÇA DA CÓPIA (Meus Gastos, 27/10/2026): a linha tem METADE da altura da do Gestor (22 + 16 de vão
+// = 38px, contra 60 + 16 = 76), para o bloco poder crescer e encolher em passos menores. Os `h` do
+// catálogo dobraram, e a mesma altura em px continua a mesma: `38h - 16`.
 // Altura de UMA linha do grid, em px. `76h - 16` é a altura de um item de h linhas (60 + 16 de
 // margem, menos a margem que sobra na última).
-export const LINHA_PX = 60;
+export const LINHA_PX = 22;
 export const MARGEM = [16, 16];
 // Limiar medido na largura do CONTAINER (já sem a sidebar de ~274px), não na viewport.
 export const LARGURA_LG = 700;
@@ -40,13 +43,26 @@ export const LARGURA_NORMAL = 1200;
 const LARGURA_COMPACTO_ENTRA = 1180;
 export const PADDING_GRID = [0, 0];
 // Widget minimizado = só o header.
-export const H_COLAPSADO = 1;
+// Duas linhas de 22 (60px): a barra do bloco minimizado cabe inteira.
+export const H_COLAPSADO = 2;
 
 // AS ROTAS DO GESTOR SOBRE O LOCALSTORAGE: a rota inteira (com o `?dashboard=` e o `&tamanho=`) é a
 // chave. `config` guarda { widgets, separadores }; `layout` guarda a lista de itens do PUT.
 const lerLs = (k) => { try { return JSON.parse(lsGet(k) || 'null'); } catch { return null; } };
+// LINHAS ANTIGAS: `ESCOPO_ANTIGO` diz de que escopo a disposição salva vinha quando a linha tinha o dobro
+// da altura. Sem nada salvo no novo, ela é lida de lá com `y` e `h` dobrados (o mesmo tamanho em px).
+const ESCOPO_ANTIGO = { visao_v2: 'visao' };
+const dobrar = (itens) => itens?.map((i) => ({ ...i, y: i.y * 2, h: i.h * 2, h_aberto: i.h_aberto != null ? i.h_aberto * 2 : i.h_aberto }));
 const api = {
-  get: async (rota) => lerLs(rota),
+  get: async (rota) => {
+    const atual = lerLs(rota);
+    if (atual != null) return atual;
+    const m = rota.match(/dashboard=([^&]+)/);
+    const antigo = m && ESCOPO_ANTIGO[m[1]];
+    if (!antigo) return null;
+    const velho = lerLs(rota.replace(`dashboard=${m[1]}`, `dashboard=${antigo}`));
+    return rota.startsWith('/dashboard/layout') ? dobrar(velho) : velho;
+  },
   put: async (rota, corpo) => {
     const valor = rota.startsWith('/dashboard/layout') ? corpo.itens : corpo;
     lsSet(rota, JSON.stringify(valor));
@@ -126,7 +142,7 @@ const soPosicao = (l) => l.map(({ i, x, y, w, h }) => ({ i, x, y, w, h }));
 // remover um widget faz o de baixo subir. Pondo um separador no vão, ele fica onde está.
 // Numerado (`sep-1`, `sep-2`…) porque com id fixo só daria para guardar um vão.
 export const ehSeparador = (id) => /^sep-\d+$/.test(id);
-export const SEP_DEF = { w: 12, h: 1, minH: 1 };
+export const SEP_DEF = { w: 12, h: 2, minH: 2 };
 // Id do item fantasma enquanto o botão "Separador" está sendo arrastado para dentro do grid.
 const SEP_DROP = '__sep-novo__';
 const proximoSeparador = (ids) => {
@@ -907,7 +923,7 @@ export default function GridPersonalizavel({
       }
       // Nos demais, o minH é piso para quem encolher daqui pra frente — não licença para esticar
       // (e persistir) um widget que o usuário já deixou menor.
-      const base = comAjuste({ ...it, ...comMinW, minH: Math.min(def?.minH ?? 3, it.h) });
+      const base = comAjuste({ ...it, ...comMinW, minH: Math.min(def?.minH ?? 6, it.h) });
       return comFalta(base);
     });
     // A ALTURA QUE FALTOU (`faltas`) sobe o item só nesta largura — ver o `onFalta` do `ItemGrid`.

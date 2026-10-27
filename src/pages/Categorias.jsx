@@ -163,7 +163,7 @@ export default function Categorias() {
   // O uso vem à parte: a tela abre com o cadastro e os números chegam em seguida.
   useEffect(() => { listarResumoMensal().then(setResumo).catch((err) => toast.error(err.message)); }, [toast]);
 
-  const { uso } = useMemo(() => usoPorCategoria(resumo, comp), [resumo, comp]);
+  const { uso } = useMemo(() => usoPorCategoria(resumo, comp, 12, competenciaAtual()), [resumo, comp]);
 
   // Os grupos com as categorias que passam nos filtros. Buscando, o grupo cujo NOME casa vem inteiro.
   const blocos = useMemo(() => {
@@ -360,7 +360,7 @@ export default function Categorias() {
             </table>
           </div>
           <p className="mt-2 text-right text-xs text-gray-500">
-            Lançamentos e média contam os 12 meses até {mesCurto} (a média, só os meses que têm algum lançamento).
+            Lançamentos e média contam os 12 meses até {mesCurto} (a média, só os meses que têm algum lançamento, sem o mês atual, que está em andamento).
           </p>
         </>
       )}

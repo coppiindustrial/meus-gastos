@@ -26,3 +26,10 @@ test('usoPorCategoria: sem nenhum dado na janela, média zero', () => {
   assert.equal(uso.get('merc').media, 0);
   assert.equal(uso.get('merc').ultimo, '2020-01');
 });
+
+test('usoPorCategoria: o mês em andamento fica fora da média', () => {
+  const { uso, meses } = usoPorCategoria([L('2026-10', 'merc', 300), L('2026-09', 'merc', 1000)], '2026-10', 12, '2026-10');
+  assert.equal(meses, 1);
+  assert.equal(uso.get('merc').media, 1000);
+  assert.equal(uso.get('merc').soma, 1300); // a soma dos 12 meses continua com tudo
+});

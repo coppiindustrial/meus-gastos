@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { anoAnterior, filtrar, gruposPorMes, periodo, resumoPeriodo, variacao } from '../src/lib/visaoGeral.js';
+import { anoAnterior, filtrar, gruposPorMes, mediaPorMes, periodo, resumoPeriodo, variacao } from '../src/lib/visaoGeral.js';
 
 // Linhas no formato da view resumo_mensal (valores fictícios).
 const L = (competencia, tipo, origem, categoria_id, total_centavos, qtd = 1) => ({ competencia, tipo, origem, categoria_id, total_centavos, qtd });
@@ -58,4 +58,23 @@ test('gruposPorMes: grupo, categorias, meses e "Sem categoria"', () => {
 test('variacao: em %, e null sem base', () => {
   assert.equal(variacao(110, 100), 10);
   assert.equal(variacao(5, 0), null);
+});
+
+test('mediaPorMes: só os meses com o valor, e sem o mês em andamento quando há outros', () => {
+  const porMes = [
+    { competencia: '2026-08', entradas: 1000 },
+    { competencia: '2026-09', entradas: 0 },     // sem entrada cadastrada: não entra
+    { competencia: '2026-10', entradas: 200 },   // o mês em andamento: fora
+  ];
+  assert.deepEqual(mediaPorMes(porMes, 'entradas', { emAndamento: '2026-10' }), { media: 1000, meses: 1 });
+  assert.deepEqual(mediaPorMes(porMes, 'entradas'), { media: 600, meses: 2 });
+  // Sozinho no período, o mês em andamento entra (é o único que há).
+  assert.deepEqual(mediaPorMes([porMes[2]], 'entradas', { emAndamento: '2026-10' }), { media: 200, meses: 1 });
+  assert.deepEqual(mediaPorMes([porMes[1]], 'entradas'), { media: 0, meses: 0 });
+});
+
+test('gruposPorMes: a média do grupo não conta o mês em andamento', () => {
+  const g = gruposPorMes(linhas, periodo([2026], [7, 8]), categorias, '2026-08');
+  assert.equal(g[0].media, 30000); // Mercado: só julho (agosto em andamento)
+  assert.equal(g[0].total, 70000);  // o total continua com os dois meses
 });

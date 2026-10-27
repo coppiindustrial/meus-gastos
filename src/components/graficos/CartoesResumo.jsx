@@ -4,8 +4,8 @@ import { COR_ENTRADAS, COR_GASTOS } from './Graficos.jsx';
 import { COR_SALDO } from './GraficosVisao.jsx';
 import { varCor } from '../../lib/varCor.js';
 import { brlCurto, formatBRL } from '../../lib/dinheiro.js';
-import { competenciaCurta, nomeCompetencia } from '../../lib/format.js';
-import { variacao } from '../../lib/visaoGeral.js';
+import { competenciaAtual, competenciaCurta, nomeCompetencia } from '../../lib/format.js';
+import { mediaPorMes, variacao } from '../../lib/visaoGeral.js';
 
 // OS CARTÕES DE INDICADOR com a curva dos meses — a opção C do mockup do resumo dos Lançamentos, com as
 // setas da A. `CartaoKpi` é a peça genérica: ícone, rótulo, a variação, o número e a CURVA na base. O
@@ -152,13 +152,14 @@ export default function CartoesResumo({ serie, tipo, onTipo, onMes }) {
     const vals = serie.map((m) => m[chave]);
     const atual = vals[vals.length - 1];
     const antes = vals.length > 1 ? vals[vals.length - 2] : null;
-    const media = Math.round(vals.reduce((s, x) => s + x, 0) / Math.max(1, vals.length));
+    // A média só dos meses que têm o valor (o saldo: os que têm alguma entrada ou gasto), sem o mês em andamento.
+    const m = mediaPorMes(serie, chave, { emAndamento: competenciaAtual(), presente: chave === 'saldo' ? (x) => x.entradas > 0 || x.gastos > 0 : undefined });
     return (
       <CartaoKpi key={chave} icone={chave} cor={CORES_KPI[chave]} rotulo={ROTULOS[chave]}
         valor={formatBRL(atual)} valorCurto={brlCurto(atual)}
         corValor={chave === 'entradas' ? 'text-green-700' : chave === 'saldo' && atual < 0 ? 'text-hx-c0393d' : 'text-gray-900'}
         variacao={antes === null ? null : chave === 'saldo' ? variacaoSaldo(atual, antes) : variacao(atual, antes)}
-        sobeBom={SOBE_E_BOM[chave]} sub={`média de ${vals.length} meses ${formatBRL(media)}`}
+        sobeBom={SOBE_E_BOM[chave]} sub={m.meses ? `média de ${m.meses} ${m.meses === 1 ? 'mês' : 'meses'} ${formatBRL(m.media)}` : 'nada nos últimos meses'}
         serie={serie.map((m) => ({ competencia: m.competencia, valor: m[chave] }))}
         ativo={ativo} onClicar={onClicar} onMes={onMes} titulo={titulo} />
     );
