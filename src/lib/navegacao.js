@@ -9,7 +9,7 @@ export const GRUPOS = [
     label: 'Movimentação',
     icon: SbFinanceiro,
     items: [
-      { to: '/lancamentos', label: 'Lançamentos', fase: 1 },
+      { to: '/lancamentos', label: 'Lançamentos' },
       { to: '/fixos', label: 'Gastos fixos', fase: 5 },
     ],
   },
@@ -33,8 +33,8 @@ export const GRUPOS = [
     label: 'Cadastros',
     icon: SbCompass,
     items: [
-      { to: '/cadastros/categorias', label: 'Categorias e grupos', fase: 1 },
-      { to: '/cadastros/cartoes', label: 'Cartões', fase: 1 },
+      { to: '/cadastros/categorias', label: 'Categorias e grupos' },
+      { to: '/cadastros/cartoes', label: 'Cartões' },
       { to: '/cadastros/regras', label: 'Regras de classificação', fase: 3 },
     ],
   },

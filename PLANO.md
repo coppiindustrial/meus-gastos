@@ -2,6 +2,8 @@
 
 > Status: **aprovado** (2026-10-27), **revisado em 2026-10-27**: o uso é no **computador** (sistema web
 > no padrão do Gestor Coppi); o celular só **visualiza**. Online, sem cópia offline.
+> Fase 0 concluída. **Fase 1 pronta (2026-10-27)**: categorias e grupos (com a estrutura sugerida), cartões,
+> lançamentos do mês (tabela no PC, lista no celular, filtros, novo/editar/excluir).
 > No ar em https://coppiindustrial.github.io/meus-gastos/ (repo `coppiindustrial/meus-gastos`, Supabase `abofajutoxukbvrfisem`).
 > Substitui a planilha `OneDrive\CONTAS\Gastos\Gastos total.xlsx`.
 

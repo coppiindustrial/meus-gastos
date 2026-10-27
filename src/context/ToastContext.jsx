@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 const ToastCtx = createContext(null);
 
@@ -112,12 +112,14 @@ export function ToastProvider({ children }) {
     };
   }, []);
 
-  const toast = {
+  // Memorizado: telas põem o `toast` nas dependências do `useCallback` que carrega os dados, e um
+  // objeto novo a cada aviso recarregaria a tela (e, num erro de carga, em laço).
+  const toast = useMemo(() => ({
     success: (m) => push(m, 'success'),
     error: (m) => push(m, 'error'),
     info: (m) => push(m, 'info'),
     notificacao,
-  };
+  }), [push, notificacao]);
 
   const styles = {
     success: 'bg-green-600',
