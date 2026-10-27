@@ -29,13 +29,17 @@ export async function hashDoTexto(texto) {
 
 // Todas as regras, na ordem de prioridade (para classificar as linhas da fatura).
 export function listarRegrasParaClassificar() {
-  return buscarTudo(() => supabase.from('regras').select('palavra_chave, categoria_id, prioridade').order('prioridade').order('id'));
+  return buscarTudo(() => supabase.from('regras').select('palavra_chave, categoria_id, prioridade, ignorar').order('prioridade').order('id'));
 }
 
-// Classifica as linhas lidas do CSV: cada uma ganha `categoria_id` (ou null → vai para Revisar).
+// Classifica as linhas lidas do CSV: cada uma ganha `categoria_id` (ou null → vai para Revisar), ou
+// `ignorar: true` quando a regra que pega é de ignorar (essas não são gravadas).
 export function classificarLinhas(linhas, regras) {
   const classificar = criarClassificador(regras);
-  return linhas.map((l) => ({ ...l, categoria_id: classificar(l.estabelecimento)?.categoria_id ?? null }));
+  return linhas.map((l) => {
+    const r = classificar(l.estabelecimento);
+    return { ...l, categoria_id: r?.ignorar ? null : r?.categoria_id ?? null, ignorar: Boolean(r?.ignorar) };
+  });
 }
 
 // Grava a fatura e os lançamentos. `substituirId`: a fatura anterior do mesmo cartão e vencimento,

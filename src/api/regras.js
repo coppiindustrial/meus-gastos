@@ -16,8 +16,9 @@ async function proximaPrioridade() {
   return (ultima?.prioridade ?? 0) + 1;
 }
 
-export async function salvarRegra({ id, palavra_chave, categoria_id, prioridade }) {
-  const dados = { palavra_chave: palavra_chave.trim(), categoria_id };
+// `ignorar`: a regra diz "isto não é gasto" (sem categoria) — usada no extrato da conta (migration 005).
+export async function salvarRegra({ id, palavra_chave, categoria_id, prioridade, ignorar = false }) {
+  const dados = { palavra_chave: palavra_chave.trim(), categoria_id: ignorar ? null : categoria_id, ignorar };
   if (id) {
     if (prioridade !== undefined && prioridade !== '') dados.prioridade = Number(prioridade);
     return exigir(supabase.from('regras').update(dados).eq('id', id).select().single());

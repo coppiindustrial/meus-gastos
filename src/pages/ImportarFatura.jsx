@@ -64,9 +64,12 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada }) {
     return () => { vivo = false; };
   }, [cartaoId, vencimento]);
 
-  const classificadas = lido && regras ? classificarLinhas(lido.linhas, regras) : null;
+  // As que uma regra de ignorar pega não entram (nem na conta do total).
+  const todas = lido && regras ? classificarLinhas(lido.linhas, regras) : null;
+  const classificadas = todas?.filter((l) => !l.ignorar) ?? null;
+  const ignoradasPorRegra = todas?.filter((l) => l.ignorar) ?? [];
   const semCategoria = classificadas?.filter((l) => !l.categoria_id).length ?? 0;
-  const total = lido?.linhas.reduce((s, l) => s + l.valor_centavos, 0) ?? 0;
+  const total = classificadas?.reduce((s, l) => s + l.valor_centavos, 0) ?? 0;
   const pronto = lido && classificadas && cartaoId && /^\d{4}-\d{2}-\d{2}$/.test(vencimento);
 
   const gravar = async () => {
@@ -115,10 +118,13 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada }) {
             {cartao && !cartao.ativo && <p className="text-amber-700">Este cartão está inativo.</p>}
 
             <ul className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md bg-gray-50 px-3 py-2.5">
-              <li><strong>{lido.linhas.length}</strong> compras · {formatBRL(total)}</li>
-              <li><strong>{lido.linhas.filter((l) => l.parcela_total).length}</strong> parceladas</li>
-              <li><strong>{lido.linhas.length - semCategoria}</strong> classificadas pelas regras</li>
+              <li><strong>{classificadas?.length ?? 0}</strong> compras · {formatBRL(total)}</li>
+              <li><strong>{classificadas?.filter((l) => l.parcela_total).length ?? 0}</strong> parceladas</li>
+              <li><strong>{(classificadas?.length ?? 0) - semCategoria}</strong> classificadas pelas regras</li>
               <li className={semCategoria ? 'text-amber-700' : ''}><strong>{semCategoria}</strong> para revisar</li>
+              {ignoradasPorRegra.length > 0 && (
+                <li className="col-span-2 text-gray-500">Ignoradas por regra: {ignoradasPorRegra.map((l) => `${l.estabelecimento} ${formatBRL(l.valor_centavos)}`).join('; ')}</li>
+              )}
               {lido.ignoradas.length > 0 && (
                 <li className="col-span-2 text-gray-500">
                   Fora da fatura (pagamentos e estornos): {lido.ignoradas.map((l) => `${l.estabelecimento} ${formatBRL(-l.valor_centavos)}`).join('; ')}

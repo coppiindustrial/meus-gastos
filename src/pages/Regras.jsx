@@ -5,7 +5,7 @@ import SelectSimples from '../components/SelectSimples.jsx';
 import SearchInput from '../components/SearchInput.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
-import { Bolinha, BotaoEditar, BotaoExcluir, Campo, RodapeForm } from '../components/Comuns.jsx';
+import { Bolinha, BotaoEditar, BotaoExcluir, Campo, Etiqueta, RodapeForm } from '../components/Comuns.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { listarCategorias } from '../api/cadastros.js';
@@ -16,20 +16,23 @@ import { regraPega } from '../lib/classificar.js';
 // aparece no nome do estabelecimento dá a categoria. Vale para as faturas importadas daqui em diante;
 // os lançamentos já gravados não mudam quando a regra muda.
 
+const IGNORAR = '__ignorar';
+
 function ModalRegra({ regra, categorias, onFechar, onSalvo }) {
   const toast = useToast();
-  const [form, setForm] = useState(() => regra ?? { palavra_chave: '', categoria_id: '' });
+  const [form, setForm] = useState(() => (regra ? { ...regra, categoria_id: regra.ignorar ? IGNORAR : regra.categoria_id } : { palavra_chave: '', categoria_id: '' }));
   const [teste, setTeste] = useState('');
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const opcoes = categorias.filter((c) => c.grupo.tipo === 'saida' && (c.ativa || c.id === form.categoria_id))
-    .map((c) => ({ value: c.id, label: `${c.nome} · ${c.grupo.nome}` }));
+    .map((c) => ({ value: c.id, label: `${c.nome} · ${c.grupo.nome}` }))
+    .concat({ value: IGNORAR, label: 'Ignorar (não é gasto: ex. transferência entre contas suas)' });
   const enviar = async (e) => {
     e.preventDefault();
     if (!form.palavra_chave.trim() || !form.categoria_id) { setErro('Informe a palavra-chave e a categoria.'); return; }
     setSalvando(true);
     try {
-      await salvarRegra(form);
+      await salvarRegra({ ...form, ignorar: form.categoria_id === IGNORAR });
       toast.success(regra?.id ? 'Regra atualizada.' : 'Regra criada.');
       onSalvo();
     } catch (err) {
@@ -88,7 +91,7 @@ export default function Regras() {
     const t = busca.trim().toLowerCase();
     if (!t) return regras ?? [];
     return (regras ?? []).filter((r) => r.palavra_chave.toLowerCase().includes(t)
-      || r.categoria?.nome.toLowerCase().includes(t) || regraPega(r.palavra_chave, busca.trim()));
+      || r.categoria?.nome.toLowerCase().includes(t) || (r.ignorar && 'ignorar'.includes(t)) || regraPega(r.palavra_chave, busca.trim()));
   }, [regras, busca]);
 
   const apagar = async (r) => {
@@ -121,7 +124,7 @@ export default function Regras() {
                       <td className="table-td text-right tabular-nums text-gray-500">{r.prioridade}</td>
                       <td className="table-td font-mono text-[13px] text-gray-800">{r.palavra_chave}</td>
                       <td className="table-td">
-                        <span className="inline-flex items-center gap-1.5"><Bolinha cor={r.categoria?.grupo?.cor} />{r.categoria?.nome ?? '—'}</span>
+                        {r.ignorar ? <Etiqueta>Ignorar</Etiqueta> : <span className="inline-flex items-center gap-1.5"><Bolinha cor={r.categoria?.grupo?.cor} />{r.categoria?.nome ?? '—'}</span>}
                       </td>
                       <td className="table-td">
                         <span className="flex justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/linha:opacity-100 md:focus-within:opacity-100">

@@ -16,7 +16,10 @@
 > ligados), fixos do mês com valor sugerido (o do último mês) e "Lançar"; um por mês (migration 004); aviso no Resumo.
 > **Fase 6 pronta (2026-10-27)**: Patrimônio — contas, "Registrar saldos" (uma data, um campo por conta, já com o
 > último valor), total por tipo, evolução mensal (o último saldo vale até a próxima foto), histórico por conta.
-> **Todas as fases do plano concluídas.** Próximo, se quiser: importar extrato da conta corrente.
+> **Todas as fases do plano concluídas.**
+> **Extrato da conta (2026-10-27)**: CSV do extrato do Nubank; entradas continuam à mão; fatura, investimentos e
+> transferências entre contas próprias (regra de ignorar) ficam de fora; pagamento de fixo vira o fixo do mês com o
+> valor real; o resto entra como avulso (sem regra → Revisar pendências). Migration 005.
 > No ar em https://coppiindustrial.github.io/meus-gastos/ (repo `coppiindustrial/meus-gastos`, Supabase `abofajutoxukbvrfisem`).
 > Substitui a planilha `OneDrive\CONTAS\Gastos\Gastos total.xlsx`.
 

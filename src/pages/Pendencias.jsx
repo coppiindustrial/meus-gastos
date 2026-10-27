@@ -14,7 +14,7 @@ import { regraPega } from '../lib/classificar.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { formatDate } from '../lib/format.js';
 
-// REVISAR PENDÊNCIAS: os lançamentos de cartão que nenhuma regra classificou ("⚠️ Revisar" da
+// REVISAR PENDÊNCIAS: os lançamentos importados (fatura ou extrato) que nenhuma regra classificou ("⚠️ Revisar" da
 // planilha), agrupados pelo estabelecimento. Classificar um grupo pode criar a regra junto — e a
 // regra nova já resolve as outras pendências que ela pegar (e as próximas faturas).
 
@@ -116,7 +116,7 @@ export default function Pendencias() {
         acessorio={pendencias?.length > 0 && <span className="text-sm text-gray-500">{pendencias.length} lançamento(s)</span>} />
       <div className="mt-6 max-w-4xl">
         {!pendencias ? <PageLoading /> : grupos.length === 0 ? (
-          <ListaVazia>Nada para revisar: todos os lançamentos de cartão têm categoria.</ListaVazia>
+          <ListaVazia>Nada para revisar: todos os lançamentos importados têm categoria.</ListaVazia>
         ) : (
           <div className="card divide-y divide-gray-100">
             {grupos.map((g) => (

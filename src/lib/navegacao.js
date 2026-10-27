@@ -11,6 +11,7 @@ export const GRUPOS = [
     items: [
       { to: '/lancamentos', label: 'Lançamentos' },
       { to: '/fixos', label: 'Gastos fixos' },
+      { to: '/extrato', label: 'Extrato da conta' },
     ],
   },
   {

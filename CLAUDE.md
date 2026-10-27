@@ -41,6 +41,18 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - `importado_de` (migration 002) marca o que veio de fora (`'planilha'` = histórico da fase 2). "Desfazer importação"
   apaga só o que tem a marca.
 
+## Extrato da conta corrente
+
+- `lib/lerExtrato.js`: CSV do extrato do Nubank (`Data,Valor,Identificador,Descrição`); a `contraparte` (quem recebeu
+  ou enviou) sai da descrição sem CPF/banco. `lib/planoExtrato.js` dá o destino de cada linha (fora, já importada,
+  fixo novo, corrige o fixo, avulso) — a prévia mostra exatamente o plano, e `api/extrato.js` grava.
+- Decisões do usuário: entradas do extrato ficam de fora (lançadas à mão); pagamento de fatura e investimentos
+  (RDB, dinheiro guardado) sempre de fora; transferência entre contas próprias por REGRA DE IGNORAR
+  (`regras.ignorar`, migration 005 — também vale nas faturas); pagamento cuja categoria é a de uma recorrência
+  vigente vira o fixo do mês com o valor real (se o fixo já foi lançado à mão, o valor é corrigido).
+- **Classificar só pela contraparte**, nunca pela descrição inteira: a regra "4" → Outros da planilha pegava todo
+  Pix pelos dígitos do CPF. `id_externo` (identificador do banco, índice único) impede importar duas vezes.
+
 ## Patrimônio (fase 6)
 
 - `contas` + `saldos` (foto do saldo numa data, única por conta + data: registrar de novo na mesma data substitui).

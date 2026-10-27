@@ -17,6 +17,7 @@ import Regras from './pages/Regras.jsx';
 import Evolucao from './pages/Evolucao.jsx';
 import Fixos from './pages/Fixos.jsx';
 import Patrimonio from './pages/Patrimonio.jsx';
+import Extrato from './pages/Extrato.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -49,6 +50,7 @@ export default function App() {
       <Route path="/evolucao" element={<Protected><Evolucao /></Protected>} />
       <Route path="/fixos" element={<Protected><Fixos /></Protected>} />
       <Route path="/patrimonio" element={<Protected><Patrimonio /></Protected>} />
+      <Route path="/extrato" element={<Protected><Extrato /></Protected>} />
       {/* As telas que ainda não existem: cada uma ganha a sua rota quando a fase dela chegar. */}
       {TELAS.filter((t) => t.fase).map((t) => (
         <Route key={t.to} path={t.to} element={<Protected><EmBreve titulo={t.label} fase={t.fase} /></Protected>} />
