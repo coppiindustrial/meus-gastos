@@ -583,3 +583,15 @@
   opacity: .25;
   transition: opacity .15s ease-out;
 }
+
+/* SÉRIES DOS GRÁFICOS (Resumo e Evolução): gastos e entradas. Validadas com o validador do skill de
+   dataviz nos dois temas (CVD ΔE 23,1 claro / 19,6 escuro). O verde-água fica abaixo de 3:1 no claro:
+   por isso os gráficos têm legenda e a Evolução tem a tabela. Cada tema tem o PRÓPRIO tom. */
+:root {
+  --serie-gastos: #2a78d6;
+  --serie-entradas: #1baf7a;
+}
+html[data-tema='escuro'] {
+  --serie-gastos: #3987e5;
+  --serie-entradas: #199e70;
+}

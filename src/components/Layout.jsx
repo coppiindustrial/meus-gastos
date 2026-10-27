@@ -6,6 +6,7 @@ import { SbChevron, SbPanel, SbPanelR, SbLogout, SbTema, SbSol, SbMonitor, SbChe
 import { DASHBOARD, GRUPOS } from '../lib/navegacao.js';
 import { TEMAS, useTema } from '../lib/tema.js';
 import Tooltip from './Tooltip.jsx';
+import ErrorBoundary from './ErrorBoundary.jsx';
 import { lsGet, lsSet } from '../lib/storage.js';
 
 // A BARRA LATERAL do Gestor Coppi (components/Layout.jsx de lá), sem o que este app não tem: sino,
@@ -383,7 +384,7 @@ export default function Layout({ children }) {
       {/* `overflow-x-clip` e NÃO `overflow-x-hidden` (o `hidden` daria ao <main> uma barra de rolagem
           vertical própria). Quem rola é o documento. */}
       <main className="flex-1 min-w-0 overflow-x-clip flex flex-col">
-        <div className="p-6 w-full flex-1">{children}</div>
+        <div className="p-6 w-full flex-1"><ErrorBoundary key={pathname}>{children}</ErrorBoundary></div>
       </main>
     </div>
   );

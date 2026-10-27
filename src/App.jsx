@@ -14,6 +14,7 @@ import ImportarHistorico from './pages/ImportarHistorico.jsx';
 import Faturas from './pages/Faturas.jsx';
 import Pendencias from './pages/Pendencias.jsx';
 import Regras from './pages/Regras.jsx';
+import Evolucao from './pages/Evolucao.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -43,6 +44,7 @@ export default function App() {
       <Route path="/faturas" element={<Protected><Faturas /></Protected>} />
       <Route path="/pendencias" element={<Protected><Pendencias /></Protected>} />
       <Route path="/cadastros/regras" element={<Protected><Regras /></Protected>} />
+      <Route path="/evolucao" element={<Protected><Evolucao /></Protected>} />
       {/* As telas que ainda não existem: cada uma ganha a sua rota quando a fase dela chegar. */}
       {TELAS.filter((t) => t.fase).map((t) => (
         <Route key={t.to} path={t.to} element={<Protected><EmBreve titulo={t.label} fase={t.fase} /></Protected>} />

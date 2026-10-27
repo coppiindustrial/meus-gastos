@@ -9,6 +9,9 @@
 > **Fase 3 pronta (2026-10-27)**: importar fatura (CSV original do Nubank `date,title,amount` e o da XP
 > `Data;Estabelecimento;Portador;Valor;Parcela`), fatura repetida só substituindo, classificação com os curingas do
 > Excel, pendências com "criar regra", tela de regras. Os 13 CSVs reais batem com a planilha (linhas, total, categoria, parcela).
+> **Fase 4 pronta (2026-10-27)**: Resumo do mês (KPIs, média de 3 meses, grupos/categorias, origem, parcelas
+> comprometidas, 12 meses), Evolução mensal com tabela e CSV, CSV dos lançamentos. Contas nas views `resumo_mensal` e
+> `parcelas_futuras` (migration 003). Conferido: totais = planilha; parcelas de set/26 = R$ 4.380,04 pelo cálculo direto.
 > No ar em https://coppiindustrial.github.io/meus-gastos/ (repo `coppiindustrial/meus-gastos`, Supabase `abofajutoxukbvrfisem`).
 > Substitui a planilha `OneDrive\CONTAS\Gastos\Gastos total.xlsx`.
 

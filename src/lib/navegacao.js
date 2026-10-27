@@ -25,7 +25,7 @@ export const GRUPOS = [
     label: 'Análises',
     icon: SbChart,
     items: [
-      { to: '/evolucao', label: 'Evolução mensal', fase: 4 },
+      { to: '/evolucao', label: 'Evolução mensal' },
       { to: '/patrimonio', label: 'Patrimônio', fase: 6 },
     ],
   },

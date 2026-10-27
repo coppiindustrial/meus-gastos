@@ -15,6 +15,7 @@ import { useSort } from '../lib/useSort.js';
 import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { competenciaAtual, formatDate, nomeCompetencia } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
+import { exportCsv } from '../lib/exportCsv.js';
 
 const FILTRO_TIPO = [{ valor: '', rotulo: 'Todos' }, { valor: 'saida', rotulo: 'Gastos' }, { valor: 'entrada', rotulo: 'Entradas' }];
 const ORIGENS = { cartao: 'Cartão', fixo: 'Fixo', manual: 'Avulso', entrada: 'Entrada' };
@@ -105,6 +106,18 @@ export default function Lancamentos() {
 
   const filtrando = Boolean(busca || tipo || origem || categoria);
   const limpar = () => { setBusca(''); setTipo(''); setOrigem(''); setCategoria(''); };
+
+  // Exporta o que está na tela (mês + filtros + ordem), no padrão do Excel em pt-BR.
+  const exportar = () => exportCsv(`lancamentos-${comp}`, sort.sorted, [
+    { key: 'data', label: 'Data', tipo: 'data' },
+    { key: 'descricao', label: 'Descrição' },
+    { key: 'categoria_nome', label: 'Categoria' },
+    { key: 'grupo', label: 'Grupo', map: (l) => l.categoria?.grupo?.nome ?? '' },
+    { key: 'tipo', label: 'Tipo', map: (l) => (l.tipo === 'entrada' ? 'Entrada' : 'Gasto') },
+    { key: 'origem_texto', label: 'Origem' },
+    { key: 'valor', label: 'Valor', tipo: 'dinheiro', map: (l) => l.valor_centavos / 100 },
+    { key: 'obs', label: 'Observação' },
+  ]);
 
   return (
     <div>
@@ -199,7 +212,10 @@ export default function Lancamentos() {
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-right text-xs text-gray-500">{sort.sorted.length} lançamento(s)</p>
+            <p className="mt-2 flex items-center justify-end gap-3 text-xs text-gray-500">
+              {sort.sorted.length} lançamento(s)
+              <button type="button" className="hidden font-medium underline hover:text-gray-800 md:inline" onClick={exportar}>Exportar CSV</button>
+            </p>
           </>
         )}
       </div>
