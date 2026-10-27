@@ -12,6 +12,7 @@ import {
 } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
 import Modal from '../components/Modal.jsx';
+import AbasPilula from '../components/AbasPilula.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { contarPendencias, listarParcelasFuturas, listarResumoMensal } from '../api/resumo.js';
 import { listarCategorias } from '../api/cadastros.js';
@@ -362,15 +363,10 @@ export default function VisaoGeral() {
     }
     return <ColunasEntradasGastos meses={r.porMes} anterior={anterior} ctrl={ctrl} onMes={abrirMes} altura="auto" />;
   };
+  // A troca de forma é a `AbasPilula` do Gestor (a pílula desliza), como as trocas dos widgets de lá.
   const seletorForma = (
-    <span className="inline-flex h-[27px] items-center rounded-[6px] border border-gray-300 bg-hx-f6f7f8 p-[2px]">
-      {FORMAS.map((f) => (
-        <button key={f.id} type="button" onClick={() => setForma(f.id)} title={f.dica} aria-pressed={forma === f.id}
-          className={`rounded-[3px] px-2 py-[3px] text-[11.5px] transition-colors ${forma === f.id ? 'bg-chip-ativo font-semibold text-chip-ativo' : 'text-gray-600 hover:bg-gray-200'}`}>
-          {f.rotulo}
-        </button>
-      ))}
-    </span>
+    <AbasPilula abas={FORMAS.map((f) => ({ key: f.id, label: f.rotulo, aria: f.dica }))} valor={forma} onChange={setForma}
+      variante="claro" altura={30} folga={2} />
   );
 
   // Os indicadores, no molde dos cartões dos Lançamentos (versão compacta): a curva é a do período.

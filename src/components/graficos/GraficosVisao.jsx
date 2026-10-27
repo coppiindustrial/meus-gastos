@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import BalaoGrafico, { useBalao } from './BalaoGrafico.jsx';
+import AbasPilula from '../AbasPilula.jsx';
 import { COR_ENTRADAS, COR_GASTOS, CALHA, Grade } from './Graficos.jsx';
 import { escalaLinear } from '../../lib/escala.js';
 import { tomAno } from '../../lib/coresGrafico.js';
@@ -355,12 +356,6 @@ export function BarrasGrupos({ grupos, total, meses }) {
   const max = Math.max(1, ...itens.map((it) => it.total));
   const ativo = itens.find((it) => it.id === balao.ativo);
 
-  const botao = (id, rotulo) => (
-    <button type="button" onClick={() => { setModo(id); setAberto(null); }}
-      className={`rounded-[3px] px-2 py-[3px] text-[11.5px] transition-colors ${modo === id && !grupo ? 'bg-chip-ativo font-semibold text-chip-ativo' : 'text-gray-600 hover:bg-gray-200'}`}>
-      {rotulo}
-    </button>
-  );
 
   let nota;
   if (ativo && !ativo.resto) {
@@ -379,9 +374,8 @@ export function BarrasGrupos({ grupos, total, meses }) {
             </>
           ) : 'Gastos por grupo'}
         </h2>
-        <span className="inline-flex h-[27px] items-center rounded-[6px] border border-gray-300 bg-hx-f6f7f8 p-[2px]">
-          {botao('grupos', 'Grupos')}{botao('categorias', 'Categorias')}
-        </span>
+        <AbasPilula abas={[{ key: 'grupos', label: 'Grupos' }, { key: 'categorias', label: 'Categorias' }]} valor={modo}
+          onChange={(m) => { setModo(m); setAberto(null); }} variante="claro" altura={30} folga={2} />
       </div>
       {itens.length === 0 ? <p className="py-6 text-center text-sm text-gray-400">Nenhum gasto no período.</p> : (
         <ul className="space-y-0.5" onMouseLeave={balao.aoSair}>

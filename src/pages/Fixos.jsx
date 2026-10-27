@@ -9,6 +9,7 @@ import { Campo, RodapeForm } from '../components/Comuns.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { BuscaFaixa, SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import MatrizFixos from '../components/planilha/MatrizFixos.jsx';
+import AbasPilula from '../components/AbasPilula.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { listarCategorias } from '../api/cadastros.js';
 import {
@@ -188,12 +189,6 @@ export default function Fixos() {
   const sugeridas = recs.length === 0 ? recorrenciasDoHistorico(semRec) : [];
   const filtrando = Boolean(busca || cats.length || situacao !== 'ativos' || ano !== anoAtual);
   const limpar = () => { setBusca(''); setCats([]); setSituacao('ativos'); setAno(anoAtual); };
-  const chipModo = (id, rotulo) => (
-    <button type="button" onClick={() => setModo(id)}
-      className={`rounded-[3px] px-[9px] pb-[3px] pt-[4px] text-[12px] transition-colors ${modo === id ? 'bg-chip-ativo font-semibold text-chip-ativo' : 'font-medium text-gray-600 hover:bg-gray-200'}`}>
-      {rotulo}
-    </button>
-  );
 
   return (
     <div>
@@ -224,7 +219,9 @@ export default function Fixos() {
               </Trilho>
               <LimparFiltros ativo={filtrando} onClick={limpar} />
               <span className="flex-1" />
-              <Trilho>{chipModo('valor', 'Valor')}{chipModo('variacao', 'Variação %')}</Trilho>
+              {/* A troca Valor | Variação % é a `AbasPilula` do Gestor (a pílula desliza), na altura do trilho ao lado. */}
+              <AbasPilula abas={[{ key: 'valor', label: 'Valor' }, { key: 'variacao', label: 'Variação %' }]} valor={modo} onChange={setModo}
+                variante="claro" altura={31} folga={3} />
             </div>
           </FaixaProvider>
 
