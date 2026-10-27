@@ -7,3 +7,6 @@ dev-dist
 .env.local
 *.log
 .DS_Store
+
+# Dados financeiros (saída do scripts/migrar-planilha.mjs): NUNCA no git, o repositório é público.
+dados/

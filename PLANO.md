@@ -4,6 +4,8 @@
 > no padrão do Gestor Coppi); o celular só **visualiza**. Online, sem cópia offline.
 > Fase 0 concluída. **Fase 1 pronta (2026-10-27)**: categorias e grupos (com a estrutura sugerida), cartões,
 > lançamentos do mês (tabela no PC, lista no celular, filtros, novo/editar/excluir).
+> **Fase 2 concluída (2026-10-27)**: histórico importado (12 faturas/962 linhas de cartão, 21 fixos, 12 manuais,
+> 24 entradas, 249 regras); conferência por fatura 100% e julho idêntico ao Dashboard da planilha (R$ 17.017,80).
 > No ar em https://coppiindustrial.github.io/meus-gastos/ (repo `coppiindustrial/meus-gastos`, Supabase `abofajutoxukbvrfisem`).
 > Substitui a planilha `OneDrive\CONTAS\Gastos\Gastos total.xlsx`.
 

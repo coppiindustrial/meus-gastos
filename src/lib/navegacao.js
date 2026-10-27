@@ -36,6 +36,7 @@ export const GRUPOS = [
       { to: '/cadastros/categorias', label: 'Categorias e grupos' },
       { to: '/cadastros/cartoes', label: 'Cartões' },
       { to: '/cadastros/regras', label: 'Regras de classificação', fase: 3 },
+      { to: '/cadastros/importar', label: 'Importar histórico' },
     ],
   },
 ];
