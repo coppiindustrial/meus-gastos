@@ -1,0 +1,1951 @@
+:root {
+  --bg: #000000;
+  --bg-2: #0a0a0b;
+  --card: #161618;
+  --raised: #262628;
+  --raised-2: #333336;
+  --border: #262629;
+  --border-2: #3a3a3c;
+  --border-3: #48484a;
+  --text: #ffffff;
+  --text-2: #98989f;
+  --muted: #8e8e93;
+  --accent: #2f8cff;
+  --accent-hover: #1f7ae8;
+  --on-accent: #ffffff;
+  --accent-soft: #172a42;
+  --done-row: #173d26;
+  --orange: #ffb47e;
+  --orange-bg: #33251b;
+  --orange-border: #4a3422;
+  --superset-bg: #1a1714;
+  --record: #ffa15c;
+  --danger: #ff453a;
+  --danger-border: #4a1f1c;
+  --set-a: #f5b83d;
+  --set-f: #ff7b72;
+  --set-d: #6cb6ff;
+  --display: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --body: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tabbar-h: 72px;
+  --press: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ Estrutura */
+
+.screen {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: calc(var(--safe-top) + 16px) 20px calc(var(--tabbar-h) + var(--safe-bottom) + 96px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.screen.no-tabs {
+  padding-bottom: calc(var(--safe-bottom) + 110px);
+}
+
+.screen.tight {
+  gap: 12px;
+}
+
+.display {
+  font-family: var(--display);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.h1 {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.h2 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.muted {
+  color: var(--text-2);
+}
+
+.small {
+  font-size: 13px;
+}
+
+.tiny {
+  font-size: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.row.between {
+  justify-content: space-between;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stack-lg {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------ Barra superior */
+
+/* Cabeçalho das telas internas: botões de vidro nas pontas e título pequeno no centro. */
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  min-height: 48px;
+  gap: 8px;
+}
+
+.topbar > :first-child {
+  justify-self: start;
+  display: flex;
+  gap: 8px;
+}
+
+.topbar > :last-child {
+  justify-self: end;
+  display: flex;
+  gap: 8px;
+}
+
+.topbar-title {
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  min-width: 0;
+  max-width: 56vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.text-btn {
+  min-height: 44px;
+  padding: 0 4px;
+  background: none;
+  border: 0;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.text-btn.muted {
+  color: var(--text-2);
+}
+
+.text-btn.danger {
+  color: var(--danger);
+}
+
+/* ------------------------------------------------------------ Botões */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: var(--raised);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Ícone do mesmo tamanho e peso do texto, formando um bloco centralizado. */
+.btn {
+  gap: 6px;
+}
+
+.btn > svg,
+.card-row-btn > svg {
+  width: 1.05em;
+  height: 1.05em;
+  stroke-width: 3;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.btn.light {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.btn.soft {
+  background: var(--raised);
+  border-color: transparent;
+}
+
+.btn.outline-accent {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn.dashed {
+  background: transparent;
+  border: 1.5px dashed var(--border-3);
+  color: var(--accent);
+}
+
+.btn.danger {
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.btn.big {
+  min-height: 52px;
+  font-size: 16px;
+  border-radius: 12px;
+}
+
+.btn.small {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
+.btn.block {
+  width: 100%;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+}
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 0;
+  background: var(--raised);
+  color: var(--text);
+  padding: 0;
+}
+
+.icon-btn.ghost {
+  background: transparent;
+}
+
+.icon-btn.round {
+  border-radius: 50%;
+}
+
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  padding: 12px 20px calc(var(--safe-bottom) + 14px);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.bottom-bar-inner {
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  gap: 10px;
+}
+
+/* ------------------------------------------------------------ Cartões e listas */
+
+.card {
+  background: var(--card);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.card.flat {
+  border-color: transparent;
+}
+
+.card.accent {
+  border-color: var(--border-3);
+}
+
+.tile {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tile-value {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--card);
+  border-radius: 16px;
+  color: var(--text);
+  border: 1px solid transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.card-row-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 4px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.list-group {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Linha entre as opções: clara o bastante para aparecer em qualquer fundo. */
+/* (seletor mais forte que o "border: 0" de .list-item, que vem depois e apagava a linha) */
+.list-group > :not(:first-child) {
+  border-top: 0.5px solid rgba(255, 255, 255, 0.12);
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  width: 100%;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.list-item .value {
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.list-item.danger {
+  color: var(--danger);
+}
+
+.letter {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  background: var(--raised);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.letter.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.letter.big {
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  border-radius: 16px;
+  font-size: 26px;
+}
+
+.thumb {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  border-radius: 12px;
+  background: var(--raised);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--raised);
+}
+
+.thumb.lg {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.chip.accent {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.chip.soft-accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.chip.method {
+  background: var(--orange-bg);
+  color: var(--orange);
+}
+
+.chip.neutral {
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.chip.outline {
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-weight: 700;
+}
+
+.chip.dashed {
+  border: 1.5px dashed var(--accent);
+  color: var(--accent);
+}
+
+.chip.record {
+  color: var(--record);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.badge-next {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--on-accent);
+  background: var(--accent);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+/* ------------------------------------------------------------ Formulários */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  outline: none;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--accent);
+}
+
+.textarea {
+  padding: 12px 14px;
+  min-height: 72px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23A3A6AD' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 40px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--muted);
+}
+
+.search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.seg > * {
+  min-height: 38px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+.seg > .on {
+  background: var(--raised-2);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pill.on {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.filter-btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.filter-btn.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.switch {
+  width: 52px;
+  min-width: 52px;
+  height: 32px;
+  border-radius: 16px;
+  border: 0;
+  background: var(--border-2);
+  padding: 3px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.switch[aria-checked='true'] {
+  background: var(--accent);
+  justify-content: flex-end;
+}
+
+.switch span {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+.switch[aria-checked='true'] span {
+  background: var(--on-accent);
+}
+
+/* ------------------------------------------------------------ Barra de abas */
+
+/* Menu de vidro flutuante: a bolha translúcida desliza até a aba e estica no caminho. */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 0 14px calc(var(--safe-bottom) + 8px);
+  pointer-events: none;
+}
+
+.tabbar-inner {
+  pointer-events: auto;
+  position: relative;
+  max-width: 440px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-radius: 33px;
+  background: rgba(38, 38, 42, 0.5);
+  -webkit-backdrop-filter: blur(22px) saturate(190%);
+  backdrop-filter: blur(22px) saturate(190%);
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Bolha do menu (posição, tamanho e opacidade vêm de liquidTabs.ts a cada quadro). */
+.tab-pill,
+.tab-lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  will-change: transform, width, height;
+}
+
+.tab-pill {
+  z-index: 0;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Lente de vidro ao encostar ("Suave 2"): brilho leve, borda iluminada e franja vermelha/azul imitando a refração. */
+.tab-lens {
+  z-index: 2;
+  opacity: 0;
+  background: rgba(255, 255, 255, 0.07);
+  -webkit-backdrop-filter: brightness(1.09) saturate(1.2);
+  backdrop-filter: brightness(1.09) saturate(1.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.32),
+    inset 3px 0 4px -2px rgba(255, 80, 100, 0.26),
+    inset -3px 0 4px -2px rgba(80, 160, 255, 0.32),
+    0 7px 18px rgba(0, 0, 0, 0.3);
+}
+
+.tab {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 28px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--muted);
+  transform-origin: 50% 60%;
+  transition: color 0.18s ease;
+  -webkit-user-drag: none;
+}
+
+/* Aba "acesa": a que está embaixo da bolha (marcada por liquidTabs.ts). */
+.tab[data-on] {
+  color: var(--text);
+}
+
+.session-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 10px);
+  z-index: 29;
+  max-width: 536px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 16px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------ Folhas (bottom sheets) */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.62);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  animation: fade 0.15s ease-out;
+  transition: padding-bottom 0.2s ease-out;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  max-height: 92dvh;
+  overflow-y: auto;
+  background: var(--card);
+  border-radius: 22px 22px 0 0;
+  padding: 8px 16px calc(var(--safe-bottom) + 20px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slide-up 0.2s ease-out;
+}
+
+.sheet.kb-open {
+  padding-bottom: 16px;
+  border-radius: 22px 22px 0 0;
+}
+
+.sheet-handle {
+  align-self: center;
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--border-2);
+  flex: 0 0 auto;
+}
+
+.sheet-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.sheet .list-group {
+  background: var(--raised);
+}
+
+.sheet .list-group > * + * {
+  border-top-color: var(--raised-2);
+}
+
+.sheet .tile,
+.sheet .muscle-card {
+  background: var(--raised);
+}
+
+.sheet .input,
+.sheet .select,
+.sheet .textarea {
+  background: var(--raised);
+  border-color: var(--border-2);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0.6;
+  }
+}
+
+/* ------------------------------------------------------------ Diversos */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 28px 16px;
+  border-radius: 18px;
+  border: 1.5px dashed var(--border-3);
+  color: var(--text-2);
+}
+
+.empty .title {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.notice {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.notice-icon {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.steps li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.steps .n {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 50%;
+  background: var(--raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.photo-cell {
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--raised);
+  position: relative;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+}
+
+.photo-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-cell .date {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(17, 18, 20, 0.8);
+  color: var(--text);
+}
+
+.photo-add {
+  border: 1.5px dashed var(--border-3);
+  background: transparent;
+  color: var(--accent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  top: calc(var(--safe-top) + 12px);
+  transform: translateX(-50%);
+  z-index: 80;
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  animation: fade 0.15s ease-out;
+  max-width: calc(100% - 32px);
+}
+
+.chart-wrap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.drag-handle {
+  color: var(--muted);
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-height: 44px;
+  cursor: grab;
+}
+
+.link-pill {
+  align-self: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  border: 1px dashed var(--border-2);
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.link-pill.on {
+  border: 1px solid var(--orange-border);
+  background: var(--superset-bg);
+  color: var(--orange);
+  font-weight: 700;
+}
+
+.video-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 14px;
+  background: #000;
+}
+
+/* ------------------------------------------------------------ Efeitos de toque */
+
+.btn,
+.icon-btn,
+.list-row,
+.list-item,
+.card-row-btn,
+.muscle-card,
+.pill,
+.filter-btn,
+.seg > *,
+.check-circle,
+.set-check,
+.set-type,
+.link-pill,
+.photo-cell,
+.media-chip,
+.tile,
+.cal-day,
+.text-btn,
+.back,
+.unit-toggle,
+.session-banner {
+  transition:
+    transform 0.16s var(--press),
+    background-color 0.16s ease,
+    opacity 0.16s ease,
+    filter 0.16s ease;
+}
+
+.btn:active,
+.pill:active,
+.filter-btn:active,
+.media-chip:active,
+.link-pill:active,
+.unit-toggle:active,
+.session-banner:active {
+  transform: scale(0.96);
+  filter: brightness(0.85);
+}
+
+.icon-btn:active,
+.check-circle:active,
+.set-check:active,
+.set-type:active,
+.cal-day:active,
+.photo-cell:active {
+  transform: scale(0.9);
+}
+
+a.list-row:active,
+button.list-row:active,
+a.tile:active,
+button.tile:active,
+.muscle-card:active {
+  background-color: var(--raised);
+  transform: scale(0.98);
+}
+
+.list-item:active,
+.card-row-btn:active {
+  background-color: var(--raised);
+}
+
+.seg > button:active,
+.seg > a:active {
+  transform: scale(0.95);
+}
+
+.text-btn:active,
+.back:active {
+  opacity: 0.5;
+}
+
+/* O check "salta" ao marcar */
+.check-circle.on,
+.set-check.on {
+  animation: pop 0.34s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ------------------------------------------------------------ Toque com mola: rápido ao apertar, macio ao soltar */
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+button,
+a {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.btn,
+.icon-btn,
+.list-row,
+.card-row-btn,
+.muscle-card,
+.pill,
+.filter-btn,
+.seg > *,
+.check-circle,
+.set-check,
+.set-type,
+.link-pill,
+.photo-cell,
+.media-chip,
+.tile,
+.cal-day,
+.unit-toggle,
+.session-banner,
+.rest-link {
+  transition:
+    transform 0.34s var(--spring),
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease,
+    filter 0.2s ease;
+}
+
+.btn:active,
+.icon-btn:active,
+.list-row:active,
+.card-row-btn:active,
+.muscle-card:active,
+.pill:active,
+.filter-btn:active,
+.seg > *:active,
+.check-circle:active,
+.set-check:active,
+.set-type:active,
+.link-pill:active,
+.photo-cell:active,
+.media-chip:active,
+.tile:active,
+.cal-day:active,
+.unit-toggle:active,
+.session-banner:active,
+.rest-link:active {
+  transition:
+    transform 0.08s ease-out,
+    background-color 0.08s ease-out,
+    filter 0.08s ease-out,
+    opacity 0.08s ease-out;
+}
+
+.rest-link:active {
+  opacity: 0.55;
+}
+
+/* Janelas inferiores entram com mola */
+.sheet {
+  animation: sheet-in 0.42s var(--spring);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+.rest-bar {
+  animation: rest-in 0.45s var(--spring);
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------ Transição entre telas */
+
+/* O nome vai no próprio vidro (e não no pai): se fosse no pai, o desfoque só enxergaria o que está dentro do menu. */
+.tabbar-inner {
+  view-transition-name: tabbar;
+}
+
+/* O menu não pisca na troca de tela: só a versão nova (ao vivo) aparece, com a bolha deslizando. */
+::view-transition-old(tabbar) {
+  display: none;
+}
+
+::view-transition-new(tabbar) {
+  animation: none;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.34s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation-fill-mode: both;
+}
+
+html[data-nav='forward']::view-transition-new(root) {
+  animation-name: vt-in-right;
+}
+
+html[data-nav='forward']::view-transition-old(root) {
+  animation-name: vt-out-left;
+}
+
+html[data-nav='back']::view-transition-old(root) {
+  animation-name: vt-out-right;
+  z-index: 2;
+}
+
+html[data-nav='back']::view-transition-new(root) {
+  animation-name: vt-in-left;
+}
+
+html[data-nav='tab']::view-transition-old(root) {
+  animation: 0.16s ease both vt-fade-out;
+}
+
+html[data-nav='tab']::view-transition-new(root) {
+  animation: 0.2s ease both vt-fade-in;
+}
+
+@keyframes vt-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes vt-out-left {
+  to {
+    transform: translateX(-28%);
+    opacity: 0.5;
+  }
+}
+
+@keyframes vt-in-left {
+  from {
+    transform: translateX(-28%);
+    opacity: 0.5;
+  }
+}
+
+@keyframes vt-out-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes vt-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------ Botões de vidro: crescem, brilham e voltam */
+
+.glass,
+.pill-primary {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  transition:
+    transform 0.55s var(--spring),
+    background-color 0.35s ease,
+    box-shadow 0.35s ease,
+    filter 0.3s ease;
+}
+
+.glass {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.glass::after,
+.pill-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at var(--x, 50%) var(--y, 30%), rgba(255, 255, 255, 0.45), transparent 60%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+}
+
+.glass.circle {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 50%;
+  padding: 0;
+}
+
+.glass.circle.sm {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+}
+
+.glass.pill,
+.pill-primary {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+}
+
+.glass.accent-text {
+  color: var(--accent);
+}
+
+.glass.danger-text {
+  color: var(--danger);
+}
+
+.pill-primary {
+  color: #fff;
+  background: var(--accent);
+  border: 0.5px solid rgba(255, 255, 255, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 4px 16px rgba(47, 140, 255, 0.25);
+}
+
+.glass.pressed,
+.glass:active,
+.pill-primary.pressed,
+.pill-primary:active {
+  transform: scale(1.12);
+  transition-duration: 0.16s;
+  transition-timing-function: ease-out;
+}
+
+.glass.pressed,
+.glass:active {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 10px 28px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(255, 255, 255, 0.1);
+}
+
+.pill-primary.pressed,
+.pill-primary:active {
+  filter: brightness(1.15);
+}
+
+.glass.pressed::after,
+.pill-primary.pressed::after {
+  opacity: 0.6;
+  transition-duration: 0.12s;
+}
+
+.glass:disabled,
+.pill-primary:disabled {
+  opacity: 0.45;
+}
+
+.glass > svg,
+.pill-primary > svg {
+  flex: none;
+}
+
+/* Cabeçalho das abas: título menor, mais para cima, botões de vidro à direita. */
+.tab-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.tab-head .actions {
+  display: flex;
+  gap: 8px;
+}
+
+.screen:not(.no-tabs) {
+  padding-top: calc(var(--safe-top) + 8px);
+}
+
+/* Troca de aba: a tela nova aparece na hora, sem esmaecer (como nos apps do iPhone). */
+
+/* Esmaecido curto usado nas abas de dentro das telas (ex.: Resumo/Histórico do exercício). */
+@keyframes tab-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------ Menu de opções (estilo iPhone) */
+
+.action-menu {
+  background: var(--raised);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.action-menu + .action-menu {
+  margin-top: 10px;
+}
+
+.action-item {
+  width: 100%;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 18px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 500;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.action-item + .action-item {
+  border-top: 0.5px solid var(--border-2);
+}
+
+.action-item:active {
+  background: rgba(255, 255, 255, 0.08);
+  transition-duration: 0.05s;
+}
+
+.action-item.danger {
+  color: var(--danger);
+}
+
+.action-item > svg {
+  flex: none;
+}
+
+/* ------------------------------------------------------------ Seletor com bolha deslizando (Cargas | Corpo) */
+
+.seg.sliding {
+  position: relative;
+}
+
+.seg.sliding > a,
+.seg.sliding > span {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+
+.seg-bubble {
+  position: absolute !important;
+  z-index: 0 !important;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 6px);
+  border-radius: 10px;
+  background: var(--raised-2) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: transform 0.5s var(--spring);
+  pointer-events: none;
+}
+
+.fade-in {
+  animation: tab-in 0.22s ease;
+}
+
+/* ------------------------------------------------------------ Data e hora (o iPhone deixa esses campos mais largos que a tela) */
+
+.input[type="date"],
+.input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 46px;
+  text-align: left;
+}
+
+.input::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
+.date-pill {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: none;
+  min-width: 0;
+  max-width: 60%;
+  height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 38px;
+}
+
+.date-pill::-webkit-date-and-time-value {
+  text-align: right;
+  margin: 0;
+}
+
+/* Película invisível da vibração (iPhone): cobre o botão e repassa o toque. */
+.hap-film {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+:where(.btn, .tab, .set-check, .check-circle, .set-type, .seg > a, .cal-day, .list-item, .action-item, .folder-head, .unit-toggle, .import-chip, .ex-chip):has(> .hap-film) {
+  position: relative;
+}
+
+/* Linha de abas dentro do vidro (a bolha anda aqui dentro). */
+.tabs-row {
+  position: relative;
+  height: 66px;
+  padding: 5px;
+  display: flex;
+  /* O dedo pode arrastar pelo menu sem rolar a tela nem abrir o menu de link do iPhone. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ------------------------------------------------------------ Deslizar para apagar */
+
+.swipe-wrap {
+  position: relative;
+  overflow: hidden;
+  margin: 0 -20px;
+}
+
+.swipe-del {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 88px;
+  border: 0;
+  background: var(--danger);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Fechado, o botão fica escondido (senão aparece um fio vermelho nas bordas). */
+.swipe-wrap:not(.open):not(.dragging) .swipe-del {
+  visibility: hidden;
+}
+
+.swipe-row {
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
+  touch-action: pan-y;
+  transition: transform 0.35s var(--spring);
+}
+
+.ex-card .swipe-wrap .set-row {
+  margin: 0;
+}
+
+.ss-group .ex-card .swipe-wrap {
+  margin-left: 0;
+}
+
+.ss-group .ex-card .swipe-wrap .set-row {
+  margin: 0;
+  padding-left: 4px;
+}
+
+/* ------------------------------------------------------------ Aviso com "Desfazer" */
+
+.toast.with-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: max-content;
+  padding: 6px 6px 6px 16px;
+  white-space: nowrap;
+}
+
+.toast-action {
+  border: 0;
+  background: transparent;
+  color: #0a64d6;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+/* ------------------------------------------------------------ Campos e botões quase pretos (como o Hevy) */
+
+:root {
+  --field: #121214;
+  --field-border: #2a2a2d;
+  --fill: #161618;
+}
+
+.set-input {
+  background: var(--field);
+  border: 1px solid var(--field-border);
+}
+
+.set-input:focus {
+  border-color: var(--accent);
+}
+
+.set-type {
+  background: var(--field);
+  border-color: var(--field-border);
+}
+
+.set-check:not(.on) {
+  background: var(--fill);
+}
+
+.screen .btn:not(.primary, .dashed, .light, .outline-accent) {
+  background: var(--fill);
+}
+
+/* Dentro de cartões e janelas (que já são desse cinza), o botão continua um tom acima. */
+.screen :is(.card, .notice, .list-row) .btn:not(.primary, .dashed, .light, .outline-accent) {
+  background: var(--raised);
+}
+
+/* Campo vazio: o valor sugerido aparece em cinza e some ao tocar (fica só o cursor). */
+.set-input::placeholder {
+  color: #5c5c61;
+  font-weight: 600;
+  opacity: 1;
+}
+
+.set-input:focus::placeholder {
+  color: transparent;
+}
+
+/* ------------------------------------------------------------ Texto dos botões com "+" no centro exato */
+
+.btn:has(> svg:first-child)::after {
+  content: '';
+  flex: none;
+  width: 1.05em;
+}
+
+/* Botão fixo de baixo ("Iniciar treino", "Concluído"): camada própria na troca de tela, como o menu.
+   Dentro da foto da tela, o Safari desenhava o vidro errado (retângulo azul borrado, sem texto). */
+.dock {
+  view-transition-name: dock;
+}
+
+::view-transition-old(dock) {
+  display: none;
+}
+
+::view-transition-new(dock) {
+  animation: none;
+}
+
+/* Durante a animação de troca de tela, o vidro fica sem desfoque (quase sólido) e volta ao normal no fim.
+   Nas "fotos" da animação, o Safari desenhava o desfoque errado: um borrão no lugar do menu ou do botão fixo. */
+html.vt-running .tabbar-inner,
+html.vt-running .dock,
+html.vt-running .glass,
+html.vt-running .tab-lens {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.vt-running .tabbar-inner,
+html.vt-running .dock {
+  background: rgba(30, 30, 33, 0.95);
+}
+
+/* Títulos dos grupos em Configurações. */
+.settings-label {
+  padding-left: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------ Título das abas e cabeçalhos fixos */
+
+/* Título das abas (Treino, Treinos, Calendário, Progresso, Perfil) menor. */
+.tab-head .h1 {
+  font-size: 22px;
+}
+
+/* Os cabeçalhos ficam presos no topo ao rolar (ex.: "Atualizar" no Editar treino sempre à mão).
+   Cobrem a área do relógio e as laterais; a barra do treino em andamento (.sticky-top) já era fixa. */
+.screen > .topbar:not(.sticky-top),
+.screen > .tab-head {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  margin: calc(-1 * var(--safe-top) - 16px) -20px 0;
+  padding: calc(var(--safe-top) + 16px) 20px 6px;
+  background: rgba(0, 0, 0, 0.8);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 0.5px 0 transparent;
+  transition: box-shadow 0.2s ease;
+}
+
+/* Nas abas o conteúdo começa mais perto do topo. */
+.screen:not(.no-tabs) > .tab-head {
+  margin-top: calc(-1 * var(--safe-top) - 8px);
+  padding-top: calc(var(--safe-top) + 8px);
+}
+
+/* A linha fina embaixo só aparece depois de rolar (classe ligada no App). */
+html.rolou .screen > .topbar:not(.sticky-top),
+html.rolou .screen > .tab-head {
+  box-shadow: 0 0.5px 0 var(--border);
+}
+
+/* Na animação de troca de tela, sem desfoque (o Safari deixava borrão nas "fotos" da troca). */
+html.vt-running .screen > .topbar,
+html.vt-running .screen > .tab-head {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgba(0, 0, 0, 0.94);
+}
+
+/* ------------------------------------------------------------ Sem zoom com dois dedos nem com toque duplo */
+
+html {
+  touch-action: pan-x pan-y;
+}
+
