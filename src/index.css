@@ -35,6 +35,14 @@
     background-color: rgb(var(--tf-gray-500, 107 114 128));
   }
 
+  /* Rola sem barra nenhuma: o trilho de filtros, que no celular passa da largura e rola com o dedo. */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Scrollbar da sidebar: fina, discreta e só aparece quando o cursor está sobre a
      sidebar (aside:hover). Thumb transparente por padrão. Firefox + WebKit. */
   .sidebar-scroll {

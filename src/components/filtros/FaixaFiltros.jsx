@@ -31,9 +31,11 @@ export function FaixaProvider({ children }) {
 // A casca cinza que agrupa os segmentos. ALTURA FIXA de 31px (chip de 25 + 3px de padding de cada
 // lado), a mesma da `BuscaFaixa` ao lado; o raio 6 menos o padding 3 dá o raio 3 do chip, e os cantos
 // ficam concêntricos. `border` e não `ring`: a sombra do ring não encaixa no pixel físico e borra.
+// No celular o trilho passa da largura e ROLA com o dedo, SEM BARRA: a barra do Windows (com as setas)
+// aparecia dentro dos 31px e cobria os filtros.
 export function Trilho({ children, className = '' }) {
   return (
-    <span className={`inline-flex h-[31px] items-center rounded-[6px] border border-gray-300 bg-hx-f6f7f8 p-[3px] ${className}`}>
+    <span className={`inline-flex h-[31px] max-w-full items-center overflow-x-auto overflow-y-hidden rounded-[6px] border border-gray-300 bg-hx-f6f7f8 p-[3px] scrollbar-none ${className}`}>
       {children}
     </span>
   );

@@ -141,7 +141,7 @@ export default function Lancamentos() {
       <FaixaProvider>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <BuscaFaixa className="w-full sm:w-[220px]" placeholder="Descrição ou observação" value={busca} onChange={(e) => setBusca(e.target.value)} />
-          <Trilho className="max-w-full overflow-x-auto">
+          <Trilho>
             <SegMes value={comp} onChange={setComp} />
             <DivisorFaixa />
             <SegUnico id="tipo" rotulo="Tipo" opcoes={OPCOES_TIPO} value={tipo} onChange={setTipo} padrao="" largura={160} />

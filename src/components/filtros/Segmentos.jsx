@@ -152,7 +152,7 @@ export function SegMes({ value, onChange, id = 'mes' }) {
   const noPadrao = value === hoje;
   const texto = nomeCompetencia(value).replace(' de ', '/').replace(/\/(\d{2})(\d{2})$/, '/$2');
   return (
-    <span className="inline-flex items-center">
+    <span className="inline-flex shrink-0 items-center">
       <Tooltip label={`Mês anterior (${competenciaCurta(addMeses(value, -1))})`}>
         <button type="button" className={BTN_SETA} onClick={() => onChange(addMeses(value, -1))} aria-label="Mês anterior"><Seta volta /></button>
       </Tooltip>

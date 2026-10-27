@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
 import SegmentedFiltro from '../components/SegmentedFiltro.jsx';
@@ -20,6 +20,7 @@ import { usoPorCategoria } from '../lib/usoCategorias.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaAtual, competenciaCurta } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
+import useLinhasAnimadas, { atributosLinha } from '../lib/useLinhasAnimadas.js';
 
 const TIPOS = [{ valor: 'saida', rotulo: 'Gasto' }, { valor: 'entrada', rotulo: 'Entrada' }];
 
@@ -190,6 +191,18 @@ export default function Categorias() {
   const alternarTudo = () => setRecolhidos(tudoAberto ? new Set(blocos.map((b) => b.grupo.id)) : new Set());
   const alternar = (id) => { const s = new Set(recolhidos); if (s.has(id)) s.delete(id); else s.add(id); setRecolhidos(s); };
 
+  // As linhas da tabela numa lista só (grupo, as categorias dele, ou o aviso de grupo vazio), para o
+  // recolher e abrir ANIMAR como no DRE do Gestor: as de um grupo fechado ficam montadas e escondidas.
+  const todasLinhas = useMemo(() => blocos.flatMap((b) => [
+    { id: `g:${b.grupo.id}`, tipo: 'grupo', bloco: b },
+    ...b.itens.map((c) => ({ id: `c:${c.id}`, tipo: 'categoria', categoria: c, bloco: b })),
+    ...(b.itens.length ? [] : [{ id: `v:${b.grupo.id}`, tipo: 'vazio', bloco: b }]),
+  ]), [blocos]);
+  const abertas = useMemo(() => todasLinhas.filter((x) => x.tipo === 'grupo' || aberto(x.bloco.grupo)),
+    [todasLinhas, recolhidos, busca]);
+  const caixaRef = useRef(null);
+  const desenhadas = useLinhasAnimadas(todasLinhas, abertas, caixaRef);
+
   const fecharESalvar = () => { setModal(null); carregar(); };
 
   const apagarCategoria = async (c) => {
@@ -239,7 +252,7 @@ export default function Categorias() {
           <FaixaProvider>
             <div className="mt-6 flex flex-wrap items-center gap-2">
               <BuscaFaixa className="w-full sm:w-[220px]" placeholder="Categoria ou grupo" value={busca} onChange={(e) => setBusca(e.target.value)} />
-              <Trilho className="max-w-full overflow-x-auto">
+              <Trilho>
                 <SegUnico id="tipo" rotulo="Tipo" opcoes={OPCOES_TIPO} value={tipo} onChange={setTipo} padrao="" largura={160} />
                 <DivisorFaixa />
                 <SegUnico id="situacao" rotulo="Situação" opcoes={OPCOES_SITUACAO} value={situacao} onChange={setSituacao} padrao="" largura={180} />
@@ -256,7 +269,7 @@ export default function Categorias() {
             </div>
           </FaixaProvider>
 
-          <div className="card mt-4 overflow-x-auto">
+          <div ref={caixaRef} className="card mt-4 overflow-x-auto">
             <table className="w-full min-w-[760px] table-fixed border-separate border-spacing-0">
               <colgroup>
                 <col /><col style={{ width: 110 }} /><col style={{ width: 230 }} /><col style={{ width: 130 }} /><col style={{ width: 100 }} /><col style={{ width: 96 }} />
@@ -275,66 +288,73 @@ export default function Categorias() {
                 {blocos.length === 0 && (
                   <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-400">Nenhuma categoria com esses filtros.</td></tr>
                 )}
-                {blocos.map(({ grupo: g, itens, total, qtd, noMes, media }) => {
-                  const abre = aberto(g);
+                {desenhadas.map(({ linha: x, estado }) => {
+                  const { grupo: g, total, qtd, noMes, media } = x.bloco;
                   const entrada = g.tipo === 'entrada';
-                  return [
-                    <tr key={g.id} className="group/linha bg-hx-f6f7f8">
-                      <td className="border-b border-gray-200 px-3 py-2">
-                        <button type="button" onClick={() => alternar(g.id)} aria-expanded={abre}
-                          className="flex min-w-0 items-center gap-2 text-left">
-                          <IconChevron aberto={abre} />
-                          <Bolinha cor={g.cor} className="h-3 w-3" />
-                          <span className="truncate text-[13.5px] font-semibold text-gray-800">{g.nome}</span>
-                          {entrada && <Etiqueta tom="verde">Entrada</Etiqueta>}
-                          <span className="shrink-0 text-xs text-gray-400">{total} {total === 1 ? 'categoria' : 'categorias'}</span>
-                        </button>
-                      </td>
-                      <td className="border-b border-gray-200 px-3 text-right text-[13px] font-semibold tabular-nums text-gray-700">{qtd || '—'}</td>
-                      <td className="border-b border-gray-200 px-3 text-right text-[13px] font-semibold tabular-nums">
-                        <span className={entrada ? 'text-green-700' : 'text-gray-800'}>{noMes ? formatBRL(noMes) : '—'}</span>
-                      </td>
-                      <td className="border-b border-gray-200 px-3 text-right text-[13px] font-semibold tabular-nums text-gray-700">{media ? formatBRL(media) : '—'}</td>
-                      <td className="border-b border-gray-200" />
-                      <td className="border-b border-gray-200 pr-2">
-                        <span className="flex justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/linha:opacity-100 md:focus-within:opacity-100">
-                          <BotaoAcao titulo={`Nova categoria em ${g.nome}`} onClick={() => setModal({ tipo: 'categoria', item: { nome: '', grupo_id: g.id, ativa: true } })}>
-                            <IconMais className="h-[13px] w-[13px]" />
-                          </BotaoAcao>
-                          <BotaoEditar titulo="Editar grupo" onClick={() => setModal({ tipo: 'grupo', item: g })} />
-                          <BotaoExcluir titulo={total ? 'Só dá para excluir grupo vazio' : 'Excluir grupo'} disabled={total > 0} onClick={() => apagarGrupo(g)} />
+                  const attrs = atributosLinha(x.id, estado);
+                  if (x.tipo === 'grupo') {
+                    const abre = aberto(g);
+                    return (
+                      <tr key={x.id} {...attrs} className="group/linha bg-hx-f6f7f8">
+                        <td className="border-b border-gray-200 px-3 py-2">
+                          <button type="button" onClick={() => alternar(g.id)} aria-expanded={abre}
+                            className="flex min-w-0 items-center gap-2 text-left">
+                            <IconChevron aberto={abre} />
+                            <Bolinha cor={g.cor} className="h-3 w-3" />
+                            <span className="truncate text-[13.5px] font-semibold text-gray-800">{g.nome}</span>
+                            {entrada && <Etiqueta tom="verde">Entrada</Etiqueta>}
+                            <span className="shrink-0 text-xs text-gray-400">{total} {total === 1 ? 'categoria' : 'categorias'}</span>
+                          </button>
+                        </td>
+                        <td className="border-b border-gray-200 px-3 text-right text-[13px] font-semibold tabular-nums text-gray-700">{qtd || '—'}</td>
+                        <td className="border-b border-gray-200 px-3 text-right text-[13px] font-semibold tabular-nums">
+                          <span className={entrada ? 'text-green-700' : 'text-gray-800'}>{noMes ? formatBRL(noMes) : '—'}</span>
+                        </td>
+                        <td className="border-b border-gray-200 px-3 text-right text-[13px] font-semibold tabular-nums text-gray-700">{media ? formatBRL(media) : '—'}</td>
+                        <td className="border-b border-gray-200" />
+                        <td className="border-b border-gray-200 pr-2">
+                          <span className="flex justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/linha:opacity-100 md:focus-within:opacity-100">
+                            <BotaoAcao titulo={`Nova categoria em ${g.nome}`} onClick={() => setModal({ tipo: 'categoria', item: { nome: '', grupo_id: g.id, ativa: true } })}>
+                              <IconMais className="h-[13px] w-[13px]" />
+                            </BotaoAcao>
+                            <BotaoEditar titulo="Editar grupo" onClick={() => setModal({ tipo: 'grupo', item: g })} />
+                            <BotaoExcluir titulo={total ? 'Só dá para excluir grupo vazio' : 'Excluir grupo'} disabled={total > 0} onClick={() => apagarGrupo(g)} />
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  if (x.tipo === 'vazio') {
+                    return (
+                      <tr key={x.id} {...attrs} className="bg-white">
+                        <td colSpan={6} className="border-b border-gray-100 py-2 pl-[46px] text-[13px] text-gray-400">Nenhuma categoria neste grupo.</td>
+                      </tr>
+                    );
+                  }
+                  const c = x.categoria;
+                  const u = uso.get(c.id);
+                  return (
+                    <tr key={x.id} {...attrs} className="group/linha bg-white hover:bg-hx-f9fafb">
+                      <td className="border-b border-gray-100 py-[7px] pl-[46px] pr-3">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className={`truncate text-[13px] ${c.ativa ? 'text-gray-700' : 'text-gray-400 line-through'}`}>{c.nome}</span>
+                          {!c.ativa && <Etiqueta>Inativa</Etiqueta>}
                         </span>
                       </td>
-                    </tr>,
-                    ...(abre ? itens.map((c) => {
-                      const u = uso.get(c.id);
-                      return (
-                        <tr key={c.id} className="group/linha hover:bg-hx-f9fafb">
-                          <td className="border-b border-gray-100 py-[7px] pl-[46px] pr-3">
-                            <span className="flex min-w-0 items-center gap-2">
-                              <span className={`truncate text-[13px] ${c.ativa ? 'text-gray-700' : 'text-gray-400 line-through'}`}>{c.nome}</span>
-                              {!c.ativa && <Etiqueta>Inativa</Etiqueta>}
-                            </span>
-                          </td>
-                          <td className="border-b border-gray-100 px-3 text-right text-[13px] tabular-nums text-gray-600">{u?.qtd || <span className="text-gray-300">—</span>}</td>
-                          <td className="border-b border-gray-100 px-3 text-[13px]">
-                            <TotalComBarra centavos={u?.noMes ?? 0} maximo={maximo} cor={g.cor} entrada={entrada} />
-                          </td>
-                          <td className="border-b border-gray-100 px-3 text-right text-[13px] tabular-nums text-gray-600">{u?.media ? formatBRL(u.media) : <span className="text-gray-300">—</span>}</td>
-                          <td className="border-b border-gray-100 px-3 text-right text-[12.5px] text-gray-500">{u?.ultimo ? competenciaCurta(u.ultimo) : <span className="text-gray-300">nunca</span>}</td>
-                          <td className="border-b border-gray-100 pr-2">
-                            <span className="flex justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/linha:opacity-100 md:focus-within:opacity-100">
-                              <BotaoEditar onClick={() => setModal({ tipo: 'categoria', item: c })} />
-                              <BotaoExcluir onClick={() => apagarCategoria(c)} />
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    }) : []),
-                    ...(abre && itens.length === 0 ? [
-                      <tr key={`${g.id}-vazio`}><td colSpan={6} className="border-b border-gray-100 py-2 pl-[46px] text-[13px] text-gray-400">Nenhuma categoria neste grupo.</td></tr>,
-                    ] : []),
-                  ];
+                      <td className="border-b border-gray-100 px-3 text-right text-[13px] tabular-nums text-gray-600">{u?.qtd || <span className="text-gray-300">—</span>}</td>
+                      <td className="border-b border-gray-100 px-3 text-[13px]">
+                        <TotalComBarra centavos={u?.noMes ?? 0} maximo={maximo} cor={g.cor} entrada={entrada} />
+                      </td>
+                      <td className="border-b border-gray-100 px-3 text-right text-[13px] tabular-nums text-gray-600">{u?.media ? formatBRL(u.media) : <span className="text-gray-300">—</span>}</td>
+                      <td className="border-b border-gray-100 px-3 text-right text-[12.5px] text-gray-500">{u?.ultimo ? competenciaCurta(u.ultimo) : <span className="text-gray-300">nunca</span>}</td>
+                      <td className="border-b border-gray-100 pr-2">
+                        <span className="flex justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/linha:opacity-100 md:focus-within:opacity-100">
+                          <BotaoEditar onClick={() => setModal({ tipo: 'categoria', item: c })} />
+                          <BotaoExcluir onClick={() => apagarCategoria(c)} />
+                        </span>
+                      </td>
+                    </tr>
+                  );
                 })}
               </tbody>
             </table>
