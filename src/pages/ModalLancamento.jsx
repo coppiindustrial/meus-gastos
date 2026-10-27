@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import Modal from '../components/Modal.jsx';
 import SelectSimples from '../components/SelectSimples.jsx';
+import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
 import SegmentedFiltro from '../components/SegmentedFiltro.jsx';
 import { Campo } from '../components/Comuns.jsx';
 import { useToast } from '../context/ToastContext.jsx';
@@ -62,9 +63,7 @@ export default function ModalLancamento({ lancamento, compPadrao, categorias, ca
   // Só as categorias do tipo certo e ativas (mais a atual, se ela tiver sido desativada depois).
   const opcoesCategoria = useMemo(() => [
     { value: '', label: 'Sem categoria' },
-    ...categorias
-      .filter((c) => c.grupo.tipo === form.tipo && (c.ativa || c.id === form.categoria_id))
-      .map((c) => ({ value: c.id, label: `${c.nome} · ${c.grupo.nome}` })),
+    ...opcoesDeCategorias(categorias, { tipo: form.tipo, atual: form.categoria_id }),
   ], [categorias, form.tipo, form.categoria_id]);
 
   const opcoesCartao = cartoes
@@ -143,7 +142,7 @@ export default function ModalLancamento({ lancamento, compPadrao, categorias, ca
         </Campo>
 
         <Campo rotulo="Categoria">
-          <SelectSimples value={form.categoria_id ?? ''} onChange={(v) => mudar('categoria_id', v)} opcoes={opcoesCategoria} />
+          <SelectBusca value={form.categoria_id ?? ''} onChange={(v) => mudar('categoria_id', v)} opcoes={opcoesCategoria} buscaPlaceholder="Buscar categoria ou grupo" />
         </Campo>
 
         {cartao && (

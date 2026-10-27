@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
-import SelectSimples from '../components/SelectSimples.jsx';
+import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
 import Checkbox from '../components/Checkbox.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
@@ -29,8 +29,7 @@ function ModalRecorrencia({ rec, categorias, onFechar, onSalvo }) {
     : { descricao: '', categoria_id: '', valor: '', dia_do_mes: 1, inicio: `${competenciaAtual()}-01`, fim: '', ativa: true }));
   const [erros, setErros] = useState({});
   const [salvando, setSalvando] = useState(false);
-  const opcoes = [{ value: '', label: 'Sem categoria' },
-    ...categorias.filter((c) => c.grupo.tipo === 'saida' && (c.ativa || c.id === form.categoria_id)).map((c) => ({ value: c.id, label: `${c.nome} · ${c.grupo.nome}` }))];
+  const opcoes = [{ value: '', label: 'Sem categoria' }, ...opcoesDeCategorias(categorias, { tipo: 'saida', atual: form.categoria_id })];
   const mudar = (campo, valor) => { setForm((f) => ({ ...f, [campo]: valor })); setErros((e) => ({ ...e, [campo]: undefined })); };
 
   const enviar = async (e) => {
@@ -61,7 +60,7 @@ function ModalRecorrencia({ rec, categorias, onFechar, onSalvo }) {
           <input className="input" autoFocus value={form.descricao} placeholder="Ex.: Luz" onChange={(e) => mudar('descricao', e.target.value)} />
         </Campo>
         <Campo rotulo="Categoria">
-          <SelectSimples value={form.categoria_id} onChange={(v) => mudar('categoria_id', v)} opcoes={opcoes} />
+          <SelectBusca value={form.categoria_id} onChange={(v) => mudar('categoria_id', v)} opcoes={opcoes} buscaPlaceholder="Buscar categoria ou grupo" />
         </Campo>
         <div className="grid grid-cols-2 gap-3">
           <Campo rotulo="Valor padrão (R$)" erro={erros.valor}>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
-import SelectSimples from '../components/SelectSimples.jsx';
+import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
 import SearchInput from '../components/SearchInput.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
@@ -24,9 +24,10 @@ function ModalRegra({ regra, categorias, onFechar, onSalvo }) {
   const [teste, setTeste] = useState('');
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const opcoes = categorias.filter((c) => c.grupo.tipo === 'saida' && (c.ativa || c.id === form.categoria_id))
-    .map((c) => ({ value: c.id, label: `${c.nome} · ${c.grupo.nome}` }))
-    .concat({ value: IGNORAR, label: 'Ignorar (não é gasto: ex. transferência entre contas suas)' });
+  const opcoes = [
+    { value: IGNORAR, label: 'Ignorar (não é gasto: ex. transferência entre contas suas)' },
+    ...opcoesDeCategorias(categorias, { tipo: 'saida', atual: form.categoria_id }),
+  ];
   const enviar = async (e) => {
     e.preventDefault();
     if (!form.palavra_chave.trim() || !form.categoria_id) { setErro('Informe a palavra-chave e a categoria.'); return; }
@@ -48,7 +49,7 @@ function ModalRegra({ regra, categorias, onFechar, onSalvo }) {
           <p className="mt-1 text-xs text-gray-500">Em qualquer parte do nome, sem diferenciar maiúsculas. <code>*</code> = qualquer coisa, <code>?</code> = um caractere.</p>
         </Campo>
         <Campo rotulo="Categoria">
-          <SelectSimples value={form.categoria_id} onChange={(categoria_id) => setForm({ ...form, categoria_id })} opcoes={opcoes} />
+          <SelectBusca value={form.categoria_id} onChange={(categoria_id) => setForm({ ...form, categoria_id })} opcoes={opcoes} buscaPlaceholder="Buscar categoria ou grupo" />
         </Campo>
         {regra?.id && (
           <Campo rotulo="Prioridade (menor decide primeiro)">

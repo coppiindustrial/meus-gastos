@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
-import SelectSimples from '../components/SelectSimples.jsx';
+import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
 import Spinner from '../components/Spinner.jsx';
 import { Etiqueta } from '../components/Comuns.jsx';
 import { useToast } from '../context/ToastContext.jsx';
@@ -48,7 +48,7 @@ function SemRegra({ grupo, opcoes, onCriar }) {
         <span className="block text-xs text-gray-500">{grupo.n} movimentação(ões) · {formatBRL(grupo.total)}</span>
       </span>
       <input className="input !w-44 !py-1.5" value={palavra} onChange={(e) => setPalavra(e.target.value)} aria-label="Palavra-chave da regra" />
-      <SelectSimples className="w-56" value={categoria} onChange={setCategoria} opcoes={opcoes} placeholder="Categoria…" />
+      <SelectBusca className="w-64" value={categoria} onChange={setCategoria} opcoes={opcoes} placeholder="Categoria…" buscaPlaceholder="Buscar categoria ou grupo" />
       <button type="button" className="btn-secondary !py-1.5" disabled={!categoria || !palavra.trim() || salvando} onClick={criar}>
         {salvando ? 'Criando…' : 'Criar regra'}
       </button>
@@ -92,8 +92,8 @@ export default function Extrato() {
 
   const nomeCat = useCallback((id) => base?.categorias.find((c) => c.id === id)?.nome ?? '—', [base]);
   const opcoes = useMemo(() => (base ? [
-    ...base.categorias.filter((c) => c.ativa && c.grupo.tipo === 'saida').map((c) => ({ value: c.id, label: `${c.nome} · ${c.grupo.nome}` })),
     { value: IGNORAR, label: 'Ignorar sempre (não é gasto)' },
+    ...opcoesDeCategorias(base.categorias, { tipo: 'saida' }),
   ] : []), [base]);
 
   // As contrapartes que ficariam sem categoria, agrupadas.

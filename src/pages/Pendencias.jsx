@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
-import SelectSimples from '../components/SelectSimples.jsx';
+import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
 import Checkbox from '../components/Checkbox.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
@@ -27,7 +27,7 @@ function ModalClassificar({ grupo, pendencias, categorias, onFechar, onFeito }) 
   const [palavra, setPalavra] = useState(grupo.nome);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const opcoes = categorias.filter((c) => c.ativa && c.grupo.tipo === 'saida').map((c) => ({ value: c.id, label: `${c.nome} · ${c.grupo.nome}` }));
+  const opcoes = opcoesDeCategorias(categorias, { tipo: 'saida' });
   // Quantas pendências a palavra pega (pode ser mais que o grupo: "UBER" pega todos os Uber).
   const pega = useMemo(() => (palavra.trim() ? pendencias.filter((p) => regraPega(palavra.trim(), nomeDe(p))).length : 0), [palavra, pendencias]);
   const pegaOGrupo = palavra.trim() && regraPega(palavra.trim(), grupo.nome);
@@ -57,7 +57,7 @@ function ModalClassificar({ grupo, pendencias, categorias, onFechar, onFeito }) 
       <form onSubmit={salvar} className="space-y-4 text-sm">
         <p className="text-gray-700"><strong>{grupo.nome}</strong> · {grupo.itens.length} lançamento(s) · {formatBRL(grupo.total)}</p>
         <Campo rotulo="Categoria">
-          <SelectSimples value={categoriaId} onChange={(v) => { setCategoriaId(v); setErro(''); }} opcoes={opcoes} />
+          <SelectBusca value={categoriaId} onChange={(v) => { setCategoriaId(v); setErro(''); }} opcoes={opcoes} buscaPlaceholder="Buscar categoria ou grupo" />
         </Campo>
         <span className="flex items-center gap-2">
           <Checkbox checked={criarRegra} onChange={(e) => setCriarRegra(e.target.checked)} title="Criar regra" />

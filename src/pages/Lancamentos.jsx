@@ -3,6 +3,7 @@ import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import SearchInput from '../components/SearchInput.jsx';
 import SegmentedFiltro from '../components/SegmentedFiltro.jsx';
 import SelectSimples from '../components/SelectSimples.jsx';
+import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
 import SortableTh from '../components/SortableTh.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
@@ -101,7 +102,7 @@ export default function Lancamentos() {
   const opcoesCategoria = useMemo(() => [
     { value: '', label: 'Todas as categorias' },
     { value: 'sem', label: 'Sem categoria' },
-    ...categorias.map((c) => ({ value: c.id, label: `${c.nome} · ${c.grupo.nome}` })),
+    ...opcoesDeCategorias(categorias, { incluirInativas: true }),
   ], [categorias]);
 
   const filtrando = Boolean(busca || tipo || origem || categoria);
@@ -145,7 +146,7 @@ export default function Lancamentos() {
         <SearchInput className="w-full sm:w-64" placeholder="Buscar descrição…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <SegmentedFiltro opcoes={FILTRO_TIPO} value={tipo} onChange={setTipo} ariaLabel="Tipo" />
         <SelectSimples className="w-full sm:w-44" value={origem} onChange={setOrigem} opcoes={FILTRO_ORIGEM} />
-        <SelectSimples className="w-full sm:w-64" value={categoria} onChange={setCategoria} opcoes={opcoesCategoria} />
+        <SelectBusca className="w-full sm:w-64" value={categoria} onChange={setCategoria} opcoes={opcoesCategoria} buscaPlaceholder="Buscar categoria ou grupo" />
         {filtrando && <button type="button" className="text-sm font-medium text-gray-500 hover:text-gray-800" onClick={limpar}>Limpar filtros</button>}
       </div>
 
