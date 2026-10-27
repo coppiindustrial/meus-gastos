@@ -41,6 +41,12 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - `importado_de` (migration 002) marca o que veio de fora (`'planilha'` = histórico da fase 2). "Desfazer importação"
   apaga só o que tem a marca.
 
+## Patrimônio (fase 6)
+
+- `contas` + `saldos` (foto do saldo numa data, única por conta + data: registrar de novo na mesma data substitui).
+- Patrimônio no mês = soma, por conta, da foto mais recente até o fim do mês (vale até a próxima); conta sem foto
+  ainda não entra. Conta encerrada: registrar saldo 0 antes de desativar. Lógica em `lib/patrimonio.js` (testada).
+
 ## Gastos fixos (fase 5)
 
 - `recorrencias` geram, a cada mês vigente (ativa, entre `inicio` e `fim`), uma SUGESTÃO; o lançamento só existe

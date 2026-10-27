@@ -99,7 +99,8 @@ export function BarrasMensais({ meses, selecionado, onSelecionar, altura = 180 }
 }
 
 // UMA SÉRIE POR MÊS (parcelas comprometidas), com o valor escrito em cima de cada barra (são poucas).
-export function ColunasMes({ meses, cor = COR_GASTOS, rotulo, altura = 150 }) {
+// `nota(mes)`: a linha de rodapé do balão (padrão: a quantidade de parcelas). Total negativo vira barra zero.
+export function ColunasMes({ meses, cor = COR_GASTOS, rotulo, altura = 150, nota = (m) => `${m.qtd} parcela(s)` }) {
   const balao = useBalao(200, 70);
   const max = Math.max(1, ...meses.map((m) => m.total)) / 100;
   const esc = escalaLinear(max);
@@ -114,7 +115,7 @@ export function ColunasMes({ meses, cor = COR_GASTOS, rotulo, altura = 150 }) {
                 className={`relative flex h-full min-w-0 flex-1 flex-col items-center justify-end transition-opacity ${balao.esmaecido(m.competencia) ? 'opacity-45' : ''}`}>
                 {/* O valor só em tela larga: no celular as colunas são estreitas demais (fica no balão). */}
                 <span className="mb-0.5 hidden whitespace-nowrap text-[10px] font-medium text-gray-700 tabular-nums sm:block">{brlCurto(m.total)}</span>
-                <span className="w-[56%] max-w-[28px] rounded-t-[4px]" style={{ height: `${esc.fracao(m.total / 100) * 100}%`, background: cor }} />
+                <span className="w-[56%] max-w-[28px] rounded-t-[4px]" style={{ height: `${esc.fracao(Math.max(0, m.total) / 100) * 100}%`, background: cor }} />
               </div>
             ))}
           </div>
@@ -125,7 +126,7 @@ export function ColunasMes({ meses, cor = COR_GASTOS, rotulo, altura = 150 }) {
       </div>
       {ativo && (
         <BalaoGrafico pos={balao.pos} titulo={nomeCompetencia(ativo.competencia)} itens={[{ rotulo, valor: formatBRL(ativo.total), cor }]}
-          nota={`${ativo.qtd} parcela(s)`} />
+          nota={nota(ativo)} />
       )}
     </div>
   );

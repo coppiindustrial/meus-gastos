@@ -14,6 +14,9 @@
 > `parcelas_futuras` (migration 003). Conferido: totais = planilha; parcelas de set/26 = R$ 4.380,04 pelo cálculo direto.
 > **Fase 5 pronta (2026-10-27)**: Gastos fixos — cadastro (6 criados do histórico, com os 21 lançamentos antigos
 > ligados), fixos do mês com valor sugerido (o do último mês) e "Lançar"; um por mês (migration 004); aviso no Resumo.
+> **Fase 6 pronta (2026-10-27)**: Patrimônio — contas, "Registrar saldos" (uma data, um campo por conta, já com o
+> último valor), total por tipo, evolução mensal (o último saldo vale até a próxima foto), histórico por conta.
+> **Todas as fases do plano concluídas.** Próximo, se quiser: importar extrato da conta corrente.
 > No ar em https://coppiindustrial.github.io/meus-gastos/ (repo `coppiindustrial/meus-gastos`, Supabase `abofajutoxukbvrfisem`).
 > Substitui a planilha `OneDrive\CONTAS\Gastos\Gastos total.xlsx`.
 
