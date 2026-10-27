@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
-import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
+import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import Checkbox from '../components/Checkbox.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
@@ -20,14 +20,13 @@ import { formatDate } from '../lib/format.js';
 
 const nomeDe = (p) => p.estabelecimento || p.descricao;
 
-function ModalClassificar({ grupo, pendencias, categorias, onFechar, onFeito }) {
+function ModalClassificar({ grupo, pendencias, categorias, onFechar, onFeito, onCategoriaCriada }) {
   const toast = useToast();
   const [categoriaId, setCategoriaId] = useState('');
   const [criarRegra, setCriarRegra] = useState(true);
   const [palavra, setPalavra] = useState(grupo.nome);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const opcoes = opcoesDeCategorias(categorias, { tipo: 'saida' });
   // Quantas pendências a palavra pega (pode ser mais que o grupo: "UBER" pega todos os Uber).
   const pega = useMemo(() => (palavra.trim() ? pendencias.filter((p) => regraPega(palavra.trim(), nomeDe(p))).length : 0), [palavra, pendencias]);
   const pegaOGrupo = palavra.trim() && regraPega(palavra.trim(), grupo.nome);
@@ -57,7 +56,7 @@ function ModalClassificar({ grupo, pendencias, categorias, onFechar, onFeito }) 
       <form onSubmit={salvar} className="space-y-4 text-sm">
         <p className="text-gray-700"><strong>{grupo.nome}</strong> · {grupo.itens.length} lançamento(s) · {formatBRL(grupo.total)}</p>
         <Campo rotulo="Categoria">
-          <SelectBusca value={categoriaId} onChange={(v) => { setCategoriaId(v); setErro(''); }} opcoes={opcoes} buscaPlaceholder="Buscar categoria ou grupo" />
+          <SeletorCategoria value={categoriaId} onChange={(v) => { setCategoriaId(v); setErro(''); }} categorias={categorias} tipo="saida" onCriada={onCategoriaCriada} />
         </Campo>
         <span className="flex items-center gap-2">
           <Checkbox checked={criarRegra} onChange={(e) => setCriarRegra(e.target.checked)} title="Criar regra" />
@@ -140,7 +139,8 @@ export default function Pendencias() {
       </div>
       {grupoAberto && (
         <ModalClassificar grupo={grupoAberto} pendencias={pendencias} categorias={categorias}
-          onFechar={() => setGrupoAberto(null)} onFeito={() => { setGrupoAberto(null); carregar(); }} />
+          onFechar={() => setGrupoAberto(null)} onFeito={() => { setGrupoAberto(null); carregar(); }}
+          onCategoriaCriada={() => listarCategorias().then(setCategorias).catch(() => {})} />
       )}
     </div>
   );

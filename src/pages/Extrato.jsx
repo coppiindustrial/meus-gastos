@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
-import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
+import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import Spinner from '../components/Spinner.jsx';
 import { Etiqueta } from '../components/Comuns.jsx';
 import { useToast } from '../context/ToastContext.jsx';
@@ -22,6 +22,7 @@ import { formatDate } from '../lib/format.js';
 // Decisões (2026-10-27): entradas continuam à mão; pagamento de fatura e investimentos ficam de fora;
 // o pagamento de um gasto fixo vira o fixo do mês com o valor real.
 const IGNORAR = '__ignorar';
+const EXTRAS_IGNORAR = [{ value: IGNORAR, label: 'Ignorar sempre (não é gasto)' }];
 
 const ROTULO = {
   ignorar: (p) => <Etiqueta>Fora: {p.motivo}</Etiqueta>,
@@ -32,7 +33,7 @@ const ROTULO = {
 };
 
 // Uma linha por contraparte sem regra: escolher a categoria (ou Ignorar) cria a regra na hora.
-function SemRegra({ grupo, opcoes, onCriar }) {
+function SemRegra({ grupo, categorias, onCriar, onCategoriaCriada }) {
   const [categoria, setCategoria] = useState('');
   const [palavra, setPalavra] = useState(grupo.contraparte);
   const [salvando, setSalvando] = useState(false);
@@ -48,7 +49,8 @@ function SemRegra({ grupo, opcoes, onCriar }) {
         <span className="block text-xs text-gray-500">{grupo.n} movimentação(ões) · {formatBRL(grupo.total)}</span>
       </span>
       <input className="input !w-44 !py-1.5" value={palavra} onChange={(e) => setPalavra(e.target.value)} aria-label="Palavra-chave da regra" />
-      <SelectBusca className="w-64" value={categoria} onChange={setCategoria} opcoes={opcoes} placeholder="Categoria…" buscaPlaceholder="Buscar categoria ou grupo" />
+      <SeletorCategoria className="w-64" value={categoria} onChange={setCategoria} categorias={categorias} tipo="saida"
+        extras={EXTRAS_IGNORAR} onCriada={onCategoriaCriada} />
       <button type="button" className="btn-secondary !py-1.5" disabled={!categoria || !palavra.trim() || salvando} onClick={criar}>
         {salvando ? 'Criando…' : 'Criar regra'}
       </button>
@@ -91,10 +93,6 @@ export default function Extrato() {
   }, [arquivo, base, ja]);
 
   const nomeCat = useCallback((id) => base?.categorias.find((c) => c.id === id)?.nome ?? '—', [base]);
-  const opcoes = useMemo(() => (base ? [
-    { value: IGNORAR, label: 'Ignorar sempre (não é gasto)' },
-    ...opcoesDeCategorias(base.categorias, { tipo: 'saida' }),
-  ] : []), [base]);
 
   // As contrapartes que ficariam sem categoria, agrupadas.
   const semRegra = useMemo(() => {
@@ -179,7 +177,7 @@ export default function Extrato() {
                   </p>
                 </header>
                 <ul className="divide-y divide-gray-100">
-                  {semRegra.map((g) => <SemRegra key={g.contraparte} grupo={g} opcoes={opcoes} onCriar={criarRegra} />)}
+                  {semRegra.map((g) => <SemRegra key={g.contraparte} grupo={g} categorias={base.categorias} onCriar={criarRegra} onCategoriaCriada={carregarBase} />)}
                 </ul>
               </section>
             )}

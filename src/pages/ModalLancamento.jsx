@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import Modal from '../components/Modal.jsx';
 import SelectSimples from '../components/SelectSimples.jsx';
-import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
+import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import SegmentedFiltro from '../components/SegmentedFiltro.jsx';
 import { Campo } from '../components/Comuns.jsx';
 import { useToast } from '../context/ToastContext.jsx';
@@ -11,6 +11,7 @@ import { parseValor, valorParaCampo } from '../lib/dinheiro.js';
 import { addMeses, competenciaDe, nomeCompetencia, todayISO } from '../lib/format.js';
 
 const TIPOS = [{ valor: 'saida', rotulo: 'Gasto' }, { valor: 'entrada', rotulo: 'Entrada' }];
+const SEM_CATEGORIA = [{ value: '', label: 'Sem categoria' }];
 const ORIGENS = [{ valor: 'manual', rotulo: 'Avulso' }, { valor: 'fixo', rotulo: 'Fixo' }, { valor: 'cartao', rotulo: 'Cartão' }];
 
 // O mês em que o lançamento conta, sugerido pela data: gasto de CARTÃO cai na fatura, que vence no
@@ -61,10 +62,6 @@ export default function ModalLancamento({ lancamento, compPadrao, categorias, ca
   const cartao = !entrada && form.origem === 'cartao';
 
   // Só as categorias do tipo certo e ativas (mais a atual, se ela tiver sido desativada depois).
-  const opcoesCategoria = useMemo(() => [
-    { value: '', label: 'Sem categoria' },
-    ...opcoesDeCategorias(categorias, { tipo: form.tipo, atual: form.categoria_id }),
-  ], [categorias, form.tipo, form.categoria_id]);
 
   const opcoesCartao = cartoes
     .filter((c) => c.ativo || c.id === form.cartao_id)
@@ -142,7 +139,8 @@ export default function ModalLancamento({ lancamento, compPadrao, categorias, ca
         </Campo>
 
         <Campo rotulo="Categoria">
-          <SelectBusca value={form.categoria_id ?? ''} onChange={(v) => mudar('categoria_id', v)} opcoes={opcoesCategoria} buscaPlaceholder="Buscar categoria ou grupo" />
+          <SeletorCategoria value={form.categoria_id ?? ''} onChange={(v) => mudar('categoria_id', v)} categorias={categorias} tipo={form.tipo}
+            extras={SEM_CATEGORIA} placeholder="Sem categoria" />
         </Campo>
 
         {cartao && (

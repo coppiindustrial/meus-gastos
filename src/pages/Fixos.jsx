@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
-import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
+import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import Checkbox from '../components/Checkbox.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
@@ -21,6 +21,7 @@ import { lsGet, lsSet } from '../lib/storage.js';
 // GASTOS FIXOS: o cadastro das contas que se repetem todo mês e, para o mês escolhido, a lista do que
 // falta lançar — com o valor sugerido (o do último mês) editável e "Lançar" com um clique.
 const LS_MES = 'fixos_mes';
+const SEM_CATEGORIA = [{ value: '', label: 'Sem categoria' }];
 
 function ModalRecorrencia({ rec, categorias, onFechar, onSalvo }) {
   const toast = useToast();
@@ -29,7 +30,6 @@ function ModalRecorrencia({ rec, categorias, onFechar, onSalvo }) {
     : { descricao: '', categoria_id: '', valor: '', dia_do_mes: 1, inicio: `${competenciaAtual()}-01`, fim: '', ativa: true }));
   const [erros, setErros] = useState({});
   const [salvando, setSalvando] = useState(false);
-  const opcoes = [{ value: '', label: 'Sem categoria' }, ...opcoesDeCategorias(categorias, { tipo: 'saida', atual: form.categoria_id })];
   const mudar = (campo, valor) => { setForm((f) => ({ ...f, [campo]: valor })); setErros((e) => ({ ...e, [campo]: undefined })); };
 
   const enviar = async (e) => {
@@ -60,7 +60,8 @@ function ModalRecorrencia({ rec, categorias, onFechar, onSalvo }) {
           <input className="input" autoFocus value={form.descricao} placeholder="Ex.: Luz" onChange={(e) => mudar('descricao', e.target.value)} />
         </Campo>
         <Campo rotulo="Categoria">
-          <SelectBusca value={form.categoria_id} onChange={(v) => mudar('categoria_id', v)} opcoes={opcoes} buscaPlaceholder="Buscar categoria ou grupo" />
+          <SeletorCategoria value={form.categoria_id} onChange={(v) => mudar('categoria_id', v)} categorias={categorias} tipo="saida"
+            extras={SEM_CATEGORIA} placeholder="Sem categoria" />
         </Campo>
         <div className="grid grid-cols-2 gap-3">
           <Campo rotulo="Valor padrão (R$)" erro={erros.valor}>

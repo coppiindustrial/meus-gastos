@@ -16,12 +16,14 @@ import useEscape from '../lib/useEscape.js';
 // grupos (ex.: "Sem categoria", "Ignorar sempre").
 // `semBusca`: lista curta (cartão, mês, tipo) — sem o campo de busca, e com a largura do próprio campo.
 // É o que o `SelectSimples` usa: os seletores do app têm uma implementação só.
+// `acao`: { rotulo(q), onClick(q) } — um botão fixo no pé da lista ("+ Criar categoria"), que recebe o
+// texto da busca. A lista fecha antes de chamar.
 const norm = (s) => String(s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
 const LARGURA_MIN = 320;
 const ALTURA = 400;
 
 export default function SelectBusca({
-  value, onChange, opcoes, placeholder = 'Selecione…', buscaPlaceholder = 'Buscar…', className = '', disabled = false, semBusca = false,
+  value, onChange, opcoes, placeholder = 'Selecione…', buscaPlaceholder = 'Buscar…', className = '', disabled = false, semBusca = false, acao,
 }) {
   const [aberto, setAberto] = useState(false);
   const [pos, setPos] = useState(null);
@@ -133,7 +135,7 @@ export default function SelectBusca({
           className="z-[75] animate-pop-in rounded-[4px] border border-elevado bg-elevado p-2.5 outline-none shadow-[0_14px_34px_rgba(20,28,44,.15),0_3px_8px_rgba(20,28,44,.06)] sombra-popover">
           {!semBusca && <SearchInput autoFocus placeholder={buscaPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} />}
           <div ref={listaRef} className={`${semBusca ? '' : 'mt-2 '}max-h-[320px] overflow-y-auto overflow-x-hidden scrollbar-thin`}>
-            {visiveis.lista.length === 0 && <p className="px-3 py-2 text-[13px] text-gray-400">Nada com esse nome.</p>}
+            {visiveis.lista.length === 0 && <p className="px-3 py-2 text-[13px] text-gray-400">Nada com esse nome{acao ? ' — crie abaixo.' : '.'}</p>}
             {visiveis.soltas.map(linha)}
             {visiveis.soltas.length > 0 && visiveis.grupos.length > 0 && <div className="my-1.5 h-px bg-gray-100" />}
             {visiveis.grupos.map((g) => (
@@ -145,6 +147,15 @@ export default function SelectBusca({
               </div>
             ))}
           </div>
+          {acao && (
+            <div className="mt-1.5 border-t border-gray-100 pt-1.5">
+              <button type="button" onClick={() => { setAberto(false); acao.onClick(q.trim()); }}
+                className="flex w-full items-center gap-2.5 rounded-[3px] px-3 py-2 text-left text-[13.5px] font-medium text-gray-800 transition-colors hover:bg-gray-100">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-gray-400 text-gray-500">+</span>
+                <span className="min-w-0 flex-1 truncate">{acao.rotulo(q.trim())}</span>
+              </button>
+            </div>
+          )}
         </div>,
         document.body,
       )}

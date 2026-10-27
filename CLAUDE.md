@@ -107,6 +107,9 @@ NUNCA no git). A tela Cadastros → Importar histórico grava e confere por fatu
   `CabecalhoPagina` como PRIMEIRO filho (ele nega o `p-6` do Layout e nomeia a aba do navegador).
 - **Celular**: abaixo de `md` a barra lateral vira menu (☰). Telas precisam ser legíveis em 375px (tabela larga →
   rolagem horizontal dentro do `card` ou lista).
+- **Seletores**: escolher categoria é sempre o `SeletorCategoria` (busca, grupos em ordem alfabética, "+ Criar
+  categoria" que abre o `ModalCategoria` e já escolhe a nova). Listas curtas: `SelectSimples` (= `SelectBusca`
+  sem busca). Os dois portam a lista ao body — nunca `absolute` dentro de cartão/modal, que recorta.
 - `localStorage` só por `lsGet`/`lsSet` (`lib/storage.js`) e só para preferência de tela — nunca dado financeiro.
 - Confirmação é `useConfirmacao()` com `await` (nunca `window.confirm`); avisos por `useToast()`.
 - Nunca logar valores financeiros nem dados pessoais.

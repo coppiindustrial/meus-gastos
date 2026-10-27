@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
-import SelectSimples from '../components/SelectSimples.jsx';
 import SegmentedFiltro from '../components/SegmentedFiltro.jsx';
-import Checkbox from '../components/Checkbox.jsx';
+import ModalCategoria from '../components/ModalCategoria.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { Bolinha, BotaoEditar, BotaoExcluir, Campo, Etiqueta, RodapeForm } from '../components/Comuns.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import {
   contarUsoCategoria, criarCategoriasSugeridas, excluirCategoria, excluirGrupo, listarCategorias, listarGrupos,
-  salvarCategoria, salvarGrupo,
+  salvarGrupo,
 } from '../api/cadastros.js';
 import { CORES_GRUPO, GRUPOS_SUGERIDOS } from '../lib/sugestoes.js';
 
@@ -51,45 +50,6 @@ function ModalGrupo({ grupo, onFechar, onSalvo }) {
             ))}
           </div>
         </Campo>
-        <RodapeForm onCancelar={onFechar} salvando={salvando} />
-      </form>
-    </Modal>
-  );
-}
-
-function ModalCategoria({ categoria, grupos, onFechar, onSalvo }) {
-  const toast = useToast();
-  const [form, setForm] = useState(() => categoria ?? { nome: '', grupo_id: grupos[0]?.id ?? '', ativa: true });
-  const [erro, setErro] = useState('');
-  const [salvando, setSalvando] = useState(false);
-  const opcoes = grupos.map((g) => ({ value: g.id, label: `${g.nome} (${g.tipo === 'saida' ? 'gasto' : 'entrada'})` }));
-  const enviar = async (e) => {
-    e.preventDefault();
-    if (!form.nome.trim()) { setErro('Informe o nome da categoria.'); return; }
-    setSalvando(true);
-    try {
-      await salvarCategoria(form);
-      toast.success(categoria?.id ? 'Categoria atualizada.' : 'Categoria criada.');
-      onSalvo();
-    } catch (err) {
-      setErro(/duplicate|unique/i.test(err.message) ? 'Já existe uma categoria com esse nome.' : err.message);
-    } finally { setSalvando(false); }
-  };
-  return (
-    <Modal open onClose={onFechar} title={categoria?.id ? 'Editar categoria' : 'Nova categoria'} maxWidth="max-w-md">
-      <form onSubmit={enviar} className="space-y-4">
-        <Campo rotulo="Nome" erro={erro}>
-          <input className="input" autoFocus value={form.nome} onChange={(e) => { setForm({ ...form, nome: e.target.value }); setErro(''); }} />
-        </Campo>
-        <Campo rotulo="Grupo">
-          <SelectSimples value={form.grupo_id} onChange={(grupo_id) => setForm({ ...form, grupo_id })} opcoes={opcoes} />
-        </Campo>
-        <span className="flex items-center gap-2">
-          <Checkbox checked={form.ativa} onChange={(e) => setForm({ ...form, ativa: e.target.checked })} title="Ativa" />
-          <button type="button" className="text-sm text-gray-700" onClick={() => setForm({ ...form, ativa: !form.ativa })}>
-            Ativa (aparece na hora de lançar)
-          </button>
-        </span>
         <RodapeForm onCancelar={onFechar} salvando={salvando} />
       </form>
     </Modal>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
-import SelectBusca, { opcoesCategoria as opcoesDeCategorias } from '../components/SelectBusca.jsx';
+import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import SearchInput from '../components/SearchInput.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
@@ -17,6 +17,7 @@ import { regraPega } from '../lib/classificar.js';
 // os lançamentos já gravados não mudam quando a regra muda.
 
 const IGNORAR = '__ignorar';
+const EXTRAS_IGNORAR = [{ value: IGNORAR, label: 'Ignorar (não é gasto: ex. transferência entre contas suas)' }];
 
 function ModalRegra({ regra, categorias, onFechar, onSalvo }) {
   const toast = useToast();
@@ -24,10 +25,6 @@ function ModalRegra({ regra, categorias, onFechar, onSalvo }) {
   const [teste, setTeste] = useState('');
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const opcoes = [
-    { value: IGNORAR, label: 'Ignorar (não é gasto: ex. transferência entre contas suas)' },
-    ...opcoesDeCategorias(categorias, { tipo: 'saida', atual: form.categoria_id }),
-  ];
   const enviar = async (e) => {
     e.preventDefault();
     if (!form.palavra_chave.trim() || !form.categoria_id) { setErro('Informe a palavra-chave e a categoria.'); return; }
@@ -49,7 +46,8 @@ function ModalRegra({ regra, categorias, onFechar, onSalvo }) {
           <p className="mt-1 text-xs text-gray-500">Em qualquer parte do nome, sem diferenciar maiúsculas. <code>*</code> = qualquer coisa, <code>?</code> = um caractere.</p>
         </Campo>
         <Campo rotulo="Categoria">
-          <SelectBusca value={form.categoria_id} onChange={(categoria_id) => setForm({ ...form, categoria_id })} opcoes={opcoes} buscaPlaceholder="Buscar categoria ou grupo" />
+          <SeletorCategoria value={form.categoria_id} onChange={(categoria_id) => setForm({ ...form, categoria_id })} categorias={categorias} tipo="saida"
+            extras={EXTRAS_IGNORAR} />
         </Campo>
         {regra?.id && (
           <Campo rotulo="Prioridade (menor decide primeiro)">
