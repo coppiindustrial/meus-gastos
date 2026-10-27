@@ -5,7 +5,7 @@ import Layout from './components/Layout.jsx';
 import { PageLoading } from './components/Spinner.jsx';
 import { TELAS } from './lib/navegacao.js';
 import Login from './pages/Login.jsx';
-import Resumo from './pages/Resumo.jsx';
+import VisaoGeral from './pages/VisaoGeral.jsx';
 import EmBreve from './pages/EmBreve.jsx';
 import Lancamentos from './pages/Lancamentos.jsx';
 import Categorias from './pages/Categorias.jsx';
@@ -39,7 +39,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={user && !loading ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/" element={<Protected><Resumo /></Protected>} />
+      <Route path="/" element={<Protected><VisaoGeral /></Protected>} />
       <Route path="/lancamentos" element={<Protected><Lancamentos /></Protected>} />
       <Route path="/cadastros/categorias" element={<Protected><Categorias /></Protected>} />
       <Route path="/cadastros/cartoes" element={<Protected><Cartoes /></Protected>} />

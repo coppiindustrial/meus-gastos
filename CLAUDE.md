@@ -82,6 +82,17 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - Índice único `(recorrencia_id, competencia)` (migration 004): o banco recusa o fixo lançado duas vezes no mês.
 - Excluir a recorrência mantém os lançamentos (FK `set null`); editar um lançamento de fixo mantém o `recorrencia_id`.
 
+## Visão geral (a tela inicial, 27/10/2026)
+
+- Substituiu o "Resumo do mês": é o Dashboard da planilha (segmentações ANO e MÊS) no estilo do Gestor.
+  Filtros: anos (vários), meses (grade de 12, Shift = intervalo, atalhos de trimestre), tipo, origem, categoria e
+  "Comparar: ano anterior". Contas puras em `lib/visaoGeral.js` (testadas), sobre a `resumo_mensal`; média divide
+  pelos meses COM dado. A faixa "Agora" (pendências, fixos a lançar, parcelas do próximo mês) é sempre do mês atual.
+- Gráficos em `components/graficos/GraficosVisao.jsx` + `LegendaSeries.jsx` (legenda-controle do Gestor):
+  colunas entradas × gastos com saldo e o ano anterior tracejado, rosca por origem (clique filtra), barras por
+  grupo que abrem nas categorias, e a tabela grupo × mês (recolhe com `useLinhasAnimadas`). Clicar num mês abre
+  os Lançamentos dele.
+
 ## Resumo, evolução e gráficos (fase 4)
 
 - Views (migration 003): `resumo_mensal` (totais por mês × tipo × origem × categoria) e `parcelas_futuras` (as

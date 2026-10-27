@@ -10,7 +10,7 @@ import { competenciaCurta, nomeCompetencia } from '../../lib/format.js';
 
 export const COR_GASTOS = 'var(--serie-gastos)';
 export const COR_ENTRADAS = 'var(--serie-entradas)';
-const CALHA = 44; // largura da calha do eixo Y (rótulos "R$ 20 mil")
+export const CALHA = 44; // largura da calha do eixo Y (rótulos "R$ 20 mil")
 
 // Rótulo de mês um sim, um não no celular quando são muitos (12 rótulos "set/26" não cabem em 375px);
 // o último sempre aparece. Escondido com `invisible`, para a coluna continuar ocupando o lugar.
@@ -29,7 +29,7 @@ export function Legenda({ itens }) {
 }
 
 // Grade + calha do eixo Y (em reais, a partir de centavos).
-function Grade({ esc, children }) {
+export function Grade({ esc, children }) {
   const topo = (v) => `${100 - esc.fracao(v) * 100}%`;
   return (
     <div className="relative h-full" style={{ paddingRight: CALHA }}>

@@ -2,7 +2,7 @@
 // `App.jsx`. `fase` marca as telas que ainda não existem (ver PLANO.md): aparecem esmaecidas.
 import { SbChart, SbCompass, SbDashboard, SbDoc, SbFinanceiro } from '../components/sidebarIcons.jsx';
 
-export const DASHBOARD = { to: '/', label: 'Resumo do mês', icon: SbDashboard };
+export const DASHBOARD = { to: '/', label: 'Visão geral', icon: SbDashboard };
 
 export const GRUPOS = [
   {
