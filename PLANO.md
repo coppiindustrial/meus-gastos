@@ -12,6 +12,8 @@
 > **Fase 4 pronta (2026-10-27)**: Resumo do mês (KPIs, média de 3 meses, grupos/categorias, origem, parcelas
 > comprometidas, 12 meses), Evolução mensal com tabela e CSV, CSV dos lançamentos. Contas nas views `resumo_mensal` e
 > `parcelas_futuras` (migration 003). Conferido: totais = planilha; parcelas de set/26 = R$ 4.380,04 pelo cálculo direto.
+> **Fase 5 pronta (2026-10-27)**: Gastos fixos — cadastro (6 criados do histórico, com os 21 lançamentos antigos
+> ligados), fixos do mês com valor sugerido (o do último mês) e "Lançar"; um por mês (migration 004); aviso no Resumo.
 > No ar em https://coppiindustrial.github.io/meus-gastos/ (repo `coppiindustrial/meus-gastos`, Supabase `abofajutoxukbvrfisem`).
 > Substitui a planilha `OneDrive\CONTAS\Gastos\Gastos total.xlsx`.
 

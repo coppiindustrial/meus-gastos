@@ -10,7 +10,7 @@ export const GRUPOS = [
     icon: SbFinanceiro,
     items: [
       { to: '/lancamentos', label: 'Lançamentos' },
-      { to: '/fixos', label: 'Gastos fixos', fase: 5 },
+      { to: '/fixos', label: 'Gastos fixos' },
     ],
   },
   {

@@ -12,6 +12,8 @@ import { comprometidoPorMes, gastosPorGrupo, mediaAnterior, mesesAte, totaisPorM
 import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
+import { listarLancamentosDeFixos, listarRecorrencias } from '../api/fixos.js';
+import { situacaoDoMes } from '../lib/fixos.js';
 
 // RESUMO DO MÊS (tela inicial) — o Dashboard da planilha. As somas vêm da view `resumo_mensal` e as
 // parcelas da `parcelas_futuras` (migration 003); aqui só se escolhe o recorte.
@@ -48,14 +50,17 @@ export default function Resumo() {
   const [parcelas, setParcelas] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [pendencias, setPendencias] = useState(0);
+  const [fixos, setFixos] = useState({ recs: [], lancs: [] });
   const [comp, setCompEstado] = useState(() => lsGet(LS_MES));
   const [grupoAberto, setGrupoAberto] = useState(null);
   const setComp = (c) => { setCompEstado(c); lsSet(LS_MES, c); setGrupoAberto(null); };
 
   const carregar = useCallback(async () => {
     try {
-      const [r, p, c, n] = await Promise.all([listarResumoMensal(), listarParcelasFuturas(), listarCategorias(), contarPendencias()]);
-      setLinhas(r); setParcelas(p); setCategorias(c); setPendencias(n);
+      const [r, p, c, n, rec, lf] = await Promise.all([
+        listarResumoMensal(), listarParcelasFuturas(), listarCategorias(), contarPendencias(), listarRecorrencias(), listarLancamentosDeFixos(),
+      ]);
+      setLinhas(r); setParcelas(p); setCategorias(c); setPendencias(n); setFixos({ recs: rec, lancs: lf });
     } catch (err) { toast.error(err.message); setLinhas([]); }
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -80,6 +85,7 @@ export default function Resumo() {
   const proximo = comprometido.find((c) => c.competencia === addMeses(comp, 1));
   const meses12 = mesesAte(comp, 12).map((c) => ({ competencia: c, ...(porMes[c] ?? { entradas: 0, gastos: 0 }) }));
   const vazio = !porMes[comp];
+  const fixosPendentes = situacaoDoMes(fixos.recs, fixos.lancs.filter((l) => l.competencia === comp), {}, comp).filter((s) => !s.lancamento);
 
   return (
     <div>
@@ -88,6 +94,12 @@ export default function Resumo() {
       {pendencias > 0 && (
         <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
           {pendencias} lançamento(s) de cartão sem categoria. <Link to="/pendencias" className="font-semibold underline">Revisar pendências</Link>
+        </div>
+      )}
+      {fixosPendentes.length > 0 && (
+        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          {fixosPendentes.length} gasto(s) fixo(s) de {nomeCompetencia(comp).toLowerCase()} ainda não lançado(s): {fixosPendentes.map((s) => s.rec.descricao).join(', ')}.{' '}
+          <Link to="/fixos" onClick={() => lsSet('fixos_mes', comp)} className="font-semibold underline">Lançar</Link>
         </div>
       )}
 
