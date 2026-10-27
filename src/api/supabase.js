@@ -30,3 +30,22 @@ export async function exigir(promessa) {
   if (error) throw new Error(mensagemErro(error));
   return data;
 }
+
+// O PostgREST devolve no máximo 1000 linhas por consulta: lê de 1000 em 1000. `montar` cria a consulta
+// do zero a cada página (o builder do supabase-js não pode ser reusado) e precisa de um `order`.
+export async function buscarTudo(montar) {
+  const tudo = [];
+  for (let de = 0; ; de += 1000) {
+    const pagina = await exigir(montar().range(de, de + 999));
+    tudo.push(...pagina);
+    if (pagina.length < 1000) return tudo;
+  }
+}
+
+// Insere em lotes de 500 (uma fatura grande ou o histórico inteiro não cabem numa requisição só).
+export async function inserirEmLotes(tabela, linhas, aoAvancar) {
+  for (let i = 0; i < linhas.length; i += 500) {
+    await exigir(supabase.from(tabela).insert(linhas.slice(i, i + 500)));
+    aoAvancar?.(Math.min(i + 500, linhas.length));
+  }
+}

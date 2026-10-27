@@ -1,30 +1,12 @@
-import { exigir, supabase } from './supabase.js';
+import { buscarTudo, exigir, inserirEmLotes, supabase } from './supabase.js';
 import { competenciaParaBanco } from '../lib/format.js';
 
 // Importação do histórico da planilha (fase 2). O JSON vem de `scripts/migrar-planilha.mjs` e traz
 // NOMES (de categoria e de cartão); aqui eles viram ids. Tudo o que entra leva `importado_de`, para
 // a conferência e para o "desfazer".
 export const ORIGEM_PLANILHA = 'planilha';
-const LOTE = 500;
 
 const chave = (s) => String(s ?? '').trim().toLocaleLowerCase('pt-BR');
-
-// O PostgREST devolve no máximo 1000 linhas por consulta: lê de 1000 em 1000.
-async function buscarTudo(montar) {
-  const tudo = [];
-  for (let de = 0; ; de += 1000) {
-    const pagina = await exigir(montar().range(de, de + 999));
-    tudo.push(...pagina);
-    if (pagina.length < 1000) return tudo;
-  }
-}
-
-async function inserirEmLotes(tabela, linhas, aoAvancar) {
-  for (let i = 0; i < linhas.length; i += LOTE) {
-    await exigir(supabase.from(tabela).insert(linhas.slice(i, i + LOTE)));
-    aoAvancar?.(Math.min(i + LOTE, linhas.length));
-  }
-}
 
 // Confere o arquivo contra os cadastros: o que não tem categoria ou cartão correspondente.
 export function prepararImportacao(dados, categorias, cartoes) {

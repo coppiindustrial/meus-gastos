@@ -17,8 +17,8 @@ export const GRUPOS = [
     label: 'Cartões',
     icon: SbDoc,
     items: [
-      { to: '/faturas', label: 'Faturas', fase: 3 },
-      { to: '/pendencias', label: 'Revisar pendências', fase: 3 },
+      { to: '/faturas', label: 'Faturas' },
+      { to: '/pendencias', label: 'Revisar pendências' },
     ],
   },
   {
@@ -35,7 +35,7 @@ export const GRUPOS = [
     items: [
       { to: '/cadastros/categorias', label: 'Categorias e grupos' },
       { to: '/cadastros/cartoes', label: 'Cartões' },
-      { to: '/cadastros/regras', label: 'Regras de classificação', fase: 3 },
+      { to: '/cadastros/regras', label: 'Regras de classificação' },
       { to: '/cadastros/importar', label: 'Importar histórico' },
     ],
   },
