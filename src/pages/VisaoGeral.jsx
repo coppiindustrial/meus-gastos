@@ -280,6 +280,7 @@ export default function VisaoGeral() {
   const [forma, setFormaEstado] = useState(() => lsGet(LS_FORMA) || 'colunas');
   const setForma = (v) => { setFormaEstado(v); lsSet(LS_FORMA, v); };
   const [ampliado, setAmpliado] = useState(false);
+  const [gruposAmpliado, setGruposAmpliado] = useState(false);
   const ctrl = useDestaqueSeries();
 
   const carregar = useCallback(async () => {
@@ -468,7 +469,8 @@ export default function VisaoGeral() {
       case 'vg_grupos':
         return (
           <section className="card flex flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-auto p-4"><BarrasGrupos grupos={grupos} total={r.gastos} meses={textoPer} comps={comDado.map((m) => m.competencia)} anterior={gruposAnt} /></div>
+            <div className="min-h-0 flex-1 overflow-auto p-4"><BarrasGrupos grupos={grupos} total={r.gastos} meses={textoPer} comps={comDado.map((m) => m.competencia)} anterior={gruposAnt}
+              onAmpliar={() => setGruposAmpliado(true)} /></div>
           </section>
         );
       case 'vg_tabela':
@@ -510,6 +512,15 @@ export default function VisaoGeral() {
         acessorio={linhas && <span className="hidden text-sm text-gray-500 sm:inline">{textoPer.replace(/^./, (c) => c.toUpperCase())} · {r.meses} {r.meses === 1 ? 'mês' : 'meses'} com lançamentos</span>}
         catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={renderWidget} abaixo={filtros}
         pronto={!!linhas} onAtualizar={carregar} atualizando={carregando} />
+
+      {/* O "Gastos por grupo" AMPLIADO: a lista inteira (grupos ou categorias), com tendência e variação. */}
+      {gruposAmpliado && (
+        <Modal open onClose={() => setGruposAmpliado(false)} title={`Gastos por grupo · ${textoPer}`} maxWidth="max-w-5xl">
+          <div className="max-h-[70vh] overflow-auto pr-1">
+            <BarrasGrupos grupos={grupos} total={r.gastos} meses={textoPer} comps={comDado.map((m) => m.competencia)} anterior={gruposAnt} semLimite />
+          </div>
+        </Modal>
+      )}
 
       {ampliado && (
         <Modal open onClose={() => setAmpliado(false)} title={`Entradas × gastos · ${textoPer}`} maxWidth="max-w-6xl">

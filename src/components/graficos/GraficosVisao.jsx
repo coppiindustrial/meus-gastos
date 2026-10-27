@@ -387,31 +387,69 @@ function useLargura(ref) {
 }
 
 // AS BARRAS POR GRUPO (a opção A do mockup): a barra na COR DO GRUPO, o valor, o %, a curva dos meses e
-// a variação contra o mesmo período do ano anterior. Mostra os maiores (`VISIVEIS`) e "Mostrar os
-// outros"; o hover acende a linha e o balão lista as maiores categorias; clicar num grupo ABRE as
-// categorias dele (com "‹ Todos os grupos" para voltar); "Categorias" lista as maiores de todos.
+// a variação contra o mesmo período do ano anterior. O hover acende a linha e o balão lista as maiores
+// categorias; clicar num grupo ABRE as categorias dele (com "‹ Todos os grupos" para voltar);
+// "Categorias" lista as maiores de todos.
+//
+// QUANTAS LINHAS: as que CABEM no bloco (medido — o bloco se redimensiona no grid). Se tudo cabe, tudo
+// aparece; se não, a última vaga vira um RESUMO quieto do resto ("+ 3 grupos menores · R$ … · 4%", com
+// o balão listando quem são), e a lista inteira fica no AMPLIAR (`onAmpliar`). `semLimite`: o ampliado,
+// que mostra tudo.
 //
 // `grupos`: o `gruposPorMes`. `comps`: os meses do período (a curva). `anterior`: Map de "g:<id>" e
 // "c:<grupo>:<categoria>" → total um ano antes (sem ele, não há a coluna da variação).
 const MAX_CATEGORIAS = 12;
-const VISIVEIS = 7;
+const ALT_LINHA = 35; // a altura de uma linha antes da primeira medida
 
-export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null }) {
-  const balao = useBalao(250, 150);
+// Quantas linhas cabem na caixa que rola o bloco (o pai): a altura dela menos o padding, o cabeçalho e uma
+// folga, dividida pela altura MEDIDA de uma linha.
+function useLinhasQueCabem(caixaRef, cabecalhoRef, ativo) {
+  const [cabem, setCabem] = useState(Infinity);
+  useLayoutEffect(() => {
+    const caixa = caixaRef.current?.parentElement;
+    if (!ativo || !caixa) return undefined;
+    const medir = () => {
+      const cs = getComputedStyle(caixa);
+      const util = caixa.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+        - (cabecalhoRef.current?.getBoundingClientRect().height ?? 40) - 8;
+      const linha = caixaRef.current.querySelector('li')?.getBoundingClientRect().height || ALT_LINHA;
+      const n = Math.max(3, Math.floor(util / (linha + 2)));
+      setCabem((x) => (x === n ? x : n));
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(caixa);
+    return () => ro.disconnect();
+  }, [caixaRef, cabecalhoRef, ativo]);
+  return ativo ? cabem : Infinity;
+}
+
+const IconAmpliarBloco = () => (
+  <svg viewBox="0 0 24 24" className="h-[15px] w-[15px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+  </svg>
+);
+
+export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null, onAmpliar, semLimite = false }) {
+  const balao = useBalao(250, 170);
   const caixaRef = useRef(null);
+  const cabecalhoRef = useRef(null);
   const largura = useLargura(caixaRef);
   const [modo, setModo] = useState('grupos');
   const [aberto, setAberto] = useState(null);
-  const [todos, setTodos] = useState(false);
+  const cabem = useLinhasQueCabem(caixaRef, cabecalhoRef, !semLimite);
   const grupo = grupos.find((g) => g.id === aberto);
   let lista;
   if (grupo) lista = grupo.categorias.map((c) => ({ ...c, chave: `c:${grupo.id}:${c.id}`, cor: grupo.cor, grupo }));
   else if (modo === 'categorias') {
     lista = grupos.flatMap((g) => g.categorias.map((c) => ({ ...c, id: `${g.id}:${c.id}`, chave: `c:${g.id}:${c.id}`, cor: g.cor, grupo: g })))
-      .sort((a, b) => b.total - a.total).slice(0, MAX_CATEGORIAS);
+      .sort((a, b) => b.total - a.total).slice(0, semLimite ? undefined : MAX_CATEGORIAS);
   } else lista = grupos.map((g) => ({ ...g, chave: `g:${g.id}` }));
-  const escondidos = todos ? [] : lista.slice(VISIVEIS);
-  const itens = todos ? lista : lista.slice(0, VISIVEIS);
+  const sobra = lista.length > cabem;
+  const itens = sobra ? lista.slice(0, cabem - 1) : lista;
+  const resto = sobra ? lista.slice(cabem - 1) : [];
+  const somaResto = resto.reduce((s2, x) => s2 + x.total, 0);
+  const nomeResto = grupo || modo === 'categorias' ? ['categoria menor', 'categorias menores'] : ['grupo menor', 'grupos menores'];
   const max = Math.max(1, ...lista.map((it) => it.total));
   const ativo = itens.find((it) => it.id === balao.ativo);
   const comTendencia = largura >= 640 && comps.length > 1;
@@ -419,7 +457,8 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
   const colunas = `minmax(0,11rem) 1fr auto 2.6rem${comTendencia ? ' 74px' : ''}${comVariacao ? ' 4.2rem' : ''}`;
 
   let nota;
-  if (ativo) {
+  if (balao.ativo === 'resto') nota = onAmpliar ? 'Clique para ampliar e ver a lista inteira.' : undefined;
+  else if (ativo) {
     const parte = `${total ? Math.round((ativo.total / total) * 100) : 0}% dos gastos · média ${formatBRL(ativo.media)}/mês`;
     const v = anterior?.get(ativo.chave) ? variacao(ativo.total, anterior.get(ativo.chave)) : null;
     const vs = v === null ? '' : ` · ${v > 0 ? '+' : ''}${v}% sobre o ano anterior`;
@@ -428,7 +467,7 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
 
   return (
     <div ref={caixaRef}>
-      <div className="mb-2 flex items-center gap-2">
+      <div ref={cabecalhoRef} className="mb-2 flex items-center gap-2">
         <h2 className="m-0 flex-1 text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500">
           {grupo ? (
             <>
@@ -441,7 +480,13 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
           <span className="hidden text-[11px] text-gray-400 sm:inline">{[comTendencia && 'tendência', comVariacao && 'vs. ano anterior'].filter(Boolean).join(' · ')}</span>
         )}
         <AbasPilula abas={[{ key: 'grupos', label: 'Grupos' }, { key: 'categorias', label: 'Categorias' }]} valor={modo}
-          onChange={(m) => { setModo(m); setAberto(null); setTodos(false); }} variante="claro" altura={30} folga={2} />
+          onChange={(m) => { setModo(m); setAberto(null); }} variante="claro" altura={30} folga={2} />
+        {onAmpliar && (
+          <button type="button" onClick={onAmpliar} title="Ampliar: a lista inteira"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-[4px] text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">
+            <IconAmpliarBloco />
+          </button>
+        )}
       </div>
       {itens.length === 0 ? <p className="py-6 text-center text-sm text-gray-400">Nenhum gasto no período.</p> : (
         <ul className="space-y-0.5" onMouseLeave={balao.aoSair}>
@@ -450,7 +495,7 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
             return (
               <li key={it.id}>
                 <button type="button" onMouseMove={balao.aoMover(it.id)}
-                  onClick={() => { if (it.categorias) { setAberto(it.id); setTodos(false); } }}
+                  onClick={() => { if (it.categorias) setAberto(it.id); }}
                   style={{ gridTemplateColumns: colunas }}
                   className={`grid w-full items-center gap-3 rounded-[7px] px-2 py-[6px] text-left transition-[background-color,opacity] duration-150 ${
                     balao.ativo === it.id ? 'bg-gray-100' : 'hover:bg-gray-50'} ${balao.esmaecido(it.id) ? 'opacity-50' : ''} ${it.categorias ? 'cursor-pointer' : 'cursor-default'}`}>
@@ -472,13 +517,35 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
               </li>
             );
           })}
+          {/* O RESUMO DO RESTO: uma linha quieta, no mesmo desenho das outras (barra cinza, sem curva). O
+              balão diz quem são; clicar amplia. */}
+          {resto.length > 0 && (
+            <li>
+              <button type="button" onMouseMove={balao.aoMover('resto')} onClick={onAmpliar}
+                style={{ gridTemplateColumns: colunas }}
+                className={`grid w-full items-center gap-3 rounded-[7px] px-2 py-[6px] text-left transition-[background-color,opacity] duration-150 ${
+                  balao.ativo === 'resto' ? 'bg-gray-100' : 'hover:bg-gray-50'} ${balao.esmaecido('resto') ? 'opacity-50' : ''} ${onAmpliar ? 'cursor-pointer' : 'cursor-default'}`}>
+                <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-gray-500">
+                  <span className="h-2 w-2 shrink-0 rounded-full border border-gray-400" />
+                  <span className="truncate">+ {resto.length} {resto.length === 1 ? nomeResto[0] : nomeResto[1]}</span>
+                </span>
+                <span className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                  <span className="block h-full rounded-full bg-gray-300" style={{ width: pct(Math.min(1, somaResto / max)) }} />
+                </span>
+                <span className="whitespace-nowrap text-right text-[12.5px] tabular-nums text-gray-600">{formatBRL(somaResto)}</span>
+                <span className="text-right text-[11.5px] tabular-nums text-gray-500">{total ? Math.round((somaResto / total) * 100) : 0}%</span>
+                {comTendencia && <span />}
+                {comVariacao && <span />}
+              </button>
+            </li>
+          )}
         </ul>
       )}
-      {(escondidos.length > 0 || todos) && lista.length > VISIVEIS && (
-        <button type="button" onClick={() => setTodos((t) => !t)}
-          className="mt-1 rounded-[6px] px-2 py-1 text-[12px] font-medium text-hx-2563eb transition-colors hover:bg-gray-50">
-          {todos ? 'Mostrar só os maiores' : `Mostrar ${escondidos.length === 1 ? 'o outro' : `os outros ${escondidos.length}`} (${formatBRL(escondidos.reduce((s, x) => s + x.total, 0))})`}
-        </button>
+      {balao.ativo === 'resto' && resto.length > 0 && (
+        <BalaoGrafico pos={balao.pos} largura={250} titulo={`${resto.length} ${nomeResto[1]} · ${meses}`}
+          itens={[...resto.slice(0, 5).map((x) => ({ rotulo: x.nome, valor: formatBRL(x.total), cor: x.cor })),
+            ...(resto.length > 5 ? [{ rotulo: `+ ${resto.length - 5} outros`, valor: formatBRL(resto.slice(5).reduce((s2, x) => s2 + x.total, 0)) }] : [])]}
+          nota={nota} />
       )}
       {ativo && (
         <BalaoGrafico pos={balao.pos} largura={250} titulo={`${ativo.grupo && !grupo ? `${ativo.grupo.nome} · ` : ''}${ativo.nome} · ${meses}`}
