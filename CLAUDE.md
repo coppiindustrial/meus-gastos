@@ -41,6 +41,21 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - `importado_de` (migration 002) marca o que veio de fora (`'planilha'` = histórico da fase 2). "Desfazer importação"
   apaga só o que tem a marca.
 
+## Filtros, grade de lançamentos e categorias (mockups escolhidos em 27/10/2026)
+
+- **Filtros = a faixa do Gestor** (`components/filtros/`): `FaixaProvider` + `Trilho` + `DivisorFaixa`, segmentos
+  `SegUnico` (com `padrao`), `SegMulti` (agrupado, com busca), `SegMes` (o mês dentro do trilho, ‹ ›) e `BuscaFaixa`
+  (31px, a altura do trilho). Filtro quieto = só texto; ativo = chip com ✕ que limpa só ele. Tela nova com filtro usa isso.
+- **Lançamentos = planilha no jeito da grade do DRE do Gestor** (`components/planilha/GradeLancamentos.jsx`; contas
+  puras e testadas em `lib/planilha.js`): célula ativa + faixa (Shift, arrastar, nº da linha, cabeçalho), digitar edita,
+  Enter grava e desce, Ctrl+C/V de e para o Excel (colar abaixo do fim cria linhas), Ctrl+D e a alça preenchem,
+  Ctrl+Z/Y desfazem (antes/depois de cada ação; excluir e desfazer devolve o MESMO id), botão direito = `MenuContexto`.
+  Linha nova é RASCUNHO só na tela até ter data e valor; aí vira avulso (ou entrada, com "+" no valor) no mês da tela.
+  Grava campo a campo (`atualizarCampos`), otimista, numa fila. Cartão/parcela/mês: "Abrir no formulário" (Shift+F2).
+  No celular continua a lista (só leitura + formulário).
+- **Categorias = planilha agrupada** (opção A): grupos recolhíveis, e por categoria o uso tirado da `resumo_mensal`
+  (`lib/usoCategorias.js`: 12 meses, total no mês, média pelos meses com dado, último uso).
+
 ## Extrato da conta corrente
 
 - `lib/lerExtrato.js`: CSV do extrato do Nubank (`Data,Valor,Identificador,Descrição`); a `contraparte` (quem recebeu

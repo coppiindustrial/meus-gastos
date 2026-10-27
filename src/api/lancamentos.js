@@ -41,3 +41,45 @@ export function salvarLancamento(l) {
 export function excluirLancamento(id) {
   return exigir(supabase.from('lancamentos').delete().eq('id', id));
 }
+
+// ------------------------------------------------------------ a grade (edição como planilha)
+// A grade grava CAMPO A CAMPO: só o que mudou vai para o banco. Escolher a categoria à mão tira o
+// "Revisar" (alguém decidiu), a não ser que ele venha junto (o desfazer devolve o que era); os outros
+// campos não mexem nele.
+const doBanco = (l) => ({ ...l, competencia: l.competencia.slice(0, 7) });
+
+export async function atualizarCampos(id, campos) {
+  const dados = { ...campos };
+  if ('categoria_id' in dados && !('revisar' in dados)) dados.revisar = false;
+  if ('descricao' in dados) dados.descricao = String(dados.descricao ?? '').trim();
+  if ('obs' in dados) dados.obs = String(dados.obs ?? '').trim();
+  return doBanco(await exigir(supabase.from('lancamentos').update(dados).eq('id', id).select(COLUNAS).single()));
+}
+
+// Linhas novas da grade: avulso (ou entrada), sem cartão nem parcela, no mês que está na tela.
+export async function criarLancamentos(lista) {
+  const dados = lista.map((l) => ({
+    tipo: l.tipo,
+    origem: l.tipo === 'entrada' ? 'entrada' : 'manual',
+    data: l.data,
+    competencia: competenciaParaBanco(l.competencia),
+    descricao: String(l.descricao ?? '').trim(),
+    valor_centavos: l.valor_centavos,
+    categoria_id: l.categoria_id || null,
+    obs: String(l.obs ?? '').trim(),
+  }));
+  return (await exigir(supabase.from('lancamentos').insert(dados).select(COLUNAS))).map(doBanco);
+}
+
+export function excluirLancamentos(ids) {
+  return exigir(supabase.from('lancamentos').delete().in('id', ids));
+}
+
+// O DESFAZER de uma exclusão: as linhas voltam com o MESMO id (o resto da pilha do desfazer as acha),
+// a mesma fatura, parcela e recorrência. Sai só o que veio de junção (categoria, cartão).
+export async function restaurarLancamentos(registros) {
+  const dados = registros.map(({ categoria, cartao, user_id, atualizado_em, ...l }) => ({
+    ...l, competencia: competenciaParaBanco(l.competencia),
+  }));
+  return (await exigir(supabase.from('lancamentos').insert(dados).select(COLUNAS))).map(doBanco);
+}

@@ -595,3 +595,12 @@ html[data-tema='escuro'] {
   --serie-gastos: #3987e5;
   --serie-entradas: #199e70;
 }
+
+/* A GRADE DE LANÇAMENTOS (planilha, `components/planilha/GradeLancamentos.jsx`): o azul da seleção, o
+   mesmo #2563eb do anel da grade do DRE do Gestor, e a hachura das células que ficaram de fora de uma
+   colagem (o motivo aparece no hover). */
+:root { --grade-sel: #2563eb; }
+html[data-tema='escuro'] { --grade-sel: #5b8def; }
+.grade-hachura {
+  background: repeating-linear-gradient(135deg, transparent 0 4px, rgb(156 163 175 / 0.22) 4px 8px);
+}

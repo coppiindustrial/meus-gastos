@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
 import SeletorCategoria from '../components/SeletorCategoria.jsx';
-import SearchInput from '../components/SearchInput.jsx';
+import { BuscaFaixa } from '../components/filtros/Segmentos.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { Bolinha, BotaoEditar, BotaoExcluir, Campo, Etiqueta, RodapeForm } from '../components/Comuns.jsx';
@@ -104,7 +104,7 @@ export default function Regras() {
         acessorio={regras && <span className="text-sm text-gray-500">{regras.length}</span>}
         acoes={<button type="button" className="btn-primary" onClick={() => setModal({})}>Nova regra</button>} />
       <div className="mt-4 max-w-4xl">
-        <SearchInput className="w-full sm:w-80" placeholder="Buscar palavra, categoria ou nome…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <BuscaFaixa className="w-full sm:w-80" placeholder="Buscar palavra, categoria ou nome…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <div className="mt-3">
           {!regras ? <PageLoading /> : filtradas.length === 0 ? <ListaVazia>Nenhuma regra{busca ? ' com essa busca' : ''}.</ListaVazia> : (
             <div className="card overflow-x-auto">
