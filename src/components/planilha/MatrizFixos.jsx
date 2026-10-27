@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import MenuContexto from '../MenuContexto.jsx';
+import BordaCopia, { bordaDaCopia, medirCopia } from './BordaCopia.jsx';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
@@ -13,6 +14,7 @@ import { addMeses, competenciaCurta, nomeCompetencia } from '../../lib/format.js
 import { lsSet } from '../../lib/storage.js';
 import posicionarPopover from '../../lib/posicionarPopover.js';
 import useEscape from '../../lib/useEscape.js';
+import { copiarTexto } from '../../lib/copiar.js';
 import {
   IcoAbrir, IcoColar, IcoCopiar, IcoDesfazer, IcoEtiqueta, IcoLixeira, IcoRefazer, IcoRevisado,
 } from './iconesMenu.jsx';
@@ -52,6 +54,9 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
   const fechou = useRef(false); // o campo já gravou (Enter/Tab): o blur que vem depois não grava de novo
   const fila = useRef(Promise.resolve());
   const balao = useBalao(270, 150);
+  const [copia, setCopia] = useState(null); // o bloco copiado (a borda que anda), com as medidas
+  const [selo, setSelo] = useState(null);   // "N células copiadas" na barra de baixo (some sozinho)
+  const [focada, setFocada] = useState(false);
   const [destaque, setDestaque] = useState(null); // a marca da legenda acesa ('lancado', 'pendente'…)
 
   const faixa = faixaDe(sel, ext ?? sel);
@@ -135,6 +140,7 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
     const acao = pilha[de][pilha[de].length - 1];
     if (!acao) return;
     setPilha((p) => ({ ...p, [de]: p[de].slice(0, -1) }));
+    setCopia(null);
     enfileirar(async () => {
       try {
         const ordem = sentido === 'desfazer' ? [...acao.partes].reverse() : acao.partes;
@@ -178,6 +184,26 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
         empilhar({ rotulo: `excluir ${plural(ids.length, 'lançamento', 'lançamentos')}`, partes: [{ tipo: 'excluir', registros }] });
       } catch (err) { falhou(err); }
     });
+  };
+
+  useEffect(() => {
+    if (!selo) return undefined;
+    const t = setTimeout(() => setSelo(null), 2200);
+    return () => clearTimeout(t);
+  }, [selo]);
+
+  // COPIAR (Ctrl+C e o menu): os valores lançados do bloco, como o Excel lê, e a borda que anda em volta
+  // dele até o Esc, uma edição ou um desfazer — como no DRE. O keydown copia (o evento `copy` nem sempre
+  // dispara numa caixa que não é campo de texto); o Ctrl+V segue para o evento `paste`.
+  const copiar = async () => {
+    const texto = textoFaixa();
+    if (!texto.replace(/[\t\n]/g, '')) { toast.info('Nada lançado na seleção para copiar.'); return; }
+    const ok = await copiarTexto(texto);
+    focar();
+    if (!ok) { toast.error('O navegador não deixou copiar.'); return; }
+    setCopia(medirCopia(caixaRef.current, faixa, 1));
+    const nCel = (faixa.r1 - faixa.r0 + 1) * (faixa.c1 - faixa.c0 + 1);
+    setSelo(`${plural(nCel, 'célula copiada', 'células copiadas')} · Ctrl+V cola aqui ou no Excel`);
   };
 
   const textoFaixa = () => {
@@ -230,6 +256,7 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
     if (!cel) return;
     if (cel.estado === 'fora') { toast.info('Fora da vigência deste gasto fixo: ajuste o início ou o fim no cadastro (Shift+F2).'); return; }
     fechou.current = false;
+    setCopia(null);
     setEditor({ r, c, texto: texto ?? (cel.estado === 'lancado' ? valorParaCampo(cel.valor) : valorParaCampo(cel.sugerido)) });
   };
   const mover = (dr, dc, estender = false) => {
@@ -268,7 +295,8 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
     if (k === 'Tab') { e.preventDefault(); mover(0, e.shiftKey ? -1 : 1); return; }
     if (k === 'Enter' || k === 'F2') { e.preventDefault(); comecar(sel.r, sel.c); return; }
     if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); excluirLancados(); return; }
-    if (k === 'Escape') { setExt(null); setDestaque(null); return; }
+    if (ctrl && (k === 'c' || k === 'C')) { e.preventDefault(); copiar(); return; }
+    if (k === 'Escape') { setExt(null); setDestaque(null); setCopia(null); setSelo(null); return; }
     if (/^[\d,.]$/.test(k) && !ctrl && !e.altKey) { e.preventDefault(); comecar(sel.r, sel.c, k); }
   };
 
@@ -291,7 +319,7 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
       pend
         ? { rotulo: pend === 1 ? 'Lançar com o valor sugerido' : `Lançar os ${pend} pendentes`, icone: <IcoRevisado />, atalho: 'Ctrl+Enter', sub: 'o valor do último mês lançado (ou o padrão)', onEscolher: () => lancarPendentes() }
         : { rotulo: 'Lançar com o valor sugerido', icone: <IcoRevisado />, atalho: 'Ctrl+Enter', desabilitado: true, motivo: 'nada a lançar na seleção' },
-      { rotulo: 'Copiar', icone: <IcoCopiar />, atalho: 'Ctrl+C', sub: multi ? 'os valores lançados, para o Excel' : undefined, onEscolher: () => navigator.clipboard?.writeText(textoFaixa()).then(() => toast.success('Copiado.'), () => {}) },
+      { rotulo: 'Copiar', icone: <IcoCopiar />, atalho: 'Ctrl+C', sub: multi ? 'os valores lançados, para o Excel' : undefined, onEscolher: () => copiar() },
       { rotulo: 'Colar', icone: <IcoColar />, atalho: 'Ctrl+V', sub: 'valores do Excel: lança ou corrige cada mês', onEscolher: async () => { try { colar(await navigator.clipboard.readText()); } catch { toast.info('Use Ctrl+V com a célula selecionada.'); } } },
       lanc
         ? { rotulo: lanc === 1 ? 'Excluir o lançamento' : `Excluir ${lanc} lançamentos`, icone: <IcoLixeira />, atalho: 'Delete', perigo: true, onEscolher: excluirLancados }
@@ -429,8 +457,13 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
     <div>
       <LegendaFixos linhas={linhas} destaque={destaque} onDestaque={(d) => setDestaque((x) => (x === d ? null : d))} />
       <div ref={caixaRef} tabIndex={0} onKeyDown={teclar}
-        onCopy={(e) => { if (editor) return; e.preventDefault(); e.clipboardData.setData('text/plain', textoFaixa()); toast.success('Copiado: cole no Excel.'); }}
-        onPaste={(e) => { if (editor) return; e.preventDefault(); colar(e.clipboardData.getData('text/plain')); }}
+        onFocus={() => setFocada(true)}
+        onBlur={(e) => { if (!caixaRef.current?.contains(e.relatedTarget)) setFocada(false); }}
+        onPaste={(e) => {
+          if (editor || (e.target !== caixaRef.current && e.target.closest?.('input, textarea'))) return;
+          e.preventDefault();
+          colar(e.clipboardData?.getData('text/plain') ?? '');
+        }}
         className="max-h-[calc(100vh-270px)] min-h-[200px] overflow-auto rounded-t-lg border border-gray-300 bg-white outline-none"
         style={{ scrollPaddingLeft: 210, scrollPaddingTop: 34 }}>
         <table className="w-full min-w-[1080px] table-fixed border-separate border-spacing-0 text-[12.5px]">
@@ -505,6 +538,7 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
                         multi && naFaixa(faixa, r, c) && !(sel.r === r && sel.c === c) && cel.estado !== 'pendente' && cel.estado !== 'fora' ? 'bg-hx-eff5ff' : ''} ${
                         apagada(cel) ? 'opacity-20' : ''}`}>
                       {conteudo}
+                      <BordaCopia borda={bordaDaCopia(copia, r, c)} foco={focada} />
                       {editando && (
                         <input autoFocus value={editor.texto} inputMode="decimal"
                           onChange={(e) => setEditor((ed) => ({ ...ed, texto: e.target.value }))}
@@ -550,7 +584,8 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
           </span>
         ) : <span className="truncate">Digite o valor e Enter para lançar · Ctrl+Enter lança os pendentes · botão direito para mais</span>}
         <span className="flex-1" />
-        {multi && <span>{selCelulas.length} células · lançado <b className="font-semibold text-gray-800">{formatBRL(somaSel)}</b></span>}
+        {selo && <span className="text-hx-15803d">✓ {selo}</span>}
+        {multi && !selo && <span>{selCelulas.length} células · lançado <b className="font-semibold text-gray-800">{formatBRL(somaSel)}</b></span>}
       </div>
 
       <MenuContexto menu={menu?.pendente ? null : menu} onFechar={() => setMenu(null)} />

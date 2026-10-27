@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import MenuContexto from '../MenuContexto.jsx';
+import BordaCopia, { bordaDaCopia, medirCopia } from './BordaCopia.jsx';
 import ModalCategoria from '../ModalCategoria.jsx';
 import { Etiqueta } from '../Comuns.jsx';
 import { opcoesCategoria } from '../SelectBusca.jsx';
@@ -16,6 +17,7 @@ import {
 import { formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
 import { competenciaAtual, formatDate, todayISO } from '../../lib/format.js';
 import posicionarPopover from '../../lib/posicionarPopover.js';
+import { copiarTexto } from '../../lib/copiar.js';
 import {
   IcoAbrir, IcoAbaixo, IcoAcima, IcoColar, IcoCopiar, IcoDesfazer, IcoEtiqueta, IcoLimpar, IcoLixeira, IcoPreencher,
   IcoRefazer, IcoRevisado,
@@ -79,6 +81,8 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   const [menu, setMenu] = useState(null);
   const [marcas, setMarcas] = useState(null);     // { alcance, fora: Map("r:c" → motivo) } — a última colagem
   const [selo, setSelo] = useState(null);         // "N células copiadas" (some sozinho)
+  const [copia, setCopia] = useState(null);       // o bloco copiado (a borda que anda), com as medidas
+  const [focada, setFocada] = useState(false);    // a grade tem o foco (a borda da cópia fica azul)
   const [pilha, setPilha] = useState({ desfazer: [], refazer: [] });
   const [criandoCat, setCriandoCat] = useState(null); // { nome, r0, r1 }
   const arrasto = useRef(null);                   // 'faixa' | 'preencher' | null
@@ -112,6 +116,9 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   useLayoutEffect(() => {
     caixaRef.current?.querySelector(`[data-cel="${sel.r}:${sel.c}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [sel.r, sel.c]);
+
+  // Trocar de mês tira a borda da cópia (as linhas são outras).
+  useEffect(() => { setCopia(null); }, [comp]);
 
   useEffect(() => {
     if (!selo) return undefined;
@@ -249,6 +256,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     if (!acao) return;
     setPilha((p) => ({ ...p, [de]: p[de].slice(0, -1) }));
     setMarcas(null);
+    setCopia(null);
     enfileirar(async () => {
       try {
         const ordem = sentido === 'desfazer' ? [...acao.partes].reverse() : acao.partes;
@@ -265,12 +273,17 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
 
   const linhasReais = (f) => linhas.slice(f.r0, Math.min(f.r1, n - 1) + 1).filter((l) => l && !l.rascunho);
 
+  // COPIAR (Ctrl+C e o menu): o bloco como o Excel lê, e a borda que anda em volta dele até o Esc, uma
+  // edição ou um desfazer — como no DRE. É o keydown que copia, e não o evento `copy`: numa caixa que não
+  // é campo de texto o navegador nem sempre o dispara.
   const copiar = async (f = faixa) => {
-    const texto = textoDaFaixa(linhas, { ...f, r1: Math.min(f.r1, n - 1) });
-    try {
-      await navigator.clipboard.writeText(texto);
-      setSelo(`${plural((Math.min(f.r1, n - 1) - f.r0 + 1) * (f.c1 - f.c0 + 1), 'célula copiada', 'células copiadas')} · cole no Excel ou aqui`);
-    } catch { toast.error('O navegador não deixou copiar. Tente Ctrl+C.'); }
+    const g = { ...f, r1: Math.min(f.r1, n - 1) };
+    if (g.r1 < g.r0) return;
+    const ok = await copiarTexto(textoDaFaixa(linhas, g));
+    focar();
+    if (!ok) { toast.error('O navegador não deixou copiar.'); return; }
+    setCopia(medirCopia(caixaRef.current, g, 1));
+    setSelo(`${plural((g.r1 - g.r0 + 1) * (g.c1 - g.c0 + 1), 'célula copiada', 'células copiadas')} · Ctrl+V cola aqui ou no Excel`);
   };
 
   const colarTexto = (texto, inicio = { r: faixa.r0, c: faixa.c0 }) => {
@@ -388,6 +401,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
       return;
     }
     setMarcas(null);
+    setCopia(null);
     const l = linhas[r] ?? novoRascunho(linhas[n - 1]);
     setEditor({ r, c, texto: textoInicial ?? textoEdicao(l, c), digitando: textoInicial !== undefined });
   };
@@ -440,6 +454,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     const ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && (k === 'z' || k === 'Z') && !e.shiftKey) { e.preventDefault(); andarPilha('desfazer'); return; }
     if (ctrl && (k === 'y' || k === 'Y' || ((k === 'z' || k === 'Z') && e.shiftKey))) { e.preventDefault(); andarPilha('refazer'); return; }
+    if (ctrl && (k === 'c' || k === 'C')) { e.preventDefault(); copiar(); return; }
     if (ctrl && (k === 'd' || k === 'D')) { e.preventDefault(); preencher(); return; }
     if (ctrl && (k === 'a' || k === 'A')) { e.preventDefault(); setSel({ r: 0, c: 0 }); setExt({ r: Math.max(0, n - 1), c: ULTIMA_COL }); return; }
     if (ctrl && e.shiftKey && (k === '+' || k === '=')) { e.preventDefault(); inserir('acima'); return; }
@@ -463,7 +478,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     if (k === 'Tab') { e.preventDefault(); mover(0, e.shiftKey ? -1 : 1); return; }
     if (k === 'Enter' || k === 'F2') { e.preventDefault(); comecarEdicao(sel.r, sel.c); return; }
     if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); limpar(); return; }
-    if (k === 'Escape') { setExt(null); setMarcas(null); setSelo(null); return; }
+    if (k === 'Escape') { setExt(null); setMarcas(null); setSelo(null); setCopia(null); return; }
     if (k.length === 1 && !ctrl && !e.altKey) { e.preventDefault(); comecarEdicao(sel.r, sel.c, k); }
   };
 
@@ -641,6 +656,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
             }}
             onCriarCategoria={(nome) => { setCriandoCat({ nome, r0: editor.r, r1: editor.r1 ?? editor.r }); setEditor(null); }} />
         )}
+        <BordaCopia borda={bordaDaCopia(copia, r, c)} foco={focada} />
         {(ultimaFaixa || (!multi && ativa && !editor)) && (
           <span onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); arrasto.current = 'preencher'; }}
             title="Arraste para baixo para preencher"
@@ -656,8 +672,15 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   return (
     <div>
       <div ref={caixaRef} tabIndex={0} onKeyDown={teclar}
-        onCopy={(e) => { if (editor) return; e.preventDefault(); e.clipboardData.setData('text/plain', textoDaFaixa(linhas, { ...faixa, r1: Math.min(faixa.r1, n - 1) })); setSelo(`${plural((Math.min(faixa.r1, n - 1) - faixa.r0 + 1) * (faixa.c1 - faixa.c0 + 1), 'célula copiada', 'células copiadas')} · cole no Excel ou aqui`); }}
-        onPaste={(e) => { if (editor) return; e.preventDefault(); colarTexto(e.clipboardData.getData('text/plain')); }}
+        onFocus={() => setFocada(true)}
+        onBlur={(e) => { if (!caixaRef.current?.contains(e.relatedTarget)) setFocada(false); }}
+        // COLAR: o Ctrl+V segue para o evento `paste`, que é onde o navegador entrega o que foi copiado
+        // (do Excel ou desta grade). Com um campo aberto, o texto vai para o campo.
+        onPaste={(e) => {
+          if (editor || (e.target !== caixaRef.current && e.target.closest?.('input, textarea'))) return;
+          e.preventDefault();
+          colarTexto(e.clipboardData?.getData('text/plain') ?? '');
+        }}
         className="grade-lancamentos max-h-[calc(100vh-300px)] min-h-[260px] overflow-auto rounded-t-lg border border-gray-300 bg-white outline-none focus-visible:ring-0"
         style={{ scrollPaddingTop: 34, scrollPaddingLeft: 44 }}>
         <table className="table-fixed border-separate border-spacing-0" style={{ width: '100%', minWidth: larguraTotal }}>
