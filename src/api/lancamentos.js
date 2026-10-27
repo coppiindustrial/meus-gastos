@@ -71,6 +71,11 @@ export async function criarLancamentos(lista) {
   return (await exigir(supabase.from('lancamentos').insert(dados).select(COLUNAS))).map(doBanco);
 }
 
+// As linhas inteiras (para guardar no desfazer antes de excluir).
+export async function buscarPorIds(ids) {
+  return (await exigir(supabase.from('lancamentos').select('*').in('id', ids))).map(doBanco);
+}
+
 export function excluirLancamentos(ids) {
   return exigir(supabase.from('lancamentos').delete().in('id', ids));
 }

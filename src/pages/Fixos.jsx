@@ -5,22 +5,25 @@ import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import Checkbox from '../components/Checkbox.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
-import { Bolinha, BotaoEditar, BotaoExcluir, Campo, Etiqueta, RodapeForm, SeletorMes } from '../components/Comuns.jsx';
+import { Campo, RodapeForm } from '../components/Comuns.jsx';
+import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
+import { BuscaFaixa, SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
+import MatrizFixos from '../components/planilha/MatrizFixos.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { listarCategorias } from '../api/cadastros.js';
 import {
-  criarRecorrenciasDoHistorico, excluirRecorrencia, lancarFixo, listarFixosSemRecorrencia, listarLancamentosDeFixos,
-  listarRecorrencias, salvarRecorrencia,
+  criarRecorrenciasDoHistorico, lancarFixo, listarFixosSemRecorrencia, listarLancamentosDeFixos, listarRecorrencias, salvarRecorrencia,
 } from '../api/fixos.js';
-import { recorrenciasDoHistorico, situacaoDoMes, ultimosPorRecorrencia } from '../lib/fixos.js';
+import { matrizDoAno, recorrenciasDoHistorico } from '../lib/fixos.js';
 import { formatBRL, parseValor, valorParaCampo } from '../lib/dinheiro.js';
-import { competenciaAtual, competenciaCurta, formatDate, nomeCompetencia } from '../lib/format.js';
+import { competenciaAtual, competenciaCurta } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
 
-// GASTOS FIXOS: o cadastro das contas que se repetem todo mês e, para o mês escolhido, a lista do que
-// falta lançar — com o valor sugerido (o do último mês) editável e "Lançar" com um clique.
-const LS_MES = 'fixos_mes';
+// GASTOS FIXOS como uma aba da planilha (a opção B do mockup): uma linha por gasto fixo e uma coluna por
+// mês do ano (`MatrizFixos`). A célula a lançar vem com o valor sugerido (o do último mês lançado);
+// digitar e dar Enter lança. O cadastro (nome, dia, categoria, padrão, vigência) é o modal de sempre,
+// aberto pelo clique duplo no nome, pelo botão direito ou por Shift+F2.
+const LS_ANO = 'fixos_ano';
 const SEM_CATEGORIA = [{ value: '', label: 'Sem categoria' }];
 
 function ModalRecorrencia({ rec, categorias, onFechar, onSalvo }) {
@@ -116,17 +119,23 @@ function DoHistorico({ sugeridas, categorias, onCriado }) {
   );
 }
 
+const OPCOES_SITUACAO = [{ value: 'ativos', label: 'Só os ativos', chip: 'Ativos' }, { value: '', label: 'Todos' }, { value: 'inativos', label: 'Só os inativos', chip: 'Inativos' }];
+const semAcento = (s) => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+
 export default function Fixos() {
   const toast = useToast();
-  const confirmar = useConfirmacao();
-  const [comp, setCompEstado] = useState(() => lsGet(LS_MES) || competenciaAtual());
-  const setComp = (c) => { setCompEstado(c); lsSet(LS_MES, c); };
+  const hoje = competenciaAtual();
+  const anoAtual = Number(hoje.slice(0, 4));
+  const [ano, setAnoEstado] = useState(() => Number(lsGet(LS_ANO)) || anoAtual);
+  const setAno = (a) => { setAnoEstado(a); lsSet(LS_ANO, String(a)); };
   const [recs, setRecs] = useState(null);
   const [lancs, setLancs] = useState([]);
   const [semRec, setSemRec] = useState([]);
   const [categorias, setCategorias] = useState([]);
-  const [valores, setValores] = useState({}); // valor digitado por recorrência (texto)
-  const [lancando, setLancando] = useState(null);
+  const [busca, setBusca] = useState('');
+  const [cats, setCats] = useState([]);
+  const [situacao, setSituacao] = useState('ativos');
+  const [modo, setModo] = useState('valor');
   const [modal, setModal] = useState(null);
 
   const carregar = useCallback(async () => {
@@ -137,131 +146,103 @@ export default function Fixos() {
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
 
-  const situacao = useMemo(() => situacaoDoMes(
-    recs ?? [], lancs.filter((l) => l.competencia === comp), ultimosPorRecorrencia(lancs, comp), comp,
-  ), [recs, lancs, comp]);
-  const pendentes = situacao.filter((s) => !s.lancamento);
-  const valorDe = (s) => (valores[s.rec.id] !== undefined ? parseValor(valores[s.rec.id]) : s.sugerido);
+  const filtrados = useMemo(() => {
+    const t = semAcento(busca).trim();
+    return (recs ?? []).filter((r) => (!situacao || (situacao === 'ativos' ? r.ativa : !r.ativa))
+      && (!cats.length || cats.includes(r.categoria_id ?? 'sem'))
+      && (!t || semAcento(`${r.descricao} ${r.categoria?.nome ?? ''}`).includes(t)));
+  }, [recs, busca, situacao, cats]);
+  const matriz = useMemo(() => matrizDoAno(filtrados, lancs, ano, hoje), [filtrados, lancs, ano, hoje]);
 
-  const lancar = async (lista) => {
-    const invalidas = lista.filter((s) => !(valorDe(s) > 0));
-    if (invalidas.length) { toast.error(`Informe o valor de: ${invalidas.map((s) => s.rec.descricao).join(', ')}.`); return; }
-    setLancando(lista.length === 1 ? lista[0].rec.id : 'todos');
+  const opcoesAno = useMemo(() => {
+    const s = new Set(lancs.map((l) => Number(l.competencia.slice(0, 4))));
+    [anoAtual - 1, anoAtual, anoAtual + 1].forEach((a) => s.add(a));
+    return [...s].sort((a, b) => b - a).map((a) => ({ value: a, label: String(a), chip: `Ano: ${a}` }));
+  }, [lancs, anoAtual]);
+  const opcoesCategoria = useMemo(() => {
+    const gs = [];
+    categorias.filter((c) => c.grupo.tipo === 'saida').forEach((c) => {
+      let g = gs.find((x) => x.titulo === c.grupo.nome);
+      if (!g) { g = { titulo: c.grupo.nome, cor: c.grupo.cor, itens: [] }; gs.push(g); }
+      g.itens.push({ value: c.id, label: c.nome, grupo: c.grupo.nome });
+    });
+    return [{ titulo: 'Geral', itens: [{ value: 'sem', label: 'Sem categoria' }] }, ...gs];
+  }, [categorias]);
+
+  // "Lançar os N de outubro": as pendentes do mês atual, com o valor sugerido.
+  const colHoje = matriz.comps.indexOf(hoje);
+  const pendHoje = colHoje >= 0 ? matriz.linhas.filter((l) => l.celulas[colHoje].estado === 'pendente' && l.celulas[colHoje].sugerido > 0) : [];
+  const [lancandoTodos, setLancandoTodos] = useState(false);
+  const lancarMes = async () => {
+    setLancandoTodos(true);
     try {
-      for (const s of lista) await lancarFixo(s.rec, comp, valorDe(s));
-      toast.success(lista.length === 1 ? `${lista[0].rec.descricao} lançado.` : `${lista.length} gastos fixos lançados.`);
-      setValores({});
-      await carregar();
+      for (const l of pendHoje) await lancarFixo(l.rec, hoje, l.celulas[colHoje].sugerido);
+      toast.success(`${pendHoje.length} gastos fixos lançados em ${competenciaCurta(hoje)}.`);
     } catch (err) {
-      toast.error(/duplicate|unique/i.test(err.message) ? 'Este fixo já foi lançado neste mês.' : err.message);
-      await carregar();
-    } finally { setLancando(null); }
-  };
-
-  const apagar = async (r) => {
-    const ok = await confirmar({ titulo: `Excluir o gasto fixo "${r.descricao}"?`, texto: 'Os lançamentos que ele já gerou continuam. Se só parou de pagar, prefira desmarcar "Ativo" ou pôr a data de término.', confirmar: 'Excluir', perigo: true });
-    if (!ok) return;
-    try { await excluirRecorrencia(r.id); toast.success('Gasto fixo excluído.'); carregar(); } catch (err) { toast.error(err.message); }
+      toast.error(/duplicate|unique/i.test(err.message) ? 'Algum destes fixos já tinha sido lançado neste mês.' : err.message);
+    } finally { setLancandoTodos(false); carregar(); }
   };
 
   if (!recs) return (<div><CabecalhoPagina titulo="Gastos fixos" /><PageLoading /></div>);
 
   const sugeridas = recs.length === 0 ? recorrenciasDoHistorico(semRec) : [];
-  const total = situacao.reduce((s, x) => s + (x.lancamento ? Number(x.lancamento.valor_centavos) : 0), 0);
+  const filtrando = Boolean(busca || cats.length || situacao !== 'ativos' || ano !== anoAtual);
+  const limpar = () => { setBusca(''); setCats([]); setSituacao('ativos'); setAno(anoAtual); };
+  const chipModo = (id, rotulo) => (
+    <button type="button" onClick={() => setModo(id)}
+      className={`rounded-[3px] px-[9px] pb-[3px] pt-[4px] text-[12px] transition-colors ${modo === id ? 'bg-chip-ativo font-semibold text-chip-ativo' : 'font-medium text-gray-600 hover:bg-gray-200'}`}>
+      {rotulo}
+    </button>
+  );
 
   return (
     <div>
       <CabecalhoPagina titulo="Gastos fixos"
+        acessorio={recs.length > 0 && <span className="text-sm text-gray-500">{recs.filter((r) => r.ativa).length} ativos</span>}
         acoes={<>
-          <span className="hidden sm:block"><SeletorMes comp={comp} onChange={setComp} /></span>
+          {pendHoje.length > 0 && (
+            <button type="button" className="btn-secondary hidden sm:inline-flex" onClick={lancarMes} disabled={lancandoTodos}>
+              {lancandoTodos ? 'Lançando…' : `Lançar os ${pendHoje.length} de ${competenciaCurta(hoje).slice(0, 3)}`}
+            </button>
+          )}
           <button type="button" className="btn-primary" onClick={() => setModal({})}><span className="sm:hidden">Novo</span><span className="hidden sm:inline">Novo gasto fixo</span></button>
         </>} />
-      <div className="mt-4 flex justify-center sm:hidden"><SeletorMes comp={comp} onChange={setComp} /></div>
 
       {sugeridas.length > 0 && <DoHistorico sugeridas={sugeridas} categorias={categorias} onCriado={carregar} />}
 
       {recs.length > 0 && (
-        <section className="card mt-4 max-w-4xl overflow-hidden">
-          <header className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-2.5">
-            <h2 className="flex-1 text-sm font-semibold text-gray-800">Fixos de {nomeCompetencia(comp).toLowerCase()}</h2>
-            <span className="text-xs text-gray-500">{situacao.length - pendentes.length} de {situacao.length} lançados · {formatBRL(total)}</span>
-            {pendentes.length > 1 && (
-              <button type="button" className="btn-primary !py-1" onClick={() => lancar(pendentes)} disabled={!!lancando}>
-                {lancando === 'todos' ? 'Lançando…' : `Lançar os ${pendentes.length} pendentes`}
-              </button>
-            )}
-          </header>
-          {situacao.length === 0 ? <p className="px-4 py-3 text-sm text-gray-500">Nenhum gasto fixo vigente neste mês.</p> : (
-            <ul className="divide-y divide-gray-100">
-              {situacao.map((s) => (
-                <li key={s.rec.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5 text-sm text-gray-800"><Bolinha cor={s.rec.categoria?.grupo?.cor} />{s.rec.descricao}</span>
-                    <span className="block text-xs text-gray-500">
-                      dia {s.rec.dia_do_mes}{s.rec.categoria ? ` · ${s.rec.categoria.nome}` : ''}{!s.lancamento && ` · sugerido pelo ${s.base}`}
-                    </span>
-                  </span>
-                  {s.lancamento ? (
-                    <>
-                      <span className="text-sm tabular-nums text-gray-800">{formatBRL(s.lancamento.valor_centavos)}</span>
-                      <Etiqueta tom="verde">Lançado {formatDate(s.lancamento.data).slice(0, 5)}</Etiqueta>
-                    </>
-                  ) : (
-                    <>
-                      <input className="input !w-28 !py-1.5 text-right tabular-nums" inputMode="decimal" aria-label={`Valor de ${s.rec.descricao}`}
-                        value={valores[s.rec.id] ?? valorParaCampo(s.sugerido)} onChange={(e) => setValores((v) => ({ ...v, [s.rec.id]: e.target.value }))} />
-                      <button type="button" className="btn-secondary !py-1.5" onClick={() => lancar([s])} disabled={!!lancando}>
-                        {lancando === s.rec.id ? 'Lançando…' : 'Lançar'}
-                      </button>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+        <>
+          <FaixaProvider>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <BuscaFaixa className="w-full sm:w-[200px]" placeholder="Gasto fixo" value={busca} onChange={(e) => setBusca(e.target.value)} />
+              <Trilho>
+                <SegUnico id="ano" rotulo="Ano" opcoes={opcoesAno} value={ano} onChange={setAno} padrao={anoAtual} mostraPadrao largura={150} />
+                <DivisorFaixa />
+                <SegMulti id="categoria" rotulo="Categoria" opcoes={opcoesCategoria} value={cats} onChange={setCats} largura={280} busca="Buscar categoria ou grupo" />
+                <DivisorFaixa />
+                <SegUnico id="situacao" rotulo="Situação" opcoes={OPCOES_SITUACAO} value={situacao} onChange={setSituacao} padrao="ativos" mostraPadrao largura={170} />
+              </Trilho>
+              <LimparFiltros ativo={filtrando} onClick={limpar} />
+              <span className="flex-1" />
+              <Trilho>{chipModo('valor', 'Valor')}{chipModo('variacao', 'Variação %')}</Trilho>
+            </div>
+          </FaixaProvider>
 
-      {recs.length > 0 && (
-        <section className="mt-6 max-w-4xl">
-          <h2 className="mb-2 text-sm font-semibold text-gray-800">Cadastro</h2>
-          <div className="card overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-gray-200 bg-gray-50">
-                <tr>
-                  <th className="table-th">Gasto fixo</th>
-                  <th className="table-th hidden sm:table-cell">Categoria</th>
-                  <th className="table-th text-right">Padrão</th>
-                  <th className="table-th">Dia</th>
-                  <th className="table-th hidden md:table-cell">Vigência</th>
-                  <th className="table-th w-[84px]" aria-label="Ações" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {recs.map((r) => (
-                  <tr key={r.id} className="group/linha hover:bg-gray-50">
-                    <td className="table-td">
-                      <span className={r.ativa ? 'text-gray-800' : 'text-gray-400'}>{r.descricao}</span>
-                      {!r.ativa && <span className="ml-2"><Etiqueta>Inativo</Etiqueta></span>}
-                    </td>
-                    <td className="table-td hidden sm:table-cell">{r.categoria?.nome ?? '—'}</td>
-                    <td className="table-td text-right tabular-nums">{formatBRL(r.valor_padrao_centavos)}</td>
-                    <td className="table-td">{r.dia_do_mes}</td>
-                    <td className="table-td hidden md:table-cell text-gray-500">
-                      desde {competenciaCurta(r.inicio.slice(0, 7))}{r.fim ? ` até ${competenciaCurta(r.fim.slice(0, 7))}` : ''}
-                    </td>
-                    <td className="table-td">
-                      <span className="flex justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/linha:opacity-100 md:focus-within:opacity-100">
-                        <BotaoEditar onClick={() => setModal({ item: r })} />
-                        <BotaoExcluir onClick={() => apagar(r)} />
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-3">
+            {matriz.linhas.length === 0
+              ? <ListaVazia>Nenhum gasto fixo {filtrando ? 'com esses filtros' : `vigente em ${ano}`}.</ListaVazia>
+              : <MatrizFixos matriz={matriz} hoje={hoje} setLancs={setLancs} modo={modo} onEditar={(rec) => setModal({ item: rec })} onRecarregar={carregar} />}
           </div>
-        </section>
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11.5px] text-gray-500">
+            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 border border-hx-bbf7d0 bg-hx-f0fdf4" />lançado no mês atual</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 border border-hx-fcd34d bg-hx-fffbeb" />a lançar (o cinza é o valor sugerido)</span>
+            <span className="inline-flex items-center gap-1.5"><span className="grade-hachura h-3 w-4 border border-gray-200" />fora da vigência</span>
+            <span className="inline-flex items-center gap-1.5"><b className="font-semibold text-hx-b91c1c">123</b>subiu em relação ao mês anterior</span>
+            <span className="flex-1" />
+            <span>Digite o valor e Enter para lançar · Ctrl+Enter lança os pendentes da seleção · clique duplo no nome edita o cadastro</span>
+          </div>
+        </>
       )}
 
       {recs.length === 0 && sugeridas.length === 0 && (

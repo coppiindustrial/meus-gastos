@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dataNoMes, recorrenciasDoHistorico, situacaoDoMes, ultimosPorRecorrencia, vigente } from '../src/lib/fixos.js';
+import { dataNoMes, recorrenciasDoHistorico, situacaoDoMes, ultimosPorRecorrencia, vigente, matrizDoAno } from '../src/lib/fixos.js';
 
 const rec = (id, extra = {}) => ({ id, descricao: id, dia_do_mes: 5, ativa: true, inicio: '2026-04-01', fim: null, valor_padrao_centavos: 10000, ...extra });
 
@@ -55,4 +55,26 @@ test('recorrências a partir do histórico: uma por descrição, com o valor mai
     ['Internet', 14990, '2026-05-01', 1, 1],
     ['Luz', 30698, '2026-04-01', 2, 2],
   ]);
+});
+
+test('matrizDoAno: lançado (com o mês anterior), pendente, futuro e fora da vigência', () => {
+  const recs = [
+    { id: 'luz', descricao: 'Luz', dia_do_mes: 15, valor_padrao_centavos: 15000, inicio: '2026-03-01', fim: null, ativa: true },
+    { id: 'velho', descricao: 'Velho', dia_do_mes: 1, valor_padrao_centavos: 100, inicio: '2020-01-01', fim: '2024-12-01', ativa: true },
+  ];
+  const lancs = [
+    { id: 'a', recorrencia_id: 'luz', competencia: '2026-08', valor_centavos: 18000 },
+    { id: 'b', recorrencia_id: 'luz', competencia: '2026-09', valor_centavos: '18126' },
+  ];
+  const { comps, linhas, totais } = matrizDoAno(recs, lancs, 2026, '2026-10');
+  assert.equal(comps.length, 12);
+  assert.equal(linhas.length, 1); // o "Velho" não vale em 2026
+  const c = linhas[0].celulas;
+  assert.equal(c[1].estado, 'fora');                       // fevereiro, antes do início
+  assert.deepEqual([c[2].estado, c[2].sugerido, c[2].base], ['pendente', 15000, 'valor padrão']);
+  assert.deepEqual([c[8].estado, c[8].valor, c[8].antes], ['lancado', 18126, 18000]);
+  assert.deepEqual([c[9].estado, c[9].sugerido, c[9].base], ['pendente', 18126, 'valor de set/26']);
+  assert.equal(c[10].estado, 'futuro');
+  assert.equal(linhas[0].media, 18063);
+  assert.equal(totais['2026-09'], 18126);
 });

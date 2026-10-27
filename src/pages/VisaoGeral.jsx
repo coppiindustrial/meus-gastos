@@ -369,7 +369,7 @@ export default function VisaoGeral() {
           {fixosPendentes.length > 0 && (
             <span title={fixosPendentes.map((s) => s.rec.descricao).join(', ')}>
               <b className="font-semibold text-gray-900">{fixosPendentes.length}</b> gasto(s) fixo(s) a lançar{' '}
-              <Link to="/fixos" onClick={() => lsSet('fixos_mes', hoje)} className="font-medium text-hx-2563eb hover:underline">Lançar →</Link>
+              <Link to="/fixos" className="font-medium text-hx-2563eb hover:underline">Lançar →</Link>
             </span>
           )}
           {parcelasProx && (

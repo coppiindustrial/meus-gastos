@@ -77,3 +77,43 @@ export function recorrenciasDoHistorico(lancamentos) {
     };
   }).sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
 }
+
+// A MATRIZ DO ANO (a tela de Gastos fixos, "fixo × mês"): para cada recorrência, uma célula por mês.
+//   'lancado'  → { lancamento, valor, antes }: `antes` é o valor lançado no mês anterior (ou null);
+//   'pendente' → vigente, sem lançamento, até o mês atual: { sugerido, base } (como no `situacaoDoMes`);
+//   'futuro'   → vigente, depois do mês atual: { sugerido, base };
+//   'fora'     → fora da vigência (inativa, antes do início ou depois do fim).
+// Um lançamento existente vale mesmo fora da vigência (a recorrência pode ter sido encerrada depois).
+// Entram as recorrências vigentes em algum mês do ano ou com lançamento nele, na ordem do dia.
+// `media`: a média dos meses lançados no ano; `totais`: { comp: soma do lançado }.
+export function matrizDoAno(recorrencias, lancamentos, ano, hoje) {
+  const comps = Array.from({ length: 12 }, (_, i) => `${ano}-${p2(i + 1)}`);
+  const lanc = new Map(lancamentos.filter((l) => l.recorrencia_id).map((l) => [`${l.recorrencia_id}|${l.competencia}`, l]));
+  const ultimosPorMes = Object.fromEntries(comps.map((c) => [c, ultimosPorRecorrencia(lancamentos, c)]));
+  const totais = Object.fromEntries(comps.map((c) => [c, 0]));
+  const linhas = recorrencias.map((rec) => {
+    const celulas = comps.map((comp, i) => {
+      const l = lanc.get(`${rec.id}|${comp}`);
+      if (l) {
+        const valor = Number(l.valor_centavos);
+        totais[comp] += valor;
+        const ant = lanc.get(`${rec.id}|${i ? comps[i - 1] : `${ano - 1}-12`}`);
+        return { comp, estado: 'lancado', lancamento: l, valor, antes: ant ? Number(ant.valor_centavos) : null };
+      }
+      if (!vigente(rec, comp)) return { comp, estado: 'fora' };
+      const u = ultimosPorMes[comp][rec.id];
+      const sug = u ? { sugerido: u.valor_centavos, base: `valor de ${competenciaCurta(u.competencia)}` } : { sugerido: rec.valor_padrao_centavos, base: 'valor padrão' };
+      return { comp, estado: comp <= hoje ? 'pendente' : 'futuro', ...sug };
+    });
+    const lancadas = celulas.filter((c) => c.estado === 'lancado');
+    return {
+      rec,
+      celulas,
+      total: lancadas.reduce((s, c) => s + c.valor, 0),
+      media: lancadas.length ? Math.round(lancadas.reduce((s, c) => s + c.valor, 0) / lancadas.length) : null,
+    };
+  })
+    .filter((x) => x.celulas.some((c) => c.estado !== 'fora'))
+    .sort((a, b) => (a.rec.dia_do_mes - b.rec.dia_do_mes) || a.rec.descricao.localeCompare(b.rec.descricao, 'pt-BR'));
+  return { comps, linhas, totais };
+}

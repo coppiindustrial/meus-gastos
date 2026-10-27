@@ -81,6 +81,12 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   recorrência antes do mês; sem histórico, o `valor_padrao_centavos`. Lógica pura em `lib/fixos.js` (testada).
 - Índice único `(recorrencia_id, competencia)` (migration 004): o banco recusa o fixo lançado duas vezes no mês.
 - Excluir a recorrência mantém os lançamentos (FK `set null`); editar um lançamento de fixo mantém o `recorrencia_id`.
+- A TELA é a matriz fixo × mês do ano (opção B, `components/planilha/MatrizFixos.jsx`, células de `matrizDoAno`):
+  lançado · a lançar (sugerido em cinza, fundo âmbar) · futuro · fora da vigência (hachurado). Digitar + Enter lança
+  (ou corrige o lançado), Ctrl+Enter lança os pendentes da seleção, Delete exclui, Ctrl+V cola do Excel, Ctrl+Z/Y.
+  O cadastro continua no modal (clique duplo no nome, Shift+F2 ou botão direito).
+- O resumo no topo dos Lançamentos (`components/graficos/CartoesResumo.jsx`, opção C com as setas): cartões com a
+  curva dos últimos 6 meses (da `resumo_mensal`; o mês da tela vem da grade); clicar filtra o tipo.
 
 ## Visão geral (a tela inicial, 27/10/2026)
 

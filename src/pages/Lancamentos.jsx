@@ -6,15 +6,19 @@ import { Bolinha } from '../components/Comuns.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { BuscaFaixa, SegMes, SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import GradeLancamentos from '../components/planilha/GradeLancamentos.jsx';
+import CartoesResumo from '../components/graficos/CartoesResumo.jsx';
 import ModalLancamento from './ModalLancamento.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { listarDoMes } from '../api/lancamentos.js';
+import { listarResumoMensal } from '../api/resumo.js';
 import { listarCartoes, listarCategorias } from '../api/cadastros.js';
-import { brlCurto, formatBRL } from '../lib/dinheiro.js';
+import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaAtual, formatDate, nomeCompetencia } from '../lib/format.js';
 import { ORIGENS, textoOrigem } from '../lib/planilha.js';
 import { lsGet, lsSet } from '../lib/storage.js';
 import { exportCsv } from '../lib/exportCsv.js';
+import { mesesAte } from '../lib/resumo.js';
+import { filtrar, resumoPeriodo } from '../lib/visaoGeral.js';
 
 const OPCOES_TIPO = [{ value: '', label: 'Todos' }, { value: 'saida', label: 'Gastos' }, { value: 'entrada', label: 'Entradas' }];
 const OPCOES_ORIGEM = Object.entries(ORIGENS).map(([value, label]) => ({ value, label }));
@@ -31,20 +35,6 @@ const Valor = ({ l }) => (
   </span>
 );
 
-// No celular os três cartões dividem 375px: o valor vai abreviado ("R$ 18,5 mil"), o cheio no resto.
-function Kpi({ rotulo, centavos, tom }) {
-  const cor = tom === 'verde' ? 'text-green-700' : tom === 'vermelho' ? 'text-hx-c0393d' : 'text-gray-800';
-  return (
-    <div className="card min-w-0 px-3 py-2.5 sm:px-4 sm:py-3">
-      <div className="truncate text-[10.5px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">{rotulo}</div>
-      <div className={`mt-1 whitespace-nowrap font-semibold tabular-nums ${cor}`}>
-        <span className="text-[15px] sm:hidden">{brlCurto(centavos)}</span>
-        <span className="hidden text-xl sm:inline">{formatBRL(centavos)}</span>
-      </div>
-    </div>
-  );
-}
-
 export default function Lancamentos() {
   const toast = useToast();
   const [comp, setCompEstado] = useState(() => lsGet(LS_MES) || competenciaAtual());
@@ -58,6 +48,7 @@ export default function Lancamentos() {
   const [cats, setCats] = useState([]);
   const [revisar, setRevisar] = useState('');
   const [modal, setModal] = useState(null); // { item } ou {} para novo
+  const [resumo, setResumo] = useState([]); // a view resumo_mensal (para a curva dos meses)
 
   useEffect(() => {
     Promise.all([listarCategorias(), listarCartoes()])
@@ -69,26 +60,33 @@ export default function Lancamentos() {
     try { setTodas(ordenar(await listarDoMes(comp))); } catch (err) { toast.error(err.message); setTodas([]); }
   }, [comp, toast]);
   useEffect(() => { setTodas(null); carregar(); }, [carregar]);
+  useEffect(() => { listarResumoMensal().then(setResumo).catch((err) => toast.error(err.message)); }, [toast]);
 
   // Os filtros. Os RASCUNHOS da grade passam sempre: uma linha que se está digitando não pode sumir.
-  const visiveis = useMemo(() => {
+  // Os filtros MENOS o tipo: os cartões do resumo são um por tipo, e o tipo é escolhido clicando neles.
+  const semTipo = useMemo(() => {
     if (!todas) return [];
     const termo = busca.trim().toLocaleLowerCase('pt-BR');
     return todas.filter((l) => l.rascunho || (
-      (!tipo || l.tipo === tipo)
-      && (!origens.length || origens.includes(l.origem))
+      (!origens.length || origens.includes(l.origem))
       && (!cats.length || cats.includes(l.categoria_id ?? 'sem'))
       && (!revisar || l.revisar)
       && (!termo || `${l.descricao} ${l.estabelecimento ?? ''} ${l.obs ?? ''} ${l.categoria?.nome ?? ''}`.toLocaleLowerCase('pt-BR').includes(termo))
     ));
-  }, [todas, busca, tipo, origens, cats, revisar]);
+  }, [todas, busca, origens, cats, revisar]);
+  const visiveis = useMemo(() => semTipo.filter((l) => l.rascunho || !tipo || l.tipo === tipo), [semTipo, tipo]);
   const gravadas = useMemo(() => visiveis.filter((l) => !l.rascunho), [visiveis]);
 
-  const totais = useMemo(() => {
+  // A SÉRIE DO RESUMO: os últimos 6 meses da view (com origem e categoria do filtro), e o mês da tela
+  // contado da própria grade — ele muda na hora em que se edita, e respeita também a busca.
+  const serie = useMemo(() => {
+    const meses = mesesAte(comp, 6);
+    const r = resumoPeriodo(filtrar(resumo, { origens, cats }), meses).porMes;
     const t = { entradas: 0, gastos: 0 };
-    gravadas.forEach((l) => { if (l.tipo === 'entrada') t.entradas += l.valor_centavos; else t.gastos += l.valor_centavos; });
-    return { ...t, saldo: t.entradas - t.gastos };
-  }, [gravadas]);
+    semTipo.forEach((l) => { if (!l.rascunho) t[l.tipo === 'entrada' ? 'entradas' : 'gastos'] += l.valor_centavos; });
+    r[r.length - 1] = { ...r[r.length - 1], ...t, saldo: t.entradas - t.gastos };
+    return r;
+  }, [resumo, comp, origens, cats, semTipo]);
 
   // As categorias do filtro, por grupo (na ordem do cadastro), com "Sem categoria" no topo.
   const opcoesCategoria = useMemo(() => {
@@ -131,10 +129,8 @@ export default function Lancamentos() {
         )}
       />
 
-      <div className="mt-4 grid grid-cols-3 gap-2 sm:mt-6 sm:gap-4">
-        <Kpi rotulo="Entradas" centavos={totais.entradas} tom="verde" />
-        <Kpi rotulo="Gastos" centavos={totais.gastos} />
-        <Kpi rotulo="Saldo" centavos={totais.saldo} tom={totais.saldo < 0 ? 'vermelho' : undefined} />
+      <div className="mt-4 sm:mt-6">
+        <CartoesResumo serie={serie} tipo={tipo} onTipo={setTipo} onMes={setComp} />
       </div>
 
       {/* A FAIXA DE FILTROS do Gestor: a busca e um trilho só, com o mês dentro dele. */}
