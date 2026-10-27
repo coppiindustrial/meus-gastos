@@ -167,3 +167,7 @@ NUNCA no git). A tela Cadastros → Importar histórico grava e confere por fatu
 - Repositório é **público**: nada de segredo no código (só a chave publishable).
 - Edição de código com `$`, crase ou barra invertida: por script em ARQUIVO (no scratchpad), nunca `node -e`/`sed` inline.
 - Git: oferecer commit, mas nunca commitar ou dar push sem o usuário pedir.
+- **Ícone** (barras e tendência, 27/10/2026): `public/icon.svg` é a fonte, no MESMO desenho do Coppi Gains (fundo em
+  degradê #343434 → #101010, símbolo branco recortado por máscara, a mesma sombra). Os PNGs, o maskable e o
+  `favicon.ico` (48px) saem dele nos tamanhos do preset minimal-2023 do `@vite-pwa/assets-generator`, sem padding
+  (o SVG já tem a margem da área segura). Mudou o SVG → gere todos de novo.
