@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
-import { PageLoading } from '../components/Spinner.jsx';
+import GridPersonalizavel from '../components/dashboard/GridPersonalizavel.jsx';
+import CardAutoAltura from '../components/dashboard/CardAutoAltura.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import SegmentoFiltro, { OpcaoMenu } from '../components/filtros/SegmentoFiltro.jsx';
 import { SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
-import BalaoGrafico, { useBalao } from '../components/graficos/BalaoGrafico.jsx';
+import { CartaoKpi, CORES_KPI, variacaoSaldo } from '../components/graficos/CartoesResumo.jsx';
 import { COR_ENTRADAS, COR_GASTOS } from '../components/graficos/Graficos.jsx';
-import { BarrasGrupos, COR_ANTERIOR, COR_SALDO, ColunasEntradasGastos, RoscaOrigem } from '../components/graficos/GraficosVisao.jsx';
+import {
+  BarrasGrupos, COR_ANTERIOR, COR_SALDO, ColunasEntradasGastos, LinhasEntradasGastos, RoscaOrigem, SaldoMensal,
+} from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
 import Modal from '../components/Modal.jsx';
 import { useToast } from '../context/ToastContext.jsx';
@@ -22,6 +24,7 @@ import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '.
 import { exportCsv } from '../lib/exportCsv.js';
 import { lsGet, lsSet } from '../lib/storage.js';
 import useLinhasAnimadas, { atributosLinha } from '../lib/useLinhasAnimadas.js';
+import { varCor } from '../lib/varCor.js';
 
 // A VISÃO GERAL (tela inicial) — o Dashboard da planilha refeito no estilo do Gestor: não é a foto de
 // um mês, é o retrato do período que os filtros escolhem. ANO e MESES funcionam como as segmentações
@@ -132,19 +135,6 @@ function SegMeses({ meses, onChange }) {
 
 // ------------------------------------------------------------ peças da tela
 
-function Kpi({ rotulo, valor, sub, cor, balao }) {
-  const b = useBalao(270, 150);
-  return (
-    <div className="card min-w-0 px-4 py-3" onMouseMove={balao ? b.aoMover('k') : undefined} onMouseLeave={b.aoSair}>
-      <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-gray-600">{rotulo}</div>
-      <div className={`mt-1 whitespace-nowrap text-lg font-semibold tabular-nums sm:text-[21px] ${cor ?? 'text-gray-900'} ${balao ? 'w-fit cursor-default rounded px-1.5 -mx-1.5 hover:bg-gray-100' : ''}`}>{valor}</div>
-      {sub && <div className="mt-0.5 truncate text-xs text-gray-500">{sub}</div>}
-      {balao && b.ativo && <BalaoGrafico pos={b.pos} largura={270} {...balao} />}
-    </div>
-  );
-}
-
-const Cartao = ({ children, className = '' }) => <section className={`card p-4 ${className}`}>{children}</section>;
 const Titulo = ({ children }) => <h2 className="m-0 text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500">{children}</h2>;
 
 const IconAmpliar = () => (
@@ -183,13 +173,14 @@ function TabelaGrupoMes({ grupos, comps, total, porMes, onExportar }) {
     ));
   };
   return (
-    <Cartao className="!p-0">
-      <div className="flex items-center gap-2 px-4 pb-2.5 pt-3.5">
+    <section className="card flex flex-col overflow-hidden !p-0">
+      <div className="flex shrink-0 items-center gap-2 px-4 pb-2.5 pt-3.5">
         <Titulo>Grupo × mês <span className="font-medium normal-case tracking-normal text-gray-400">· em reais · o tom mais forte é o mês mais caro de cada linha</span></Titulo>
         <span className="flex-1" />
         <button type="button" onClick={onExportar} className="text-xs font-medium text-gray-500 underline hover:text-gray-800">Exportar CSV</button>
       </div>
-      <div ref={caixaRef} className="overflow-x-auto">
+      <div className="min-h-0 flex-1 overflow-auto">
+      <div ref={caixaRef}>
         <table className="w-full border-separate border-spacing-0 text-[12.5px]" style={{ minWidth: 300 + comps.length * 74 }}>
           <thead>
             <tr className="bg-hx-f9fafb">
@@ -237,9 +228,34 @@ function TabelaGrupoMes({ grupos, comps, total, porMes, onExportar }) {
           </tbody>
         </table>
       </div>
-    </Cartao>
+      </div>
+    </section>
   );
 }
+
+// ------------------------------------------------------------ o catálogo do grid
+
+// OS BLOCOS DA VISÃO GERAL no `GridPersonalizavel` (o grid do Dashboard Comercial do Gestor): cada um se
+// arrasta, redimensiona, minimiza e liga/desliga em "Personalizar". `x/y/w/h` é a disposição padrão
+// (12 colunas; uma linha = 60px). Os números e a faixa "Agora" têm a ALTURA MEDIDA (crescem com o
+// conteúdo); os gráficos têm `minPx`, o piso de largura em que ainda se leem.
+const CATALOGO = [
+  { id: 'vg_kpis', titulo: 'Indicadores', area: 'vg_numeros', x: 0, y: 0, w: 12, h: 2, alturaMedida: true, minPx: 300 },
+  { id: 'vg_agora', titulo: 'Agora, no mês atual', area: 'vg_numeros', x: 0, y: 2, w: 12, h: 1, alturaMedida: true, minPx: 300 },
+  { id: 'vg_meses', titulo: 'Entradas × gastos por mês', area: 'vg_graficos', x: 0, y: 3, w: 8, h: 5, minH: 4, minPx: 420 },
+  { id: 'vg_origem', titulo: 'Gastos por origem', area: 'vg_graficos', x: 8, y: 3, w: 4, h: 5, minH: 4, minPx: 300 },
+  { id: 'vg_grupos', titulo: 'Gastos por grupo', area: 'vg_graficos', x: 0, y: 8, w: 12, h: 6, minH: 3, minPx: 360 },
+  { id: 'vg_tabela', titulo: 'Grupo × mês', area: 'vg_tabelas', x: 0, y: 14, w: 12, h: 7, minH: 4, minPx: 520 },
+];
+
+// AS FORMAS DO "ENTRADAS × GASTOS": a escolha fica no próprio bloco (e lembrada no navegador).
+const FORMAS = [
+  { id: 'colunas', rotulo: 'Colunas', dica: 'Entradas e gastos lado a lado, com o saldo em linha' },
+  { id: 'linhas', rotulo: 'Linhas', dica: 'As duas curvas no tempo, com a área embaixo' },
+  { id: 'saldo', rotulo: 'Saldo', dica: 'Quanto sobrou (ou faltou) em cada mês' },
+  { id: 'acumulado', rotulo: 'Acumulado', dica: 'Entradas e gastos somados ao longo do período' },
+];
+const LS_FORMA = 'visao_meses_forma';
 
 // ------------------------------------------------------------ a tela
 
@@ -248,6 +264,7 @@ export default function VisaoGeral() {
   const navigate = useNavigate();
   const anoAtual = Number(competenciaAtual().slice(0, 4));
   const [linhas, setLinhas] = useState(null);
+  const [carregando, setCarregando] = useState(false);
   const [categorias, setCategorias] = useState([]);
   const [parcelas, setParcelas] = useState([]);
   const [pendencias, setPendencias] = useState(0);
@@ -259,16 +276,19 @@ export default function VisaoGeral() {
   const [cats, setCats] = useState([]);
   const [comparar, setCompararEstado] = useState(() => lsGet(LS_COMPARAR) || 'anterior');
   const setComparar = (v) => { setCompararEstado(v); lsSet(LS_COMPARAR, v); };
+  const [forma, setFormaEstado] = useState(() => lsGet(LS_FORMA) || 'colunas');
+  const setForma = (v) => { setFormaEstado(v); lsSet(LS_FORMA, v); };
   const [ampliado, setAmpliado] = useState(false);
   const ctrl = useDestaqueSeries();
 
   const carregar = useCallback(async () => {
+    setCarregando(true);
     try {
       const [r, c, p, n, rec, lf] = await Promise.all([
         listarResumoMensal(), listarCategorias(), listarParcelasFuturas(), contarPendencias(), listarRecorrencias(), listarLancamentosDeFixos(),
       ]);
       setLinhas(r); setCategorias(c); setParcelas(p); setPendencias(n); setFixos({ recs: rec, lancs: lf });
-    } catch (err) { toast.error(err.message); setLinhas([]); }
+    } catch (err) { toast.error(err.message); setLinhas((l) => l ?? []); } finally { setCarregando(false); }
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -306,18 +326,16 @@ export default function VisaoGeral() {
   const abrirMes = (comp) => { lsSet('lancamentos_mes', comp); navigate('/lancamentos'); };
   const alternarOrigem = (k) => setOrigens((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
 
-  if (!linhas) return (<div><CabecalhoPagina titulo="Visão geral" /><PageLoading /></div>);
-
   const textoPer = textoPeriodo(anos, meses);
   const anterior = rAnt ? Object.fromEntries(comps.map((c, i) => [c, rAnt.porMes[i].gastos])) : null;
   const mediaMes = (v) => (r.meses ? Math.round(v / r.meses) : 0);
   const gastosPorMes = Object.fromEntries(r.porMes.map((m) => [m.competencia, m.gastos]));
-  const vsAnt = rAnt && rAnt.gastos ? variacao(r.gastos, rAnt.gastos) : null;
+  const comDado = r.porMes.filter((m) => m.temDado);
   const series = [
     { key: 'entradas', rotulo: 'Entradas', cor: COR_ENTRADAS },
     { key: 'gastos', rotulo: 'Gastos', cor: COR_GASTOS },
-    { key: 'saldo', rotulo: 'Saldo', cor: COR_SALDO, forma: 'linha' },
-    ...(anterior ? [{ key: 'anterior', rotulo: `Gastos um ano antes`, cor: COR_ANTERIOR, forma: 'tracejado' }] : []),
+    ...(forma === 'colunas' || forma === 'linhas' ? [{ key: 'saldo', rotulo: 'Saldo', cor: COR_SALDO, forma: 'linha' }] : []),
+    ...(anterior ? [{ key: 'anterior', rotulo: 'Um ano antes', cor: COR_ANTERIOR, forma: 'tracejado' }] : []),
   ];
 
   const exportarTabela = () => exportCsv(`visao-geral-${comps[0]}-${comps[comps.length - 1]}`,
@@ -329,104 +347,160 @@ export default function VisaoGeral() {
       { key: 'media', label: 'Média', tipo: 'dinheiro', map: (x) => x.media / 100 },
     ]);
 
-  const grafico = (altura) => (
-    <ColunasEntradasGastos meses={r.porMes} anterior={anterior} ctrl={ctrl} onMes={abrirMes} altura={altura} />
+  // O mês a mês na forma escolhida, na altura de quem o contém (o bloco do grid, ou o ampliado).
+  const graficoMeses = () => {
+    if (forma === 'saldo') return <SaldoMensal meses={r.porMes} onMes={abrirMes} />;
+    if (forma === 'linhas' || forma === 'acumulado') {
+      return <LinhasEntradasGastos meses={r.porMes} anterior={anterior} ctrl={ctrl} onMes={abrirMes} acumulado={forma === 'acumulado'} />;
+    }
+    return <ColunasEntradasGastos meses={r.porMes} anterior={anterior} ctrl={ctrl} onMes={abrirMes} altura="auto" />;
+  };
+  const seletorForma = (
+    <span className="inline-flex h-[27px] items-center rounded-[6px] border border-gray-300 bg-hx-f6f7f8 p-[2px]">
+      {FORMAS.map((f) => (
+        <button key={f.id} type="button" onClick={() => setForma(f.id)} title={f.dica} aria-pressed={forma === f.id}
+          className={`rounded-[3px] px-2 py-[3px] text-[11.5px] transition-colors ${forma === f.id ? 'bg-chip-ativo font-semibold text-chip-ativo' : 'text-gray-600 hover:bg-gray-200'}`}>
+          {f.rotulo}
+        </button>
+      ))}
+    </span>
+  );
+
+  // Os indicadores, no molde dos cartões dos Lançamentos (versão compacta): a curva é a do período.
+  const serieDe = (campo) => comDado.map((m) => ({ competencia: m.competencia, valor: m[campo] }));
+  const vsAnt = (atual, antes) => (rAnt && antes ? variacao(atual, antes) : null);
+  const tituloVs = 'Contra o mesmo período do ano anterior';
+  // O `.card` por fora é o que o grid estica; a MEDIDA é do miolo, na altura natural (medir o card
+  // esticado mediria a própria vaga, e o laço não fecharia — a regra do Gestor).
+  const kpis = (
+    <div className="card !border-0 !bg-transparent !shadow-none">
+    <CardAutoAltura id="vg_kpis">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
+        <CartaoKpi compacto icone="entradas" cor={CORES_KPI.entradas} rotulo="Entradas" valor={formatBRL(r.entradas)} valorCurto={brlCurto(r.entradas)} corValor="text-green-700"
+          variacao={vsAnt(r.entradas, rAnt?.entradas)} tituloVariacao={tituloVs} sub={`média ${formatBRL(mediaMes(r.entradas))}/mês`}
+          serie={serieDe('entradas')} onMes={abrirMes} ativo={tipo === 'entrada'} onClicar={() => setTipo(tipo === 'entrada' ? '' : 'entrada')} titulo="Clique para ver só as entradas" />
+        <CartaoKpi compacto icone="gastos" cor={CORES_KPI.gastos} rotulo="Gastos" valor={formatBRL(r.gastos)} valorCurto={brlCurto(r.gastos)}
+          variacao={vsAnt(r.gastos, rAnt?.gastos)} sobeBom={false} tituloVariacao={tituloVs} sub={`média ${formatBRL(mediaMes(r.gastos))}/mês`}
+          serie={serieDe('gastos')} onMes={abrirMes} ativo={tipo === 'saida'} onClicar={() => setTipo(tipo === 'saida' ? '' : 'saida')} titulo="Clique para ver só os gastos" />
+        <CartaoKpi compacto icone="saldo" cor={CORES_KPI.saldo} rotulo="Saldo" valor={formatBRL(r.saldo)} valorCurto={brlCurto(r.saldo)}
+          corValor={r.saldo < 0 ? 'text-hx-c0393d' : 'text-gray-900'}
+          variacao={rAnt ? variacaoSaldo(r.saldo, rAnt.saldo) : null} tituloVariacao={tituloVs}
+          sub={r.entradas ? `${Math.round((r.saldo / r.entradas) * 100)}% das entradas` : 'sem entradas no período'}
+          serie={serieDe('saldo')} onMes={abrirMes} onClicar={() => setTipo('')} titulo="Clique para ver entradas e gastos" />
+        <CartaoKpi compacto icone="lancamentos" cor={varCor('#6b7280', 'texto')} rotulo="Lançamentos" valor={r.qtd.toLocaleString('pt-BR')}
+          variacao={vsAnt(r.qtd, rAnt?.qtd)} tituloVariacao={tituloVs} sub={`${r.meses ? Math.round(r.qtd / r.meses) : 0} por mês`}
+          serie={serieDe('qtd')} formatar={(v) => `${v.toLocaleString('pt-BR')} lançamentos`} onMes={abrirMes} />
+        <CartaoKpi compacto icone="mes" cor={varCor('#ca8a04', 'texto')} rotulo="Mês mais caro"
+          valor={r.maisCaro ? nomeCompetencia(r.maisCaro.competencia).replace(/ de \d+$/, '') : '—'}
+          sub={r.maisCaro ? `${formatBRL(r.maisCaro.gastos)} em gastos` : 'nenhum gasto no período'}
+          serie={serieDe('gastos')} onMes={abrirMes} />
+      </div>
+    </CardAutoAltura>
+    </div>
+  );
+
+  const agora = (
+    <div className="card">
+    <CardAutoAltura id="vg_agora" className="px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-gray-700">
+        <span className="font-semibold text-gray-800">Agora, em {MESES_LONGOS[Number(hoje.slice(5)) - 1]}:</span>
+        {pendencias > 0 && (
+          <span><b className="font-semibold text-gray-900">{pendencias}</b> lançamento(s) a revisar <Link to="/pendencias" className="font-medium text-hx-2563eb hover:underline">Revisar →</Link></span>
+        )}
+        {fixosPendentes.length > 0 && (
+          <span title={fixosPendentes.map((s) => s.rec.descricao).join(', ')}>
+            <b className="font-semibold text-gray-900">{fixosPendentes.length}</b> gasto(s) fixo(s) a lançar{' '}
+            <Link to="/fixos" className="font-medium text-hx-2563eb hover:underline">Lançar →</Link>
+          </span>
+        )}
+        {parcelasProx && (
+          <span><b className="font-semibold text-gray-900">{formatBRL(parcelasProx.total)}</b> já comprometidos em parcelas para {MESES_LONGOS[Number(addMeses(hoje, 1).slice(5)) - 1]}</span>
+        )}
+        {!pendencias && !fixosPendentes.length && !parcelasProx && <span className="text-gray-500">nada pendente ✓</span>}
+      </div>
+    </CardAutoAltura>
+    </div>
+  );
+
+  const renderWidget = (id) => {
+    switch (id) {
+      case 'vg_kpis': return kpis;
+      case 'vg_agora': return agora;
+      case 'vg_meses':
+        return (
+          <section className="card flex flex-col overflow-hidden px-4 pb-2 pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Titulo>Entradas × gastos por mês</Titulo>
+              {seletorForma}
+              <span className="flex-1" />
+              {forma !== 'saldo' && <LegendaSeries series={series} ctrl={ctrl} />}
+              <button type="button" onClick={() => setAmpliado(true)} title="Ampliar"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-[4px] text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">
+                <IconAmpliar />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">{graficoMeses()}</div>
+          </section>
+        );
+      case 'vg_origem':
+        return (
+          <section className="card flex flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-auto p-4">
+              <div className="mb-3"><Titulo>Gastos por origem</Titulo></div>
+              <RoscaOrigem itens={ORIGENS.map(([key, rotulo]) => ({ key, rotulo, valor: r.porOrigem[key] }))} marcadas={origens} onClicar={alternarOrigem} />
+            </div>
+          </section>
+        );
+      case 'vg_grupos':
+        return (
+          <section className="card flex flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-auto p-4"><BarrasGrupos grupos={grupos} total={r.gastos} meses={textoPer} /></div>
+          </section>
+        );
+      case 'vg_tabela':
+        return grupos.length
+          ? <TabelaGrupoMes grupos={grupos} comps={comps} total={r.gastos} porMes={gastosPorMes} onExportar={exportarTabela} />
+          : <section className="card p-4"><Titulo>Grupo × mês</Titulo><p className="mt-6 text-center text-sm text-gray-400">Nenhum gasto no período.</p></section>;
+      default: return null;
+    }
+  };
+
+  // Os filtros: o período (como as segmentações da planilha) e os recortes, no trilho do Gestor. Vão
+  // ACIMA do grid (o `abaixo` do `GridPersonalizavel`), como a faixa do Dashboard Comercial.
+  const filtros = (
+    <FaixaProvider>
+      <div className="flex flex-wrap items-center gap-2">
+        <Trilho>
+          <SegAnos anos={anos} opcoes={opcoesAnos} onChange={setAnos} />
+          <DivisorFaixa />
+          <SegMeses meses={meses} onChange={setMeses} />
+          <DivisorFaixa />
+          <SegUnico id="tipo" rotulo="Tipo" opcoes={OPCOES_TIPO} value={tipo} onChange={setTipo} padrao="" largura={160} />
+          <DivisorFaixa />
+          <SegMulti id="origem" rotulo="Origem" plural="origens" opcoes={OPCOES_ORIGEM} value={origens} onChange={setOrigens} largura={200} />
+          <DivisorFaixa />
+          <SegMulti id="categoria" rotulo="Categoria" opcoes={opcoesCategoria} value={cats} onChange={setCats} largura={280} busca="Buscar categoria ou grupo" />
+        </Trilho>
+        <LimparFiltros ativo={filtrando} onClick={limpar} />
+        <span className="flex-1" />
+        <Trilho>
+          <SegUnico id="comparar" rotulo="Comparar" opcoes={OPCOES_COMPARAR} value={comparar} onChange={setComparar} padrao="anterior" mostraPadrao largura={190} />
+        </Trilho>
+      </div>
+    </FaixaProvider>
   );
 
   return (
-    <div>
-      <CabecalhoPagina titulo="Visão geral"
-        acessorio={<span className="hidden text-sm text-gray-500 sm:inline">{textoPer.replace(/^./, (c) => c.toUpperCase())} · {r.meses} {r.meses === 1 ? 'mês' : 'meses'} com lançamentos</span>} />
-
-      {/* Os filtros: o período (como as segmentações da planilha) e os recortes, no trilho do Gestor. */}
-      <FaixaProvider>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Trilho>
-            <SegAnos anos={anos} opcoes={opcoesAnos} onChange={setAnos} />
-            <DivisorFaixa />
-            <SegMeses meses={meses} onChange={setMeses} />
-            <DivisorFaixa />
-            <SegUnico id="tipo" rotulo="Tipo" opcoes={OPCOES_TIPO} value={tipo} onChange={setTipo} padrao="" largura={160} />
-            <DivisorFaixa />
-            <SegMulti id="origem" rotulo="Origem" plural="origens" opcoes={OPCOES_ORIGEM} value={origens} onChange={setOrigens} largura={200} />
-            <DivisorFaixa />
-            <SegMulti id="categoria" rotulo="Categoria" opcoes={opcoesCategoria} value={cats} onChange={setCats} largura={280} busca="Buscar categoria ou grupo" />
-          </Trilho>
-          <LimparFiltros ativo={filtrando} onClick={limpar} />
-          <span className="flex-1" />
-          <Trilho>
-            <SegUnico id="comparar" rotulo="Comparar" opcoes={OPCOES_COMPARAR} value={comparar} onChange={setComparar} padrao="anterior" mostraPadrao largura={190} />
-          </Trilho>
-        </div>
-      </FaixaProvider>
-
-      {(pendencias > 0 || fixosPendentes.length > 0 || parcelasProx) && (
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-gray-200 bg-white px-4 py-2.5 text-[13px] text-gray-700">
-          <span className="font-semibold text-gray-800">Agora, em {MESES_LONGOS[Number(hoje.slice(5)) - 1]}:</span>
-          {pendencias > 0 && (
-            <span><b className="font-semibold text-gray-900">{pendencias}</b> lançamento(s) a revisar <Link to="/pendencias" className="font-medium text-hx-2563eb hover:underline">Revisar →</Link></span>
-          )}
-          {fixosPendentes.length > 0 && (
-            <span title={fixosPendentes.map((s) => s.rec.descricao).join(', ')}>
-              <b className="font-semibold text-gray-900">{fixosPendentes.length}</b> gasto(s) fixo(s) a lançar{' '}
-              <Link to="/fixos" className="font-medium text-hx-2563eb hover:underline">Lançar →</Link>
-            </span>
-          )}
-          {parcelasProx && (
-            <span><b className="font-semibold text-gray-900">{formatBRL(parcelasProx.total)}</b> já comprometidos em parcelas para {MESES_LONGOS[Number(addMeses(hoje, 1).slice(5)) - 1]}</span>
-          )}
-        </div>
-      )}
-
-      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Kpi rotulo="Entradas" valor={formatBRL(r.entradas)} cor="text-green-700" sub={`média ${formatBRL(mediaMes(r.entradas))}/mês`} />
-        <Kpi rotulo="Gastos" valor={formatBRL(r.gastos)} sub={`média ${formatBRL(mediaMes(r.gastos))}/mês`}
-          balao={{
-            titulo: `Gastos · ${textoPer}`,
-            itens: ORIGENS.map(([k, rot]) => ({ rotulo: rot, valor: formatBRL(r.porOrigem[k]) })),
-            nota: rAnt ? (vsAnt === null ? 'Sem gastos no mesmo período do ano anterior.'
-              : `vs. o mesmo período do ano anterior: ${vsAnt > 0 ? '+' : ''}${vsAnt}% (${formatBRL(rAnt.gastos)}).`) : 'Cartão conta no mês da fatura.',
-          }} />
-        <Kpi rotulo="Saldo" valor={formatBRL(r.saldo)} cor={r.saldo < 0 ? 'text-hx-c0393d' : undefined}
-          sub={r.entradas ? `${Math.round((r.saldo / r.entradas) * 100)}% das entradas` : 'sem entradas no período'} />
-        <Kpi rotulo="Lançamentos" valor={r.qtd.toLocaleString('pt-BR')} sub={`${r.meses ? Math.round(r.qtd / r.meses) : 0} por mês`} />
-        <Kpi rotulo="Mês mais caro" valor={r.maisCaro ? nomeCompetencia(r.maisCaro.competencia).replace(/ de \d+$/, '') : '—'}
-          sub={r.maisCaro ? `${formatBRL(r.maisCaro.gastos)} em gastos` : 'nenhum gasto no período'} />
-      </div>
-
-      <Cartao className="mt-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Titulo>Entradas × gastos por mês</Titulo>
-          <span className="flex-1" />
-          <LegendaSeries series={series} ctrl={ctrl} />
-          <button type="button" onClick={() => setAmpliado(true)} title="Ampliar"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-[4px] text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">
-            <IconAmpliar />
-          </button>
-        </div>
-        {grafico(240)}
-      </Cartao>
-
-      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-        <Cartao>
-          <div className="mb-3"><Titulo>Gastos por origem</Titulo></div>
-          <RoscaOrigem itens={ORIGENS.map(([key, rotulo]) => ({ key, rotulo, valor: r.porOrigem[key] }))} marcadas={origens} onClicar={alternarOrigem} />
-        </Cartao>
-        <Cartao>
-          <BarrasGrupos grupos={grupos} total={r.gastos} meses={textoPer} />
-        </Cartao>
-      </div>
-
-      <div className="mt-3">
-        {grupos.length
-          ? <TabelaGrupoMes grupos={grupos} comps={comps} total={r.gastos} porMes={gastosPorMes} onExportar={exportarTabela} />
-          : null}
-      </div>
+    <>
+      <GridPersonalizavel escopo="visao" titulo="Visão geral"
+        acessorio={linhas && <span className="hidden text-sm text-gray-500 sm:inline">{textoPer.replace(/^./, (c) => c.toUpperCase())} · {r.meses} {r.meses === 1 ? 'mês' : 'meses'} com lançamentos</span>}
+        catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={renderWidget} abaixo={filtros}
+        pronto={!!linhas} onAtualizar={carregar} atualizando={carregando} />
 
       {ampliado && (
         <Modal open onClose={() => setAmpliado(false)} title={`Entradas × gastos · ${textoPer}`} maxWidth="max-w-6xl">
-          <div className="mb-2 flex justify-end"><LegendaSeries series={series} ctrl={ctrl} /></div>
-          {grafico(380)}
+          <div className="mb-2 flex flex-wrap items-center gap-2">{seletorForma}<span className="flex-1" />{forma !== 'saldo' && <LegendaSeries series={series} ctrl={ctrl} />}</div>
+          <div style={{ height: 380 }}>{graficoMeses()}</div>
           <div className="mt-4 max-h-[260px] overflow-auto rounded-md border border-gray-200">
             <table className="w-full text-[12.5px]">
               <thead className="sticky top-0 bg-hx-f9fafb">
@@ -435,7 +509,7 @@ export default function VisaoGeral() {
                 ))}</tr>
               </thead>
               <tbody>
-                {r.porMes.filter((m) => m.temDado).map((m) => {
+                {comDado.map((m) => {
                   const ant = anterior?.[m.competencia] ?? 0;
                   const v = variacao(m.gastos, ant);
                   return (
@@ -453,9 +527,8 @@ export default function VisaoGeral() {
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-gray-400">Total: {brlCurto(r.gastos)} em gastos e {brlCurto(r.entradas)} em entradas.</p>
         </Modal>
       )}
-    </div>
+    </>
   );
 }
