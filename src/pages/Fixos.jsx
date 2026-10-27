@@ -22,7 +22,7 @@ import { lsGet, lsSet } from '../lib/storage.js';
 // GASTOS FIXOS como uma aba da planilha (a opção B do mockup): uma linha por gasto fixo e uma coluna por
 // mês do ano (`MatrizFixos`). A célula a lançar vem com o valor sugerido (o do último mês lançado);
 // digitar e dar Enter lança. O cadastro (nome, dia, categoria, padrão, vigência) é o modal de sempre,
-// aberto pelo clique duplo no nome, pelo botão direito ou por Shift+F2.
+// aberto pelo clique no nome, pelo botão direito ou por Shift+F2.
 const LS_ANO = 'fixos_ano';
 const SEM_CATEGORIA = [{ value: '', label: 'Sem categoria' }];
 
@@ -234,14 +234,6 @@ export default function Fixos() {
               : <MatrizFixos matriz={matriz} hoje={hoje} setLancs={setLancs} modo={modo} onEditar={(rec) => setModal({ item: rec })} onRecarregar={carregar} />}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11.5px] text-gray-500">
-            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 border border-hx-bbf7d0 bg-hx-f0fdf4" />lançado no mês atual</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-4 border border-hx-fcd34d bg-hx-fffbeb" />a lançar (o cinza é o valor sugerido)</span>
-            <span className="inline-flex items-center gap-1.5"><span className="grade-hachura h-3 w-4 border border-gray-200" />fora da vigência</span>
-            <span className="inline-flex items-center gap-1.5"><b className="font-semibold text-hx-b91c1c">123</b>subiu em relação ao mês anterior</span>
-            <span className="flex-1" />
-            <span>Digite o valor e Enter para lançar · Ctrl+Enter lança os pendentes da seleção · clique duplo no nome edita o cadastro</span>
-          </div>
         </>
       )}
 

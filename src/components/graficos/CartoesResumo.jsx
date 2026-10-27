@@ -17,8 +17,11 @@ import { variacao } from '../../lib/visaoGeral.js';
 const SETAS = {
   entradas: <path d="M12 19V5M6 11l6-6 6 6" />,
   gastos: <path d="M12 5v14M6 13l6 6 6-6" />,
-  saldo: <path d="M4 12h16M12 4v16" />,
+  saldo: <path d="M5 12h14M12 5v14" />,
 };
+// O ícone em PIXEL INTEIRO (caixa de 26, desenho de 14): com o `h-3.5` (0,875rem sobre a raiz de 87,5%
+// = 12,25px) o desenho caía entre pixels e o "+" do saldo saía borrado e fora do centro.
+const ICONE = 14;
 const CORES = { entradas: COR_ENTRADAS, gastos: COR_GASTOS, saldo: COR_SALDO };
 const ROTULOS = { entradas: 'Entradas', gastos: 'Gastos', saldo: 'Saldo' };
 // Para quem subir é bom: entrada e saldo sim, gasto não.
@@ -70,15 +73,21 @@ function Cartao({ chave, serie, ativo: filtroAtivo, onFiltrar, onMes }) {
     : variacao(vals[hover.i], antesHover)) : null;
 
   return (
+    // O HOVER SÓ MEXE EM `transform` E `opacity` (a placa de vídeo faz sozinha): o cartão sobe 2px INTEIROS
+    // (o -0,5 do Tailwind dava 1,75px e o texto tremia ao re-rasterizar) e a sombra é uma camada própria
+    // que só ACENDE — animar `box-shadow` repintava o cartão a cada quadro, e era o "duro" do gesto. A
+    // curva tem o seu `overflow-hidden`, para a sombra do cartão poder sair pelas bordas.
     <div role="button" tabIndex={0} onClick={onFiltrar} onKeyDown={(e) => { if (e.key === 'Enter') onFiltrar(); }}
       title={chave === 'saldo' ? 'Clique para ver entradas e gastos' : `Clique para ver só ${ROTULOS[chave].toLowerCase()}`}
-      className={`card group flex min-w-0 cursor-pointer flex-col overflow-hidden !rounded-[10px] transition-[transform,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-[0_10px_24px_rgba(20,28,44,.10)] ${
+      className={`card group relative isolate flex min-w-0 cursor-pointer flex-col !rounded-[10px] transition-[transform,border-color] duration-300 ease-[cubic-bezier(.2,.8,.2,1)] will-change-transform hover:-translate-y-[2px] hover:border-gray-300 motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
         filtroAtivo ? 'ring-2 ring-gray-800' : ''}`}>
+      <span aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 rounded-[10px] opacity-0 shadow-[0_14px_30px_-10px_rgba(20,28,44,.22)] transition-opacity duration-300 ease-out group-hover:opacity-100" />
       <div className="flex flex-col gap-1 px-3 pt-2.5 sm:px-4 sm:pt-3.5">
         <div className="flex items-center gap-2">
           <span className="hidden h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] sm:inline-flex"
             style={{ background: `color-mix(in srgb, ${cor} 14%, ${varCor('#ffffff', 'fundo')})`, color: cor }}>
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{SETAS[chave]}</svg>
+            <svg viewBox="0 0 24 24" width={ICONE} height={ICONE} className="block shrink-0" fill="none" stroke="currentColor" strokeWidth="2.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{SETAS[chave]}</svg>
           </span>
           <span className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-gray-500 sm:text-[12px] sm:normal-case sm:tracking-normal sm:text-gray-600">{ROTULOS[chave]}</span>
           <span className="flex-1" />
@@ -92,9 +101,11 @@ function Cartao({ chave, serie, ativo: filtroAtivo, onFiltrar, onMes }) {
         <div className="hidden truncate text-[11.5px] text-gray-500 sm:block">média de {vals.length} meses {formatBRL(media)}</div>
       </div>
       {/* A CURVA, na base do cartão. O SVG estica na largura (`preserveAspectRatio="none"`) com o traço
-          sem escalar; o ponto é uma <div>, para continuar redondo. */}
-      <div className="relative mt-2 hidden sm:block" onMouseMove={mover} onMouseLeave={() => setHover(null)}
+          sem escalar; o ponto é uma <div>, para continuar redondo — e mora numa caixa da MESMA altura do
+          SVG (54px): medido contra a caixa de fora, que tem os meses embaixo, o ponto ficava acima da reta. */}
+      <div className="mt-2 hidden overflow-hidden rounded-b-[10px] sm:block" onMouseMove={mover} onMouseLeave={() => setHover(null)}
         onClick={(e) => { if (hover) { e.stopPropagation(); onMes(serie[hover.i].competencia); } }}>
+        <div className="relative h-[54px]">
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block h-[54px] w-full overflow-visible" aria-hidden="true">
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
@@ -106,8 +117,9 @@ function Cartao({ chave, serie, ativo: filtroAtivo, onFiltrar, onMes }) {
           <polyline points={pts} fill="none" stroke={cor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
           {hover && <line x1={x(hover.i)} x2={x(hover.i)} y1="0" y2={H} stroke={varCor('#d1d5db', 'borda')} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
         </svg>
-        <span className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white transition-[left,top] duration-100"
+        <span className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white transition-[left,top,width,height] duration-150 ease-out"
           style={{ left: `${(x(pontoAtivo) / W) * 100}%`, top: `${(y(vals[pontoAtivo]) / H) * 100}%`, width: hover ? 10 : 8, height: hover ? 10 : 8, background: cor }} />
+        </div>
         <div className="flex justify-between px-2 pb-2 pt-0.5 text-[9.5px] text-gray-400">
           {serie.map((m, i) => (
             <span key={m.competencia} className={i === pontoAtivo && hover ? 'font-semibold text-gray-800' : ''}>{competenciaCurta(m.competencia).slice(0, 3)}</span>
