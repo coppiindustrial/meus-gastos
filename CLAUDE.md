@@ -1,56 +1,57 @@
 # Meus Gastos
 
-Webapp pessoal de finanças (gastos, entradas, faturas de cartão e patrimônio) que substitui a planilha
-`OneDrive\CONTAS\Gastos\Gastos total.xlsx`. Usuário único. Uso principal pelo celular (PWA instalado), importação de faturas costuma ser no PC.
+Sistema web pessoal de finanças (gastos, entradas, faturas de cartão e patrimônio) que substitui a planilha
+`OneDrive\CONTAS\Gastos\Gastos total.xlsx`. Usuário único. **Tudo é preenchido no computador; o celular só
+visualiza** (atalho na tela inicial). Código, comentários e UI **em português**.
 
-- **Plano, modelo de dados e fases:** `PLANO.md` (fonte da verdade do escopo; atualizar o status das fases ao concluir).
-- **Projetos irmãos** (mesma pasta `Downloads`): `Projeto app de treino` (base desta stack: sync, componentes, estilos) e
-  `Projeto Gestor Integrado Coppi Industrial` (ideias de DRE, `formatBRL`, export CSV, gráficos SVG).
+- **Plano, modelo de dados e fases:** `PLANO.md` (fonte da verdade do escopo; atualizar o status ao concluir uma fase).
+- **Visual e peças vêm do Gestor Coppi** (`Downloads\Projeto Gestor Integrado Coppi Industrial\Gestor-integrado-coppi\frontend`).
+  Antes de criar componente, veja se o Gestor já tem (tabelas TanStack, filtros, gráficos, KPIs) e copie adaptando.
+  As regras de UI de lá valem aqui: `docs/claude/frontend-ui.md` e `tema-escuro.md` daquele repositório.
 
 ## Stack
 
-React 19 + TypeScript (strict) + Vite 8 · `vite-plugin-pwa` · `react-router-dom` (HashRouter) · Dexie (IndexedDB) ·
-Supabase (Auth + tabela `records`) · Vitest · CSS puro com variáveis (`src/styles.css`, tema escuro estilo iOS) · deploy no GitHub Pages.
-
-## Estrutura
-
-```
-src/lib/        db.ts (Dexie), sync.ts, supabase.ts, types.ts (modelo), dinheiro.ts, format.ts (datas e competência), backup.ts
-src/components/ Layout (TabBar de vidro, TopBar, TabHead, EmptyState), Sheet, Dialogs, SwipeRow, ActionMenu, Icon
-src/screens/    uma tela por arquivo; rotas em App.tsx
-supabase/schema.sql   tabela records + RLS (rodar no SQL Editor)
-public/icon.svg       ícone; `npm run icons` gera os PNGs
-```
+React 18 + Vite 5 + Tailwind 3 (JS, sem TypeScript) · `react-router-dom` 6 (`BrowserRouter` com `basename`) ·
+`@supabase/supabase-js` (Auth + Postgres com RLS) · testes com `node:test` · deploy no GitHub Pages.
+**Só online**: não há cópia local dos dados.
 
 ## Como rodar
 
 ```
 npm install
 npm run dev        # http://localhost:5182 (preview do Claude: .claude/launch.json "meus-gastos")
-npm test           # Vitest (lógica em src/lib)
-npm run build      # tsc + vite build
+npm test           # node --test test/*.test.js
+npm run build      # vite build + dist/404.html (o Pages devolve o app em qualquer rota)
+npm run tema       # depois de escrever bg-[#hex] novo: vira token bg-hx-xxxxxx com versão escura (reinicie o Vite)
 ```
 
-Supabase: projeto `abofajutoxukbvrfisem`. URL e chave pública ficam em `.env.local` (dev, fora do git) e em `deploy.yml` (produção).
-Sem essas variáveis o app roda só local; dá para colar URL e chave em Mais → Conta e backup.
-Com a nuvem configurada, o app exige login (componente `Portao` em `App.tsx`).
+Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.local` (dev, fora do git) e em
+`.github/workflows/deploy.yml` (produção). Push na `main` publica em https://coppiindustrial.github.io/meus-gastos/.
 
-## Dados e sincronização
+## Banco (Supabase)
 
-- Offline-first: tudo grava primeiro no Dexie com `dirty: 1`; `scheduleSync()` envia depois. Cada tabela de `SYNCED_TABLES`
-  vira um `kind` na tabela `records` do Supabase (`data` jsonb). Mudar o modelo **não** exige migração no Supabase,
-  mas exige nova `version()` no Dexie quando mudar índices.
-- Apagar = `deleted: 1` (nunca remover a linha), para o apagamento chegar aos outros aparelhos.
-- Registros criados automaticamente (seeds) devem ter **id fixo**, senão cada aparelho cria uma cópia.
-- Booleans que precisam de índice são `0 | 1` (IndexedDB não indexa boolean).
+- **Migrations em `supabase/migrations/NNN_nome.sql`, append-only**: nunca edite uma já aplicada. Aplicar = colar no
+  SQL Editor do Supabase (o usuário faz; avise quando houver migration nova).
+- Toda tabela: `id uuid`, `user_id default auth.uid()`, política RLS `(select auth.uid()) = user_id`, `grant` para
+  `authenticated`, `revoke` de `anon`, gatilho de `atualizado_em`. Tabela nova entra no laço do fim da migration.
+- **VIEW nova sempre com `with (security_invoker = on)`**, senão ela ignora o RLS.
+- **Regra de ouro (do Gestor): a lógica de negócio mora nas VIEWs SQL** (totais por competência, parcelas); o front lê.
+- Acesso a dados: `src/api/supabase.js` (`supabase`, `exigir`, `mensagemErro`) + um arquivo por tabela em `src/api/`.
 
 ## Convenções
 
-- **Dinheiro em centavos inteiros e positivos**; a direção vem de `tipo` (`saida`/`entrada`). Use `dinheiro.ts`
-  (`parseValor`, `formatBRL`, `brlCurto`). Nunca somar reais em float.
-- **Datas só-data como texto `AAAA-MM-DD`**; competência (mês em que conta) como `AAAA-MM`. Gasto de cartão conta no
-  mês do **vencimento da fatura**. Para converter use `fromISODate` (meio-dia local), nunca `new Date('AAAA-MM-DD')`.
-- UI, comentários e nomes do domínio em português (`lancamento`, `competencia`); código genérico herdado do app de treino segue em inglês.
+- **Dinheiro em centavos inteiros (`bigint`) e positivos**; a direção vem de `tipo` (`saida`/`entrada`). Use
+  `lib/dinheiro.js` (`parseValor`, `formatBRL`, `brlCurto` — todos em CENTAVOS). Nunca some reais em float.
+- **Datas**: coluna DATE pelos 10 primeiros caracteres (`formatDate`, `diaDeData`); timestamp por `formatDateTime`.
+  Nunca `new Date('AAAA-MM-DD')`. **Competência** é `'AAAA-MM'` no front e `date` dia 1 no banco
+  (`competenciaParaBanco`). Gasto de cartão conta no mês do **vencimento da fatura**.
+- **Tela nova**: entra em `lib/navegacao.js` (barra lateral e menu do celular) e em `App.jsx`; a página abre com
+  `CabecalhoPagina` como PRIMEIRO filho (ele nega o `p-6` do Layout e nomeia a aba do navegador).
+- **Celular**: abaixo de `md` a barra lateral vira menu (☰). Telas precisam ser legíveis em 375px (tabela larga →
+  rolagem horizontal dentro do `card` ou lista).
+- `localStorage` só por `lsGet`/`lsSet` (`lib/storage.js`) e só para preferência de tela — nunca dado financeiro.
+- Confirmação é `useConfirmacao()` com `await` (nunca `window.confirm`); avisos por `useToast()`.
 - Nunca logar valores financeiros nem dados pessoais.
-- Repositório é **público**: nada de segredo no código. Só a chave pública (publishable/anon) do Supabase, via variáveis do repositório no GitHub Actions.
+- Repositório é **público**: nada de segredo no código (só a chave publishable).
+- Edição de código com `$`, crase ou barra invertida: por script em ARQUIVO (no scratchpad), nunca `node -e`/`sed` inline.
 - Git: oferecer commit, mas nunca commitar ou dar push sem o usuário pedir.

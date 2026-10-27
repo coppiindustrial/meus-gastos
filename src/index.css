@@ -1,0 +1,585 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Reduz fontes E espaçamentos (rem) em ~12,5% globalmente: 16px → 14px de base. */
+  html {
+    font-size: 87.5%;
+  }
+  body {
+    /* `bg-pagina`: branco no claro; no escuro, o fundo da página fica um degrau abaixo dos cartões. */
+    @apply bg-pagina text-gray-800 antialiased;
+  }
+}
+
+@layer utilities {
+  /* Scrollbar fina/minimalista (usada no Kanban, colunas da ficha, painéis). Pill grafite
+     sólida (gray-400) → gray-500 no hover, sem trilho. Firefox + WebKit/Chromium. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--tf-gray-400, 156 163 175)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--tf-gray-400, 156 163 175));
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--tf-gray-500, 107 114 128));
+  }
+
+  /* Scrollbar da sidebar: fina, discreta e só aparece quando o cursor está sobre a
+     sidebar (aside:hover). Thumb transparente por padrão. Firefox + WebKit. */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  aside:hover .sidebar-scroll {
+    scrollbar-color: rgba(20, 28, 44, 0.18) transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 9999px;
+    transition: background-color 0.18s ease;
+  }
+  aside:hover .sidebar-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(20, 28, 44, 0.16);
+  }
+  html[data-tema='escuro'] aside:hover .sidebar-scroll { scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+  html[data-tema='escuro'] aside:hover .sidebar-scroll::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.16); }
+  aside:hover .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(20, 28, 44, 0.28);
+  }
+}
+
+@layer components {
+  /* A BORDA TRANSPARENTE está aqui para os três variantes fecharem a MESMA CAIXA.
+     Só o `.btn-secondary` tem borda visível, e como nenhum dos três declara `height`, o
+     `border-box` não tem o que descontar — a borda SOMA. Medido: dentro de um `flex` sem
+     `items-*` o `stretch` disfarça (os dois dão 25,83px), mas com `items-center` ou fora de um
+     flex o secundário fica 1,33px mais alto que o primário e o danger (25,83 contra 24,50).
+     Quem paga isso hoje é a `Paginacao`: a página ativa é `.btn-primary` entre vizinhas
+     `.btn-secondary`, e fica mais baixa que elas.
+     A saída é a borda, não uma altura cravada: `height` no `.btn` brigaria com os ~10 pontos que
+     usam `!py-1`/`!py-2` para mudar a altura de propósito. É a mesma regra da célula editável e
+     da régua do login — variante muda a COR, nunca a espessura da caixa.
+     (`MenuColunas.jsx` já tinha remendado isso localmente com `h-[30px]` nos três botões; o
+     comentário de lá descreve exatamente este defeito.) */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-transparent
+           px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2
+           focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  /* O `active:` de cada variante é o retorno de clique, no mesmo idioma do `.btn-acao` das
+     tabelas: um passo de cor além do hover, nunca escala (o app não usa `active:scale` em lugar
+     nenhum, e por ser só cor não precisa de `motion-reduce:`).
+     O passo é de DOIS tons na escala, não de um: com branco → gray-50 no hover → gray-100 no
+     clique, os dois estados ficavam indistinguíveis e o clique não dava retorno nenhum.
+     Estas três classes são o botão padrão do app E a base da Paginacao — é por isso que o
+     retorno de clique da paginação mora aqui, e não numa classe só dela. */
+  .btn-primary {
+    @apply btn bg-gray-800 text-white hover:bg-gray-700 active:bg-gray-900 focus:ring-gray-500;
+  }
+  /* Só a COR da borda — a espessura já vem do `.btn`, para a caixa ser a mesma dos outros dois. */
+  .btn-secondary {
+    @apply btn bg-white text-gray-700 border-gray-300 hover:bg-gray-50 active:bg-gray-200 focus:ring-gray-400;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 active:bg-red-800 focus:ring-red-500;
+  }
+  /* NO ESCURO O BOTÃO PRINCIPAL SE INVERTE (o mockup aprovado): claro com texto escuro. Pela paleta
+     ele ficaria um grafite um pouco mais claro que o fundo, e a ação principal da tela sumiria entre
+     os botões secundários. O :hover e o :active vêm juntos porque este seletor vence os da classe.
+     `.inverte-no-escuro` é a MESMA inversão para o botão principal que não é `.btn-primary` (o
+     "Personalizar" do dashboard, 30/09/2026, a opção A de um mockup: o grafite dele virava um cinza
+     médio quase igual ao trilho). */
+  html[data-tema='escuro'] .btn-primary,
+  html[data-tema='escuro'] .inverte-no-escuro { background-color: #e9e9e9; color: #131313; }
+  html[data-tema='escuro'] .btn-primary:hover,
+  html[data-tema='escuro'] .inverte-no-escuro:hover { background-color: #f5f5f5; }
+  html[data-tema='escuro'] .btn-primary:active,
+  html[data-tema='escuro'] .inverte-no-escuro:active { background-color: #d4d4d4; }
+  /* O RESPONSÁVEL PENDENTE da trilha (`ConclusaoStack`): no claro, a cor dele a 40% sobre o branco;
+     no escuro os mesmos 40% sobre o grafite apagavam o rosto (opção E1 do mockup de 25/09/2026).
+     Opacidade não é cor, então não cabe num token do tema — daqui o seletor, que vence o
+     `opacity-40` e o `hover:opacity-80` pela especificidade. */
+  /* A SOMBRA DOS POPOVERS NO ESCURO (opção B do mockup de 25/09/2026): um fio de brilho no topo e uma
+     sombra escura de verdade. A do claro (10–15% de preto) some sobre o grafite, e o popover se
+     confundia com a tabela. Todo contêiner de popover, menu, toast e barra flutuante leva a classe
+     `sombra-popover` junto da sombra do claro, que continua valendo lá; aqui ela vence pela
+     especificidade. Com o fundo e a borda `elevado` do tema, é o que separa o popover do que está atrás. */
+  html[data-tema='escuro'] .sombra-popover {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 16px 40px rgba(0, 0, 0, 0.65), 0 2px 6px rgba(0, 0, 0, 0.5);
+  }
+  html[data-tema='escuro'] .avatar-pendente { opacity: 0.7; }
+  html[data-tema='escuro'] .avatar-pendente:hover { opacity: 0.9; }
+  /* A SOMBRA DA COLUNA FIXADA (`estiloFixada`, `components/tabela/CabecalhoColuna.jsx`), opção P1 de
+     26/09/2026. No claro vale a reserva escrita lá (10% de preto); sobre o grafite ela sumia, e a
+     coluna fixada deixava de dizer "o resto passa por baixo daqui". Sombra não é cor de token. */
+  html[data-tema='escuro'] { --sombra-fixada: 4px 0 8px -2px rgba(0, 0, 0, 0.65); }
+  /* DENTRO DE UM POPOVER A ESCALA CINZA DE FUNDO SOBE UM DEGRAU (26/09/2026). O popover é `bg-elevado`
+     (`262626`), e pela paleta o gray-50 (`232323`) e o gray-100 (`272727`) — o hover e a linha
+     selecionada de quase todo menu — ficavam no MESMO tom do fundo ou abaixo dele: passar o cursor nas
+     opções do filtro de Período não acendia nada. Em vez de trocar a classe em cada menu, as variáveis
+     são redefinidas no contêiner, e todo descendente herda. Vale para o que tem `sombra-popover` (os
+     popovers passados) e `bg-elevado` (os do DRE, que não levam a sombra). */
+  html[data-tema='escuro'] :is(.sombra-popover, .bg-elevado) {
+    --tf-gray-50: 46 46 46;
+    --tf-gray-100: 51 51 51;
+    --tf-gray-200: 61 61 61;
+    --tf-gray-300: 71 71 71;
+  }
+  .input {
+    @apply w-full rounded-md border border-gray-300 px-3 py-2 text-sm
+           focus:border-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-800;
+  }
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200;
+  }
+  /* Divisória vertical entre colunas do cabeçalho, no molde do HubSpot: é ela que dá ao
+     cabeçalho a leitura de "grade" e mostra onde uma coluna termina e a outra começa.
+     Mora aqui, e não no SortableTh, porque a mesma linha de cabeçalho mistura colunas
+     ordenáveis e cruas — só nas ordenáveis, as outras ficariam sem linha no meio da fileira.
+     A última não leva divisória: ela cairia em cima da borda do card. */
+  .table-th {
+    @apply px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500
+      border-r border-gray-200;
+  }
+  .table-th:last-child {
+    @apply border-r-0;
+  }
+  .table-td {
+    @apply px-3 py-2 text-sm text-gray-700 whitespace-nowrap align-middle;
+  }
+  /* COMPACTA fica com METADE do respiro vertical do padrão: `py-1` é `py-2` dividido por dois
+     (4px contra 8px — 3,5 contra 7 já com o `html { font-size: 87.5% }` do app), e não um valor
+     arbitrário novo. Os BOTÕES não encolhem aqui — quem define o tamanho deles é o `.btn-acao`
+     (32px) — só a folga ao redor deles cai pela metade. Especificidade (0,2,0) contra os (0,1,0)
+     do `.table-td` puro, como as regras de media/alta logo abaixo. */
+  [data-linhas='compacta'] .table-td {
+    @apply py-1;
+    /* PISO da linha compacta. `height` num `td` é MÍNIMO (ver a nota das alturas abaixo), então
+       isto não encolhe ninguém: as telas com `.btn-acao` ficam nos 39px que o botão pede (32 + 7),
+       e Contatos nos 37,7 que o `min-h-[30px]` da CelulaEditavel dá.
+
+       Existe pela Lista de Controle de Custos, a ÚNICA lista sem coluna de ações: sem um botão
+       puxando a linha, o item mais alto dela é uma pílula de 21px e a compacta desabava para
+       28,7 — 9px mais curta que a de Contatos e 13 que a das demais. Não era uma escolha, era o
+       acaso de quais controles a tela tem. Os 37px casam com Contatos, que é a mais baixa das que
+       já existiam. */
+    height: 37px;
+  }
+  /* ALTURA DA LINHA — três padrões, no molde do Airtable, declarados no `data-linhas` da <table>.
+     A altura não é ar: ela é o número de LINHAS DE TEXTO que a célula longa mostra antes de cortar.
+     Sem isso, escolher "alta" só afastaria as linhas umas das outras e não haveria motivo para
+     escolher — o que a pessoa quer é ler o título inteiro sem abrir o registro.
+
+     A regra ataca a classe `.truncate` do Tailwind (que é `nowrap` + reticências) porque é ela que
+     todas as células longas do app já usam; assim nenhuma tela precisou marcar quais colunas
+     quebram. Especificidade (0,3,0) contra os (0,1,0) dela — vence sem `!important`.
+
+     `-webkit-box` + `line-clamp` e não `max-height`: é o que mantém as reticências no fim da ÚLTIMA
+     linha visível. Sem ele o texto seria cortado no meio de uma letra.
+
+     `height` no `td` funciona como MÍNIMO em tabela: é o que mantém todas as linhas da mesma
+     altura, mesmo as que têm texto curto — senão a lista fica com degraus.
+
+     `.table-td` já é `align-middle` por padrão (declarado explicitamente, para não depender do
+     `middle` implícito que o navegador dá de graça a um `<td>`). Media/alta chegaram a forçar
+     `vertical-align: top` aqui, pensando só no bloco de duas linhas do Cliente ("alinhar pelo meio
+     desencontra a primeira linha de cada coluna") — mas a regra valia para TODA célula, inclusive
+     pílulas de uma linha só e o par avatar+nome, que não têm esse problema: em compacta já ficavam
+     centralizadas pelo `middle` padrão, e o `align-top` de media/alta roubava essa centralização
+     sem necessidade — a maioria das colunas do app "subia" e sobrava um vão vazio embaixo. Removido:
+     o padrão agora é `middle` em qualquer altura, inclusive para o bloco do Cliente, que passa a
+     centralizar como bloco. Na altura em que a linha nasce (dimensionada para caber exatamente as
+     duas linhas dele), centralizar e alinhar ao topo dão o mesmo resultado — a diferença só aparece
+     quando outra coluna da mesma linha empurra a altura além do que o Cliente precisa, e aí
+     centralizar é o que concorda com as demais colunas da linha, que também centralizam. */
+  [data-linhas='media'] .table-td,
+  [data-linhas='alta'] .table-td {
+    @apply whitespace-normal;
+  }
+  /* `:not(.whitespace-nowrap)` é o OPT-OUT do clamp — o jeito de marcar "este truncate é para
+     cortar numa linha só, nunca para quebrar". Existe porque `.truncate` serve dois propósitos que
+     até aqui pareciam a mesma coisa: texto longo de célula (Cliente, Assunto — quer quebrar em
+     média/alta) e conteúdo atômico como o rótulo dentro de uma pílula (não quer, nunca). As duas
+     pílulas de status do app (`StatusErpBadge`, o `StatusDropdown` do Custos) escreviam o rótulo
+     num `<span class="truncate">` cru e essa regra as pegava do mesmo jeito que pegava o Cliente —
+     em compacta não aparecia (a regra só existe para média/alta), e por isso o defeito só se via
+     ali. Quem precisa ficar de fora carrega `.whitespace-nowrap` JUNTO com `.truncate`. */
+  [data-linhas='media'] .table-td .truncate:not(.whitespace-nowrap),
+  [data-linhas='alta'] .table-td .truncate:not(.whitespace-nowrap) {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: normal;
+    /* O `text-overflow: ellipsis` da `.truncate` FICA: é ele que põe as reticências no fim da
+       última linha visível. Trocá-lo por `clip` corta no meio da letra, sem sinal de que há mais
+       texto — foi o que a primeira versão fazia. */
+  }
+  /* As alturas são o TETO do conteúdo, não um chute. Declarar abaixo dele não uniformiza nada — o
+     `height` do `td` é um MÍNIMO, e as linhas com texto longo estouram enquanto as de texto curto
+     ficam na altura declarada, dando degraus na lista. Um pixel acima do teto resolve.
+
+     E o teto NÃO é só o texto: nas telas com coluna de ações pesa também o `.btn-acao` (32px). Por
+     isso a MÉDIA leva `py-1` junto com os 42px — com o `py-2` do padrão o botão pediria 46 e a
+     conta não fecharia. Medido: botão 32 + 7 = 39; duas linhas 31,6 + 7 = 38,6; declarado 42, que
+     fica acima dos dois. É essa folga de 3px sobre o botão que faz a troca compacta↔média
+     APARECER: com o botão de 34 de antes ele pedia ~41,7 e comia a diferença inteira. */
+  [data-linhas='media'] .table-td {
+    @apply py-1;
+    height: 42px;
+  }
+  /* O `:not(.whitespace-nowrap)` aqui é INERTE por si só — sem `display:-webkit-box` (regra acima)
+     o `-webkit-line-clamp` não faz nada. Fica pelo par, para não sobrar um seletor sem a exclusão
+     ao lado de outro que a tem — a assimetria é o tipo de coisa que confunde quem vier depois. */
+  [data-linhas='media'] .table-td .truncate:not(.whitespace-nowrap) {
+    -webkit-line-clamp: 2;
+  }
+  [data-linhas='alta'] .table-td {
+    height: 68px;
+  }
+  [data-linhas='alta'] .table-td .truncate:not(.whitespace-nowrap) {
+    -webkit-line-clamp: 3;
+  }
+  /* AS MESMAS TRÊS ALTURAS PARA A CÉLULA EDITÁVEL (Contatos e Lista de Controle). Tudo acima está
+     ancorado em `.table-td`, e o `<td>` dessas colunas não a carrega — ele leva o `TD_CHEIO`
+     (`!p-0 h-px`) e quem desenha a caixa é a casca `.celula-cheia`. Sem estas regras o seletor de
+     altura existia na barra das duas telas e não movia um pixel: o texto ficava numa linha só e a
+     altura presa no `min-h-[34px]` da casca.
+
+     `min-height` e não `height`: a casca é `h-full` dentro de um `<td>` de `h-px` — é o mínimo que
+     dá o piso, e um `height` brigaria com o `h-full`. Especificidade (0,2,0) contra os (0,1,0) do
+     `min-h-[34px]`, então a compacta continua vindo da classe e nada precisa de `!important`.
+
+     O `:not(.whitespace-nowrap)` é o mesmo opt-out das regras acima: pílula dentro de célula corta
+     com reticência, nunca quebra.
+
+     AS DUAS PLANILHAS FICAM EM 35 · 42 · 56 NA TELA (14/09/2026, números do usuário; eram 38 · 52 ·
+     71). A moldura da casca é borda 1,5 × 2 + `py-0.5` (1,75 × 2) = 6,5px, e o piso é sempre +1 da
+     linha divisória. Na compacta quem manda é o controle de 22px (`MiniCheck`, avatar, pílula):
+     22 + 6,5 = 28,5 dentro dos 34 declarados (a compacta chegou a 31 e subiu para 35 a pedido: ficou
+     pequena demais na tela; a sobra vira respiro, centrado). Na média e na alta quem manda é o TEXTO, e com as
+     entrelinhas de antes (17,5 no Custos, 18,75 em Contatos) a conta não fecha — duas linhas pediam
+     43 a 45 e três, 59 a 63. Por isso a ENTRELINHA DAS CÉLULAS LONGAS desce para 16px nas duas
+     densidades: 32 + 6,5 = 38,5 dentro de 41, e 48 + 6,5 = 54,5 dentro de 55. Abaixo disso o
+     `-webkit-line-clamp` come a última linha SEM AVISAR, que é o pior modo de falhar num campo de
+     texto.
+
+     E A LINHA VALE A CÉLULA MAIS ALTA: as colunas sem célula editável (Abrir, comentários, Chegada)
+     carregam `.table-td`, cujo piso global é 37 · 42 · 68. Ele governa as outras sete tabelas do app
+     e fica como está; as duas planilhas levam a classe `planilha-densa` na `<table>`, e as regras
+     escopadas logo abaixo baixam o piso só ali. */
+  [data-linhas='media'] .celula-cheia {
+    min-height: 41px;
+  }
+  [data-linhas='alta'] .celula-cheia {
+    min-height: 55px;
+  }
+  [data-linhas='media'] .celula-cheia .truncate:not(.whitespace-nowrap),
+  [data-linhas='alta'] .celula-cheia .truncate:not(.whitespace-nowrap) {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: normal;
+    line-height: 16px;
+  }
+  [data-linhas='media'] .celula-cheia .truncate:not(.whitespace-nowrap) {
+    -webkit-line-clamp: 2;
+  }
+  [data-linhas='alta'] .celula-cheia .truncate:not(.whitespace-nowrap) {
+    -webkit-line-clamp: 3;
+  }
+  /* O `.table-td` DAS DUAS PLANILHAS acompanha a casca (ver a nota acima). Especificidade (0,3,0)
+     contra os (0,2,0) das regras globais de altura — vence sem `!important`. O `height` é o mesmo
+     piso da casca, e a entrelinha 16 vale para as células longas que não são editáveis. */
+  .planilha-densa[data-linhas] .table-td {
+    @apply py-0.5;
+  }
+  .planilha-densa[data-linhas='compacta'] .table-td {
+    height: 34px;
+  }
+  .planilha-densa[data-linhas='media'] .table-td {
+    height: 41px;
+  }
+  .planilha-densa[data-linhas='alta'] .table-td {
+    height: 55px;
+  }
+  .planilha-densa[data-linhas='media'] .table-td .truncate:not(.whitespace-nowrap),
+  .planilha-densa[data-linhas='alta'] .table-td .truncate:not(.whitespace-nowrap) {
+    line-height: 16px;
+  }
+  /* Botão de ação quadrado das tabelas (editar, retomar, excluir, o gatilho do menu ⋮).
+     Este texto de classe estava COPIADO 12 vezes em 7 telas; virou classe para o retorno de
+     clique entrar num lugar só — e para a próxima mudança não precisar caçar as cópias.
+     A cor do ícone, o `disabled:` e os casos destrutivos continuam inline por cima, porque
+     variam por botão.
+     `active:bg-gray-300` e não gray-200: o idioma é o do menu de reticências
+     (`active:bg-gray-200`), mas lá a base é branca — aqui a base é #fafbfc e o hover JÁ é
+     gray-100, então o clique precisa de um passo a mais para se distinguir do hover. */
+  /* `shrink-0` porque ele vive numa linha flex dentro de uma célula de largura fixa: quando a
+     coluna não dá conta dos botões, o flex ESPREME cada um (medido: 34 de altura por 28,31 de
+     largura) e o quadrado vira retângulo — o desenho de dentro continua 14×14 e fica descentrado.
+     Com o `shrink-0` a coluna estreita demais passa a cortar o último botão, que é um defeito que
+     se vê e se corrige, em vez de deformar todos em silêncio. */
+  /* 32px, e não os 34 de antes. Não é gosto: com 34 o botão pedia 34 + 7 de `py-1` = ~41,7px, o
+     que passava do piso de 37 da COMPACTA e empatava com os 42 da MÉDIA — trocar de altura de linha
+     não movia nada nas quatro telas que usam esta classe (Controle, Fila, Pausados, Grupos), porque
+     quem ditava a altura era sempre o botão, nunca a regra escolhida. Com 32 a conta vira 39 na
+     compacta contra 42 na média: 3px de diferença real, e o seletor volta a fazer o que promete.
+     Só esta classe muda — `.btn-acao-sm` (30px) sobrescreve a altura e segue igual. */
+  .btn-acao {
+    @apply h-[32px] w-[32px] shrink-0 inline-flex items-center justify-center rounded-[9px]
+      border border-gray-200 bg-hx-fafbfc transition hover:bg-gray-100 active:bg-gray-300;
+  }
+  /* 30px: o das listas de arquivo da Engenharia, que são mais densas. */
+  .btn-acao-sm {
+    @apply btn-acao h-[30px] w-[30px];
+  }
+  /* Link do Nº do orçamento: sublinhado que "cresce" da esquerda no hover.
+     Gradiente animado via background-size (2px, pixel inteiro) — espessura
+     consistente em todas as linhas e sem "salto" no fim (sem transform/sub-pixel). */
+  .orc-link {
+    /* As cores daqui leem as variáveis do tema (tema/escuro.mjs): no claro valem o fallback. */
+    color: rgb(var(--tt-hx-006162, 0 97 98));
+    text-decoration: none;
+    padding-bottom: 1px;
+    background-image: linear-gradient(currentColor, currentColor);
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    background-size: 0% 2px;
+    transition: background-size 0.18s ease;
+  }
+  .orc-link:hover {
+    background-size: 100% 2px;
+  }
+  /* Variante QUIETA: o link nasce cinza e só vira teal sob o cursor. É o e-mail e o telefone do
+     card "Pessoas de contato", onde o NOME já é o `ContatoLink` — foi para o nome ser o alvo
+     primário que o `⋯` daquela linha saiu, e seis textos teal num card de três pessoas (3 nomes
+     + 3 e-mails) desfariam essa hierarquia.
+     Ela COMPÕE com o `.orc-link` (`className="orc-link orc-link-quieto"`) em vez de reescrevê-lo:
+     o sublinhado de lá é um `linear-gradient(currentColor, …)` que cresce de 0% a 100% em 0,18s,
+     então trocar só a `color` faz o traço nascer cinza e virar teal sozinho — sem duplicar o hex
+     e sem animação nova.
+     O seletor é `a.orc-link-quieto` (0,1,1) e não `.orc-link-quieto` (0,1,0) para vencer o
+     `.orc-link` sem depender da ordem na folha — a mesma razão que o `a.orc-link-linhas` abaixo
+     já registra. */
+  a.orc-link-quieto {
+    color: rgb(var(--tt-gray-500, 107 114 128));
+  }
+  a.orc-link-quieto:hover {
+    color: rgb(var(--tt-hx-006162, 0 97 98));
+  }
+  /* Variante para nome que ocupa MAIS DE UMA LINHA. O sublinhado do `.orc-link` é uma imagem de
+     fundo colada na base da CAIXA: num bloco de duas linhas ele vira um traço único com a largura
+     da caixa, atravessando o vazio à direita da última linha (medido: 220px de traço sob uma linha
+     de texto de 132px).
+     A saída é FRAGMENTAR o link: em `display: inline` ele vira uma caixa por linha, e o
+     `box-decoration-break: clone` faz cada fragmento pintar o fundo inteiro em vez de fatiar um
+     fundo só entre elas — resultado, um sublinhado por linha, do tamanho exato dela (medido: 127px
+     e 132px), com a animação de crescer preservada.
+     Tentativa anterior, registrada porque é a saída óbvia e é pior: `text-decoration: underline`.
+     Ela acompanha o texto, mas o traço de 2px cai em meio pixel de dispositivo (as linhas nascem em
+     y = 77,75 e 94,75, com dpr 2) e UMA das duas sai antialiasada, visivelmente mais fina.
+     O seletor precisa ser `a.orc-link-linhas` (0,1,1) e não `.orc-link-linhas`: ele tem de vencer
+     o `.inline-block` que o `ClienteLink` já aplica, e utilitário do Tailwind com a mesma
+     especificidade ganharia por vir depois na folha. */
+  a.orc-link-linhas {
+    display: inline;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  /* Mesma animação de sublinhado do .orc-link, mas SEM cor própria (herda a do elemento) —
+     para números de orçamento que precisam manter a cor original (ex.: azul do grupo). */
+  .orc-underline {
+    text-decoration: none;
+    padding-bottom: 1px;
+    background-image: linear-gradient(currentColor, currentColor);
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    background-size: 0% 2px;
+    transition: background-size 0.18s ease;
+  }
+  .orc-underline:hover {
+    background-size: 100% 2px;
+  }
+}
+
+/* Grid do Dashboard (react-grid-layout) — overrides do CSS da lib.
+   O placeholder default dela é VERMELHO puro; aqui vira o cinza-azulado do app. */
+@layer components {
+  .react-grid-item.react-grid-placeholder {
+    @apply rounded-lg;
+    background: #a5b4fc;
+    opacity: 0.35;
+  }
+  /* A alça de resize da lib só aparece no hover. No modo edição ela fica sempre visível,
+     senão o usuário não descobre que dá para redimensionar. */
+  .dash-edicao .react-grid-item > .react-resizable-handle {
+    opacity: 1;
+  }
+  /* A alça da lib é desenhada em PRETO translúcido (a imagem e o `::after` da quina): no escuro ela
+     sumiria sobre o cartão. Inverter a caixa inteira clareia as duas de uma vez. */
+  html[data-tema='escuro'] .react-grid-item > .react-resizable-handle {
+    filter: invert(1);
+  }
+  /* O item de ALTURA MEDIDA pode ficar maior que a própria vaga — o card cresce com o conteúdo
+     enquanto o RGL congela a altura no arrasto (ver `GridPersonalizavel`). A lib dá `z-index: 1`
+     ao item em resize, mas o tira NO INSTANTE em que se solta o botão, enquanto a altura ainda
+     anima por 200ms (`transition-property: transform, width, height`): nessa janela o vizinho
+     voltava a cortar o card. O 3 é o mesmo nível do item sendo arrastado, e não custa nada —
+     estes só se sobrepõem a alguém quando estão vazando. */
+  .react-grid-item.dash-cresce {
+    z-index: 3;
+  }
+}
+
+/* PREENCHIMENTO AUTOMÁTICO do navegador nos campos da ilha de autenticação (`CampoFlutuante`).
+   Ao escolher um login no gerenciador de senhas, o Chrome pinta o campo de azul-claro e troca a cor
+   do texto — e isso NÃO se desliga com `background`: o navegador desenha o fundo do `:-webkit-autofill`
+   por cima de qualquer declaração de cor. O jeito que funciona é uma SOMBRA INTERNA opaca cobrindo a
+   caixa inteira, e a cor do texto por `-webkit-text-fill-color` (o `color` também é ignorado ali).
+
+   O `transition: background-color 9999s` é o complemento: sem ele o Chrome ANIMA o azul por alguns
+   segundos ao preencher, e a sombra só venceria depois que a animação terminasse.
+
+   Fica fora de `@layer` de propósito — o autofill do Chrome tem especificidade de user-agent, e uma
+   camada do Tailwind entraria depois na cascata mas com a mesma especificidade. */
+.campo-auth:-webkit-autofill,
+.campo-auth:-webkit-autofill:hover,
+.campo-auth:-webkit-autofill:focus,
+.campo-auth:-webkit-autofill:active {
+  -webkit-text-fill-color: #2b2f52;
+  -webkit-box-shadow: 0 0 0 1000px #fff inset;
+  box-shadow: 0 0 0 1000px #fff inset;
+  caret-color: #2b2f52;
+  transition: background-color 9999s ease-in-out 0s;
+  /* Ver `CampoFlutuante`: é este par de animações vazias que avisa o React que o navegador
+     preencheu o campo sozinho — o `onChange` não dispara quando o preenchimento acontece sem
+     um gesto na página, e sem o aviso o rótulo flutuante ficaria por cima do texto preenchido. */
+  animation: autofill-liga 1ms;
+}
+.campo-auth:not(:-webkit-autofill) {
+  animation: autofill-desliga 1ms;
+}
+@keyframes autofill-liga {
+  from { /* vazia de propósito: serve só de evento */ }
+}
+@keyframes autofill-desliga {
+  from { /* idem */ }
+}
+
+/* A BORDA QUE ANDA em volta do que foi copiado na grade do DRE (`BordaCopia`, em LinhaDre.jsx), como no
+   Excel: um tracejado de 8px na cor da seleção sobre branco, correndo no sentido do relógio — a de
+   cima e a da direita andam para a frente, a de baixo e a da esquerda (`.dre-formiga-volta`) ao
+   contrário. `--dre-ox`/`--dre-oy` põem cada célula na fase certa do tracejado, para ele não quebrar
+   entre uma célula e a outra. Com "reduzir movimento" no sistema, o tracejado fica parado. */
+.dre-formiga-x, .dre-formiga-y { background-color: rgb(var(--tf-white, 255 255 255)); }
+.dre-formiga-x {
+  background-image: linear-gradient(90deg, var(--dre-cor) 50%, transparent 50%);
+  background-size: 8px 2px;
+  background-position: calc(var(--dre-ox) * -1) 0;
+  animation: dre-formigas-x .5s linear infinite;
+}
+.dre-formiga-y {
+  background-image: linear-gradient(180deg, var(--dre-cor) 50%, transparent 50%);
+  background-size: 2px 8px;
+  background-position: 0 calc(var(--dre-oy) * -1);
+  animation: dre-formigas-y .5s linear infinite;
+}
+.dre-formiga-volta { animation-direction: reverse; }
+@keyframes dre-formigas-x {
+  from { background-position: calc(var(--dre-ox) * -1) 0; }
+  to { background-position: calc(var(--dre-ox) * -1 + 8px) 0; }
+}
+@keyframes dre-formigas-y {
+  from { background-position: 0 calc(var(--dre-oy) * -1); }
+  to { background-position: 0 calc(var(--dre-oy) * -1 + 8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dre-formiga-x, .dre-formiga-y { animation: none; }
+}
+
+/* ---- IMPRESSÃO ---------------------------------------------------------------------------------
+   O PRIMEIRO `@media print` do app, e ele existe para UMA tela: o Relatório Comercial. O caminho
+   para PDF aqui é o do navegador (Ctrl+P → Salvar como PDF) — o app não tem biblioteca de PDF, e
+   pôr uma custaria ~300 KB para reproduzir o que a impressão já faz, com os gráficos junto.
+
+   TRÊS COISAS, e nenhuma é enfeite:
+
+   1. `print-color-adjust: exact` — sem ele os navegadores DESCARTAM cores de fundo ao imprimir
+      (economia de tinta), e como todo gráfico deste dashboard é `<div>` com `background`, as barras
+      sairiam em branco. É a diferença entre imprimir o relatório e imprimir os eixos dele.
+   2. `break-inside: avoid` no bloco — um gráfico partido ao meio pela quebra de página não é um
+      gráfico. `orphans`/`widows` fazem o mesmo pelo texto solto.
+   3. A CROMAGEM DA APLICAÇÃO SAI: sidebar, cabeçalho fixo, sino, barra de controles. Quem decide o
+      que some é o `data-print="fora"`, posto no layout — assim a regra não precisa conhecer as
+      classes de cada peça, que mudariam sem ninguém lembrar daqui.
+
+   O fundo cinza do app vira branco: `#F0F0F0` num papel é uma folha inteira de tinta cinza. */
+@media print {
+  [data-print="fora"] { display: none !important; }
+
+  html, body { background: #fff !important; }
+
+  /* O `<main>` do Layout rola e recorta; na impressão ele tem de deixar o conteúdo fluir, senão o
+     documento é cortado na altura da janela. É a mesma família da armadilha do `overflow` que o
+     `CLAUDE.md` registra — aqui pelo lado do papel. */
+  main, #root, body > div {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  .relatorio {
+    max-width: none !important;
+    margin: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .relatorio * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .bloco-relatorio {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 10px;
+  }
+  .relatorio p, .relatorio td, .relatorio th { orphans: 3; widows: 3; }
+
+  /* A sombra do card vira um traço: sombra não imprime bem e o cartão perde a borda. */
+  .relatorio .card { box-shadow: none !important; border: 1px solid #d1d5db !important; }
+
+  @page { margin: 12mm; }
+}
+
+/* O DESTAQUE DE UMA CLASSE DE CUSTO no DRE (migration 140; `components/dre/classeCusto.jsx`): com
+   `data-destaque-classe` no invólucro das grades, as linhas que NÃO têm a classe na célula do nome
+   (`data-classes`) apagam. A opacidade vai no CONTEÚDO da célula, e não nela: a célula do nome é
+   sticky, e apagá-la inteira deixaria a grade aparecer por baixo ao rolar para o lado. */
+[data-destaque-classe="variavel"] [data-grade-dre] tbody tr:not(:has([data-classes~="variavel"])) > * > div,
+[data-destaque-classe="fixo"] [data-grade-dre] tbody tr:not(:has([data-classes~="fixo"])) > * > div,
+[data-destaque-classe="compromisso"] [data-grade-dre] tbody tr:not(:has([data-classes~="compromisso"])) > * > div {
+  opacity: .25;
+  transition: opacity .15s ease-out;
+}
