@@ -841,7 +841,7 @@ function EditorCelula({ editor, linha, categorias, onTexto, onFechar, onCategori
 }
 
 // A lista da categoria sob a célula, portada ao body (a grade rola e recortaria uma lista `absolute`).
-export function ListaCategorias({ ancora, opcoes, ativo, onAtivo, texto, onEscolher, onCriar, onFora }) {
+function ListaCategorias({ ancora, opcoes, ativo, onAtivo, texto, onEscolher, onCriar, onFora }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
   useLayoutEffect(() => {

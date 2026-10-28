@@ -87,7 +87,7 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   O cadastro continua no modal (clique no nome, Shift+F2 ou botão direito). Legenda no jeito da do DRE: as marcas
   acima da grade são clicáveis (destacam aquele tipo de célula) e o botão "Legenda" explica tudo.
 - O QUE FALTA LANÇAR (28/10/2026, opções A + B): conta os pendentes de TODOS os meses até hoje (`pendentesPorMes`).
-  (A) "N a lançar ▾" no cabeçalho = o `MenuFixos` (de `AvisoAgora.jsx`, o mesmo do aviso da Visão geral) por mês,
+  (A) "Lançar N ▾" no cabeçalho = o `MenuFixos` (de `AvisoAgora.jsx`, o mesmo do aviso da Visão geral) por mês,
   com "Lançar" e "Não teve" em cada fixo, "Lançar os N" e "Ver na grade". (B) A linha "A lançar" da grade, com um
   ponto âmbar no título do mês; clicar seleciona o mês e a barra de baixo vira a de ação ("Lançar os N · R$" e
   "Não teve", botões da MESMA caixa). As ações moram na grade (`MatrizFixos` com `ref`: `lancar`, `pular`,
@@ -96,13 +96,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - "NÃO TEVE" = tabela `fixos_pulados` (migration 006, recorrência + mês, única): a célula fica hachurada e sai das
   pendências (`matrizDoAno`/`situacaoDoMes` recebem `pulados`). Delete no mês desfaz; lançar um valor nele apaga a
   marca; Ctrl+Z vale. Antes da migration, `listarPulados` devolve null e o "Não teve" só explica o que falta.
-- VISTA "CADASTRO" (troca Meses | Cadastro, lembrada no navegador): todos os fixos numa grade de campos
-  (`components/planilha/GradeCadastroFixos.jsx`; contas puras em `lib/cadastroFixos.js`, testadas) — ativo,
-  descrição, categoria, dia, valor padrão, último lançado (só leitura, ≠ quando difere), começa, termina. Teclado da
-  grade dos Lançamentos (Ctrl+C/V do Excel, Ctrl+D, Delete limpa categoria/fim, Ctrl+Z/Y); a última linha cria;
-  o número da linha seleciona a linha, e com linhas inteiras Delete exclui (com confirmação, sem desfazer). Seleção
-  de várias linhas: "Usar o último lançado como padrão", ativar/desativar, excluir. Grava campo a campo
-  (`atualizarRecorrencia`), otimista. Mudar o padrão não mexe no que já foi lançado.
+- O CABEÇALHO É O DO DRE do Gestor (28/10/2026, opção A do mockup dos botões): os ícones numa caixa só, com o
+  nome no tooltip — ✎ o CADASTRO e ▾ "Mais ações" (novo gasto fixo, exportar o ano em CSV) — e o gesto do dia a
+  dia como botão de destaque, "Lançar N ▾" (âmbar). O cadastro NÃO é uma vista da planilha: é um POP-UP
+  (`components/ModalCadastroFixos.jsx`), uma tabela de FORMULÁRIO (cada célula é um campo; categoria pelo
+  `SeletorCategoria`, vigência por `<input type="month">`) com todos os fixos. Muda-se em vários, acrescenta,
+  marca para excluir, e "Salvar alterações (N)" grava só a diferença de cada um (`atualizarRecorrencia`); fechar
+  com mudança pede para descartar. Ao lado do padrão, "≠ último lançado" (clicar o usa). Mudar o padrão não mexe
+  no que já foi lançado.
 - O resumo no topo dos Lançamentos (`components/graficos/CartoesResumo.jsx`, opção C com as setas): cartões com a
   curva dos últimos 6 meses (da `resumo_mensal`; o mês da tela vem da grade); clicar filtra o tipo.
 

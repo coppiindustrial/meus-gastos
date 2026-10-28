@@ -19,4 +19,3 @@ export const IcoLixeira = () => <Ico><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h1
 export const IcoDesfazer = () => <Ico><path d="M9 14L4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></Ico>;
 export const IcoRefazer = () => <Ico><path d="M15 14l5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h3" /></Ico>;
 export const IcoNaoTeve = () => <Ico><circle cx="12" cy="12" r="8" /><path d="M6.5 6.5l11 11" /></Ico>;
-export const IcoAtivar = () => <Ico><rect x="3" y="7" width="18" height="10" rx="5" /><circle cx="16" cy="12" r="2.5" /></Ico>;

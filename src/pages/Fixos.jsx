@@ -9,9 +9,12 @@ import { Campo, RodapeForm } from '../components/Comuns.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { BuscaFaixa, SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import MatrizFixos from '../components/planilha/MatrizFixos.jsx';
-import GradeCadastroFixos from '../components/planilha/GradeCadastroFixos.jsx';
+import ModalCadastroFixos from '../components/ModalCadastroFixos.jsx';
 import { MenuFixos } from '../components/dashboard/AvisoAgora.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
+import MenuContexto from '../components/MenuContexto.jsx';
+import Tooltip from '../components/Tooltip.jsx';
+import { IconLapis, IconSeta } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { listarCategorias } from '../api/cadastros.js';
 import {
@@ -19,19 +22,20 @@ import {
 } from '../api/fixos.js';
 import { matrizDoAno, pendentesPorMes, recorrenciasDoHistorico, ultimoLancado } from '../lib/fixos.js';
 import { formatBRL, parseValor, valorParaCampo } from '../lib/dinheiro.js';
-import { competenciaAtual } from '../lib/format.js';
+import { competenciaAtual, competenciaCurta } from '../lib/format.js';
+import { exportCsv } from '../lib/exportCsv.js';
 import { lsGet, lsSet } from '../lib/storage.js';
 
-// GASTOS FIXOS como uma aba da planilha, em duas vistas (a troca Meses | Cadastro):
-//   · MESES (a opção B do mockup): uma linha por gasto fixo e uma coluna por mês do ano (`MatrizFixos`).
-//     A célula a lançar vem com o valor sugerido (o do último mês lançado); digitar e dar Enter lança. O
-//     que falta lançar aparece duas vezes: no "N a lançar ▾" do cabeçalho (o menu por mês, opção A) e na
-//     linha "A lançar" da grade (opção B). As ações são as da grade (`ref`), com o mesmo desfazer.
-//   · CADASTRO: todos os fixos numa grade de campos (`GradeCadastroFixos`) — mudar o valor padrão, o dia
-//     ou a categoria de vários de uma vez, colar do Excel, criar e excluir.
-// O modal de sempre continua (clique no nome, botão direito ou Shift+F2).
+// GASTOS FIXOS como uma aba da planilha (a opção B do mockup): uma linha por gasto fixo e uma coluna por
+// mês do ano (`MatrizFixos`). A célula a lançar vem com o valor sugerido (o do último mês lançado);
+// digitar e dar Enter lança. O que falta lançar aparece duas vezes: no "Lançar N ▾" do cabeçalho (o menu
+// por mês) e na linha "A lançar" da grade. As ações são as da grade (`ref`), com o mesmo desfazer.
+//
+// O CABEÇALHO É O DO DRE do Gestor (a opção A do mockup dos botões, 28/10/2026): os ícones de mexer na
+// tela numa caixa só — ✎ o CADASTRO (todos os fixos num pop-up, `ModalCadastroFixos`) e ▾ "Mais ações"
+// (novo gasto fixo, exportar) — e o gesto do dia a dia como o botão de destaque, "Lançar N ▾". O modal
+// de UM fixo continua (clique no nome, botão direito ou Shift+F2).
 const LS_ANO = 'fixos_ano';
-const LS_VISTA = 'fixos_vista';
 const SEM_CATEGORIA = [{ value: '', label: 'Sem categoria' }];
 
 function ModalRecorrencia({ rec, categorias, onFechar, onSalvo }) {
@@ -143,16 +147,11 @@ export default function Fixos() {
   const [categorias, setCategorias] = useState([]);
   const [busca, setBusca] = useState('');
   const [cats, setCats] = useState([]);
-  const [vista, setVistaEstado] = useState(() => (lsGet(LS_VISTA) === 'cadastro' ? 'cadastro' : 'meses'));
-  const setVista = (v) => { setVistaEstado(v); lsSet(LS_VISTA, v); };
-  // A situação de cada vista: nos Meses, os ativos; no Cadastro, todos (desativar uma linha não a some).
-  const [situacaoMeses, setSituacaoMeses] = useState('ativos');
-  const [situacaoCad, setSituacaoCad] = useState('');
-  const situacao = vista === 'cadastro' ? situacaoCad : situacaoMeses;
-  const setSituacao = vista === 'cadastro' ? setSituacaoCad : setSituacaoMeses;
-  const padraoSituacao = vista === 'cadastro' ? '' : 'ativos';
+  const [situacao, setSituacao] = useState('ativos');
   const [modo, setModo] = useState('valor');
   const [modal, setModal] = useState(null);
+  const [cadastro, setCadastro] = useState(false);
+  const [mais, setMais] = useState(null); // o menu "Mais ações" (posição)
 
   const carregar = useCallback(async () => {
     try {
@@ -194,17 +193,52 @@ export default function Fixos() {
   if (!recs) return (<div><CabecalhoPagina titulo="Gastos fixos" /><PageLoading /></div>);
 
   const sugeridas = recs.length === 0 ? recorrenciasDoHistorico(semRec) : [];
-  const filtrando = Boolean(busca || cats.length || situacao !== padraoSituacao || (vista === 'meses' && ano !== anoAtual));
-  const limpar = () => { setBusca(''); setCats([]); setSituacao(padraoSituacao); setAno(anoAtual); };
+  const filtrando = Boolean(busca || cats.length || situacao !== 'ativos' || ano !== anoAtual);
+  const limpar = () => { setBusca(''); setCats([]); setSituacao('ativos'); setAno(anoAtual); };
+
+  // Exportar o ano: uma linha por fixo, o lançado em cada mês (vazio = não lançado), o total e a média.
+  const exportar = () => exportCsv(`gastos-fixos-${ano}`, matriz.linhas.map((l) => ({ ...l, nome: l.rec.descricao, categoria: l.rec.categoria?.nome ?? '' })), [
+    { key: 'nome', label: 'Gasto fixo' },
+    { key: 'categoria', label: 'Categoria' },
+    ...matriz.comps.map((c, i) => ({ key: c, label: competenciaCurta(c), tipo: 'dinheiro', map: (l) => (l.celulas[i].estado === 'lancado' ? l.celulas[i].valor / 100 : null) })),
+    { key: 'total', label: 'Total', tipo: 'dinheiro', map: (l) => l.total / 100 },
+    { key: 'media', label: 'Média', tipo: 'dinheiro', map: (l) => (l.media ?? 0) / 100 },
+  ]);
+  const abrirMais = (el) => {
+    const r = el.getBoundingClientRect();
+    setMais({ x: r.right - 230, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+      { rotulo: 'Novo gasto fixo', sub: 'o formulário de um fixo', onEscolher: () => setModal({}) },
+      { rotulo: `Exportar ${ano} (CSV)`, sub: 'o lançado de cada fixo em cada mês', desabilitado: !matriz.linhas.length, motivo: 'nada no ano', onEscolher: exportar },
+    ] });
+  };
+  const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
 
   return (
     <div>
       <CabecalhoPagina titulo="Gastos fixos"
         acessorio={recs.length > 0 && <span className="text-sm text-gray-500">{recs.filter((r) => r.ativa).length} ativos</span>}
         acoes={<>
-          {/* "N A LANÇAR ▾" (opção A): o menu por mês, com "Lançar" e "Não teve" em cada fixo e, no rodapé,
-              "Lançar os N" (pede confirmação) e "Ver na grade" (seleciona os meses). */}
-          {vista === 'meses' && pendAno.length > 0 && (
+          {/* O GRUPO DO DRE: os ícones numa caixa só (o nome no tooltip), divisória entre eles. A caixa tem a
+              altura do `.btn` (36px por dentro + a borda). */}
+          {recs.length > 0 && (
+            <div className="inline-flex overflow-hidden rounded-md border border-gray-300 bg-white">
+              <Tooltip label="Cadastro dos fixos">
+                <button type="button" aria-label="Cadastro dos fixos" onClick={() => setCadastro(true)} className={`${ICONE} w-[38px]`}>
+                  <IconLapis className="h-3.5 w-3.5" />
+                </button>
+              </Tooltip>
+              <Tooltip label="Mais ações">
+                <button type="button" aria-label="Mais ações" aria-haspopup="menu" aria-expanded={!!mais}
+                  onClick={(e) => (mais ? setMais(null) : abrirMais(e.currentTarget))}
+                  className={`${ICONE} w-[28px] border-l border-gray-200 ${mais ? 'bg-gray-100' : ''}`}>
+                  <IconSeta className={`transition-transform duration-200 ease-out ${mais ? 'rotate-180' : ''}`} />
+                </button>
+              </Tooltip>
+            </div>
+          )}
+          {/* O GESTO DO DIA A DIA: "Lançar N ▾" abre o menu por mês ("Lançar" e "Não teve" em cada fixo; no
+              rodapé, "Lançar os N", que pede confirmação, e "Ver na grade"). Âmbar = falta fazer. */}
+          {pendAno.length > 0 && (
             <MenuFixos meses={mesesPend} pendentes={pendMes} hoje={hoje} alinhar="direita"
               onLancar={(x) => matrizRef.current?.lancar([{ r: x.r, c: x.c }], { perguntar: false })}
               onPular={(x) => matrizRef.current?.pular([{ r: x.r, c: x.c }])}
@@ -213,14 +247,15 @@ export default function Fixos() {
                   onClick: () => matrizRef.current?.lancar(pendAno.map((x) => ({ r: x.r, c: x.c }))) },
                 { rotulo: 'Ver na grade', onClick: () => matrizRef.current?.selecionar(Math.min(...pendAno.map((x) => x.c)), Math.max(...pendAno.map((x) => x.c))) },
               ]}>
-              <span className="btn-secondary hidden items-center gap-2 sm:inline-flex">
-                <span className="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-[5px] bg-hx-fef3c7 px-1 text-[11px] font-bold tabular-nums text-hx-92400e">{pendAno.length}</span>
-                a lançar
-                <svg viewBox="0 0 24 24" className="h-3 w-3 opacity-70" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+              <span className="btn font-semibold hover:brightness-95 active:brightness-90" style={{ background: '#f59e0b', borderColor: '#d98a06', color: '#1f1600' }}>
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>
+                Lançar
+                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] bg-black/15 px-1 text-[11px] font-bold tabular-nums">{pendAno.length}</span>
+                <IconSeta className="opacity-70" />
               </span>
             </MenuFixos>
           )}
-          <button type="button" className="btn-primary" onClick={() => setModal({})}><span className="sm:hidden">Novo</span><span className="hidden sm:inline">Novo gasto fixo</span></button>
+          {!recs.length && <button type="button" className="btn-primary" onClick={() => setModal({})}>Novo gasto fixo</button>}
         </>} />
 
       {sugeridas.length > 0 && <DoHistorico sugeridas={sugeridas} categorias={categorias} onCriado={carregar} />}
@@ -231,34 +266,22 @@ export default function Fixos() {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <BuscaFaixa className="w-full sm:w-[200px]" placeholder="Gasto fixo" value={busca} onChange={(e) => setBusca(e.target.value)} />
               <Trilho>
-                {vista === 'meses' && (
-                  <>
-                    <SegUnico id="ano" rotulo="Ano" opcoes={opcoesAno} value={ano} onChange={setAno} padrao={anoAtual} mostraPadrao largura={150} />
-                    <DivisorFaixa />
-                  </>
-                )}
+                <SegUnico id="ano" rotulo="Ano" opcoes={opcoesAno} value={ano} onChange={setAno} padrao={anoAtual} mostraPadrao largura={150} />
+                <DivisorFaixa />
                 <SegMulti id="categoria" rotulo="Categoria" opcoes={opcoesCategoria} value={cats} onChange={setCats} largura={280} busca="Buscar categoria ou grupo" />
                 <DivisorFaixa />
-                <SegUnico id="situacao" rotulo="Situação" opcoes={OPCOES_SITUACAO} value={situacao} onChange={setSituacao} padrao={padraoSituacao} mostraPadrao largura={170} />
+                <SegUnico id="situacao" rotulo="Situação" opcoes={OPCOES_SITUACAO} value={situacao} onChange={setSituacao} padrao="ativos" mostraPadrao largura={170} />
               </Trilho>
               <LimparFiltros ativo={filtrando} onClick={limpar} />
               <span className="flex-1" />
-              {/* As trocas são a `AbasPilula` do Gestor (a pílula desliza), na altura do trilho ao lado. */}
-              {vista === 'meses' && (
-                <AbasPilula abas={[{ key: 'valor', label: 'Valor' }, { key: 'variacao', label: 'Variação %' }]} valor={modo} onChange={setModo}
-                  variante="claro" altura={31} folga={3} />
-              )}
-              <AbasPilula abas={[{ key: 'meses', label: 'Meses', aria: 'Os lançamentos de cada mês' }, { key: 'cadastro', label: 'Cadastro', aria: 'Todos os fixos numa lista para editar' }]}
-                valor={vista} onChange={setVista} variante="claro" altura={31} folga={3} />
+              {/* A troca Valor | Variação % é a `AbasPilula` do Gestor (a pílula desliza), na altura do trilho ao lado. */}
+              <AbasPilula abas={[{ key: 'valor', label: 'Valor' }, { key: 'variacao', label: 'Variação %' }]} valor={modo} onChange={setModo}
+                variante="claro" altura={31} folga={3} />
             </div>
           </FaixaProvider>
 
           <div className="mt-3">
-            {vista === 'cadastro' ? (
-              <GradeCadastroFixos recs={filtrados} setRecs={setRecs} categorias={categorias} ultimos={ultimos}
-                onEditar={(rec) => setModal({ item: rec })} onRecarregar={carregar}
-                onCategoriaCriada={(cat) => setCategorias((cs) => [...cs, cat])} />
-            ) : matriz.linhas.length === 0
+            {matriz.linhas.length === 0
               ? <ListaVazia>Nenhum gasto fixo {filtrando ? 'com esses filtros' : `vigente em ${ano}`}.</ListaVazia>
               : <MatrizFixos ref={matrizRef} matriz={matriz} hoje={hoje} setLancs={setLancs} setPulados={setPuladosLista} pulosAtivos={pulados !== null}
                   modo={modo} onEditar={(rec) => setModal({ item: rec })} onRecarregar={carregar} />}
@@ -271,6 +294,11 @@ export default function Fixos() {
         <div className="mt-6 max-w-3xl"><ListaVazia>Nenhum gasto fixo cadastrado. Use “Novo gasto fixo”.</ListaVazia></div>
       )}
 
+      {cadastro && (
+        <ModalCadastroFixos recs={recs} categorias={categorias} ultimos={ultimos} onFechar={() => setCadastro(false)}
+          onSalvo={() => { setCadastro(false); carregar(); }} onCategoriaCriada={(cat) => setCategorias((cs) => [...cs, cat])} />
+      )}
+      <MenuContexto menu={mais} onFechar={() => setMais(null)} />
       {modal && <ModalRecorrencia rec={modal.item} categorias={categorias} onFechar={() => setModal(null)} onSalvo={() => { setModal(null); carregar(); }} />}
     </div>
   );

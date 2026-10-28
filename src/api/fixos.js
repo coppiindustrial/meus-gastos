@@ -26,17 +26,9 @@ export function salvarRecorrencia(r) {
     : supabase.from('recorrencias').insert(dados).select().single());
 }
 
-// Grava só os campos mudados (o cadastro em lista grava célula a célula). Devolve a linha com a categoria.
+// Grava só os campos mudados (o pop-up do cadastro manda a diferença de cada fixo). Devolve a linha com a categoria.
 export function atualizarRecorrencia(id, campos) {
   return exigir(supabase.from('recorrencias').update(campos).eq('id', id)
-    .select('*, categoria:categorias(id, nome, grupo:grupos(nome, cor))').single());
-}
-
-// Cria (ou devolve, num refazer) uma recorrência com o id dado — o desfazer de "criar" a apaga, e o
-// refazer a traz de volta com o MESMO id.
-export function inserirRecorrencia(r) {
-  const { categoria: _c, criado_em: _cr, atualizado_em: _a, user_id: _u, ...dados } = r;
-  return exigir(supabase.from('recorrencias').insert(dados)
     .select('*, categoria:categorias(id, nome, grupo:grupos(nome, cor))').single());
 }
 
