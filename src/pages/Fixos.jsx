@@ -154,6 +154,7 @@ export default function Fixos() {
   const [modal, setModal] = useState(null);
   const [cadastro, setCadastro] = useState(false);
   const [mais, setMais] = useState(null); // o menu "Mais ações" (posição)
+  const maisAbertoNoClique = useRef(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -231,8 +232,12 @@ export default function Fixos() {
               </button>
             </Tooltip>
             <Tooltip label="Mais ações">
+              {/* ABRE E FECHA: o menu se fecha no mousedown FORA dele — e o botão está fora —, então quando o
+                  clique chegava o menu já estava fechado e o botão o reabria. O mousedown anota se ele estava
+                  aberto, e o clique só reabre se não estava. */}
               <button type="button" aria-label="Mais ações" aria-haspopup="menu" aria-expanded={!!mais}
-                onClick={(e) => (mais ? setMais(null) : abrirMais(e.currentTarget))}
+                onMouseDown={() => { maisAbertoNoClique.current = !!mais; }}
+                onClick={(e) => { if (maisAbertoNoClique.current || mais) { maisAbertoNoClique.current = false; setMais(null); } else abrirMais(e.currentTarget); }}
                 className={`${ICONE} w-[28px] border-l border-gray-200 ${mais ? 'bg-gray-100' : ''}`}>
                 <IconSeta className={`transition-transform duration-200 ease-out ${mais ? 'rotate-180' : ''}`} />
               </button>
