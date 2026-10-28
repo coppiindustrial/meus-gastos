@@ -59,7 +59,8 @@ export default function AvisoAgora({ hoje, pendentes, revisar, parcelasProx, onL
         <span className="shrink-0 text-[12px] font-medium text-gray-800">{mesDe(hoje)}</span>
         {!tom && <span className="text-[12px] text-gray-500">em dia — nada a lançar ou revisar</span>}
         {nFixos > 0 && (
-          <MenuFixos meses={meses} pendentes={pendentes} hoje={hoje} onLancar={onLancar} onAbrir={() => navigate('/fixos')}>
+          <MenuFixos meses={meses} pendentes={pendentes} hoje={hoje} onLancar={(p, comp) => onLancar(p.rec, comp, p.sugerido)}
+            rodape={[{ rotulo: 'Abrir os Gastos fixos (lá dá para marcar "não teve")', onClick: () => navigate('/fixos') }]}>
             <span className={PILULA} style={{ background: MEDIO.bg, color: MEDIO.cor }}>
               {plural(nFixos, 'fixo a lançar', 'fixos a lançar')}{meses.some((c) => c !== hoje) ? ' (inclui meses anteriores)' : ''}<IcoAbre />
             </span>
@@ -82,9 +83,11 @@ export default function AvisoAgora({ hoje, pendentes, revisar, parcelasProx, onL
   );
 }
 
-// O menu da pílula dos fixos (o `MenuAlerta` do Gestor): os pendentes por mês — o atual primeiro, os de
-// trás como "ficou para trás" — com o valor sugerido e "Lançar" em cada um; no rodapé, a tela dos fixos.
-function MenuFixos({ meses, pendentes, hoje, onLancar, onAbrir, children }) {
+// O menu dos fixos a lançar (o `MenuAlerta` do Gestor): os pendentes por mês — o atual primeiro, os de
+// trás como "ficou para trás" — com o valor sugerido e "Lançar" em cada um (e "Não teve", com `onPular`).
+// Serve à pílula daqui e ao "N a lançar ▾" do cabeçalho dos Gastos fixos. `onLancar(item, comp)` /
+// `onPular(item, comp)`: o item é o de `pendentesPorMes`. `rodape`: [{ rotulo, onClick, destaque? }].
+export function MenuFixos({ meses, pendentes, hoje, onLancar, onPular, rodape = [], alinhar = 'esquerda', children }) {
   const [pos, setPos] = useState(null);
   const [lancando, setLancando] = useState(new Set());
   const alvo = useRef(null);
@@ -108,20 +111,21 @@ function MenuFixos({ meses, pendentes, hoje, onLancar, onAbrir, children }) {
   }, [pos]);
 
   const nLinhas = meses.reduce((s, c) => s + pendentes[c].length + 1, 0);
-  const lancar = async (rec, comp, valor) => {
-    const k = `${rec.id}|${comp}`;
+  const agir = async (fn, p, comp) => {
+    const k = `${p.rec.id}|${comp}`;
     setLancando((s) => new Set([...s, k]));
-    try { await onLancar(rec, comp, valor); } finally { setLancando((s) => { const x = new Set(s); x.delete(k); return x; }); }
+    try { await fn(p, comp); } finally { setLancando((s) => { const x = new Set(s); x.delete(k); return x; }); }
   };
+  const largura = onPular ? LARG_MENU + 70 : LARG_MENU;
 
   return (
     <span ref={alvo} className="inline-flex shrink-0">
       <button type="button" className="inline-flex" aria-haspopup="menu" aria-expanded={!!pos}
-        onClick={(ev) => setPos(pos ? null : posicionarPopover(ev.currentTarget, { largura: LARG_MENU, altura: 60 + nLinhas * 30, alinhar: 'esquerda', gap: 6 }))}>
+        onClick={(ev) => setPos(pos ? null : posicionarPopover(ev.currentTarget, { largura, altura: 60 + (nLinhas + rodape.length) * 30, alinhar, gap: 6 }))}>
         {children}
       </button>
       {pos && createPortal(
-        <div role="menu" ref={menuRef} style={{ position: 'fixed', ...pos, width: LARG_MENU }}
+        <div role="menu" ref={menuRef} style={{ position: 'fixed', ...pos, width: largura }}
           className="z-[80] animate-pop-in overflow-hidden rounded-[4px] border border-elevado bg-elevado py-1 shadow-[0_14px_34px_rgba(20,28,44,.15),0_3px_8px_rgba(20,28,44,.06)] sombra-popover">
           <div className="max-h-[360px] overflow-y-auto scrollbar-thin">
             {meses.map((comp) => (
@@ -129,27 +133,44 @@ function MenuFixos({ meses, pendentes, hoje, onLancar, onAbrir, children }) {
                 <div className="px-2.5 pb-0.5 pt-1 text-[9.5px] font-semibold uppercase tracking-[0.05em] text-gray-400">
                   {mesDe(comp)}{comp === hoje ? ' · mês atual' : ' · ficou para trás'}
                 </div>
-                {pendentes[comp].map(({ rec, sugerido }) => {
+                {pendentes[comp].map((p) => {
+                  const { rec, sugerido } = p;
                   const ocupado = lancando.has(`${rec.id}|${comp}`);
                   return (
                     <div key={rec.id} role="menuitem" className="flex items-center gap-2 rounded-[2px] py-1 pl-5 pr-2.5 text-[12px] text-gray-700 transition hover:bg-hx-f4f5f7">
                       <span className="min-w-0 flex-1 truncate">{rec.descricao}</span>
                       <span className="shrink-0 text-[11.5px] tabular-nums text-gray-500">{formatBRL(sugerido)}</span>
-                      <button type="button" disabled={ocupado || !(sugerido > 0)} onClick={() => lancar(rec, comp, sugerido)}
-                        title={sugerido > 0 ? `Lançar ${formatBRL(sugerido)} em ${mesDe(comp).toLowerCase()} (o valor sugerido)` : 'Sem valor sugerido: lance na tela dos fixos'}
+                      <button type="button" disabled={ocupado || !(sugerido > 0)} onClick={() => agir(onLancar, p, comp)}
+                        title={sugerido > 0 ? `Lançar ${formatBRL(sugerido)} em ${mesDe(comp).toLowerCase()} (o valor sugerido)` : 'Sem valor sugerido: digite o valor na grade'}
                         className={`${PILULA} disabled:opacity-50`} style={{ background: MEDIO.bg, color: MEDIO.cor }}>
                         {ocupado ? 'Lançando…' : 'Lançar'}
                       </button>
+                      {onPular && (
+                        <button type="button" disabled={ocupado} onClick={() => agir(onPular, p, comp)}
+                          title={`${rec.descricao} não existiu em ${mesDe(comp).toLowerCase()}: sai das pendências (Ctrl+Z desfaz na grade)`}
+                          className={`${PILULA} border border-gray-200 text-gray-500 hover:bg-gray-100 hover:brightness-100 disabled:opacity-50`}>
+                          Não teve
+                        </button>
+                      )}
                     </div>
                   );
                 })}
               </div>
             ))}
           </div>
-          <button type="button" role="menuitem" onClick={() => { setPos(null); onAbrir(); }}
-            className="mt-1 flex w-full items-center gap-1 border-t border-gray-100 px-2.5 pb-1 pt-2 text-left text-[11.5px] text-gray-500 transition hover:text-gray-800">
-            Abrir os Gastos fixos (lá dá para marcar "não teve") <IcoSeta />
-          </button>
+          {rodape.length > 0 && (
+            <div className="mt-1 flex items-center gap-3 border-t border-gray-100 px-2.5 pb-1 pt-2">
+              {rodape.map((a) => (
+                <button key={a.rotulo} type="button" role="menuitem" onClick={() => { setPos(null); a.onClick(); }}
+                  className={a.destaque
+                    ? `${PILULA} font-semibold`
+                    : 'flex items-center gap-1 text-left text-[11.5px] text-gray-500 transition hover:text-gray-800 last:ml-auto'}
+                  style={a.destaque ? { background: '#f59e0b', color: '#1f1600' } : undefined}>
+                  {a.rotulo}{!a.destaque && <IcoSeta />}
+                </button>
+              ))}
+            </div>
+          )}
         </div>,
         document.body,
       )}

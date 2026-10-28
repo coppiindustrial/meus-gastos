@@ -86,9 +86,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (ou corrige o lançado), Ctrl+Enter lança os pendentes da seleção, Delete exclui, Ctrl+V cola do Excel, Ctrl+Z/Y.
   O cadastro continua no modal (clique no nome, Shift+F2 ou botão direito). Legenda no jeito da do DRE: as marcas
   acima da grade são clicáveis (destacam aquele tipo de célula) e o botão "Legenda" explica tudo.
-- O QUE FALTA LANÇAR (28/10/2026, opção B): sem botão no cabeçalho. A linha "A lançar" da grade conta os pendentes
-  de cada mês (todos até hoje, não só o atual; `pendentesPorMes`) e o título do mês ganha um ponto âmbar; clicar
-  seleciona o mês e a barra de baixo vira a de ação: "Lançar os N · R$" e "NÃO TEVE".
+- O QUE FALTA LANÇAR (28/10/2026, opções A + B): conta os pendentes de TODOS os meses até hoje (`pendentesPorMes`).
+  (A) "N a lançar ▾" no cabeçalho = o `MenuFixos` (de `AvisoAgora.jsx`, o mesmo do aviso da Visão geral) por mês,
+  com "Lançar" e "Não teve" em cada fixo, "Lançar os N" e "Ver na grade". (B) A linha "A lançar" da grade, com um
+  ponto âmbar no título do mês; clicar seleciona o mês e a barra de baixo vira a de ação ("Lançar os N · R$" e
+  "Não teve", botões da MESMA caixa). As ações moram na grade (`MatrizFixos` com `ref`: `lancar`, `pular`,
+  `selecionar`), com o mesmo desfazer. LANÇAR VÁRIOS PEDE CONFIRMAÇÃO com a lista (barra, Ctrl+Enter, menu, "Lançar
+  os N"); o "Lançar" de um fixo no menu não pede (a linha já mostra o valor).
 - "NÃO TEVE" = tabela `fixos_pulados` (migration 006, recorrência + mês, única): a célula fica hachurada e sai das
   pendências (`matrizDoAno`/`situacaoDoMes` recebem `pulados`). Delete no mês desfaz; lançar um valor nele apaga a
   marca; Ctrl+Z vale. Antes da migration, `listarPulados` devolve null e o "Não teve" só explica o que falta.

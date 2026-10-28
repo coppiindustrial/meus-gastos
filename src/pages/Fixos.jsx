@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
 import SeletorCategoria from '../components/SeletorCategoria.jsx';
@@ -10,13 +10,14 @@ import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../component
 import { BuscaFaixa, SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import MatrizFixos from '../components/planilha/MatrizFixos.jsx';
 import GradeCadastroFixos from '../components/planilha/GradeCadastroFixos.jsx';
+import { MenuFixos } from '../components/dashboard/AvisoAgora.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { listarCategorias } from '../api/cadastros.js';
 import {
   criarRecorrenciasDoHistorico, listarFixosSemRecorrencia, listarLancamentosDeFixos, listarPulados, listarRecorrencias, salvarRecorrencia,
 } from '../api/fixos.js';
-import { matrizDoAno, recorrenciasDoHistorico, ultimoLancado } from '../lib/fixos.js';
+import { matrizDoAno, pendentesPorMes, recorrenciasDoHistorico, ultimoLancado } from '../lib/fixos.js';
 import { formatBRL, parseValor, valorParaCampo } from '../lib/dinheiro.js';
 import { competenciaAtual } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
@@ -24,7 +25,8 @@ import { lsGet, lsSet } from '../lib/storage.js';
 // GASTOS FIXOS como uma aba da planilha, em duas vistas (a troca Meses | Cadastro):
 //   · MESES (a opção B do mockup): uma linha por gasto fixo e uma coluna por mês do ano (`MatrizFixos`).
 //     A célula a lançar vem com o valor sugerido (o do último mês lançado); digitar e dar Enter lança. O
-//     que falta lançar fica na linha "A lançar" da própria grade (não há mais botão no cabeçalho).
+//     que falta lançar aparece duas vezes: no "N a lançar ▾" do cabeçalho (o menu por mês, opção A) e na
+//     linha "A lançar" da grade (opção B). As ações são as da grade (`ref`), com o mesmo desfazer.
 //   · CADASTRO: todos os fixos numa grade de campos (`GradeCadastroFixos`) — mudar o valor padrão, o dia
 //     ou a categoria de vários de uma vez, colar do Excel, criar e excluir.
 // O modal de sempre continua (clique no nome, botão direito ou Shift+F2).
@@ -169,6 +171,10 @@ export default function Fixos() {
   const matriz = useMemo(() => matrizDoAno(filtrados, lancs, ano, hoje, pulados ?? []), [filtrados, lancs, ano, hoje, pulados]);
   const ultimos = useMemo(() => ultimoLancado(lancs), [lancs]);
   const setPuladosLista = useCallback((fn) => setPulados((ps) => fn(ps ?? [])), []);
+  const matrizRef = useRef(null);
+  const pendMes = useMemo(() => pendentesPorMes(matriz), [matriz]);
+  const mesesPend = Object.keys(pendMes).sort().reverse();
+  const pendAno = mesesPend.flatMap((c) => pendMes[c]);
 
   const opcoesAno = useMemo(() => {
     const s = new Set(lancs.map((l) => Number(l.competencia.slice(0, 4))));
@@ -196,6 +202,24 @@ export default function Fixos() {
       <CabecalhoPagina titulo="Gastos fixos"
         acessorio={recs.length > 0 && <span className="text-sm text-gray-500">{recs.filter((r) => r.ativa).length} ativos</span>}
         acoes={<>
+          {/* "N A LANÇAR ▾" (opção A): o menu por mês, com "Lançar" e "Não teve" em cada fixo e, no rodapé,
+              "Lançar os N" (pede confirmação) e "Ver na grade" (seleciona os meses). */}
+          {vista === 'meses' && pendAno.length > 0 && (
+            <MenuFixos meses={mesesPend} pendentes={pendMes} hoje={hoje} alinhar="direita"
+              onLancar={(x) => matrizRef.current?.lancar([{ r: x.r, c: x.c }], { perguntar: false })}
+              onPular={(x) => matrizRef.current?.pular([{ r: x.r, c: x.c }])}
+              rodape={[
+                { rotulo: pendAno.length === 1 ? 'Lançar com o valor sugerido' : `Lançar os ${pendAno.length} com o valor sugerido`, destaque: true,
+                  onClick: () => matrizRef.current?.lancar(pendAno.map((x) => ({ r: x.r, c: x.c }))) },
+                { rotulo: 'Ver na grade', onClick: () => matrizRef.current?.selecionar(Math.min(...pendAno.map((x) => x.c)), Math.max(...pendAno.map((x) => x.c))) },
+              ]}>
+              <span className="btn-secondary hidden items-center gap-2 sm:inline-flex">
+                <span className="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-[5px] bg-hx-fef3c7 px-1 text-[11px] font-bold tabular-nums text-hx-92400e">{pendAno.length}</span>
+                a lançar
+                <svg viewBox="0 0 24 24" className="h-3 w-3 opacity-70" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+              </span>
+            </MenuFixos>
+          )}
           <button type="button" className="btn-primary" onClick={() => setModal({})}><span className="sm:hidden">Novo</span><span className="hidden sm:inline">Novo gasto fixo</span></button>
         </>} />
 
@@ -236,7 +260,7 @@ export default function Fixos() {
                 onCategoriaCriada={(cat) => setCategorias((cs) => [...cs, cat])} />
             ) : matriz.linhas.length === 0
               ? <ListaVazia>Nenhum gasto fixo {filtrando ? 'com esses filtros' : `vigente em ${ano}`}.</ListaVazia>
-              : <MatrizFixos matriz={matriz} hoje={hoje} setLancs={setLancs} setPulados={setPuladosLista} pulosAtivos={pulados !== null}
+              : <MatrizFixos ref={matrizRef} matriz={matriz} hoje={hoje} setLancs={setLancs} setPulados={setPuladosLista} pulosAtivos={pulados !== null}
                   modo={modo} onEditar={(rec) => setModal({ item: rec })} onRecarregar={carregar} />}
           </div>
 

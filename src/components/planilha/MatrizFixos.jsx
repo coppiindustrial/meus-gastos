@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import MenuContexto from '../MenuContexto.jsx';
@@ -42,9 +42,10 @@ import {
 
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const pct = (atual, antes) => (antes ? Math.round(((atual - antes) / antes) * 100) : null);
-const AVISO_006 = 'Para marcar "Não teve", aplique a migration 006 (supabase/migrations/006_fixos_pulados.sql) no SQL Editor do Supabase.';
+const BOTAO_BARRA = 'inline-flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-[6px] border px-2.5 text-[12px] font-medium transition-[filter,background-color] duration-[120ms] disabled:opacity-50';
+const AVISO_006 ='Para marcar "Não teve", aplique a migration 006 (supabase/migrations/006_fixos_pulados.sql) no SQL Editor do Supabase.';
 
-export default function MatrizFixos({ matriz, hoje, setLancs, setPulados, pulosAtivos, modo, onEditar, onRecarregar }) {
+const MatrizFixos = forwardRef(function MatrizFixos({ matriz, hoje, setLancs, setPulados, pulosAtivos, modo, onEditar, onRecarregar }, ref) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   const navigate = useNavigate();
@@ -187,15 +188,48 @@ export default function MatrizFixos({ matriz, hoje, setLancs, setPulados, pulosA
     return out;
   };
 
-  const lancarPendentes = (f = faixa) => {
-    const pend = celulasDa(f, 'pendente').filter((x) => x.cel.sugerido > 0);
+  // LANÇAR OS PENDENTES (a barra, o Ctrl+Enter e o menu) PEDE CONFIRMAÇÃO, com a lista do que vai entrar:
+  // são vários lançamentos de uma vez, com o valor SUGERIDO, que nem sempre é o da conta do mês.
+  // `alvo`: as células [{ r, c }] (o menu do cabeçalho); sem ele, os pendentes da seleção.
+  const pendentesDe = (alvo) => (alvo
+    ? alvo.map(({ r, c }) => ({ r, c, cel: celula(r, c) })).filter((x) => x.cel?.estado === 'pendente')
+    : celulasDa(faixa, 'pendente'));
+  // `perguntar: false`: o "Lançar" de UM fixo no menu do cabeçalho, onde a linha já mostra o que entra.
+  const lancarPendentes = async (alvo, { perguntar = true } = {}) => {
+    const pend = pendentesDe(alvo).filter((x) => x.cel.sugerido > 0);
     if (!pend.length) { toast.info('Nada a lançar na seleção (sem pendentes com valor sugerido).'); return; }
+    if (perguntar && !(await confirmarLancar(pend))) return;
     aplicar(pend.map(({ r, c, cel }) => ({ r, c, valor: cel.sugerido })), `lançar ${plural(pend.length, 'fixo', 'fixos')}`);
   };
+  const confirmarLancar = async (pend) => {
+    const MAX = 8;
+    const linhaDe = ({ r, cel }) => `${linhas[r].rec.descricao} · ${competenciaCurta(cel.comp)} · ${formatBRL(cel.sugerido)}`;
+    const resto = pend.slice(MAX);
+    const ok = await confirmar({
+      titulo: pend.length === 1 ? `Lançar ${linhas[pend[0].r].rec.descricao}?` : `Lançar ${pend.length} gastos fixos?`,
+      texto: [
+        ...pend.slice(0, MAX).map(linhaDe),
+        ...(resto.length ? [`+ ${plural(resto.length, 'outro', 'outros')} · ${formatBRL(resto.reduce((s, x) => s + x.cel.sugerido, 0))}`] : []),
+        '',
+        `Total: ${formatBRL(pend.reduce((s, x) => s + x.cel.sugerido, 0))}, com o valor sugerido (o do último mês lançado). Ctrl+Z desfaz.`,
+      ].join('\n'),
+      confirmar: pend.length === 1 ? 'Lançar' : `Lançar os ${pend.length}`,
+    });
+    focar();
+    return ok;
+  };
+
+  // O QUE O CABEÇALHO DA TELA USA (o "N a lançar ▾", opção A): as mesmas ações da grade, com o mesmo
+  // desfazer. `itens`: [{ r, c }] (de `pendentesPorMes`).
+  useImperativeHandle(ref, () => ({
+    lancar: (itens, opcoes) => lancarPendentes(itens, opcoes),
+    pular: (itens) => pularPendentes(itens),
+    selecionar: (c0, c1) => selecionarMeses(c0, c1),
+  }));
 
   // "NÃO TEVE": os pendentes da seleção saem das pendências (a célula fica hachurada).
-  const pularPendentes = (f = faixa) => {
-    const pend = celulasDa(f, 'pendente');
+  const pularPendentes = (alvo) => {
+    const pend = pendentesDe(alvo);
     if (!pend.length) { toast.info('Nada a lançar na seleção.'); return; }
     if (!pulosAtivos) { toast.info(AVISO_006); return; }
     const itens = pend.map(({ r, cel }) => ({ recorrencia_id: linhas[r].rec.id, competencia: cel.comp }));
@@ -696,15 +730,16 @@ export default function MatrizFixos({ matriz, hoje, setLancs, setPulados, pulosA
               <b className="font-semibold text-gray-900">{plural(pendSel.length, 'fixo a lançar', 'fixos a lançar')}</b>
               {' '}na seleção{(() => { const ms = [...new Set(pendSel.map((x) => x.c))]; return ms.length === 1 ? ` · ${nomeCompetencia(comps[ms[0]]).replace(/ de \d+$/, '').toLowerCase()}` : ` · ${ms.length} meses`; })()}
             </span>
-            {/* O âmbar cheio com o texto escuro, IGUAL nos dois temas (fora dos tokens de propósito: o token
-                do texto clarearia no escuro, sobre um fundo que não escurece). */}
+            {/* OS DOIS BOTÕES TÊM A MESMA CAIXA (`BOTAO_BARRA`: altura, borda de 1px, padding, fonte, ícone) —
+                só a cor muda. O âmbar cheio com o texto escuro é IGUAL nos dois temas (fora dos tokens de
+                propósito: o token do texto clarearia no escuro, sobre um fundo que não escurece). */}
             <button type="button" onClick={() => lancarPendentes()} disabled={!pendSel.some((x) => x.cel.sugerido > 0)}
-              style={{ background: '#f59e0b', color: '#1f1600' }}
-              className="inline-flex h-[24px] items-center gap-1.5 whitespace-nowrap rounded-[5px] px-2.5 text-[12px] font-semibold transition-[filter] duration-[120ms] hover:brightness-95 active:brightness-90 disabled:opacity-50">
-              Lançar {pendSel.length === 1 ? '' : `os ${pendSel.length} `}· {formatBRL(pendSel.reduce((s, x) => s + x.cel.sugerido, 0))}
+              style={{ background: '#f59e0b', borderColor: '#d98a06', color: '#1f1600' }}
+              className={`${BOTAO_BARRA} hover:brightness-95 active:brightness-90`}>
+              <IcoRevisado /> Lançar {pendSel.length === 1 ? '' : `os ${pendSel.length} `}· {formatBRL(pendSel.reduce((s, x) => s + x.cel.sugerido, 0))}
             </button>
             <button type="button" onClick={() => pularPendentes()} title={pulosAtivos ? 'O fixo não existiu nesse mês: sai das pendências (Ctrl+Z desfaz)' : AVISO_006}
-              className="inline-flex h-[24px] items-center gap-1.5 whitespace-nowrap rounded-[5px] border border-gray-300 bg-white px-2.5 text-[12px] text-gray-700 transition-colors duration-[120ms] hover:bg-gray-100 active:bg-gray-200">
+              className={`${BOTAO_BARRA} border-gray-300 bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200`}>
               <IcoNaoTeve /> Não teve
             </button>
             <span className="hidden whitespace-nowrap rounded-[3px] border border-gray-300 px-1 text-[10.5px] text-gray-500 lg:inline">Ctrl+Enter</span>
@@ -727,7 +762,8 @@ export default function MatrizFixos({ matriz, hoje, setLancs, setPulados, pulosA
       {conteudoBalao && <BalaoGrafico pos={balao.pos} largura={270} {...conteudoBalao} />}
     </div>
   );
-}
+});
+export default MatrizFixos;
 
 // "Subiu": lançado com valor maior que o do mês anterior (o número vermelho da grade).
 const subiu = (cel) => cel.estado === 'lancado' && cel.antes !== null && cel.valor > cel.antes;
