@@ -831,8 +831,10 @@ function LegendaFixos({ linhas, destaque, onDestaque }) {
         Legenda
       </button>
       {aberto && createPortal(
-        <div ref={popRef} role="dialog" aria-label="Legenda da grade" style={{ position: 'fixed', width: 360, ...pos }}
-          className="z-[56] animate-pop-in rounded-[4px] border border-elevado bg-elevado px-3.5 py-3 text-[12px] leading-[1.45] text-gray-600 shadow-lg sombra-popover">
+        // A altura cabe no espaço do lado em que abriu (com "todos os atalhos" ela passa da tela): rola por dentro.
+        <div ref={popRef} role="dialog" aria-label="Legenda da grade"
+          style={{ position: 'fixed', width: 360, ...pos, maxHeight: window.innerHeight - (pos.top ?? pos.bottom) - 12 }}
+          className="z-[56] animate-pop-in overflow-y-auto overscroll-contain rounded-[4px] border border-elevado bg-elevado px-3.5 py-3 text-[12px] leading-[1.45] text-gray-600 shadow-lg sombra-popover">
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Células</div>
           {MARCAS.map((m) => (
             <button key={m.id} type="button" onClick={() => { onDestaque(m.id); fechar(); }}
