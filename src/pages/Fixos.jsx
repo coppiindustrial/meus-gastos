@@ -33,7 +33,7 @@ import { lsGet, lsSet } from '../lib/storage.js';
 //
 // O CABEÇALHO É O DO DRE do Gestor (a opção A do mockup dos botões, 28/10/2026): os ícones de mexer na
 // tela numa caixa só — ✎ o CADASTRO (todos os fixos num pop-up, `ModalCadastroFixos`) e ▾ "Mais ações"
-// (novo gasto fixo, exportar) — e o gesto do dia a dia como o botão de destaque, "Lançar N ▾". O modal
+// (exportar; criar é no cadastro) — e o gesto do dia a dia como o botão de destaque, "Lançar N ▾". O modal
 // de UM fixo continua (clique no nome, botão direito ou Shift+F2).
 const LS_ANO = 'fixos_ano';
 const SEM_CATEGORIA = [{ value: '', label: 'Sem categoria' }];
@@ -206,9 +206,11 @@ export default function Fixos() {
   ]);
   const abrirMais = (el) => {
     const r = el.getBoundingClientRect();
+    // Criar um fixo é no cadastro (✎). O `motivo` só existe com o item desabilitado: o menu o mostra no
+    // lugar do `sub` sempre que vem preenchido.
+    const vazio = !matriz.linhas.length;
     setMais({ x: r.right - 230, y: r.bottom + 4, titulo: 'Mais ações', itens: [
-      { rotulo: 'Novo gasto fixo', sub: 'o formulário de um fixo', onEscolher: () => setModal({}) },
-      { rotulo: `Exportar ${ano} (CSV)`, sub: 'o lançado de cada fixo em cada mês', desabilitado: !matriz.linhas.length, motivo: 'nada no ano', onEscolher: exportar },
+      { rotulo: `Exportar ${ano} (CSV)`, sub: 'o lançado de cada fixo em cada mês', desabilitado: vazio, motivo: vazio ? 'nada no ano' : undefined, onEscolher: exportar },
     ] });
   };
   const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
@@ -220,22 +222,20 @@ export default function Fixos() {
         acoes={<>
           {/* O GRUPO DO DRE: os ícones numa caixa só (o nome no tooltip), divisória entre eles. A caixa tem a
               altura do `.btn` (36px por dentro + a borda). */}
-          {recs.length > 0 && (
-            <div className="inline-flex overflow-hidden rounded-md border border-gray-300 bg-white">
-              <Tooltip label="Cadastro dos fixos">
-                <button type="button" aria-label="Cadastro dos fixos" onClick={() => setCadastro(true)} className={`${ICONE} w-[38px]`}>
-                  <IconLapis className="h-3.5 w-3.5" />
-                </button>
-              </Tooltip>
-              <Tooltip label="Mais ações">
-                <button type="button" aria-label="Mais ações" aria-haspopup="menu" aria-expanded={!!mais}
-                  onClick={(e) => (mais ? setMais(null) : abrirMais(e.currentTarget))}
-                  className={`${ICONE} w-[28px] border-l border-gray-200 ${mais ? 'bg-gray-100' : ''}`}>
-                  <IconSeta className={`transition-transform duration-200 ease-out ${mais ? 'rotate-180' : ''}`} />
-                </button>
-              </Tooltip>
-            </div>
-          )}
+          <div className="inline-flex overflow-hidden rounded-md border border-gray-300 bg-white">
+            <Tooltip label="Cadastro dos fixos">
+              <button type="button" aria-label="Cadastro dos fixos" onClick={() => setCadastro(true)} className={`${ICONE} w-[38px]`}>
+                <IconLapis className="h-3.5 w-3.5" />
+              </button>
+            </Tooltip>
+            <Tooltip label="Mais ações">
+              <button type="button" aria-label="Mais ações" aria-haspopup="menu" aria-expanded={!!mais}
+                onClick={(e) => (mais ? setMais(null) : abrirMais(e.currentTarget))}
+                className={`${ICONE} w-[28px] border-l border-gray-200 ${mais ? 'bg-gray-100' : ''}`}>
+                <IconSeta className={`transition-transform duration-200 ease-out ${mais ? 'rotate-180' : ''}`} />
+              </button>
+            </Tooltip>
+          </div>
           {/* O GESTO DO DIA A DIA: "Lançar N ▾" abre o menu por mês ("Lançar" e "Não teve" em cada fixo; no
               rodapé, "Lançar os N", que pede confirmação, e "Ver na grade"). Âmbar = falta fazer. */}
           {pendAno.length > 0 && (
@@ -247,15 +247,17 @@ export default function Fixos() {
                   onClick: () => matrizRef.current?.lancar(pendAno.map((x) => ({ r: x.r, c: x.c }))) },
                 { rotulo: 'Ver na grade', onClick: () => matrizRef.current?.selecionar(Math.min(...pendAno.map((x) => x.c)), Math.max(...pendAno.map((x) => x.c))) },
               ]}>
-              <span className="btn font-semibold hover:brightness-95 active:brightness-90" style={{ background: '#f59e0b', borderColor: '#d98a06', color: '#1f1600' }}>
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>
-                Lançar
-                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] bg-black/15 px-1 text-[11px] font-bold tabular-nums">{pendAno.length}</span>
-                <IconSeta className="opacity-70" />
-              </span>
+              {(aberto) => (
+                <span className="btn font-semibold hover:brightness-95 active:brightness-90" style={{ background: '#f59e0b', borderColor: '#d98a06', color: '#1f1600' }}>
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>
+                  Lançar
+                  <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] bg-black/15 px-1 text-[11px] font-bold tabular-nums">{pendAno.length}</span>
+                  {/* A seta gira com o menu aberto, como a do ▾ ao lado. */}
+                  <IconSeta className={`opacity-70 transition-transform duration-200 ease-out ${aberto ? 'rotate-180' : ''}`} />
+                </span>
+              )}
             </MenuFixos>
           )}
-          {!recs.length && <button type="button" className="btn-primary" onClick={() => setModal({})}>Novo gasto fixo</button>}
         </>} />
 
       {sugeridas.length > 0 && <DoHistorico sugeridas={sugeridas} categorias={categorias} onCriado={carregar} />}
@@ -291,7 +293,7 @@ export default function Fixos() {
       )}
 
       {recs.length === 0 && sugeridas.length === 0 && (
-        <div className="mt-6 max-w-3xl"><ListaVazia>Nenhum gasto fixo cadastrado. Use “Novo gasto fixo”.</ListaVazia></div>
+        <div className="mt-6 max-w-3xl"><ListaVazia>Nenhum gasto fixo cadastrado. Crie no cadastro (o ✎ no alto da tela).</ListaVazia></div>
       )}
 
       {cadastro && (

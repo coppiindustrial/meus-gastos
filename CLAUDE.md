@@ -97,7 +97,7 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   pendências (`matrizDoAno`/`situacaoDoMes` recebem `pulados`). Delete no mês desfaz; lançar um valor nele apaga a
   marca; Ctrl+Z vale. Antes da migration, `listarPulados` devolve null e o "Não teve" só explica o que falta.
 - O CABEÇALHO É O DO DRE do Gestor (28/10/2026, opção A do mockup dos botões): os ícones numa caixa só, com o
-  nome no tooltip — ✎ o CADASTRO e ▾ "Mais ações" (novo gasto fixo, exportar o ano em CSV) — e o gesto do dia a
+  nome no tooltip — ✎ o CADASTRO e ▾ "Mais ações" (exportar o ano em CSV; criar um fixo é no cadastro) — e o gesto do dia a
   dia como botão de destaque, "Lançar N ▾" (âmbar). O cadastro NÃO é uma vista da planilha: é um POP-UP
   (`components/ModalCadastroFixos.jsx`), uma tabela de FORMULÁRIO (cada célula é um campo; categoria pelo
   `SeletorCategoria`, vigência por `<input type="month">`) com todos os fixos. Muda-se em vários, acrescenta,

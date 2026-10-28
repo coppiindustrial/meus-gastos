@@ -37,8 +37,8 @@ const IcoCheck = () => <Ico><polyline points="20 6 9 17 4 12" /></Ico>;
 const IcoSeta = () => (
   <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18" /></svg>
 );
-const IcoAbre = () => (
-  <svg viewBox="0 0 24 24" className="h-3 w-3 opacity-75" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+const IcoAbre = ({ aberto }) => (
+  <svg viewBox="0 0 24 24" className={`h-3 w-3 opacity-75 transition-transform duration-200 ease-out ${aberto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
 );
 
 export default function AvisoAgora({ hoje, pendentes, revisar, parcelasProx, onLancar }) {
@@ -61,9 +61,11 @@ export default function AvisoAgora({ hoje, pendentes, revisar, parcelasProx, onL
         {nFixos > 0 && (
           <MenuFixos meses={meses} pendentes={pendentes} hoje={hoje} onLancar={(p, comp) => onLancar(p.rec, comp, p.sugerido)}
             rodape={[{ rotulo: 'Abrir os Gastos fixos (lá dá para marcar "não teve")', onClick: () => navigate('/fixos') }]}>
-            <span className={PILULA} style={{ background: MEDIO.bg, color: MEDIO.cor }}>
-              {plural(nFixos, 'fixo a lançar', 'fixos a lançar')}{meses.some((c) => c !== hoje) ? ' (inclui meses anteriores)' : ''}<IcoAbre />
-            </span>
+            {(aberto) => (
+              <span className={PILULA} style={{ background: MEDIO.bg, color: MEDIO.cor }}>
+                {plural(nFixos, 'fixo a lançar', 'fixos a lançar')}{meses.some((c) => c !== hoje) ? ' (inclui meses anteriores)' : ''}<IcoAbre aberto={aberto} />
+              </span>
+            )}
           </MenuFixos>
         )}
         {revisar > 0 && (
@@ -87,6 +89,7 @@ export default function AvisoAgora({ hoje, pendentes, revisar, parcelasProx, onL
 // trás como "ficou para trás" — com o valor sugerido e "Lançar" em cada um (e "Não teve", com `onPular`).
 // Serve à pílula daqui e ao "N a lançar ▾" do cabeçalho dos Gastos fixos. `onLancar(item, comp)` /
 // `onPular(item, comp)`: o item é o de `pendentesPorMes`. `rodape`: [{ rotulo, onClick, destaque? }].
+// `children` pode ser uma função `(aberto) => …`, para o gatilho girar a seta com o menu aberto.
 export function MenuFixos({ meses, pendentes, hoje, onLancar, onPular, rodape = [], alinhar = 'esquerda', children }) {
   const [pos, setPos] = useState(null);
   const [lancando, setLancando] = useState(new Set());
@@ -122,7 +125,7 @@ export function MenuFixos({ meses, pendentes, hoje, onLancar, onPular, rodape = 
     <span ref={alvo} className="inline-flex shrink-0">
       <button type="button" className="inline-flex" aria-haspopup="menu" aria-expanded={!!pos}
         onClick={(ev) => setPos(pos ? null : posicionarPopover(ev.currentTarget, { largura, altura: 60 + (nLinhas + rodape.length) * 30, alinhar, gap: 6 }))}>
-        {children}
+        {typeof children === 'function' ? children(!!pos) : children}
       </button>
       {pos && createPortal(
         <div role="menu" ref={menuRef} style={{ position: 'fixed', ...pos, width: largura }}
