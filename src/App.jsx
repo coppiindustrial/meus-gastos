@@ -14,10 +14,10 @@ import ImportarHistorico from './pages/ImportarHistorico.jsx';
 import Faturas from './pages/Faturas.jsx';
 import Pendencias from './pages/Pendencias.jsx';
 import Regras from './pages/Regras.jsx';
-import Evolucao from './pages/Evolucao.jsx';
 import Fixos from './pages/Fixos.jsx';
 import Patrimonio from './pages/Patrimonio.jsx';
 import Extrato from './pages/Extrato.jsx';
+import Importar from './pages/Importar.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -47,10 +47,10 @@ export default function App() {
       <Route path="/faturas" element={<Protected><Faturas /></Protected>} />
       <Route path="/pendencias" element={<Protected><Pendencias /></Protected>} />
       <Route path="/cadastros/regras" element={<Protected><Regras /></Protected>} />
-      <Route path="/evolucao" element={<Protected><Evolucao /></Protected>} />
       <Route path="/fixos" element={<Protected><Fixos /></Protected>} />
       <Route path="/patrimonio" element={<Protected><Patrimonio /></Protected>} />
       <Route path="/extrato" element={<Protected><Extrato /></Protected>} />
+      <Route path="/importar" element={<Protected><Importar /></Protected>} />
       {/* As telas que ainda não existem: cada uma ganha a sua rota quando a fase dela chegar. */}
       {TELAS.filter((t) => t.fase).map((t) => (
         <Route key={t.to} path={t.to} element={<Protected><EmBreve titulo={t.label} fase={t.fase} /></Protected>} />

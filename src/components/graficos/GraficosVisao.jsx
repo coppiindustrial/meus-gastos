@@ -2,7 +2,8 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import BalaoGrafico, { useBalao } from './BalaoGrafico.jsx';
 import AbasPilula from '../AbasPilula.jsx';
 import Variacao from './Variacao.jsx';
-import { COR_ENTRADAS, COR_GASTOS, CALHA, Grade } from './Graficos.jsx';
+import { COR_ENTRADAS, COR_GASTOS } from './Graficos.jsx';
+import { CLASSE_GUIA, COR_ROTULO, EIXO, GRADE, ROTULO_EIXO } from '../../lib/coresGrafico.js';
 import { escalaLinear } from '../../lib/escala.js';
 import { varCor } from '../../lib/varCor.js';
 import { brlCurto, formatBRL } from '../../lib/dinheiro.js';
@@ -19,20 +20,73 @@ const pct = (f) => `${f * 100}%`;
 const sinal = (v) => (v === null ? '' : `${v > 0 ? '+' : ''}${v}%`);
 const pulaNoCelular = (i, n) => (n > 6 && (n - 1 - i) % 2 === 1 ? 'max-sm:invisible' : '');
 
+// ------------------------------------------------------------ o chrome do Gestor
+
+// O EIXO À ESQUERDA, como o "Orçado × confirmado anual" do Dashboard Comercial do Gestor (28/10/2026,
+// opção A do mockup): calha de 56px, rótulo a 8px da grade, grade tracejada e o zero cheio. Ela vai a
+// DOIS lugares (o padding da caixa e o `left` do miolo) e à régua dos meses — os três andam juntos.
+export const CALHA_ESQ = 56;
+function GradeEsq({ esc, children }) {
+  const topo = (v) => `${100 - esc.fracao(v) * 100}%`;
+  return (
+    <div className="relative h-full" style={{ paddingLeft: CALHA_ESQ }}>
+      <div className="absolute inset-y-0 right-0" style={{ left: CALHA_ESQ }}>
+        {esc.marcas.map((v) => (
+          <div key={v} className={`absolute inset-x-0 ${v === 0 ? 'border-t' : 'border-t border-dashed'}`}
+            style={{ top: topo(v), borderColor: v === 0 ? EIXO : GRADE }}>
+            <span className="absolute -top-[7px] right-full mr-2 whitespace-nowrap text-[10px] tabular-nums" style={{ color: ROTULO_EIXO }}>
+              {brlCurto(v * 100)}
+            </span>
+          </div>
+        ))}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// O número de cada barra vai SEM a unidade (o eixo já diz "R$ 10 mil"), na unidade do topo do eixo — a
+// mesma em todas as barras, para "0,6" e "15,2" se lerem na mesma régua. `topo` em reais.
+function formatoRotulo(topo) {
+  const fmt = (v, casas) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+  if (topo >= 1e6) return (c) => fmt(c / 1e8, 2);
+  if (topo >= 1e3) return (c) => fmt(c / 1e5, 1);
+  return (c) => fmt(c / 100, 0);
+}
+
+// QUANDO OS DOIS NÚMEROS DE UM MÊS SE TOCARIAM, O DA BARRA MAIS ALTA SOBE (o `posRotulo` do Gestor): o
+// `max()` mistura a % da barra com px e resolve no layout, sem medir a caixa.
+const AR_ROTULO = 3;
+const ALT_ROTULO = 14;
+function posRotulo(fracEste, fracOutro) {
+  const base = `calc(${fracEste * 100}% + ${AR_ROTULO}px)`;
+  if (fracOutro == null || fracEste < fracOutro) return base;
+  return `max(${base}, calc(${fracOutro * 100}% + ${ALT_ROTULO + AR_ROTULO * 2}px))`;
+}
+
 // ------------------------------------------------------------ entradas × gastos por mês
 
+// AS BARRAS SOBREPOSTAS do Gestor: entradas é a LARGA e gastos a ESTREITA na frente dela (recuo de 23%
+// de cada lado) — o verde que sobra acima do azul é o que sobrou no mês; o azul fura o verde quando o
+// gasto passou da entrada. CADA BARRA TEM O SEU NÚMERO no topo (antes era um número só, o dos gastos,
+// em cima da barra mais alta — quase sempre a verde, e o "10,5 mil" pousava numa barra de 85 mil).
+// Em repouso o gráfico é limpo; no hover, a guia tracejada no mês, os outros meses a 40% e o ponto do saldo.
+//
 // `meses`: [{ competencia, entradas, gastos, saldo, temDado }]. `anterior`: { competencia → gastos do
 // mesmo mês um ano antes } ou null (sem comparação). `ctrl`: o `useDestaqueSeries` da legenda.
 // `onMes(comp)`: clicar num mês com dado. O saldo é uma LINHA no mesmo eixo (saldo negativo fica na
-// base, com o ponto vermelho, e o valor certo no balão).
-export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 230 }) {
+// base, com o ponto vermelho, e o valor certo no balão). `rotulosAte`: até quantos meses os números aparecem.
+const LARG_VAGA = 46;
+const RECUO_GASTOS = 23;
+export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 230, rotulosAte = 12 }) {
   const balao = useBalao(250, 170);
   const n = meses.length;
   const valores = meses.flatMap((m) => [m.entradas, m.gastos, m.saldo, anterior?.[m.competencia] ?? 0]);
   const esc = escalaLinear(Math.max(1, ...valores) / 100);
   const fr = (c) => esc.fracao(Math.max(0, c) / 100);
   const x = (i) => ((i + 0.5) / n) * 100;
-  const comRotulo = n <= 12;
+  const comRotulo = n <= rotulosAte;
+  const rot = formatoRotulo(esc.marcas[esc.marcas.length - 1]);
   const ativo = balao.ativo !== null ? meses[balao.ativo] : null;
 
   // Uma linha por trecho contínuo de meses com dado (o mês vazio interrompe a linha).
@@ -59,37 +113,35 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
 
   // `altura="auto"`: o gráfico ocupa a altura que o bloco do grid da Visão geral tiver.
   const auto = altura === 'auto';
+  // A moldura de uma vaga (a coluna do mês e, dentro dela, a caixa de até 46px), repetida nas camadas.
+  const vagas = (conteudo, extra = '') => (
+    <div className={`absolute inset-0 flex gap-1.5 ${extra}`}>
+      {meses.map((m, i) => (
+        <div key={m.competencia} className="h-full min-w-0 flex-1 transition-opacity duration-100"
+          style={{ opacity: balao.esmaecido(i) ? 0.4 : 1 }}>
+          <div className="relative mx-auto h-full w-full" style={{ maxWidth: LARG_VAGA }}>{conteudo(m, i)}</div>
+        </div>
+      ))}
+    </div>
+  );
+  const rotulo = (frac, outra, texto, serie) => (
+    <span className="pointer-events-none absolute inset-x-[-6px] hidden text-center text-[9px] font-semibold tabular-nums transition-opacity duration-150 sm:block"
+      style={{ bottom: posRotulo(frac, outra), color: COR_ROTULO, opacity: ctrl.opSerie(serie) < 1 ? 0.3 : 1 }}>{texto}</span>
+  );
+
   return (
     <div className={auto ? 'flex h-full min-h-0 flex-col' : ''}>
       <div style={auto ? undefined : { height: altura }} className={`pt-4 ${auto ? 'min-h-0 flex-1' : ''}`}>
-        <Grade esc={esc}>
-          <div className="absolute inset-0 flex" onMouseLeave={balao.aoSair}>
-            {meses.map((m, i) => {
-              const topo = Math.max(fr(m.entradas), fr(m.gastos));
-              return (
-                <button key={m.competencia} type="button" onMouseMove={balao.aoMover(i)}
-                  onClick={() => m.temDado && onMes?.(m.competencia)}
-                  aria-label={`${nomeCompetencia(m.competencia)}: entradas ${formatBRL(m.entradas)}, gastos ${formatBRL(m.gastos)}`}
-                  className={`relative flex h-full min-w-0 flex-1 justify-center rounded-[4px] transition-colors ${
-                    balao.ativo === i ? 'bg-gray-900/[0.04]' : ''} ${m.temDado && onMes ? 'cursor-pointer' : 'cursor-default'}`}>
-                  <span className={`flex h-full w-[64%] items-end justify-center gap-[2px] transition-opacity duration-150 ${balao.esmaecido(i) ? 'opacity-40' : ''}`}>
-                    <span className="w-1/2 max-w-[18px] rounded-t-[4px] transition-opacity duration-150"
-                      style={{ height: pct(fr(m.entradas)), background: COR_ENTRADAS, opacity: ctrl.opSerie('entradas') }} />
-                    <span className="w-1/2 max-w-[18px] rounded-t-[4px] transition-opacity duration-150"
-                      style={{ height: pct(fr(m.gastos)), background: COR_GASTOS, opacity: ctrl.opSerie('gastos') }} />
-                  </span>
-                  {/* O valor dos GASTOS em cima da coluna (acima da barra mais alta, para não cobrir a outra). */}
-                  {comRotulo && m.gastos > 0 && (
-                    <span className={`pointer-events-none absolute left-1/2 mb-0.5 hidden -translate-x-1/2 whitespace-nowrap text-[9.5px] font-semibold tabular-nums text-gray-700 transition-opacity sm:block ${balao.esmaecido(i) ? 'opacity-40' : ''}`}
-                      style={{ bottom: pct(topo), opacity: ctrl.opSerie('gastos') < 1 ? 0.3 : undefined }}>
-                      {brlCurto(m.gastos).replace('R$ ', '')}
-                    </span>
-                  )}
-                  {!m.temDado && <span className="pointer-events-none absolute bottom-1 hidden text-[9.5px] text-gray-300 sm:block">sem dados</span>}
-                </button>
-              );
-            })}
-          </div>
+        <GradeEsq esc={esc}>
+          {/* Camadas, na ordem do Gestor: barras → linhas → números → guia → ponto → alvos do cursor. */}
+          {vagas((m) => (m.temDado ? (
+            <>
+              <div className="absolute inset-x-0 bottom-0 rounded-t-[2px] transition-opacity duration-150"
+                style={{ height: pct(fr(m.entradas)), background: COR_ENTRADAS, opacity: ctrl.opSerie('entradas') }} />
+              <div className="absolute bottom-0 rounded-t-[2px] transition-opacity duration-150"
+                style={{ left: `${RECUO_GASTOS}%`, right: `${RECUO_GASTOS}%`, height: pct(fr(m.gastos)), background: COR_GASTOS, opacity: ctrl.opSerie('gastos') }} />
+            </>
+          ) : <span className="pointer-events-none absolute inset-x-[-12px] bottom-1 hidden text-center text-[9.5px] text-gray-300 sm:block">sem dados</span>))}
           <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             {linhaAnterior.map((pts) => (
               <polyline key={`a${pts[0]}`} points={pts.join(' ')} fill="none" stroke={COR_ANTERIOR} strokeWidth="1.5" strokeDasharray="4 3"
@@ -100,20 +152,30 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
                 vectorEffect="non-scaling-stroke" style={{ opacity: ctrl.opSerie('saldo'), transition: 'opacity .15s' }} />
             ))}
           </svg>
+          {comRotulo && vagas((m) => m.temDado && (
+            <>
+              {m.entradas > 0 && rotulo(fr(m.entradas), m.gastos > 0 ? fr(m.gastos) : null, rot(m.entradas), 'entradas')}
+              {m.gastos > 0 && rotulo(fr(m.gastos), m.entradas > 0 ? fr(m.entradas) : null, rot(m.gastos), 'gastos')}
+            </>
+          ), 'pointer-events-none')}
+          {ativo && <div className={CLASSE_GUIA} style={{ left: `${x(iAtivo)}%` }} />}
           {ativo?.temDado && ctrl.opSerie('saldo') === 1 && (
             <span className="pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-white"
               style={{ left: `${x(iAtivo)}%`, bottom: pct(fr(ativo.saldo)), background: ativo.saldo < 0 ? varCor('#c0393d', 'texto') : COR_SALDO }} />
           )}
-        </Grade>
-      </div>
-      <div className="mt-1 flex" style={{ paddingRight: CALHA }}>
-        {meses.map((m, i) => (
-          <div key={m.competencia} className={`flex min-w-0 flex-1 justify-center whitespace-nowrap text-[10.5px] ${
-            balao.ativo === i ? 'font-semibold text-gray-800' : `text-gray-500 ${pulaNoCelular(i, n)}`}`}>
-            {n > 12 ? competenciaCurta(m.competencia) : competenciaCurta(m.competencia).slice(0, 3)}
+          {/* Os alvos do cursor: uma camada só, por cima de tudo, com o `leave` no CONTAINER (indo de um mês ao
+              vizinho, o `leave` da coluna chegaria depois do `enter` da outra e o destaque piscaria). */}
+          <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
+            {meses.map((m, i) => (
+              <button key={m.competencia} type="button" onMouseMove={balao.aoMover(i)}
+                onClick={() => m.temDado && onMes?.(m.competencia)}
+                aria-label={`${nomeCompetencia(m.competencia)}: entradas ${formatBRL(m.entradas)}, gastos ${formatBRL(m.gastos)}`}
+                className={`h-full min-w-0 flex-1 ${m.temDado && onMes ? 'cursor-pointer' : 'cursor-default'}`} />
+            ))}
           </div>
-        ))}
+        </GradeEsq>
       </div>
+      <ReguaMeses meses={meses} />
       {ativo && (
         <BalaoGrafico pos={balao.pos} largura={250} titulo={nomeCompetencia(ativo.competencia)}
           itens={ativo.temDado ? [
@@ -130,16 +192,19 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
 
 // ------------------------------------------------------------ as outras formas do mês a mês
 
-// O balão e a régua dos meses que as três formas abaixo dividem com as colunas.
+// A régua dos meses, que as quatro formas dividem: a faixa dos anos do Gestor (`pt-1`, 10px, o mesmo vão
+// e a mesma calha das colunas). Com muitos meses (o histórico inteiro na ampliação) ela escreve um a cada
+// `passo`, para os rótulos não se atropelarem.
 function rotuloMes(m, n) { return n > 12 ? competenciaCurta(m.competencia) : competenciaCurta(m.competencia).slice(0, 3); }
-function ReguaMeses({ meses, ativo }) {
+function ReguaMeses({ meses }) {
+  const n = meses.length;
+  const passo = n > 24 ? Math.ceil(n / 12) : 1;
   return (
-    <div className="mt-1 flex" style={{ paddingRight: CALHA }}>
+    <div className="flex gap-1.5 pt-1" style={{ paddingLeft: CALHA_ESQ }}>
       {meses.map((m, i) => (
-        <div key={m.competencia} className={`flex min-w-0 flex-1 justify-center whitespace-nowrap text-[10.5px] ${
-          ativo === i ? 'font-semibold text-gray-800' : `text-gray-500 ${pulaNoCelular(i, meses.length)}`}`}>
-          {rotuloMes(m, meses.length)}
-        </div>
+        <span key={m.competencia} className={`min-w-0 flex-1 whitespace-nowrap text-center text-[10px] text-gray-500 ${n <= 24 ? 'truncate' : ''} ${pulaNoCelular(i, n)}`}>
+          {(n - 1 - i) % passo === 0 ? rotuloMes(m, n) : ''}
+        </span>
       ))}
     </div>
   );
@@ -187,25 +252,25 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 pt-4">
-        <Grade esc={esc}>
+        <GradeEsq esc={esc}>
           <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             {ant && linha(ant, COR_ANTERIOR, ctrl.opSerie('anterior'), { tracejado: true, larg: 1.5 })}
             {linha(ent, COR_ENTRADAS, ctrl.opSerie('entradas'), { area: true })}
             {linha(gas, COR_GASTOS, ctrl.opSerie('gastos'), { area: true })}
             {sal && linha(sal, COR_SALDO, ctrl.opSerie('saldo'), { larg: 1.5 })}
           </svg>
-          {i !== null && <span className="pointer-events-none absolute bottom-0 top-0 w-px border-l border-dashed border-gray-300" style={{ left: `${x(i)}%` }} />}
+          {i !== null && <div className={CLASSE_GUIA} style={{ left: `${x(i)}%` }} />}
           {ponto(ent, COR_ENTRADAS, 'entradas')}{ponto(gas, COR_GASTOS, 'gastos')}{sal && ponto(sal, COR_SALDO, 'saldo')}
-          <div className="absolute inset-0 flex" onMouseLeave={balao.aoSair}>
+          <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
             {meses.map((mm, k) => (
               <button key={mm.competencia} type="button" onMouseMove={balao.aoMover(k)} onClick={() => mm.temDado && onMes?.(mm.competencia)}
                 aria-label={nomeCompetencia(mm.competencia)}
                 className={`h-full min-w-0 flex-1 ${mm.temDado && onMes ? 'cursor-pointer' : 'cursor-default'}`} />
             ))}
           </div>
-        </Grade>
+        </GradeEsq>
       </div>
-      <ReguaMeses meses={meses} ativo={i} />
+      <ReguaMeses meses={meses} />
       {m && (
         <BalaoGrafico pos={balao.pos} largura={250} titulo={`${nomeCompetencia(m.competencia)}${acumulado ? ' · acumulado' : ''}`}
           itens={m.temDado ? [
@@ -234,11 +299,13 @@ export function SaldoMensal({ meses, onMes }) {
   const m = i !== null ? meses[i] : null;
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="relative min-h-0 flex-1 pb-3 pt-5" style={{ paddingRight: CALHA }}>
+      <div className="relative min-h-0 flex-1 pb-3 pt-5" style={{ paddingLeft: CALHA_ESQ }}>
         <div className="relative h-full">
-          <div className="absolute left-0 right-0 border-t" style={{ top: pct(zero), borderColor: varCor('#9ca3af', 'borda') }} />
-          <span className="absolute -translate-y-1/2 text-[10px] text-gray-500" style={{ top: pct(zero), right: -CALHA + 6 }}>R$ 0</span>
-          <div className="absolute inset-0 flex" onMouseLeave={balao.aoSair}>
+          <div className="absolute left-0 right-0 border-t" style={{ top: pct(zero), borderColor: EIXO }}>
+            <span className="absolute -top-[7px] right-full mr-2 whitespace-nowrap text-[10px] tabular-nums" style={{ color: ROTULO_EIXO }}>R$ 0</span>
+          </div>
+          {i !== null && <div className={CLASSE_GUIA} style={{ left: `${((i + 0.5) / meses.length) * 100}%` }} />}
+          <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
             {meses.map((mm, k) => {
               const v = vals[k];
               const pos = v >= 0;
@@ -246,7 +313,7 @@ export function SaldoMensal({ meses, onMes }) {
               return (
                 <button key={mm.competencia} type="button" onMouseMove={balao.aoMover(k)} onClick={() => mm.temDado && onMes?.(mm.competencia)}
                   aria-label={`${nomeCompetencia(mm.competencia)}: saldo ${formatBRL(v)}`}
-                  className={`relative h-full min-w-0 flex-1 rounded-[4px] transition-colors ${i === k ? 'bg-gray-900/[0.04]' : ''} ${mm.temDado && onMes ? 'cursor-pointer' : 'cursor-default'}`}>
+                  className={`relative h-full min-w-0 flex-1 ${mm.temDado && onMes ? 'cursor-pointer' : 'cursor-default'}`}>
                   {mm.temDado && v !== 0 && (
                     <span className={`absolute left-1/2 w-[46%] max-w-[26px] -translate-x-1/2 transition-opacity duration-150 ${pos ? 'rounded-t-[4px]' : 'rounded-b-[4px]'} ${balao.esmaecido(k) ? 'opacity-40' : ''}`}
                       style={pos ? { bottom: pct(1 - zero), height: `${h}%`, background: COR_ENTRADAS } : { top: pct(zero), height: `${h}%`, background: varCor('#e5484d', 'fundo') }} />
@@ -264,7 +331,7 @@ export function SaldoMensal({ meses, onMes }) {
           </div>
         </div>
       </div>
-      <ReguaMeses meses={meses} ativo={i} />
+      <ReguaMeses meses={meses} />
       {m && (
         <BalaoGrafico pos={balao.pos} largura={230} titulo={nomeCompetencia(m.competencia)}
           itens={m.temDado ? [

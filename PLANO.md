@@ -92,6 +92,7 @@ no dia 1 do mês (o front mostra `AAAA-MM`).
 | `lancamentos` | tipo, origem (`cartao`/`fixo`/`manual`/`entrada`), data, competencia, descricao, estabelecimento, valor_centavos, categoria_id, fatura_id, cartao_id, parcela_atual, parcela_total, portador, recorrencia_id, revisar, obs | Tabela central (a aba **Base**). Apagar a fatura apaga as linhas dela |
 | `recorrencias` | descricao, categoria_id, valor_padrao_centavos, dia_do_mes, inicio, fim, ativa | Gastos fixos |
 | `fixos_pulados` | recorrencia_id, competencia | O mês em que o fixo "não teve" (migration 006): sai das pendências |
+| `importacoes` | tipo, cartao_id, fatura_id, competencia, periodo_de/ate, arquivo, linhas, resumo, desfazer | O histórico de importações da tela Importar (migration 007) |
 | `contas` | nome, tipo (`corrente`/`investimento`/`reserva`/`outro`), instituicao, ativa | Patrimônio |
 | `saldos` | conta_id, data, valor_centavos | Foto do saldo numa data |
 
@@ -107,7 +108,8 @@ no dia 1 do mês (o front mostra `AAAA-MM`).
 - **Resumo** (inicial): seletor de mês; entradas, gastos e saldo; comparação com a média de 3 meses; gastos por origem; top grupos e categorias; parcelas comprometidas; pendências e fixos não lançados.
 - **Lançamentos:** tabela do mês com busca, filtros (origem, categoria, cartão) e ordenação; novo/editar em painel lateral; exportar CSV.
 - **Faturas:** importar fatura (CSV original), lista de faturas importadas, revisar pendências.
-- **Gastos fixos** · **Patrimônio** (contas, saldos, evolução) · **Evolução mensal**.
+- **Gastos fixos** · **Patrimônio** (contas, saldos, evolução) · ~~Evolução mensal~~ (28/10/2026: virou a ampliação do
+  "Entradas × gastos" da Visão geral, com a tabela completa e "Todo o histórico").
 - **Cadastros:** categorias e grupos, regras, cartões.
 - Rodapé: usuário, tema (claro/escuro/sistema), sair.
 

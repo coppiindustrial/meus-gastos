@@ -26,7 +26,10 @@ const OK = { bg: varCor('#e7f6ee', 'fundo'), cor: varCor('#15803d', 'texto') };
 
 const plural = (n, um, muitos) => `${n} ${n === 1 ? um : muitos}`;
 const mesDe = (comp) => nomeCompetencia(comp).replace(/ de \d+$/, '');
-const PILULA = 'inline-flex shrink-0 items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[11.5px] font-medium transition hover:brightness-95 active:brightness-90';
+// `CAIXA` é a geometria; `PILULA` = a caixa com o hover do tom (`.pilula-tom` no index.css: escurece no claro e
+// clareia no escuro, onde escurecer não se via).
+const CAIXA = 'inline-flex shrink-0 items-center gap-1 rounded-[4px] px-1.5 py-0.5 text-[11.5px] font-medium';
+const PILULA = `${CAIXA} pilula-tom`;
 const LARG_MENU = 340;
 
 const Ico = ({ children }) => (
@@ -52,7 +55,7 @@ export default function AvisoAgora({ hoje, pendentes, revisar, parcelasProx, onL
     <div className="flex min-h-[58px] items-center px-5">
       <span className="shrink-0 text-[13px] font-semibold text-gray-800">Agora</span>
       <span className="mx-2.5 h-[18px] w-px shrink-0 bg-gray-200" />
-      <div className="-ml-2.5 flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] px-2.5 py-1">
+      <div className="-ml-2.5 flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] px-2.5 py-1 transition hover:bg-gray-50">
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[7px]" style={{ background: (tom ?? OK).bg, color: (tom ?? OK).cor }}>
           {tom ? <IcoCalendario /> : <IcoCheck />}
         </span>
@@ -75,7 +78,7 @@ export default function AvisoAgora({ hoje, pendentes, revisar, parcelasProx, onL
           </button>
         )}
         {parcelasProx && (
-          <span className={`${PILULA} cursor-default hover:brightness-100`} style={{ background: ESTADO.bg, color: ESTADO.cor }}
+          <span className={`${PILULA} cursor-default`} style={{ background: ESTADO.bg, color: ESTADO.cor }}
             title={`Parcelas de compras no cartão que já caem na fatura de ${proximo}: ${formatBRL(parcelasProx.total)}.`}>
             {brlCurto(parcelasProx.total)} em parcelas de {proximo}
           </span>
@@ -151,7 +154,7 @@ export function MenuFixos({ meses, pendentes, hoje, onLancar, onPular, rodape = 
                       {onPular && (
                         <button type="button" disabled={ocupado} onClick={() => agir(onPular, p, comp)}
                           title={`${rec.descricao} não existiu em ${mesDe(comp).toLowerCase()}: sai das pendências (Ctrl+Z desfaz na grade)`}
-                          className={`${PILULA} border border-gray-200 text-gray-500 hover:bg-gray-100 hover:brightness-100 disabled:opacity-50`}>
+                          className={`${CAIXA} border border-gray-200 text-gray-500 transition hover:bg-gray-100 active:bg-gray-200 disabled:opacity-50`}>
                           Não teve
                         </button>
                       )}
@@ -166,7 +169,7 @@ export function MenuFixos({ meses, pendentes, hoje, onLancar, onPular, rodape = 
               {rodape.map((a) => (
                 <button key={a.rotulo} type="button" role="menuitem" onClick={() => { setPos(null); a.onClick(); }}
                   className={a.destaque
-                    ? `${PILULA} font-semibold`
+                    ? `${CAIXA} font-semibold transition hover:brightness-95 active:brightness-90`
                     : 'flex items-center gap-1 text-left text-[11.5px] text-gray-500 transition hover:text-gray-800 last:ml-auto'}
                   style={a.destaque ? { background: '#f59e0b', color: '#1f1600' } : undefined}>
                   {a.rotulo}{!a.destaque && <IcoSeta />}

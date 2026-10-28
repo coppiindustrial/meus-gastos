@@ -19,6 +19,13 @@ export const SbDashboard = base(<>
   <rect x="3" y="13" width="8" height="8" rx="1.6" />
 </>);
 
+// Importar — a seta que desce para a bandeja
+export const SbImportar = base(<>
+  <path d="M12 3v12" />
+  <path d="M7 10l5 5 5-5" />
+  <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+</>);
+
 // Gestor de Orçamentos — documentos sobrepostos / "copiar"
 export const SbDoc = base(<>
   <path d="M9 8h5l4 4v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z" />

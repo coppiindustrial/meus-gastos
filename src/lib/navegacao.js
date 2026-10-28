@@ -1,8 +1,13 @@
 // O CATÁLOGO DAS TELAS: a barra lateral (e o menu do celular) leem daqui. Tela nova entra aqui e no
 // `App.jsx`. `fase` marca as telas que ainda não existem (ver PLANO.md): aparecem esmaecidas.
-import { SbChart, SbCompass, SbDashboard, SbDoc, SbFinanceiro } from '../components/sidebarIcons.jsx';
+import { SbChart, SbCompass, SbDashboard, SbDoc, SbFinanceiro, SbImportar } from '../components/sidebarIcons.jsx';
 
-export const DASHBOARD = { to: '/', label: 'Visão geral', icon: SbDashboard };
+export const DASHBOARD = { to: '/', label: 'Visão geral', icon: SbDashboard, end: true };
+// IMPORTAR (28/10/2026): o lugar único de tudo o que se importa — as faturas, o extrato e o histórico da
+// planilha saíram dos grupos. O número ao lado (`contador: 'importar'`) é o que falta importar.
+export const IMPORTAR = { to: '/importar', label: 'Importar', icon: SbImportar, contador: 'importar' };
+// Os itens soltos, no topo, antes dos grupos.
+export const SOLTOS = [DASHBOARD, IMPORTAR];
 
 export const GRUPOS = [
   {
@@ -11,7 +16,6 @@ export const GRUPOS = [
     items: [
       { to: '/lancamentos', label: 'Lançamentos' },
       { to: '/fixos', label: 'Gastos fixos' },
-      { to: '/extrato', label: 'Extrato da conta' },
     ],
   },
   {
@@ -26,7 +30,6 @@ export const GRUPOS = [
     label: 'Análises',
     icon: SbChart,
     items: [
-      { to: '/evolucao', label: 'Evolução mensal' },
       { to: '/patrimonio', label: 'Patrimônio' },
     ],
   },
@@ -37,7 +40,6 @@ export const GRUPOS = [
       { to: '/cadastros/categorias', label: 'Categorias e grupos' },
       { to: '/cadastros/cartoes', label: 'Cartões' },
       { to: '/cadastros/regras', label: 'Regras de classificação' },
-      { to: '/cadastros/importar', label: 'Importar histórico' },
     ],
   },
 ];

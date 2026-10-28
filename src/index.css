@@ -121,6 +121,14 @@
   html[data-tema='escuro'] .inverte-no-escuro:hover { background-color: #f5f5f5; }
   html[data-tema='escuro'] .btn-primary:active,
   html[data-tema='escuro'] .inverte-no-escuro:active { background-color: #d4d4d4; }
+  /* A PÍLULA DE ALERTA (o aviso "Agora" e o menu dos fixos): no claro, o hover do Alertas do Gestor —
+     o fundo do tom escurece um passo. No escuro o fundo do tom JÁ é escuro e escurecer não se via
+     (28/10/2026): lá ela clareia. */
+  .pilula-tom { transition: filter 120ms ease-out; }
+  .pilula-tom:not(:disabled):hover { filter: brightness(0.95); }
+  .pilula-tom:not(:disabled):active { filter: brightness(0.9); }
+  html[data-tema='escuro'] .pilula-tom:not(:disabled):hover { filter: brightness(1.35); }
+  html[data-tema='escuro'] .pilula-tom:not(:disabled):active { filter: brightness(1.15); }
   /* O RESPONSÁVEL PENDENTE da trilha (`ConclusaoStack`): no claro, a cor dele a 40% sobre o branco;
      no escuro os mesmos 40% sobre o grafite apagavam o rosto (opção E1 do mockup de 25/09/2026).
      Opacidade não é cor, então não cabe num token do tema — daqui o seletor, que vence o

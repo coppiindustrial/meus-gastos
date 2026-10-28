@@ -4,7 +4,7 @@ import { EIXO, GRADE } from '../../lib/coresGrafico.js';
 import { brlCurto, formatBRL } from '../../lib/dinheiro.js';
 import { competenciaCurta, nomeCompetencia } from '../../lib/format.js';
 
-// Gráficos do Resumo e da Evolução, no chrome do Gestor (GraficoSerie): tudo em <div> posicionada por
+// Gráficos do Resumo e do Patrimônio, no chrome do Gestor (GraficoSerie): tudo em <div> posicionada por
 // %, eixo Y numa calha à DIREITA, grade tracejada recessiva, balão (BalaoGrafico) no hover.
 // Marcas finas: barras com o topo arredondado (4px) apoiadas na linha de base, 2px entre barras.
 
@@ -15,18 +15,6 @@ export const CALHA = 44; // largura da calha do eixo Y (rótulos "R$ 20 mil")
 // Rótulo de mês um sim, um não no celular quando são muitos (12 rótulos "set/26" não cabem em 375px);
 // o último sempre aparece. Escondido com `invisible`, para a coluna continuar ocupando o lugar.
 const pulaNoCelular = (i, n) => (n > 6 && (n - 1 - i) % 2 === 1 ? 'max-sm:invisible' : '');
-
-export function Legenda({ itens }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
-      {itens.map((it) => (
-        <span key={it.rotulo} className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: it.cor }} />{it.rotulo}
-        </span>
-      ))}
-    </div>
-  );
-}
 
 // Grade + calha do eixo Y (em reais, a partir de centavos).
 export function Grade({ esc, children }) {
@@ -45,55 +33,6 @@ export function Grade({ esc, children }) {
           {brlCurto(v * 100)}
         </div>
       ))}
-    </div>
-  );
-}
-
-// ENTRADAS × GASTOS POR MÊS: duas barras por mês. `selecionado` destaca um mês; clicar escolhe.
-export function BarrasMensais({ meses, selecionado, onSelecionar, altura = 180 }) {
-  const balao = useBalao(210, 96);
-  const max = Math.max(1, ...meses.flatMap((m) => [m.entradas, m.gastos])) / 100;
-  const esc = escalaLinear(max);
-  const alto = (c) => `${esc.fracao(c / 100) * 100}%`;
-  const ativo = meses.find((m) => m.competencia === balao.ativo);
-  return (
-    <div>
-      <div style={{ height: altura }}>
-        <Grade esc={esc}>
-          <div className="absolute inset-0 flex" onMouseLeave={balao.aoSair}>
-            {meses.map((m) => {
-              const sel = m.competencia === selecionado;
-              const apagado = (selecionado && !sel && !balao.ativo) || balao.esmaecido(m.competencia);
-              return (
-                // `min-w-0` + a largura das barras num miolo INTERNO: padding em % num item flex é
-                // relativo à largura do GRÁFICO, não da coluna, e fazia as colunas transbordarem.
-                <button key={m.competencia} type="button" onMouseMove={balao.aoMover(m.competencia)}
-                  onClick={() => onSelecionar?.(m.competencia)} aria-label={`${nomeCompetencia(m.competencia)}: entradas ${formatBRL(m.entradas)}, gastos ${formatBRL(m.gastos)}`}
-                  className={`relative flex h-full min-w-0 flex-1 justify-center transition-opacity ${apagado ? 'opacity-45' : ''} ${onSelecionar ? 'cursor-pointer' : 'cursor-default'}`}>
-                  <span className="flex h-full w-[64%] items-end justify-center gap-[2px]">
-                    <span className="w-1/2 max-w-[18px] rounded-t-[4px]" style={{ height: alto(m.entradas), background: COR_ENTRADAS }} />
-                    <span className="w-1/2 max-w-[18px] rounded-t-[4px]" style={{ height: alto(m.gastos), background: COR_GASTOS }} />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </Grade>
-      </div>
-      <div className="mt-1 flex" style={{ paddingRight: CALHA }}>
-        {meses.map((m, i) => (
-          <div key={m.competencia} className={`flex min-w-0 flex-1 justify-center whitespace-nowrap text-[10.5px] ${m.competencia === selecionado ? 'font-semibold text-gray-800' : `text-gray-500 ${pulaNoCelular(i, meses.length)}`}`}>
-            {competenciaCurta(m.competencia)}
-          </div>
-        ))}
-      </div>
-      {ativo && (
-        <BalaoGrafico pos={balao.pos} largura={210} titulo={nomeCompetencia(ativo.competencia)} itens={[
-          { rotulo: 'Entradas', valor: formatBRL(ativo.entradas), cor: COR_ENTRADAS },
-          { rotulo: 'Gastos', valor: formatBRL(ativo.gastos), cor: COR_GASTOS },
-          { rotulo: 'Saldo', valor: formatBRL(ativo.entradas - ativo.gastos) },
-        ]} />
-      )}
     </div>
   );
 }

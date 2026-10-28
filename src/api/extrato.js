@@ -17,13 +17,16 @@ export async function idsJaImportados(ids) {
 // Os fixos já lançados (com recorrência), no formato que o plano espera.
 export async function fixosLancados() {
   const linhas = await exigir(supabase.from('lancamentos')
-    .select('id, recorrencia_id, competencia, id_externo, valor_centavos').not('recorrencia_id', 'is', null));
+    .select('id, recorrencia_id, competencia, data, id_externo, valor_centavos, importado_de').not('recorrencia_id', 'is', null));
   return linhas.map((l) => ({ ...l, competencia: l.competencia.slice(0, 7) }));
 }
 
-// Grava o plano: só as ações que mexem no banco (ignorar e "já importada" não fazem nada).
+// Grava o plano: só as ações que mexem no banco (ignorar e "já importada" não fazem nada). Devolve
+// { n, apagar, restaurar }: os ids criados e, dos fixos corrigidos, como eles eram — o "Desfazer" do histórico.
 export async function gravarExtrato(plano, aoAvancar) {
   const acoes = plano.filter((p) => ['fixo_novo', 'fixo_corrigir', 'avulso'].includes(p.acao));
+  const apagar = [];
+  const restaurar = [];
   let n = 0;
   for (const p of acoes) {
     const l = p.linha;
@@ -35,10 +38,12 @@ export async function gravarExtrato(plano, aoAvancar) {
     };
     if (p.acao === 'fixo_corrigir') {
       // O fixo lançado à mão passa a ter o valor e a data reais do pagamento.
-      await exigir(supabase.from('lancamentos').update(comum).eq('id', p.existente.id));
+      const e = p.existente;
+      restaurar.push({ id: e.id, data: e.data, valor_centavos: e.valor_centavos, id_externo: e.id_externo ?? null, importado_de: e.importado_de ?? null });
+      await exigir(supabase.from('lancamentos').update(comum).eq('id', e.id));
     } else {
       const fixo = p.acao === 'fixo_novo';
-      await exigir(supabase.from('lancamentos').insert({
+      const criado = await exigir(supabase.from('lancamentos').insert({
         ...comum,
         tipo: 'saida',
         origem: fixo ? 'fixo' : 'manual',
@@ -48,10 +53,11 @@ export async function gravarExtrato(plano, aoAvancar) {
         categoria_id: p.categoriaId,
         recorrencia_id: fixo ? p.recorrencia.id : null,
         revisar: !p.categoriaId,
-      }));
+      }).select('id').single());
+      apagar.push(criado.id);
     }
     n += 1;
     aoAvancar?.(n, acoes.length);
   }
-  return acoes.length;
+  return { n: acoes.length, apagar, restaurar };
 }

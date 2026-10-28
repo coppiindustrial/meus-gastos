@@ -3,7 +3,8 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import useEscape from '../lib/useEscape.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { SbChevron, SbPanel, SbPanelR, SbLogout, SbTema, SbSol, SbMonitor, SbCheck } from './sidebarIcons.jsx';
-import { DASHBOARD, GRUPOS } from '../lib/navegacao.js';
+import { GRUPOS, SOLTOS } from '../lib/navegacao.js';
+import useContadores from '../lib/useContadores.js';
 import { TEMAS, useTema } from '../lib/tema.js';
 import Tooltip from './Tooltip.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
@@ -135,6 +136,7 @@ export default function Layout({ children }) {
   const { user, nome, logout } = useAuth();
   const [tema, setTema] = useTema();
   const { pathname } = useLocation();
+  const contadores = useContadores(Boolean(user));
 
   const [collapsedPref, setCollapsed] = useState(() => lsGet(LS_COLLAPSED) === 'true');
   const [openGroups, setOpenGroups] = useState(() => {
@@ -264,12 +266,15 @@ export default function Layout({ children }) {
         <nav className={`flex-1 min-h-0 ${collapsed ? 'overflow-visible px-0 py-2' : 'overflow-y-auto overflow-x-hidden sidebar-scroll px-2 py-2'}`}>
           {collapsed ? (
             <>
-              <Tooltip label={DASHBOARD.label}><NavLink to={DASHBOARD.to} end
-                className={({ isActive }) => `flex items-center justify-center h-[42px] w-[42px] mx-auto my-[2.25px] rounded-[10px] transition ${
-                  isActive ? 'bg-hx-f0f1f3 text-hx-20262f' : 'text-hx-6b727d hover:bg-hx-f3f4f6 hover:text-hx-2a3140'
-                }`}>
-                <DASHBOARD.icon className="h-[19px] w-[19px]" />
-              </NavLink></Tooltip>
+              {SOLTOS.map((it) => (
+                <Tooltip key={it.to} label={contadores[it.contador] ? `${it.label} · ${contadores[it.contador]} a fazer` : it.label}><NavLink to={it.to} end={it.end}
+                  className={({ isActive }) => `relative flex items-center justify-center h-[42px] w-[42px] mx-auto my-[2.25px] rounded-[10px] transition ${
+                    isActive ? 'bg-hx-f0f1f3 text-hx-20262f' : 'text-hx-6b727d hover:bg-hx-f3f4f6 hover:text-hx-2a3140'
+                  }`}>
+                  <it.icon className="h-[19px] w-[19px]" />
+                  {contadores[it.contador] > 0 && <span className="absolute right-[7px] top-[7px] h-[7px] w-[7px] rounded-full bg-hx-f59e0b" />}
+                </NavLink></Tooltip>
+              ))}
               {GRUPOS.map((grp) => (
                 <div key={grp.label} className="group relative"
                   onMouseEnter={() => setFlyout(grp.label)} onMouseLeave={() => setFlyout(null)}
@@ -305,18 +310,24 @@ export default function Layout({ children }) {
             </>
           ) : (
             <>
-              <NavLink to={DASHBOARD.to} end
-                className={({ isActive }) => `flex items-center gap-2.5 h-[37px] my-[2px] rounded-[9px] pl-3 pr-2 text-[12.5px] whitespace-nowrap transition-colors ${
-                  isActive ? 'bg-hx-f0f1f3 text-hx-20262f font-semibold' : 'text-hx-6b727d font-medium hover:bg-hx-f3f4f6 hover:text-hx-2a3140'
-                }`}>
-                {({ isActive }) => (
-                  <>
-                    <DASHBOARD.icon className="h-[18px] w-[18px] shrink-0" />
-                    <span className="flex-1 min-w-0 truncate text-left">{DASHBOARD.label}</span>
-                    {isActive && chevAtivo}
-                  </>
-                )}
-              </NavLink>
+              {SOLTOS.map((it) => (
+                <NavLink key={it.to} to={it.to} end={it.end}
+                  className={({ isActive }) => `flex items-center gap-2.5 h-[37px] my-[2px] rounded-[9px] pl-3 pr-2 text-[12.5px] whitespace-nowrap transition-colors ${
+                    isActive ? 'bg-hx-f0f1f3 text-hx-20262f font-semibold' : 'text-hx-6b727d font-medium hover:bg-hx-f3f4f6 hover:text-hx-2a3140'
+                  }`}>
+                  {({ isActive }) => (
+                    <>
+                      <it.icon className="h-[18px] w-[18px] shrink-0" />
+                      <span className="flex-1 min-w-0 truncate text-left">{it.label}</span>
+                      {contadores[it.contador] > 0 && (
+                        <span className="inline-grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-full bg-hx-fdf3d9 px-1.5 text-[11px] font-semibold text-hx-9a6f00"
+                          title="O que falta importar">{contadores[it.contador]}</span>
+                      )}
+                      {isActive && chevAtivo}
+                    </>
+                  )}
+                </NavLink>
+              ))}
               {GRUPOS.map((grp) => (
                 <div key={grp.label}>
                   <button onClick={() => toggleGroup(grp.label)}

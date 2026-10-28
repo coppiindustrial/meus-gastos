@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext.jsx';
 import {
   classificarLinhas, faturaExistente, hashDoTexto, importarFatura, listarRegrasParaClassificar,
 } from '../api/faturas.js';
+import { registrarImportacao } from '../api/importacoes.js';
 import { lerFatura, pistaDoArquivo, vencimentoProvavel } from '../lib/lerFatura.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaDe, formatDate, formatDateTime, nomeCompetencia } from '../lib/format.js';
@@ -16,12 +17,14 @@ import { competenciaDe, formatDate, formatDateTime, nomeCompetencia } from '../l
 // O cartão e o vencimento vêm do nome do arquivo quando ele segue o padrão (Nubank_AAAA-MM-DD,
 // FaturaAAAA-MM-DD); senão, o cartão pelo formato e o vencimento pela última compra. Os dois ficam
 // editáveis. Se já existe fatura do mesmo cartão e vencimento, só entra SUBSTITUINDO a anterior.
-export default function ImportarFatura({ cartoes, onFechar, onImportada }) {
+// `inicial` ({ cartaoId, vencimento }): aberto pela célula "falta importar" da tela Importar — vale quando
+// o nome do arquivo não diz outra coisa. Cada importação vai para o histórico (`registrarImportacao`).
+export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial = null }) {
   const toast = useToast();
   const inputRef = useRef(null);
   const [lido, setLido] = useState(null); // { arquivo, texto, formato, linhas, ignoradas, hash }
-  const [cartaoId, setCartaoId] = useState('');
-  const [vencimento, setVencimento] = useState('');
+  const [cartaoId, setCartaoId] = useState(inicial?.cartaoId ?? '');
+  const [vencimento, setVencimento] = useState(inicial?.vencimento ?? '');
   const [existente, setExistente] = useState(null);
   const [regras, setRegras] = useState(null);
   const [gravando, setGravando] = useState(false);
@@ -44,9 +47,10 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada }) {
       const pista = pistaDoArquivo(arquivo.name);
       // Cartão: pelo nome do arquivo; senão o único cartão com esse formato de importação.
       const porFormato = ativos.filter((c) => c.formato === (r.formato === 'nubank' ? 'nubank' : 'xp'));
-      const c = ativos.find((x) => x.formato === pista.cartao) ?? (porFormato.length === 1 ? porFormato[0] : null);
+      const daCelula = inicial && !pista.cartao ? ativos.find((x) => x.id === inicial.cartaoId) : null;
+      const c = ativos.find((x) => x.formato === pista.cartao) ?? daCelula ?? (porFormato.length === 1 ? porFormato[0] : null);
       setCartaoId(c?.id ?? '');
-      setVencimento(pista.vencimento ?? vencimentoProvavel(r.linhas, c?.dia_vencimento) ?? '');
+      setVencimento(pista.vencimento ?? (daCelula ? inicial.vencimento : null) ?? vencimentoProvavel(r.linhas, c?.dia_vencimento) ?? '');
       setLido({ arquivo: arquivo.name, texto, ...r, hash: await hashDoTexto(texto) });
     } catch (err) {
       setLido(null);
@@ -76,9 +80,14 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada }) {
   const gravar = async () => {
     setGravando(true);
     try {
-      await importarFatura({
+      const faturaId = await importarFatura({
         cartaoId, vencimento, arquivo: lido.arquivo, hash: lido.hash, linhas: classificadas, substituirId: existente?.id,
       }, (n) => setAndamento(`${n} de ${classificadas.length}`));
+      await registrarImportacao({
+        tipo: 'fatura', cartao_id: cartaoId, fatura_id: faturaId, competencia: competenciaDe(vencimento), arquivo: lido.arquivo,
+        linhas: classificadas.length, total_centavos: total,
+        resumo: [`${classificadas.length} compras`, semCategoria && `${semCategoria} sem regra`, existente && 'substituiu a anterior'].filter(Boolean).join(' · '),
+      });
       toast.success(`Fatura importada: ${classificadas.length} lançamentos${semCategoria ? `, ${semCategoria} para revisar` : ''}.`);
       onImportada({ revisar: semCategoria });
     } catch (err) {

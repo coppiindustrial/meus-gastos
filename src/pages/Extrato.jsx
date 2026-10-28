@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import Spinner from '../components/Spinner.jsx';
@@ -10,6 +10,8 @@ import { listarRegrasParaClassificar } from '../api/faturas.js';
 import { listarRecorrencias } from '../api/fixos.js';
 import { salvarRegra } from '../api/regras.js';
 import { fixosLancados, gravarExtrato, idsJaImportados } from '../api/extrato.js';
+import { registrarImportacao } from '../api/importacoes.js';
+import { periodoDasLinhas } from '../lib/importacoes.js';
 import { lerExtrato } from '../lib/lerExtrato.js';
 import { planejarExtrato } from '../lib/planoExtrato.js';
 import { criarClassificador } from '../lib/classificar.js';
@@ -21,6 +23,8 @@ import { formatDate } from '../lib/format.js';
 // (ou uma regra de IGNORAR, para as transferências entre as suas contas) → importar.
 // Decisões (2026-10-27): entradas continuam à mão; pagamento de fatura e investimentos ficam de fora;
 // o pagamento de um gasto fixo vira o fixo do mês com o valor real.
+// A tela é aberta pela tela Importar (não está mais no menu); o "Importar arquivos" de lá chega com o arquivo
+// já escolhido (`location.state.arquivo`). Cada importação vai para o histórico, com o que desfazê-la.
 const IGNORAR = '__ignorar';
 const EXTRAS_IGNORAR = [{ value: IGNORAR, label: 'Ignorar sempre (não é gasto)' }];
 
@@ -60,6 +64,8 @@ function SemRegra({ grupo, categorias, onCriar, onCategoriaCriada }) {
 
 export default function Extrato() {
   const toast = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const inputRef = useRef(null);
   const [base, setBase] = useState(null); // { categorias, regras, recorrencias, fixos }
   const [arquivo, setArquivo] = useState(null); // { nome, linhas }
@@ -84,6 +90,14 @@ export default function Extrato() {
       setArquivo({ nome: f.name, linhas });
     } catch (err) { setArquivo(null); setErro(err.message); } finally { if (inputRef.current) inputRef.current.value = ''; }
   };
+
+  // Veio do "Importar arquivos" com o arquivo na mão: abre a prévia dele (uma vez; o estado é limpo).
+  useEffect(() => {
+    const f = location.state?.arquivo;
+    if (!f) return;
+    navigate(location.pathname, { replace: true, state: null });
+    escolher(f);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const plano = useMemo(() => {
     if (!arquivo || !base) return null;
@@ -118,8 +132,17 @@ export default function Extrato() {
   const importar = async () => {
     setGravando(true);
     try {
-      const n = await gravarExtrato(plano, (i, total) => setAndamento(`${i} de ${total}`));
-      setFeito({ n, revisar: plano.filter((p) => p.acao === 'avulso' && !p.categoriaId).length });
+      const { n, apagar, restaurar } = await gravarExtrato(plano, (i, total) => setAndamento(`${i} de ${total}`));
+      const revisar = plano.filter((p) => p.acao === 'avulso' && !p.categoriaId).length;
+      const per = periodoDasLinhas(arquivo.linhas);
+      const fixos = conta('fixo_novo').length + conta('fixo_corrigir').length;
+      await registrarImportacao({
+        tipo: 'extrato', arquivo: arquivo.nome, periodo_de: per.de, periodo_ate: per.ate, linhas: n, total_centavos: totalGravar,
+        resumo: [`${arquivo.linhas.length} movimentações → ${conta('avulso').length} avulsos`, fixos && `${fixos} fixos`,
+          `${conta('ignorar').length + conta('ja').length} de fora`, revisar && `${revisar} sem regra`].filter(Boolean).join(' · '),
+        desfazer: { apagar, restaurar },
+      });
+      setFeito({ n, revisar });
       toast.success(`${n} movimentação(ões) importadas.`);
       setArquivo(null);
       await carregarBase();
@@ -134,7 +157,7 @@ export default function Extrato() {
 
   return (
     <div>
-      <CabecalhoPagina titulo="Extrato da conta"
+      <CabecalhoPagina titulo="Extrato da conta" acessorio={<Link to="/importar" className="text-[12.5px] text-gray-500 hover:text-gray-800">← Importar</Link>}
         acoes={<button type="button" className="btn-primary" onClick={() => inputRef.current?.click()} disabled={!base}>Escolher extrato (CSV)</button>} />
 
       <div className="mt-4 max-w-5xl space-y-4">

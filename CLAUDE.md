@@ -56,6 +56,22 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - **Categorias = planilha agrupada** (opção A): grupos recolhíveis, e por categoria o uso tirado da `resumo_mensal`
   (`lib/usoCategorias.js`: 12 meses, total no mês, média pelos meses com dado, último uso).
 
+## Importar (a tela, 28/10/2026)
+
+- UM ITEM SÓ NO MENU, "Importar" (`SOLTOS` em `lib/navegacao.js`, com o número do que falta — `useContadores`):
+  o Extrato e o Importar histórico saíram dos grupos (as rotas continuam, abertas daqui). `pages/Importar.jsx`.
+- ABA "POR MÊS": linha = mês do ano (filtro de ano), coluna = FONTE (cada cartão e o extrato); a célula diz QUANDO
+  entrou ou o que falta (`mesesDoAno` em `lib/importacoes.js`, testada). Fonte DEVE o mês quando ele já pode ser
+  importado: a fatura a partir do vencimento; o extrato quando o mês acabou (o mês corrente é "em andamento" ou
+  "até dd/mm", sem contar como pendência). Antes da primeira importação da fonte, "—". A célula que falta abre o
+  importador da fatura já com cartão e vencimento (`inicial`) ou a tela do Extrato.
+- ABA "HISTÓRICO" = tabela `importacoes` (migration 007, que também preenche o passado): toda importação chama
+  `registrarImportacao` (fatura, extrato, planilha; sem a tabela, ignora em silêncio). "Desfazer": a fatura (apaga a
+  fatura) e o ÚLTIMO extrato (`desfazer` = ids criados + os fixos corrigidos como eram, de `gravarExtrato`).
+- "IMPORTAR ARQUIVOS" (`components/ImportarArquivos.jsx`): vários CSVs de uma vez, reconhecidos pelo cabeçalho e pelo
+  nome; as faturas entram dali (a repetida é pulada, ou substituída se pedir) e o extrato abre a prévia de sempre
+  (`navigate('/extrato', { state: { arquivo } })`). Importou/desfez → `avisarMudanca()` refaz o número do menu.
+
 ## Extrato da conta corrente
 
 - `lib/lerExtrato.js`: CSV do extrato do Nubank (`Data,Valor,Identificador,Descrição`); a `contraparte` (quem recebeu
@@ -141,6 +157,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   mockups; a pílula de variação mora em `components/graficos/Variacao.jsx`.
 - Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos). "Entradas × gastos" tem 4 formas
   (colunas, linhas, saldo, acumulado), escolhidas no próprio bloco.
+- "ENTRADAS × GASTOS" = O "ORÇADO × CONFIRMADO ANUAL" DO GESTOR (28/10/2026, opção A; só as cores são daqui): card
+  `p-5`, título 13px + período em cinza, eixo à ESQUERDA (`GradeEsq`, calha `CALHA_ESQ` 56px), legenda EMBAIXO com a
+  linha que a separa (`LegendaSeries` com `borda`), hover = guia tracejada + meses a 40% + ponto no saldo. Colunas
+  SOBREPOSTAS: entradas larga, gastos estreita na frente (recuo 23%), CADA BARRA COM O SEU NÚMERO sem a unidade
+  (o da barra mais alta sobe quando tocaria o outro — `posRotulo`).
+- A AMPLIAÇÃO substituiu a tela "Evolução mensal" (removida): `components/graficos/AmpliadoEntradasGastos.jsx`, o
+  painel do Gestor (1280px/90vh, tela cheia 96vw/94vh), a tabela com todas as colunas (cartão, fixos, avulsos,
+  acumulado, um ano antes, variação) + Total, CSV, e "Período da tela | Todo o histórico" (`compsDoHistorico`).
 
 ## Resumo, evolução e gráficos (fase 4)
 

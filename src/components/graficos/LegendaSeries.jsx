@@ -16,16 +16,17 @@ export function useDestaqueSeries() {
 }
 
 // `series`: [{ key, rotulo, cor, forma? }] — forma 'linha' (traço), 'tracejado' (traço tracejado) ou
-// quadradinho (padrão).
-export default function LegendaSeries({ series, ctrl, className = '' }) {
+// quadradinho (padrão). Ela fica EMBAIXO do gráfico, separada dele por uma linha (`border-t pt-2.5`,
+// a do Gestor); `borda={false}` tira a linha.
+export default function LegendaSeries({ series, ctrl, className = 'mt-2', borda = true }) {
   return (
-    <div className={`flex flex-wrap items-center gap-x-1 gap-y-1 ${className}`} onMouseLeave={() => ctrl.setHover(null)}>
+    <div className={`flex flex-wrap items-center gap-x-1 gap-y-1 ${borda ? 'border-t border-gray-100 pt-2.5' : ''} ${className}`} onMouseLeave={() => ctrl.setHover(null)}>
       {series.map((s) => {
         const fixa = ctrl.fixas.includes(s.key);
         return (
           <button key={s.key} type="button" aria-pressed={fixa}
             onMouseEnter={() => ctrl.setHover(s.key)} onClick={() => ctrl.alternar(s.key)}
-            className={`inline-flex items-center gap-1.5 rounded-[4px] px-1.5 py-0.5 text-[11.5px] leading-[16px] transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-[4px] px-1.5 py-0.5 text-[10.5px] leading-[14px] transition-colors ${
               fixa ? 'bg-gray-100 font-semibold text-gray-800' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'}`}
             style={{ opacity: ctrl.opSerie(s.key) < 1 ? 0.55 : 1 }}>
             {s.forma === 'linha' ? <span className="h-[2px] w-3 shrink-0 rounded" style={{ background: s.cor }} />

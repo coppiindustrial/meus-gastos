@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { listarCartoes, listarCategorias } from '../api/cadastros.js';
 import { conferirImportado, desfazerImportacao, importarPlanilha, prepararImportacao } from '../api/importacao.js';
+import { avisarMudanca, registrarImportacao } from '../api/importacoes.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { formatDate } from '../lib/format.js';
 
@@ -103,6 +104,13 @@ export default function ImportarHistorico() {
     setOcupado(true);
     try {
       await importarPlanilha(dados, prep, setAndamento);
+      const doCartao = dados.faturas.reduce((s, f) => s + f.lancamentos.length, 0);
+      const comps = [...dados.faturas.map((f) => f.competencia), ...dados.lancamentos.map((l) => l.competencia)].filter(Boolean).sort();
+      await registrarImportacao({
+        tipo: 'planilha', arquivo: 'Gastos total.xlsx', linhas: doCartao + dados.lancamentos.length,
+        periodo_de: comps.length ? `${comps[0]}-01` : null, periodo_ate: comps.length ? `${comps[comps.length - 1]}-01` : null,
+        resumo: `${doCartao + dados.lancamentos.length} lançamentos · ${dados.faturas.length} faturas · ${dados.regras.length} regras`,
+      });
       toast.success('Histórico importado.');
       await recarregar();
     } catch (err) {
@@ -120,7 +128,7 @@ export default function ImportarHistorico() {
     });
     if (!ok) return;
     setOcupado(true);
-    try { await desfazerImportacao(); toast.success('Importação desfeita.'); await recarregar(); } catch (err) { toast.error(err.message); }
+    try { await desfazerImportacao(); avisarMudanca(); toast.success('Importação desfeita.'); await recarregar(); } catch (err) { toast.error(err.message); }
     setOcupado(false);
   };
 

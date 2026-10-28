@@ -13,6 +13,7 @@ import {
 } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
 import Modal from '../components/Modal.jsx';
+import AmpliadoEntradasGastos from '../components/graficos/AmpliadoEntradasGastos.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { contarPendencias, listarParcelasFuturas, listarResumoMensal } from '../api/resumo.js';
@@ -376,13 +377,14 @@ export default function VisaoGeral() {
       { key: 'media', label: 'Média', tipo: 'dinheiro', map: (x) => x.media / 100 },
     ]);
 
-  // O mês a mês na forma escolhida, na altura de quem o contém (o bloco do grid, ou o ampliado).
-  const graficoMeses = () => {
-    if (forma === 'saldo') return <SaldoMensal meses={r.porMes} onMes={abrirMes} />;
+  // O mês a mês na forma escolhida, na altura de quem o contém (o bloco do grid, ou o ampliado — que passa
+  // os SEUS meses: o período da tela ou o histórico inteiro).
+  const graficoMeses = (porMes = r.porMes, ant = anterior, { rotulosAte } = {}) => {
+    if (forma === 'saldo') return <SaldoMensal meses={porMes} onMes={abrirMes} />;
     if (forma === 'linhas' || forma === 'acumulado') {
-      return <LinhasEntradasGastos meses={r.porMes} anterior={anterior} ctrl={ctrl} onMes={abrirMes} acumulado={forma === 'acumulado'} />;
+      return <LinhasEntradasGastos meses={porMes} anterior={ant} ctrl={ctrl} onMes={abrirMes} acumulado={forma === 'acumulado'} />;
     }
-    return <ColunasEntradasGastos meses={r.porMes} anterior={anterior} ctrl={ctrl} onMes={abrirMes} altura="auto" />;
+    return <ColunasEntradasGastos meses={porMes} anterior={ant} ctrl={ctrl} onMes={abrirMes} altura="auto" rotulosAte={rotulosAte} />;
   };
   // A troca de forma é a `AbasPilula` do Gestor (a pílula desliza), como as trocas dos widgets de lá.
   const seletorForma = (
@@ -438,18 +440,23 @@ export default function VisaoGeral() {
       case 'vg_agora': return agora;
       case 'vg_meses':
         return (
-          <section className="card flex flex-col overflow-hidden px-4 pb-2 pt-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Titulo>Entradas × gastos por mês</Titulo>
-              {seletorForma}
-              <span className="flex-1" />
-              {forma !== 'saldo' && <LegendaSeries series={series} ctrl={ctrl} />}
-              <button type="button" onClick={() => setAmpliado(true)} title="Ampliar"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-[4px] text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">
-                <IconAmpliar />
-              </button>
+          // O CARD DO "ORÇADO × CONFIRMADO ANUAL" do Gestor (opção A do mockup de 28/10/2026): `p-5`, o
+          // título de 13px com o período em cinza ao lado, as abas e o "ampliar" à direita, e a legenda
+          // EMBAIXO do gráfico, separada dele por uma linha.
+          <section className="card flex flex-col overflow-hidden p-5">
+            <div className="mb-3 flex flex-wrap items-baseline gap-3">
+              <span className="text-[13px] font-semibold text-gray-800">Entradas × gastos por mês</span>
+              <span className="text-[11px] text-gray-400">{textoPer}</span>
+              <div className="ml-auto flex shrink-0 items-center gap-2 self-center">
+                {seletorForma}
+                <button type="button" onClick={() => setAmpliado(true)} title="Ampliar"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-[4px] text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">
+                  <IconAmpliar />
+                </button>
+              </div>
             </div>
             <div className="min-h-0 flex-1">{graficoMeses()}</div>
+            {forma !== 'saldo' && <LegendaSeries series={series} ctrl={ctrl} />}
           </section>
         );
       case 'vg_origem':
@@ -519,36 +526,9 @@ export default function VisaoGeral() {
       )}
 
       {ampliado && (
-        <Modal open onClose={() => setAmpliado(false)} title={`Entradas × gastos · ${textoPer}`} maxWidth="max-w-6xl">
-          <div className="mb-2 flex flex-wrap items-center gap-2">{seletorForma}<span className="flex-1" />{forma !== 'saldo' && <LegendaSeries series={series} ctrl={ctrl} />}</div>
-          <div style={{ height: 380 }}>{graficoMeses()}</div>
-          <div className="mt-4 max-h-[260px] overflow-auto rounded-md border border-gray-200">
-            <table className="w-full text-[12.5px]">
-              <thead className="sticky top-0 bg-hx-f9fafb">
-                <tr>{['Mês', 'Entradas', 'Gastos', 'Saldo', ...(rAnt ? ['Gastos um ano antes', 'Variação'] : []), 'Lançamentos'].map((h, i) => (
-                  <th key={h} className={`border-b border-gray-200 px-3 py-2 text-[10.5px] font-semibold uppercase tracking-wide text-gray-500 ${i ? 'text-right' : 'text-left'}`}>{h}</th>
-                ))}</tr>
-              </thead>
-              <tbody>
-                {comDado.map((m) => {
-                  const ant = anterior?.[m.competencia] ?? 0;
-                  const v = variacao(m.gastos, ant);
-                  return (
-                    <tr key={m.competencia} className="hover:bg-hx-f9fafb">
-                      <td className="border-b border-gray-100 px-3 py-1.5 text-gray-800">{nomeCompetencia(m.competencia)}</td>
-                      <td className="border-b border-gray-100 px-3 text-right tabular-nums text-green-700">{formatBRL(m.entradas)}</td>
-                      <td className="border-b border-gray-100 px-3 text-right tabular-nums text-gray-900">{formatBRL(m.gastos)}</td>
-                      <td className={`border-b border-gray-100 px-3 text-right tabular-nums ${m.saldo < 0 ? 'text-hx-c0393d' : 'text-gray-700'}`}>{formatBRL(m.saldo)}</td>
-                      {rAnt && <td className="border-b border-gray-100 px-3 text-right tabular-nums text-gray-500">{ant ? formatBRL(ant) : '—'}</td>}
-                      {rAnt && <td className="border-b border-gray-100 px-3 text-right tabular-nums text-gray-500">{v === null ? '—' : `${v > 0 ? '+' : ''}${v}%`}</td>}
-                      <td className="border-b border-gray-100 px-3 text-right tabular-nums text-gray-500">{m.qtd}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Modal>
+        <AmpliadoEntradasGastos onClose={() => setAmpliado(false)} linhas={filtradas} comps={comps} textoPer={textoPer}
+          comparar={comparar === 'anterior'} forma={forma} seletorForma={seletorForma} series={series} ctrl={ctrl}
+          onMes={abrirMes} desenhar={graficoMeses} />
       )}
     </>
   );

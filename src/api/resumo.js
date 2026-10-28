@@ -1,6 +1,6 @@
 import { buscarTudo, supabase } from './supabase.js';
 
-// Leituras do Resumo e da Evolução: as views da migration 003 (as contas são do banco).
+// Leituras da Visão geral: as views da migration 003 (as contas são do banco).
 const mes = (linhas) => linhas.map((l) => ({ ...l, competencia: l.competencia.slice(0, 7) }));
 
 export async function listarResumoMensal() {

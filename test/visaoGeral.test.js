@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { anoAnterior, filtrar, gruposPorMes, mediaPorMes, periodo, resumoPeriodo, variacao } from '../src/lib/visaoGeral.js';
+import { anoAnterior, compsDoHistorico, filtrar, gruposPorMes, mediaPorMes, periodo, resumoPeriodo, variacao } from '../src/lib/visaoGeral.js';
 
 // Linhas no formato da view resumo_mensal (valores fictícios).
 const L = (competencia, tipo, origem, categoria_id, total_centavos, qtd = 1) => ({ competencia, tipo, origem, categoria_id, total_centavos, qtd });
@@ -44,6 +44,16 @@ test('resumoPeriodo: totais, por origem, média pelos meses com dado e mês mais
   assert.equal(r.maisCaro.competencia, '2026-07');
   assert.equal(r.porMes[2].temDado, false);
   assert.equal(r.porMes[0].saldo, 950000);
+  // cada mês também abre o gasto por origem (as colunas da ampliação)
+  assert.deepEqual([r.porMes[1].cartao, r.porMes[1].fixo, r.porMes[1].manual], [40000, 0, 5000]);
+});
+
+test('compsDoHistorico: do primeiro ao último mês com dado, sem buracos', () => {
+  const cs = compsDoHistorico(linhas);
+  assert.equal(cs[0], '2025-07');
+  assert.equal(cs[cs.length - 1], '2026-08');
+  assert.equal(cs.length, 14);
+  assert.deepEqual(compsDoHistorico([]), []);
 });
 
 test('gruposPorMes: grupo, categorias, meses e "Sem categoria"', () => {

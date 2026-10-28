@@ -8,6 +8,7 @@ import ImportarFatura from './ImportarFatura.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { excluirFatura, listarFaturas } from '../api/faturas.js';
+import { avisarMudanca } from '../api/importacoes.js';
 import { listarCartoes } from '../api/cadastros.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaCurta, formatDate, formatDateTime } from '../lib/format.js';
@@ -39,7 +40,7 @@ export default function Faturas() {
       perigo: true,
     });
     if (!ok) return;
-    try { await excluirFatura(f.id); toast.success('Fatura excluída.'); carregar(); } catch (err) { toast.error(err.message); }
+    try { await excluirFatura(f.id); avisarMudanca(); toast.success('Fatura excluída.'); carregar(); } catch (err) { toast.error(err.message); }
   };
 
   return (

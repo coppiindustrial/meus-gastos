@@ -24,7 +24,7 @@ export function filtrar(linhas, { tipo = '', origens = [], cats = [] } = {}) {
 // sem dado nenhum é futuro ou anterior ao histórico, não mês sem gasto).
 export function resumoPeriodo(linhas, comps) {
   const dentro = new Set(comps);
-  const mes = Object.fromEntries(comps.map((c) => [c, { competencia: c, entradas: 0, gastos: 0, qtd: 0, temDado: false }]));
+  const mes = Object.fromEntries(comps.map((c) => [c, { competencia: c, entradas: 0, gastos: 0, cartao: 0, fixo: 0, manual: 0, qtd: 0, temDado: false }]));
   const t = { entradas: 0, gastos: 0, qtd: 0, porOrigem: { cartao: 0, fixo: 0, manual: 0 } };
   linhas.forEach((l) => {
     if (!dentro.has(l.competencia)) return;
@@ -36,7 +36,7 @@ export function resumoPeriodo(linhas, comps) {
     if (l.tipo === 'entrada') { m.entradas += v; t.entradas += v; }
     else {
       m.gastos += v; t.gastos += v;
-      if (t.porOrigem[l.origem] !== undefined) t.porOrigem[l.origem] += v;
+      if (t.porOrigem[l.origem] !== undefined) { t.porOrigem[l.origem] += v; m[l.origem] += v; }
     }
   });
   const porMes = comps.map((c) => ({ ...mes[c], saldo: mes[c].entradas - mes[c].gastos }));
@@ -49,6 +49,16 @@ export function resumoPeriodo(linhas, comps) {
     porMes,
     maisCaro: maisCaro && maisCaro.gastos > 0 ? maisCaro : null,
   };
+}
+
+// TODO O HISTÓRICO (a troca da ampliação do "Entradas × gastos", que substituiu a tela Evolução mensal):
+// do primeiro ao último mês com lançamento, sem buracos — o mês vazio do meio entra, como "sem dados".
+export function compsDoHistorico(linhas) {
+  const cs = linhas.map((l) => l.competencia).sort();
+  if (!cs.length) return [];
+  const out = [];
+  for (let c = cs[0]; c <= cs[cs.length - 1]; c = addMeses(c, 1)) out.push(c);
+  return out;
 }
 
 // Os mesmos meses um ano antes (para "Comparar com o ano anterior").

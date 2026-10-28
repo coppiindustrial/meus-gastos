@@ -105,6 +105,8 @@ export async function conferirImportado() {
 
 // Apaga só o que veio da planilha (as linhas das faturas vão junto com elas).
 export async function desfazerImportacao() {
+  // a linha do histórico de importações (migration 007; sem a tabela, o erro é ignorado)
+  await supabase.from('importacoes').delete().eq('tipo', 'planilha');
   await exigir(supabase.from('lancamentos').delete().eq('importado_de', ORIGEM_PLANILHA));
   await exigir(supabase.from('faturas').delete().eq('importado_de', ORIGEM_PLANILHA));
   await exigir(supabase.from('regras').delete().eq('importado_de', ORIGEM_PLANILHA));
