@@ -100,7 +100,7 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   nome no tooltip — ✎ o CADASTRO e ▾ "Mais ações" (exportar o ano em CSV; criar um fixo é no cadastro) — e o gesto do dia a
   dia como botão de destaque, "Lançar N ▾" (âmbar). O cadastro NÃO é uma vista da planilha: é um POP-UP
   (`components/ModalCadastroFixos.jsx`), uma tabela de FORMULÁRIO (cada célula é um campo; categoria pelo
-  `SeletorCategoria`, vigência por `<input type="month">`) com todos os fixos. Muda-se em vários, acrescenta,
+  `SeletorCategoria`, vigência pelo `CampoMes`) com todos os fixos. Muda-se em vários, acrescenta,
   marca para excluir, e "Salvar alterações (N)" grava só a diferença de cada um (`atualizarRecorrencia`); fechar
   com mudança pede para descartar. Ao lado do padrão, "≠ último lançado" (clicar o usa). Mudar o padrão não mexe
   no que já foi lançado.
@@ -185,6 +185,10 @@ NUNCA no git). A tela Cadastros → Importar histórico grava e confere por fatu
 - **Seletores**: escolher categoria é sempre o `SeletorCategoria` (busca, grupos em ordem alfabética, "+ Criar
   categoria" que abre o `ModalCategoria` e já escolhe a nova). Listas curtas: `SelectSimples` (= `SelectBusca`
   sem busca). Os dois portam a lista ao body — nunca `absolute` dentro de cartão/modal, que recorta.
+- **Datas**: nunca `<input type="date">`/`"month"` (destoam). Data = `CampoData`; mês (vigência, competência) =
+  `CampoMes` — os dois em `components/CampoData.jsx`, o calendário COPIADO do Gestor (`CalendarioData` +
+  `calendario/CabecalhoCalendario.jsx`, sem os feriados) e o `CalendarioMes` no mesmo desenho. O calendário vai
+  PORTADO ao body (lá era `absolute`). `min`/`max` hachuram o que não vale; `compacto` = altura de tabela.
 - `localStorage` só por `lsGet`/`lsSet` (`lib/storage.js`) e só para preferência de tela — nunca dado financeiro.
 - Confirmação é `useConfirmacao()` com `await` (nunca `window.confirm`); avisos por `useToast()`.
 - Nunca logar valores financeiros nem dados pessoais.

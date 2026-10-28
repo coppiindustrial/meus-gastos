@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import Modal from '../components/Modal.jsx';
+import CampoData from '../components/CampoData.jsx';
 import SelectSimples from '../components/SelectSimples.jsx';
 import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import SegmentedFiltro from '../components/SegmentedFiltro.jsx';
@@ -129,7 +130,7 @@ export default function ModalLancamento({ lancamento, compPadrao, categorias, ca
               onChange={(e) => mudar('valor', e.target.value)} />
           </Campo>
           <Campo rotulo="Data" erro={erros.data}>
-            <input className="input" type="date" value={form.data} onChange={(e) => mudar('data', e.target.value)} />
+            <CampoData value={form.data} onChange={(v) => mudar('data', v)} />
           </Campo>
         </div>
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
+import CampoData from '../components/CampoData.jsx';
 import SelectSimples from '../components/SelectSimples.jsx';
 import Checkbox from '../components/Checkbox.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
@@ -88,7 +89,7 @@ function ModalSaldos({ contas, ultimos, onFechar, onSalvo }) {
     <Modal open onClose={onFechar} title="Registrar saldos" maxWidth="max-w-md">
       <form onSubmit={enviar} className="space-y-4">
         <Campo rotulo="Data do saldo">
-          <input className="input" type="date" value={data} onChange={(e) => setData(e.target.value)} />
+          <CampoData value={data} onChange={setData} />
         </Campo>
         <div className="space-y-2">
           {ativas.map((c) => (

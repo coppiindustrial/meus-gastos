@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import Modal from './Modal.jsx';
 import SeletorCategoria from './SeletorCategoria.jsx';
+import { CampoMes } from './CampoData.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { atualizarRecorrencia, excluirRecorrencia, salvarRecorrencia } from '../api/fixos.js';
@@ -88,7 +89,6 @@ export default function ModalCadastroFixos({ recs, categorias, ultimos, onFechar
   const ativos = linhas.filter((l) => l.ativa && !l.excluir);
   const somaAtivos = ativos.reduce((s, l) => s + (parseValor(l.valor || '0') ?? 0), 0);
   const ultimoDe = (l) => (l.novo ? null : ultimos[l.id]);
-  const comDiferenca = linhas.filter((l) => !l.excluir && ultimoDe(l) && ultimoDe(l).valor_centavos !== parseValor(l.valor || '0'));
 
   const usarUltimo = (lista) => setLinhas((ls) => ls.map((l) => (lista.some((x) => x.id === l.id) ? { ...l, valor: valorParaCampo(ultimos[l.id].valor_centavos) } : l)));
   const adicionar = () => {
@@ -203,12 +203,12 @@ export default function ModalCadastroFixos({ recs, categorias, ultimos, onFechar
                     </div>
                   </td>
                   <td className="border-b border-gray-100 px-2 py-1.5">
-                    <input type="month" className={`input !h-8 text-[12.5px] ${borda(l, 'inicio')}`} disabled={l.excluir}
-                      value={l.inicio} onChange={(e) => mudar(l.id, 'inicio', e.target.value)} />
+                    <CampoMes compacto value={l.inicio} disabled={l.excluir} max={l.fim || undefined}
+                      onChange={(v) => mudar(l.id, 'inicio', v)} />
                   </td>
                   <td className="border-b border-gray-100 px-2 py-1.5">
-                    <input type="month" className={`input !h-8 text-[12.5px] ${l.fim ? '' : 'text-gray-400'} ${borda(l, 'fim')}`} disabled={l.excluir}
-                      value={l.fim} title="Vazio = sem fim" onChange={(e) => mudar(l.id, 'fim', e.target.value)} />
+                    <CampoMes compacto value={l.fim} disabled={l.excluir} min={l.inicio || undefined} vazio="sem fim" limpavel rotuloLimpar="Sem fim"
+                      onChange={(v) => mudar(l.id, 'fim', v)} />
                   </td>
                   <td className="border-b border-gray-100 px-1 py-1.5 text-center">
                     <button type="button" onClick={() => (l.novo && !l.descricao ? setLinhas((ls) => ls.filter((x) => x.id !== l.id)) : mudar(l.id, 'excluir', !l.excluir))}
@@ -240,13 +240,6 @@ export default function ModalCadastroFixos({ recs, categorias, ultimos, onFechar
             : 'Mudar o padrão não mexe no que já foi lançado: vale para as próximas sugestões.'}
         </span>
         <span className="flex-1" />
-        {comDiferenca.length > 0 && (
-          <button type="button" onClick={() => usarUltimo(comDiferenca)}
-            title={comDiferenca.map((l) => `${l.descricao}: ${formatBRL(ultimos[l.id].valor_centavos)}`).join('\n')}
-            className="text-[12px] text-gray-600 underline decoration-gray-300 underline-offset-[3px] hover:text-gray-900">
-            Usar o último lançado como padrão em {plural(comDiferenca.length, 'fixo', 'fixos')}
-          </button>
-        )}
         <button type="button" className="btn-secondary" onClick={fechar} disabled={salvando}>Cancelar</button>
         <button type="button" className="btn-primary" onClick={salvar} disabled={salvando || !alteradas.length}>
           {salvando ? 'Salvando…' : alteradas.length ? `Salvar alterações (${alteradas.length})` : 'Salvar alterações'}

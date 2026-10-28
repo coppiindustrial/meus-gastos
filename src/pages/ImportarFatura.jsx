@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from '../components/Modal.jsx';
+import CampoData from '../components/CampoData.jsx';
 import SelectSimples from '../components/SelectSimples.jsx';
 import Spinner from '../components/Spinner.jsx';
 import { Campo } from '../components/Comuns.jsx';
@@ -111,7 +112,7 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada }) {
                 <SelectSimples value={cartaoId} onChange={setCartaoId} opcoes={ativos.map((c) => ({ value: c.id, label: c.nome }))} />
               </Campo>
               <Campo rotulo="Vencimento">
-                <input className="input" type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} />
+                <CampoData value={vencimento} onChange={setVencimento} />
               </Campo>
             </div>
             {vencimento && <p className="-mt-2 text-xs text-gray-500">Os lançamentos contam em <strong>{nomeCompetencia(competenciaDe(vencimento)).toLowerCase()}</strong>.</p>}

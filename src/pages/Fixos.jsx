@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
+import { CampoMes } from '../components/CampoData.jsx';
 import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import Checkbox from '../components/Checkbox.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
@@ -86,10 +87,11 @@ function ModalRecorrencia({ rec, categorias, onFechar, onSalvo }) {
             <input className="input" type="number" min="1" max="31" value={form.dia_do_mes} onChange={(e) => mudar('dia_do_mes', e.target.value)} />
           </Campo>
           <Campo rotulo="Começa em" erro={erros.inicio}>
-            <input className="input" type="date" value={form.inicio} onChange={(e) => mudar('inicio', e.target.value)} />
+            <CampoMes value={(form.inicio || '').slice(0, 7)} max={form.fim ? form.fim.slice(0, 7) : undefined} onChange={(v) => mudar('inicio', `${v}-01`)} />
           </Campo>
           <Campo rotulo="Termina em (opcional)" erro={erros.fim}>
-            <input className="input" type="date" value={form.fim} onChange={(e) => mudar('fim', e.target.value)} />
+            <CampoMes value={(form.fim || '').slice(0, 7)} min={(form.inicio || '').slice(0, 7) || undefined} vazio="sem fim" limpavel rotuloLimpar="Sem fim"
+              onChange={(v) => mudar('fim', v ? `${v}-01` : '')} />
           </Campo>
         </div>
         <p className="-mt-1 text-xs text-gray-500">O valor sugerido a cada mês é o do mês anterior; o padrão vale para o primeiro.</p>
