@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import GridPersonalizavel from '../components/dashboard/GridPersonalizavel.jsx';
 import CardAutoAltura from '../components/dashboard/CardAutoAltura.jsx';
+import AvisoAgora from '../components/dashboard/AvisoAgora.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import SegmentoFiltro, { OpcaoMenu } from '../components/filtros/SegmentoFiltro.jsx';
 import { SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
@@ -16,9 +17,9 @@ import AbasPilula from '../components/AbasPilula.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { contarPendencias, listarParcelasFuturas, listarResumoMensal } from '../api/resumo.js';
 import { listarCategorias } from '../api/cadastros.js';
-import { listarLancamentosDeFixos, listarRecorrencias } from '../api/fixos.js';
+import { lancarFixo, listarLancamentosDeFixos, listarPulados, listarRecorrencias } from '../api/fixos.js';
 import { comprometidoPorMes } from '../lib/resumo.js';
-import { situacaoDoMes } from '../lib/fixos.js';
+import { matrizDoAno, pendentesPorMes } from '../lib/fixos.js';
 import { anoAnterior, filtrar, gruposPorMes, mediaPorMes, periodo, resumoPeriodo, variacao } from '../lib/visaoGeral.js';
 import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
@@ -32,9 +33,10 @@ import { varCor } from '../lib/varCor.js';
 // da planilha (vários anos, vários meses); tipo, origem e categoria recortam por cima. As somas saem da
 // view `resumo_mensal` (`lib/visaoGeral.js`); aqui só se escolhe o recorte e se desenha.
 //
-// A faixa "Agora" é o que a tela antiga (Resumo do mês) tinha de útil no dia a dia: o que falta
-// revisar, os fixos ainda não lançados e o que já está comprometido em parcelas — sempre do mês ATUAL,
-// sem depender dos filtros.
+// O aviso "Agora" (no topo, no jeito do widget Alertas do Gestor — `AvisoAgora`) é o que a tela antiga
+// (Resumo do mês) tinha de útil no dia a dia: o que falta revisar, os fixos ainda não lançados (do ano,
+// até o mês atual, sem os "não teve") e o que já está comprometido em parcelas — sempre do mês ATUAL, sem
+// depender dos filtros.
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const MESES_LONGOS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -241,8 +243,8 @@ function TabelaGrupoMes({ grupos, comps, total, porMes, onExportar }) {
 // (12 colunas; uma linha = 22px + 16 de vão, a metade da do Gestor). Os números e a faixa "Agora" têm a ALTURA MEDIDA (crescem com o
 // conteúdo); os gráficos têm `minPx`, o piso de largura em que ainda se leem.
 const CATALOGO = [
-  { id: 'vg_kpis', titulo: 'Indicadores', area: 'vg_numeros', x: 0, y: 0, w: 12, h: 4, alturaMedida: true, minPx: 300 },
-  { id: 'vg_agora', titulo: 'Agora, no mês atual', area: 'vg_numeros', x: 0, y: 4, w: 12, h: 2, alturaMedida: true, minPx: 300 },
+  { id: 'vg_agora', titulo: 'Agora, no mês atual', area: 'vg_numeros', x: 0, y: 0, w: 12, h: 2, alturaMedida: true, minPx: 300 },
+  { id: 'vg_kpis', titulo: 'Indicadores', area: 'vg_numeros', x: 0, y: 2, w: 12, h: 4, alturaMedida: true, minPx: 300 },
   { id: 'vg_meses', titulo: 'Entradas × gastos por mês', area: 'vg_graficos', x: 0, y: 6, w: 8, h: 10, minH: 7, minPx: 420 },
   { id: 'vg_origem', titulo: 'Gastos por origem', area: 'vg_graficos', x: 8, y: 6, w: 4, h: 10, minH: 6, minPx: 300 },
   { id: 'vg_grupos', titulo: 'Gastos por grupo', area: 'vg_graficos', x: 0, y: 16, w: 12, h: 12, minH: 5, minPx: 360 },
@@ -269,7 +271,7 @@ export default function VisaoGeral() {
   const [categorias, setCategorias] = useState([]);
   const [parcelas, setParcelas] = useState([]);
   const [pendencias, setPendencias] = useState(0);
-  const [fixos, setFixos] = useState({ recs: [], lancs: [] });
+  const [fixos, setFixos] = useState({ recs: [], lancs: [], pulados: [] });
   const [anos, setAnos] = useState([anoAtual]);
   const [meses, setMeses] = useState([]);
   const [tipo, setTipo] = useState('');
@@ -286,10 +288,10 @@ export default function VisaoGeral() {
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const [r, c, p, n, rec, lf] = await Promise.all([
-        listarResumoMensal(), listarCategorias(), listarParcelasFuturas(), contarPendencias(), listarRecorrencias(), listarLancamentosDeFixos(),
+      const [r, c, p, n, rec, lf, pul] = await Promise.all([
+        listarResumoMensal(), listarCategorias(), listarParcelasFuturas(), contarPendencias(), listarRecorrencias(), listarLancamentosDeFixos(), listarPulados(),
       ]);
-      setLinhas(r); setCategorias(c); setParcelas(p); setPendencias(n); setFixos({ recs: rec, lancs: lf });
+      setLinhas(r); setCategorias(c); setParcelas(p); setPendencias(n); setFixos({ recs: rec, lancs: lf, pulados: pul ?? [] });
     } catch (err) { toast.error(err.message); setLinhas((l) => l ?? []); } finally { setCarregando(false); }
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -330,7 +332,15 @@ export default function VisaoGeral() {
 
   // A faixa "Agora": sempre o mês atual, sem os filtros.
   const hoje = competenciaAtual();
-  const fixosPendentes = useMemo(() => situacaoDoMes(fixos.recs, fixos.lancs.filter((l) => l.competencia === hoje), {}, hoje).filter((s) => !s.lancamento), [fixos, hoje]);
+  // Os fixos a lançar do ano até hoje (a mesma conta da linha "A lançar" da tela dos fixos).
+  const fixosPendentes = useMemo(() => pendentesPorMes(matrizDoAno(fixos.recs, fixos.lancs, Number(hoje.slice(0, 4)), hoje, fixos.pulados)), [fixos, hoje]);
+  const lancarDoAviso = async (rec, comp, valor) => {
+    try {
+      await lancarFixo(rec, comp, valor);
+      toast.success(`${rec.descricao} lançado em ${competenciaCurta(comp)}.`);
+      carregar();
+    } catch (err) { toast.error(/duplicate|unique/i.test(err.message) ? 'Este fixo já foi lançado neste mês.' : err.message); carregar(); }
+  };
   const parcelasProx = useMemo(() => comprometidoPorMes(parcelas, hoje).find((c) => c.competencia === addMeses(hoje, 1)), [parcelas, hoje]);
 
   const filtrando = Boolean(!(anos.length === 1 && anos[0] === anoAtual) || meses.length || tipo || origens.length || cats.length);
@@ -416,23 +426,8 @@ export default function VisaoGeral() {
 
   const agora = (
     <div className="card">
-    <CardAutoAltura id="vg_agora" className="px-4 py-2.5">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-gray-700">
-        <span className="font-semibold text-gray-800">Agora, em {MESES_LONGOS[Number(hoje.slice(5)) - 1]}:</span>
-        {pendencias > 0 && (
-          <span><b className="font-semibold text-gray-900">{pendencias}</b> lançamento(s) a revisar <Link to="/pendencias" className="font-medium text-hx-2563eb hover:underline">Revisar →</Link></span>
-        )}
-        {fixosPendentes.length > 0 && (
-          <span title={fixosPendentes.map((s) => s.rec.descricao).join(', ')}>
-            <b className="font-semibold text-gray-900">{fixosPendentes.length}</b> gasto(s) fixo(s) a lançar{' '}
-            <Link to="/fixos" className="font-medium text-hx-2563eb hover:underline">Lançar →</Link>
-          </span>
-        )}
-        {parcelasProx && (
-          <span><b className="font-semibold text-gray-900">{formatBRL(parcelasProx.total)}</b> já comprometidos em parcelas para {MESES_LONGOS[Number(addMeses(hoje, 1).slice(5)) - 1]}</span>
-        )}
-        {!pendencias && !fixosPendentes.length && !parcelasProx && <span className="text-gray-500">nada pendente ✓</span>}
-      </div>
+    <CardAutoAltura id="vg_agora">
+      <AvisoAgora hoje={hoje} pendentes={fixosPendentes} revisar={pendencias} parcelasProx={parcelasProx} onLancar={lancarDoAviso} />
     </CardAutoAltura>
     </div>
   );
@@ -460,8 +455,9 @@ export default function VisaoGeral() {
       case 'vg_origem':
         return (
           <section className="card flex flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-auto p-4">
-              <div className="mb-3"><Titulo>Gastos por origem</Titulo></div>
+            <div className="px-4 pt-4"><Titulo>Gastos por origem</Titulo></div>
+            {/* A rosca mede esta caixa e escolhe o arranjo que cabe; só rola num bloco menor que o mínimo. */}
+            <div className="min-h-0 flex-1 overflow-auto px-4 pb-3 pt-2">
               <RoscaOrigem itens={ORIGENS.map(([key, rotulo]) => ({ key, rotulo, valor: r.porOrigem[key], antes: rAnt?.porOrigem[key] }))} marcadas={origens} onClicar={alternarOrigem} />
             </div>
           </section>
@@ -508,7 +504,7 @@ export default function VisaoGeral() {
 
   return (
     <>
-      <GridPersonalizavel escopo="visao_v2" titulo="Visão geral"
+      <GridPersonalizavel escopo="visao_v3" titulo="Visão geral"
         acessorio={linhas && <span className="hidden text-sm text-gray-500 sm:inline">{textoPer.replace(/^./, (c) => c.toUpperCase())} · {r.meses} {r.meses === 1 ? 'mês' : 'meses'} com lançamentos</span>}
         catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={renderWidget} abaixo={filtros}
         pronto={!!linhas} onAtualizar={carregar} atualizando={carregando} />

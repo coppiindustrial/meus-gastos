@@ -91,6 +91,7 @@ no dia 1 do mês (o front mostra `AAAA-MM`).
 | `faturas` | cartao_id, vencimento, competencia, arquivo, hash_arquivo, total_centavos, importada_em | Uma por cartão+vencimento |
 | `lancamentos` | tipo, origem (`cartao`/`fixo`/`manual`/`entrada`), data, competencia, descricao, estabelecimento, valor_centavos, categoria_id, fatura_id, cartao_id, parcela_atual, parcela_total, portador, recorrencia_id, revisar, obs | Tabela central (a aba **Base**). Apagar a fatura apaga as linhas dela |
 | `recorrencias` | descricao, categoria_id, valor_padrao_centavos, dia_do_mes, inicio, fim, ativa | Gastos fixos |
+| `fixos_pulados` | recorrencia_id, competencia | O mês em que o fixo "não teve" (migration 006): sai das pendências |
 | `contas` | nome, tipo (`corrente`/`investimento`/`reserva`/`outro`), instituicao, ativa | Patrimônio |
 | `saldos` | conta_id, data, valor_centavos | Foto do saldo numa data |
 

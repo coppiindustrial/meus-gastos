@@ -51,8 +51,16 @@ export const H_COLAPSADO = 2;
 const lerLs = (k) => { try { return JSON.parse(lsGet(k) || 'null'); } catch { return null; } };
 // LINHAS ANTIGAS: `ESCOPO_ANTIGO` diz de que escopo a disposição salva vinha quando a linha tinha o dobro
 // da altura. Sem nada salvo no novo, ela é lida de lá com `y` e `h` dobrados (o mesmo tamanho em px).
-const ESCOPO_ANTIGO = { visao_v2: 'visao' };
+// Cada escopo novo diz de qual veio e como a disposição salva lá se converte (lida UMA vez: a primeira
+// gravação já vai para o novo). `visao_v3` (28/10/2026): o aviso "Agora" (`vg_agora`) passou para o
+// TOPO da Visão geral — quem já tinha a disposição personalizada a mantém, com o aviso subindo.
 const dobrar = (itens) => itens?.map((i) => ({ ...i, y: i.y * 2, h: i.h * 2, h_aberto: i.h_aberto != null ? i.h_aberto * 2 : i.h_aberto }));
+const aoTopo = (id) => (itens) => {
+  const alvo = itens?.find((i) => i.widget_id === id);
+  if (!alvo) return itens;
+  return itens.map((i) => (i === alvo ? { ...i, x: 0, y: 0 } : i.y < alvo.y ? { ...i, y: i.y + alvo.h } : i));
+};
+const ESCOPO_ANTIGO = { visao_v2: { de: 'visao', converter: dobrar }, visao_v3: { de: 'visao_v2', converter: aoTopo('vg_agora') } };
 const api = {
   get: async (rota) => {
     const atual = lerLs(rota);
@@ -60,8 +68,8 @@ const api = {
     const m = rota.match(/dashboard=([^&]+)/);
     const antigo = m && ESCOPO_ANTIGO[m[1]];
     if (!antigo) return null;
-    const velho = lerLs(rota.replace(`dashboard=${m[1]}`, `dashboard=${antigo}`));
-    return rota.startsWith('/dashboard/layout') ? dobrar(velho) : velho;
+    const velho = await api.get(rota.replace(`dashboard=${m[1]}`, `dashboard=${antigo.de}`));
+    return rota.startsWith('/dashboard/layout') && velho ? antigo.converter(velho) : velho;
   },
   put: async (rota, corpo) => {
     const valor = rota.startsWith('/dashboard/layout') ? corpo.itens : corpo;

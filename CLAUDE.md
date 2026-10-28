@@ -86,6 +86,19 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (ou corrige o lançado), Ctrl+Enter lança os pendentes da seleção, Delete exclui, Ctrl+V cola do Excel, Ctrl+Z/Y.
   O cadastro continua no modal (clique no nome, Shift+F2 ou botão direito). Legenda no jeito da do DRE: as marcas
   acima da grade são clicáveis (destacam aquele tipo de célula) e o botão "Legenda" explica tudo.
+- O QUE FALTA LANÇAR (28/10/2026, opção B): sem botão no cabeçalho. A linha "A lançar" da grade conta os pendentes
+  de cada mês (todos até hoje, não só o atual; `pendentesPorMes`) e o título do mês ganha um ponto âmbar; clicar
+  seleciona o mês e a barra de baixo vira a de ação: "Lançar os N · R$" e "NÃO TEVE".
+- "NÃO TEVE" = tabela `fixos_pulados` (migration 006, recorrência + mês, única): a célula fica hachurada e sai das
+  pendências (`matrizDoAno`/`situacaoDoMes` recebem `pulados`). Delete no mês desfaz; lançar um valor nele apaga a
+  marca; Ctrl+Z vale. Antes da migration, `listarPulados` devolve null e o "Não teve" só explica o que falta.
+- VISTA "CADASTRO" (troca Meses | Cadastro, lembrada no navegador): todos os fixos numa grade de campos
+  (`components/planilha/GradeCadastroFixos.jsx`; contas puras em `lib/cadastroFixos.js`, testadas) — ativo,
+  descrição, categoria, dia, valor padrão, último lançado (só leitura, ≠ quando difere), começa, termina. Teclado da
+  grade dos Lançamentos (Ctrl+C/V do Excel, Ctrl+D, Delete limpa categoria/fim, Ctrl+Z/Y); a última linha cria;
+  o número da linha seleciona a linha, e com linhas inteiras Delete exclui (com confirmação, sem desfazer). Seleção
+  de várias linhas: "Usar o último lançado como padrão", ativar/desativar, excluir. Grava campo a campo
+  (`atualizarRecorrencia`), otimista. Mudar o padrão não mexe no que já foi lançado.
 - O resumo no topo dos Lançamentos (`components/graficos/CartoesResumo.jsx`, opção C com as setas): cartões com a
   curva dos últimos 6 meses (da `resumo_mensal`; o mês da tela vem da grade); clicar filtra o tipo.
 
@@ -94,7 +107,12 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - Substituiu o "Resumo do mês": é o Dashboard da planilha (segmentações ANO e MÊS) no estilo do Gestor.
   Filtros: anos (vários), meses (grade de 12, Shift = intervalo, atalhos de trimestre), tipo, origem, categoria e
   "Comparar: ano anterior". Contas puras em `lib/visaoGeral.js` (testadas), sobre a `resumo_mensal`; média divide
-  pelos meses COM dado. A faixa "Agora" (pendências, fixos a lançar, parcelas do próximo mês) é sempre do mês atual.
+  pelos meses COM dado.
+- O AVISO "AGORA" (28/10/2026, opção A) é a linha do widget Alertas do Dashboard do Gestor
+  (`components/dashboard/AvisoAgora.jsx`), no TOPO: pílulas no tom do que pedem — âmbar = fixos a lançar (do ano
+  até hoje, com o menu de lá: por mês, "Lançar" em cada um), vermelho = a revisar, cinza = parcelas do mês que vem.
+  Sempre do mês atual, sem os filtros. Escopo do grid `visao_v3`: a disposição salva em `visao_v2` é lida uma vez
+  com o aviso subindo ao topo (`aoTopo` no `ESCOPO_ANTIGO`).
 - Gráficos em `components/graficos/GraficosVisao.jsx` + `LegendaSeries.jsx` (legenda-controle do Gestor):
   colunas entradas × gastos com saldo e o ano anterior tracejado, rosca por origem (clique filtra), barras por
   grupo que abrem nas categorias, e a tabela grupo × mês (recolhe com `useLinhasAnimadas`). Clicar num mês abre
@@ -112,7 +130,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - MÉDIAS POR MÊS (toda tela): só os meses em que o valor aparece (mês sem entrada cadastrada não é "entrada zero")
   e sem o mês em andamento quando há outros — `mediaPorMes`/`mesesDaMedia` em `lib/visaoGeral.js` (testadas).
 - Gastos por origem = rosca com UMA COR POR ORIGEM (`--origem-cartao/-fixo/-manual` no index.css, validadas nos
-  dois temas) e o centro que conta a fatia sob o cursor. Gastos por grupo = barras na cor do grupo + curva dos meses
+  dois temas) e o centro que conta a fatia sob o cursor. Ela MEDE a caixa e escolhe o arranjo que cabe (rosca ao
+  lado ou em cima; legenda completa ou de uma linha — `arranjoRosca`): o bloco não rola. Gastos por grupo = barras na cor do grupo + curva dos meses
   + variação contra o ano anterior (só aparece com dado no mesmo período do ano anterior). As duas são a opção A dos
   mockups; a pílula de variação mora em `components/graficos/Variacao.jsx`.
 - Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos). "Entradas × gastos" tem 4 formas

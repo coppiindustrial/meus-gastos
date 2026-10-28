@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dataNoMes, recorrenciasDoHistorico, situacaoDoMes, ultimosPorRecorrencia, vigente, matrizDoAno } from '../src/lib/fixos.js';
+import { dataNoMes, recorrenciasDoHistorico, situacaoDoMes, ultimosPorRecorrencia, vigente, matrizDoAno, pendentesPorMes, ultimoLancado } from '../src/lib/fixos.js';
 
 const rec = (id, extra = {}) => ({ id, descricao: id, dia_do_mes: 5, ativa: true, inicio: '2026-04-01', fim: null, valor_padrao_centavos: 10000, ...extra });
 
@@ -77,4 +77,37 @@ test('matrizDoAno: lançado (com o mês anterior), pendente, futuro e fora da vi
   assert.equal(c[10].estado, 'futuro');
   assert.equal(linhas[0].media, 18063);
   assert.equal(totais['2026-09'], 18126);
+});
+
+test('"não teve": a célula pulada sai das pendências, na matriz e na situação do mês', () => {
+  const recs = [
+    { id: 'acad', descricao: 'Academia', dia_do_mes: 1, valor_padrao_centavos: 14990, inicio: '2026-01-01', fim: null, ativa: true },
+    { id: 'luz', descricao: 'Luz', dia_do_mes: 15, valor_padrao_centavos: 15000, inicio: '2026-01-01', fim: null, ativa: true },
+  ];
+  const lancs = [{ id: 'x', recorrencia_id: 'luz', competencia: '2026-08', valor_centavos: 20000 }];
+  const pulados = [
+    { id: 'p1', recorrencia_id: 'acad', competencia: '2026-08' },
+    { id: 'p2', recorrencia_id: 'luz', competencia: '2026-08' }, // lançado vale mais que o "não teve"
+  ];
+  const m = matrizDoAno(recs, lancs, 2026, '2026-09', pulados);
+  const acad = m.linhas.find((l) => l.rec.id === 'acad').celulas;
+  const luz = m.linhas.find((l) => l.rec.id === 'luz').celulas;
+  assert.deepEqual([acad[7].estado, acad[7].pulo.id, acad[7].sugerido], ['pulado', 'p1', 14990]);
+  assert.equal(luz[7].estado, 'lancado');
+  const pend = pendentesPorMes(m);
+  assert.equal(pend['2026-08'], undefined); // nada a lançar em agosto
+  assert.deepEqual(pend['2026-09'].map((p) => p.rec.id).sort(), ['acad', 'luz']);
+  assert.deepEqual(pend['2026-09'].find((p) => p.rec.id === 'luz').sugerido, 20000);
+  assert.equal(Object.keys(pend).length, 8); // jan–set (9 meses) menos agosto
+  const s = situacaoDoMes(recs, lancs, {}, '2026-08', pulados).map((x) => x.rec.id);
+  assert.deepEqual(s, ['luz']);
+});
+
+test('ultimoLancado: o lançamento mais recente de cada recorrência, de qualquer mês', () => {
+  const u = ultimoLancado([
+    { recorrencia_id: 'a', competencia: '2026-03', valor_centavos: 100 },
+    { recorrencia_id: 'a', competencia: '2026-10', valor_centavos: '250' },
+    { recorrencia_id: 'b', competencia: '2025-12', valor_centavos: 70 },
+  ]);
+  assert.deepEqual(u, { a: { valor_centavos: 250, competencia: '2026-10' }, b: { valor_centavos: 70, competencia: '2025-12' } });
 });

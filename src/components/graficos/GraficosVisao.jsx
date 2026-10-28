@@ -289,8 +289,52 @@ export function SaldoMensal({ meses, onMes }) {
 export const CORES_ORIGEM = { cartao: 'var(--origem-cartao)', fixo: 'var(--origem-fixo)', manual: 'var(--origem-manual)' };
 const corOrigem = (k) => CORES_ORIGEM[k] ?? COR_GASTOS;
 
+// O DESENHO QUE CABE NO BLOCO (ele se redimensiona no grid): a rosca ao lado da legenda ou em cima dela, e a
+// legenda completa (nome, valor, %, variação) ou compacta (uma linha só). Fica o arranjo com a MAIOR rosca, com
+// um bônus para a legenda completa; abaixo de ROSCA_MIN o texto do centro não cabe e o bloco passa a rolar.
+const ROSCA_MAX = 176;
+const ROSCA_MIN = 104;
+// altura MEDIDA de cada linha da legenda (com o vão entre elas) e a largura mínima que ela pede
+const LEG = { completa: { alt: 53, larg: 200 }, compacta: { alt: 28, larg: 130 } };
+const VAO_LADO = 20;
+const VAO_CIMA = 8;
+
+function arranjoRosca(w, h, n) {
+  if (!w || !h) return { lado: true, D: ROSCA_MAX, compacta: false };
+  const opcoes = [];
+  for (const compacta of [false, true]) {
+    const leg = LEG[compacta ? 'compacta' : 'completa'];
+    const altLeg = leg.alt * n;
+    if (h >= altLeg) opcoes.push({ lado: true, compacta, D: Math.min(ROSCA_MAX, h, w - leg.larg - VAO_LADO) });
+    opcoes.push({ lado: false, compacta, D: Math.min(ROSCA_MAX, w, h - altLeg - VAO_CIMA) });
+  }
+  const nota = (o) => o.D + (o.compacta ? 0 : 28) + (o.lado ? 4 : 0);
+  const melhor = opcoes.filter((o) => o.D >= ROSCA_MIN).sort((a, b) => nota(b) - nota(a))[0];
+  return melhor ?? { lado: false, compacta: true, D: ROSCA_MIN };
+}
+
+// O tamanho útil da caixa que contém o gráfico (o pai: o miolo do bloco, sem o padding).
+function useCaixaDoPai(ref) {
+  const [t, setT] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const pai = ref.current?.parentElement;
+    if (!pai) return undefined;
+    const ro = new ResizeObserver(([e]) => {
+      const w = Math.floor(e.contentRect.width);
+      const h = Math.floor(e.contentRect.height);
+      setT((x) => (x.w === w && x.h === h ? x : { w, h }));
+    });
+    ro.observe(pai);
+    return () => ro.disconnect();
+  }, [ref]);
+  return t;
+}
+
 export function RoscaOrigem({ itens, marcadas = [], onClicar }) {
   const [ativo, setAtivo] = useState(null);
+  const raizRef = useRef(null);
+  const caixa = useCaixaDoPai(raizRef);
+  const { lado, D, compacta } = arranjoRosca(caixa.w, caixa.h, itens.length);
   const total = itens.reduce((s, it) => s + it.valor, 0);
   const R = 66;
   const C = 2 * Math.PI * R;
@@ -298,10 +342,16 @@ export function RoscaOrigem({ itens, marcadas = [], onClicar }) {
   const pctDe = (v) => (total ? Math.round((v / total) * 100) : 0);
   const sel = itens.find((it) => it.key === ativo);
   const apagado = (k) => (ativo !== null && ativo !== k) || (ativo === null && marcadas.length > 0 && !marcadas.includes(k));
+  // Rosca pequena: o texto do centro cresce no desenho (viewBox) para continuar legível na tela.
+  const esc = Math.max(1, (ROSCA_MAX / D) * 0.8);
+  const y = (d) => 88 + d * esc;
+  const fs = (px) => ({ fontSize: px * esc });
+  const larguraLegenda = lado ? caixa.w - D - VAO_LADO : caixa.w;
   let acumulado = 0;
   return (
-    <div className="flex flex-wrap items-center gap-5" onMouseLeave={() => setAtivo(null)}>
-      <svg width="176" height="176" viewBox="0 0 176 176" className="shrink-0" role="img" aria-label="Gastos por origem">
+    <div ref={raizRef} className={`flex min-h-full items-center ${lado ? 'flex-row' : 'flex-col justify-center'}`} style={{ gap: lado ? VAO_LADO : VAO_CIMA }}
+      onMouseLeave={() => setAtivo(null)}>
+      <svg width={D} height={D} viewBox="0 0 176 176" className="shrink-0 overflow-visible" role="img" aria-label="Gastos por origem">
         {total > 0 && itens.map((it) => {
           const frac = it.valor / total;
           const len = Math.max(0, frac * C - (comValor > 1 ? 3 : 0));
@@ -317,19 +367,35 @@ export function RoscaOrigem({ itens, marcadas = [], onClicar }) {
         })}
         {total === 0 && <circle r={R} cx="88" cy="88" fill="none" stroke={varCor('#f3f4f6', 'fundo')} strokeWidth="21" />}
         {/* O CENTRO CONTA a fatia sob o cursor; sem cursor, o total. */}
-        <text x="88" y={sel ? 74 : 80} textAnchor="middle" className="fill-gray-500 text-[11px]">{sel ? sel.rotulo.replace(/ \(.*\)$/, '') : 'Total'}</text>
+        <text x="88" y={y(sel ? -14 : -8)} textAnchor="middle" className="fill-gray-500" style={fs(11)}>{sel ? sel.rotulo.replace(/ \(.*\)$/, '') : 'Total'}</text>
         {sel ? (
           <>
-            <text x="88" y="96" textAnchor="middle" className="fill-gray-900 text-[19px] font-bold">{pctDe(sel.valor)}%</text>
-            <text x="88" y="113" textAnchor="middle" className="fill-gray-600 text-[11px]">{brlCurto(sel.valor)}</text>
+            <text x="88" y={y(8)} textAnchor="middle" className="fill-gray-900 font-bold" style={fs(19)}>{pctDe(sel.valor)}%</text>
+            <text x="88" y={y(25)} textAnchor="middle" className="fill-gray-600" style={fs(11)}>{brlCurto(sel.valor)}</text>
           </>
         ) : (
-          <text x="88" y="98" textAnchor="middle" className="fill-gray-900 text-[14px] font-bold">{brlCurto(total)}</text>
+          <text x="88" y={y(10)} textAnchor="middle" className="fill-gray-900 font-bold" style={fs(14)}>{brlCurto(total)}</text>
         )}
       </svg>
-      <ul className="min-w-[210px] flex-1 space-y-1">
+      <ul className={`min-w-0 ${lado ? 'flex-1' : 'w-full'} ${compacta ? 'space-y-0.5' : 'space-y-1'}`}>
         {itens.map((it) => {
           const v = it.antes ? variacao(it.valor, it.antes) : null;
+          // COMPACTA: uma linha (cor, nome, valor quando há lugar, %); a variação fica no título.
+          if (compacta) {
+            return (
+              <li key={it.key}>
+                <button type="button" onClick={() => onClicar?.(it.key)} onMouseEnter={() => setAtivo(it.key)} onFocus={() => setAtivo(it.key)}
+                  title={`${it.rotulo}: ${formatBRL(it.valor)} · clique para filtrar a tela por esta origem`}
+                  className={`flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left transition-[background-color,opacity] duration-150 ${
+                    ativo === it.key ? 'bg-gray-100' : 'hover:bg-gray-50'} ${apagado(it.key) ? 'opacity-50' : ''} ${marcadas.includes(it.key) ? 'ring-1 ring-inset ring-gray-300' : ''}`}>
+                  <span className="h-3.5 w-1 shrink-0 rounded-full" style={{ background: corOrigem(it.key) }} />
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-gray-800">{it.rotulo}</span>
+                  {larguraLegenda >= 250 && <span className="whitespace-nowrap text-[11.5px] tabular-nums text-gray-500">{brlCurto(it.valor)}</span>}
+                  <b className="w-9 shrink-0 text-right text-[12px] font-semibold tabular-nums text-gray-900">{pctDe(it.valor)}%</b>
+                </button>
+              </li>
+            );
+          }
           return (
             <li key={it.key}>
               <button type="button" onClick={() => onClicar?.(it.key)} onMouseEnter={() => setAtivo(it.key)} onFocus={() => setAtivo(it.key)}

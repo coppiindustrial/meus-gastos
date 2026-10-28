@@ -26,6 +26,20 @@ export function salvarRecorrencia(r) {
     : supabase.from('recorrencias').insert(dados).select().single());
 }
 
+// Grava só os campos mudados (o cadastro em lista grava célula a célula). Devolve a linha com a categoria.
+export function atualizarRecorrencia(id, campos) {
+  return exigir(supabase.from('recorrencias').update(campos).eq('id', id)
+    .select('*, categoria:categorias(id, nome, grupo:grupos(nome, cor))').single());
+}
+
+// Cria (ou devolve, num refazer) uma recorrência com o id dado — o desfazer de "criar" a apaga, e o
+// refazer a traz de volta com o MESMO id.
+export function inserirRecorrencia(r) {
+  const { categoria: _c, criado_em: _cr, atualizado_em: _a, user_id: _u, ...dados } = r;
+  return exigir(supabase.from('recorrencias').insert(dados)
+    .select('*, categoria:categorias(id, nome, grupo:grupos(nome, cor))').single());
+}
+
 // Excluir a recorrência mantém os lançamentos que ela gerou (a FK é `on delete set null`).
 export function excluirRecorrencia(id) {
   return exigir(supabase.from('recorrencias').delete().eq('id', id));
@@ -53,6 +67,31 @@ export function lancarFixo(rec, comp, valorCentavos) {
     recorrencia_id: rec.id,
     revisar: false,
   }).select().single());
+}
+
+// OS "NÃO TEVE" (tabela `fixos_pulados`, migration 006). Antes de a migration ser aplicada a tabela não
+// existe: `listarPulados` devolve null (a tela segue sem o recurso e explica o que falta).
+const semTabela = (err) => /fixos_pulados/.test(err?.message ?? '');
+
+export async function listarPulados() {
+  try {
+    return mes(await buscarTudo(() => supabase.from('fixos_pulados').select('id, recorrencia_id, competencia').order('competencia').order('id')));
+  } catch (err) {
+    if (semTabela(err)) return null;
+    throw err;
+  }
+}
+
+// `itens`: [{ recorrencia_id, competencia: 'AAAA-MM' }]. Devolve as linhas criadas (com o id, para desfazer).
+export async function pularFixos(itens) {
+  if (!itens.length) return [];
+  return mes(await exigir(supabase.from('fixos_pulados')
+    .insert(itens.map((p) => ({ recorrencia_id: p.recorrencia_id, competencia: competenciaParaBanco(p.competencia) })))
+    .select('id, recorrencia_id, competencia')));
+}
+
+export function desfazerPulos(ids) {
+  return exigir(supabase.from('fixos_pulados').delete().in('id', ids));
 }
 
 // Os fixos já lançados que ainda não têm recorrência (o histórico da planilha).

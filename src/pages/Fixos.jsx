@@ -9,22 +9,27 @@ import { Campo, RodapeForm } from '../components/Comuns.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { BuscaFaixa, SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import MatrizFixos from '../components/planilha/MatrizFixos.jsx';
+import GradeCadastroFixos from '../components/planilha/GradeCadastroFixos.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { listarCategorias } from '../api/cadastros.js';
 import {
-  criarRecorrenciasDoHistorico, lancarFixo, listarFixosSemRecorrencia, listarLancamentosDeFixos, listarRecorrencias, salvarRecorrencia,
+  criarRecorrenciasDoHistorico, listarFixosSemRecorrencia, listarLancamentosDeFixos, listarPulados, listarRecorrencias, salvarRecorrencia,
 } from '../api/fixos.js';
-import { matrizDoAno, recorrenciasDoHistorico } from '../lib/fixos.js';
+import { matrizDoAno, recorrenciasDoHistorico, ultimoLancado } from '../lib/fixos.js';
 import { formatBRL, parseValor, valorParaCampo } from '../lib/dinheiro.js';
-import { competenciaAtual, competenciaCurta } from '../lib/format.js';
+import { competenciaAtual } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
 
-// GASTOS FIXOS como uma aba da planilha (a opção B do mockup): uma linha por gasto fixo e uma coluna por
-// mês do ano (`MatrizFixos`). A célula a lançar vem com o valor sugerido (o do último mês lançado);
-// digitar e dar Enter lança. O cadastro (nome, dia, categoria, padrão, vigência) é o modal de sempre,
-// aberto pelo clique no nome, pelo botão direito ou por Shift+F2.
+// GASTOS FIXOS como uma aba da planilha, em duas vistas (a troca Meses | Cadastro):
+//   · MESES (a opção B do mockup): uma linha por gasto fixo e uma coluna por mês do ano (`MatrizFixos`).
+//     A célula a lançar vem com o valor sugerido (o do último mês lançado); digitar e dar Enter lança. O
+//     que falta lançar fica na linha "A lançar" da própria grade (não há mais botão no cabeçalho).
+//   · CADASTRO: todos os fixos numa grade de campos (`GradeCadastroFixos`) — mudar o valor padrão, o dia
+//     ou a categoria de vários de uma vez, colar do Excel, criar e excluir.
+// O modal de sempre continua (clique no nome, botão direito ou Shift+F2).
 const LS_ANO = 'fixos_ano';
+const LS_VISTA = 'fixos_vista';
 const SEM_CATEGORIA = [{ value: '', label: 'Sem categoria' }];
 
 function ModalRecorrencia({ rec, categorias, onFechar, onSalvo }) {
@@ -131,18 +136,26 @@ export default function Fixos() {
   const setAno = (a) => { setAnoEstado(a); lsSet(LS_ANO, String(a)); };
   const [recs, setRecs] = useState(null);
   const [lancs, setLancs] = useState([]);
+  const [pulados, setPulados] = useState([]); // os "não teve" (null: falta aplicar a migration 006)
   const [semRec, setSemRec] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [busca, setBusca] = useState('');
   const [cats, setCats] = useState([]);
-  const [situacao, setSituacao] = useState('ativos');
+  const [vista, setVistaEstado] = useState(() => (lsGet(LS_VISTA) === 'cadastro' ? 'cadastro' : 'meses'));
+  const setVista = (v) => { setVistaEstado(v); lsSet(LS_VISTA, v); };
+  // A situação de cada vista: nos Meses, os ativos; no Cadastro, todos (desativar uma linha não a some).
+  const [situacaoMeses, setSituacaoMeses] = useState('ativos');
+  const [situacaoCad, setSituacaoCad] = useState('');
+  const situacao = vista === 'cadastro' ? situacaoCad : situacaoMeses;
+  const setSituacao = vista === 'cadastro' ? setSituacaoCad : setSituacaoMeses;
+  const padraoSituacao = vista === 'cadastro' ? '' : 'ativos';
   const [modo, setModo] = useState('valor');
   const [modal, setModal] = useState(null);
 
   const carregar = useCallback(async () => {
     try {
-      const [r, l, s, c] = await Promise.all([listarRecorrencias(), listarLancamentosDeFixos(), listarFixosSemRecorrencia(), listarCategorias()]);
-      setRecs(r); setLancs(l); setSemRec(s); setCategorias(c);
+      const [r, l, s, c, p] = await Promise.all([listarRecorrencias(), listarLancamentosDeFixos(), listarFixosSemRecorrencia(), listarCategorias(), listarPulados()]);
+      setRecs(r); setLancs(l); setSemRec(s); setCategorias(c); setPulados(p);
     } catch (err) { toast.error(err.message); setRecs([]); }
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -153,7 +166,9 @@ export default function Fixos() {
       && (!cats.length || cats.includes(r.categoria_id ?? 'sem'))
       && (!t || semAcento(`${r.descricao} ${r.categoria?.nome ?? ''}`).includes(t)));
   }, [recs, busca, situacao, cats]);
-  const matriz = useMemo(() => matrizDoAno(filtrados, lancs, ano, hoje), [filtrados, lancs, ano, hoje]);
+  const matriz = useMemo(() => matrizDoAno(filtrados, lancs, ano, hoje, pulados ?? []), [filtrados, lancs, ano, hoje, pulados]);
+  const ultimos = useMemo(() => ultimoLancado(lancs), [lancs]);
+  const setPuladosLista = useCallback((fn) => setPulados((ps) => fn(ps ?? [])), []);
 
   const opcoesAno = useMemo(() => {
     const s = new Set(lancs.map((l) => Number(l.competencia.slice(0, 4))));
@@ -170,36 +185,17 @@ export default function Fixos() {
     return [{ titulo: 'Geral', itens: [{ value: 'sem', label: 'Sem categoria' }] }, ...gs];
   }, [categorias]);
 
-  // "Lançar os N de outubro": as pendentes do mês atual, com o valor sugerido.
-  const colHoje = matriz.comps.indexOf(hoje);
-  const pendHoje = colHoje >= 0 ? matriz.linhas.filter((l) => l.celulas[colHoje].estado === 'pendente' && l.celulas[colHoje].sugerido > 0) : [];
-  const [lancandoTodos, setLancandoTodos] = useState(false);
-  const lancarMes = async () => {
-    setLancandoTodos(true);
-    try {
-      for (const l of pendHoje) await lancarFixo(l.rec, hoje, l.celulas[colHoje].sugerido);
-      toast.success(`${pendHoje.length} gastos fixos lançados em ${competenciaCurta(hoje)}.`);
-    } catch (err) {
-      toast.error(/duplicate|unique/i.test(err.message) ? 'Algum destes fixos já tinha sido lançado neste mês.' : err.message);
-    } finally { setLancandoTodos(false); carregar(); }
-  };
-
   if (!recs) return (<div><CabecalhoPagina titulo="Gastos fixos" /><PageLoading /></div>);
 
   const sugeridas = recs.length === 0 ? recorrenciasDoHistorico(semRec) : [];
-  const filtrando = Boolean(busca || cats.length || situacao !== 'ativos' || ano !== anoAtual);
-  const limpar = () => { setBusca(''); setCats([]); setSituacao('ativos'); setAno(anoAtual); };
+  const filtrando = Boolean(busca || cats.length || situacao !== padraoSituacao || (vista === 'meses' && ano !== anoAtual));
+  const limpar = () => { setBusca(''); setCats([]); setSituacao(padraoSituacao); setAno(anoAtual); };
 
   return (
     <div>
       <CabecalhoPagina titulo="Gastos fixos"
         acessorio={recs.length > 0 && <span className="text-sm text-gray-500">{recs.filter((r) => r.ativa).length} ativos</span>}
         acoes={<>
-          {pendHoje.length > 0 && (
-            <button type="button" className="btn-secondary hidden sm:inline-flex" onClick={lancarMes} disabled={lancandoTodos}>
-              {lancandoTodos ? 'Lançando…' : `Lançar os ${pendHoje.length} de ${competenciaCurta(hoje).slice(0, 3)}`}
-            </button>
-          )}
           <button type="button" className="btn-primary" onClick={() => setModal({})}><span className="sm:hidden">Novo</span><span className="hidden sm:inline">Novo gasto fixo</span></button>
         </>} />
 
@@ -211,24 +207,37 @@ export default function Fixos() {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <BuscaFaixa className="w-full sm:w-[200px]" placeholder="Gasto fixo" value={busca} onChange={(e) => setBusca(e.target.value)} />
               <Trilho>
-                <SegUnico id="ano" rotulo="Ano" opcoes={opcoesAno} value={ano} onChange={setAno} padrao={anoAtual} mostraPadrao largura={150} />
-                <DivisorFaixa />
+                {vista === 'meses' && (
+                  <>
+                    <SegUnico id="ano" rotulo="Ano" opcoes={opcoesAno} value={ano} onChange={setAno} padrao={anoAtual} mostraPadrao largura={150} />
+                    <DivisorFaixa />
+                  </>
+                )}
                 <SegMulti id="categoria" rotulo="Categoria" opcoes={opcoesCategoria} value={cats} onChange={setCats} largura={280} busca="Buscar categoria ou grupo" />
                 <DivisorFaixa />
-                <SegUnico id="situacao" rotulo="Situação" opcoes={OPCOES_SITUACAO} value={situacao} onChange={setSituacao} padrao="ativos" mostraPadrao largura={170} />
+                <SegUnico id="situacao" rotulo="Situação" opcoes={OPCOES_SITUACAO} value={situacao} onChange={setSituacao} padrao={padraoSituacao} mostraPadrao largura={170} />
               </Trilho>
               <LimparFiltros ativo={filtrando} onClick={limpar} />
               <span className="flex-1" />
-              {/* A troca Valor | Variação % é a `AbasPilula` do Gestor (a pílula desliza), na altura do trilho ao lado. */}
-              <AbasPilula abas={[{ key: 'valor', label: 'Valor' }, { key: 'variacao', label: 'Variação %' }]} valor={modo} onChange={setModo}
-                variante="claro" altura={31} folga={3} />
+              {/* As trocas são a `AbasPilula` do Gestor (a pílula desliza), na altura do trilho ao lado. */}
+              {vista === 'meses' && (
+                <AbasPilula abas={[{ key: 'valor', label: 'Valor' }, { key: 'variacao', label: 'Variação %' }]} valor={modo} onChange={setModo}
+                  variante="claro" altura={31} folga={3} />
+              )}
+              <AbasPilula abas={[{ key: 'meses', label: 'Meses', aria: 'Os lançamentos de cada mês' }, { key: 'cadastro', label: 'Cadastro', aria: 'Todos os fixos numa lista para editar' }]}
+                valor={vista} onChange={setVista} variante="claro" altura={31} folga={3} />
             </div>
           </FaixaProvider>
 
           <div className="mt-3">
-            {matriz.linhas.length === 0
+            {vista === 'cadastro' ? (
+              <GradeCadastroFixos recs={filtrados} setRecs={setRecs} categorias={categorias} ultimos={ultimos}
+                onEditar={(rec) => setModal({ item: rec })} onRecarregar={carregar}
+                onCategoriaCriada={(cat) => setCategorias((cs) => [...cs, cat])} />
+            ) : matriz.linhas.length === 0
               ? <ListaVazia>Nenhum gasto fixo {filtrando ? 'com esses filtros' : `vigente em ${ano}`}.</ListaVazia>
-              : <MatrizFixos matriz={matriz} hoje={hoje} setLancs={setLancs} modo={modo} onEditar={(rec) => setModal({ item: rec })} onRecarregar={carregar} />}
+              : <MatrizFixos matriz={matriz} hoje={hoje} setLancs={setLancs} setPulados={setPuladosLista} pulosAtivos={pulados !== null}
+                  modo={modo} onEditar={(rec) => setModal({ item: rec })} onRecarregar={carregar} />}
           </div>
 
         </>

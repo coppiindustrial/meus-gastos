@@ -7,7 +7,8 @@ import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { atualizarCampos, buscarPorIds, excluirLancamentos, restaurarLancamentos } from '../../api/lancamentos.js';
-import { excluirRecorrencia, lancarFixo, salvarRecorrencia } from '../../api/fixos.js';
+import { desfazerPulos, excluirRecorrencia, lancarFixo, pularFixos, salvarRecorrencia } from '../../api/fixos.js';
+import { pendentesPorMes } from '../../lib/fixos.js';
 import { faixaDe, ladrilhar, lerBloco, naFaixa } from '../../lib/planilha.js';
 import { formatBRL, parseValor, valorParaCampo } from '../../lib/dinheiro.js';
 import { addMeses, competenciaCurta, nomeCompetencia } from '../../lib/format.js';
@@ -16,7 +17,7 @@ import posicionarPopover from '../../lib/posicionarPopover.js';
 import useEscape from '../../lib/useEscape.js';
 import { copiarTexto } from '../../lib/copiar.js';
 import {
-  IcoAbrir, IcoColar, IcoCopiar, IcoDesfazer, IcoEtiqueta, IcoLixeira, IcoRefazer, IcoRevisado,
+  IcoAbrir, IcoColar, IcoCopiar, IcoDesfazer, IcoEtiqueta, IcoLixeira, IcoNaoTeve, IcoRefazer, IcoRevisado,
 } from './iconesMenu.jsx';
 
 // A MATRIZ DOS GASTOS FIXOS (a opção B do mockup): uma linha por gasto fixo, uma coluna por mês do ano,
@@ -30,13 +31,20 @@ import {
 // desfazem e refazem (excluir e desfazer devolve o lançamento com o MESMO id). O botão direito (e
 // Shift+F10) abre o menu; o da coluna do nome é o do cadastro.
 //
-// `matriz`: { comps, linhas, totais }. `setLancs`: a lista de lançamentos de fixos da página (a matriz
-// é recalculada dela). `modo`: 'valor' | 'variacao'.
+// O QUE FALTA LANÇAR (a opção B do mockup — sem botão no cabeçalho): a linha "A lançar" acima do total
+// conta os pendentes de cada mês, com um ponto âmbar no título da coluna. Clicar no número seleciona o
+// mês (clicar em "A lançar", todos os meses até hoje), e a barra de baixo oferece "Lançar os N" e
+// "Não teve" — o fixo que não existiu naquele mês sai das pendências e fica hachurado (`fixos_pulados`,
+// migration 006). Lançar um valor num mês "não teve", ou Delete nele, desfaz a marca.
+//
+// `matriz`: { comps, linhas, totais }. `setLancs` / `setPulados`: as listas da página (a matriz é
+// recalculada delas). `pulosAtivos`: a migration 006 já foi aplicada. `modo`: 'valor' | 'variacao'.
 
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const pct = (atual, antes) => (antes ? Math.round(((atual - antes) / antes) * 100) : null);
+const AVISO_006 = 'Para marcar "Não teve", aplique a migration 006 (supabase/migrations/006_fixos_pulados.sql) no SQL Editor do Supabase.';
 
-export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, onRecarregar }) {
+export default function MatrizFixos({ matriz, hoje, setLancs, setPulados, pulosAtivos, modo, onEditar, onRecarregar }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   const navigate = useNavigate();
@@ -101,10 +109,18 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
     enfileirar(async () => {
       try {
         await Promise.all(corrigir.map((e) => atualizarCampos(e.id, e.depois)));
+        // Lançar num mês "não teve" tira a marca antes (desfazer a devolve).
+        const pulos = lancar.map((x) => celula(x.r, x.c)?.pulo).filter(Boolean);
+        if (pulos.length) {
+          await desfazerPulos(pulos.map((p) => p.id));
+          const ids = new Set(pulos.map((p) => p.id));
+          setPulados((ps) => ps.filter((p) => !ids.has(p.id)));
+        }
         const criados = [];
         for (const x of lancar) criados.push(noMes(await lancarFixo(x.rec, x.comp, x.valor)));
         if (criados.length) setLancs((ls) => [...ls, ...criados.map(enxuto)]);
         const partes = [];
+        if (pulos.length) partes.push({ tipo: 'despular', registros: pulos });
         if (corrigir.length) partes.push({ tipo: 'valor', itens: corrigir });
         if (criados.length) partes.push({ tipo: 'criar', registros: criados });
         empilhar({ rotulo, partes });
@@ -116,6 +132,18 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
   };
 
   const executarParte = async (parte, sentido) => {
+    // "Não teve": criar de novo devolve ids novos, que a parte passa a guardar (para o próximo desfazer).
+    if (parte.tipo === 'pular' || parte.tipo === 'despular') {
+      if ((parte.tipo === 'pular') === (sentido === 'desfazer')) {
+        const ids = new Set(parte.registros.map((p) => p.id));
+        await desfazerPulos([...ids]);
+        setPulados((ps) => ps.filter((p) => !ids.has(p.id)));
+      } else {
+        parte.registros = await pularFixos(parte.registros);
+        setPulados((ps) => [...ps, ...parte.registros]);
+      }
+      return;
+    }
     if (parte.tipo === 'valor') {
       const vals = parte.itens.map((e) => [e.id, (sentido === 'desfazer' ? e.antes : e.depois).valor_centavos]);
       await Promise.all(vals.map(([id, v]) => atualizarCampos(id, { valor_centavos: v })));
@@ -165,7 +193,39 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
     aplicar(pend.map(({ r, c, cel }) => ({ r, c, valor: cel.sugerido })), `lançar ${plural(pend.length, 'fixo', 'fixos')}`);
   };
 
+  // "NÃO TEVE": os pendentes da seleção saem das pendências (a célula fica hachurada).
+  const pularPendentes = (f = faixa) => {
+    const pend = celulasDa(f, 'pendente');
+    if (!pend.length) { toast.info('Nada a lançar na seleção.'); return; }
+    if (!pulosAtivos) { toast.info(AVISO_006); return; }
+    const itens = pend.map(({ r, cel }) => ({ recorrencia_id: linhas[r].rec.id, competencia: cel.comp }));
+    enfileirar(async () => {
+      try {
+        const registros = await pularFixos(itens);
+        setPulados((ps) => [...ps, ...registros]);
+        const um = pend.length === 1 ? `${linhas[pend[0].r].rec.descricao} em ${competenciaCurta(pend[0].cel.comp)}` : null;
+        empilhar({ rotulo: um ? `não teve: ${um}` : `não teve: ${pend.length} fixos`, partes: [{ tipo: 'pular', registros }] });
+        toast.success(um ? `${um}: não teve. Ctrl+Z desfaz.` : `${pend.length} fixos marcados como "não teve". Ctrl+Z desfaz.`);
+      } catch (err) { falhou(err); }
+    });
+  };
+
+  // Tirar o "não teve" (Delete num mês hachurado): o mês volta a ficar a lançar.
+  const despular = (alvo) => {
+    const registros = alvo.map((x) => x.cel.pulo);
+    enfileirar(async () => {
+      try {
+        await desfazerPulos(registros.map((p) => p.id));
+        const ids = new Set(registros.map((p) => p.id));
+        setPulados((ps) => ps.filter((p) => !ids.has(p.id)));
+        empilhar({ rotulo: `voltar a lançar ${plural(registros.length, 'mês', 'meses')}`, partes: [{ tipo: 'despular', registros }] });
+      } catch (err) { falhou(err); }
+    });
+  };
+
   const excluirLancados = async () => {
+    const pulos = celulasDa(faixa, 'pulado');
+    if (pulos.length) despular(pulos);
     const alvo = celulasDa(faixa, 'lancado');
     if (!alvo.length) return;
     const ok = await confirmar({
@@ -311,6 +371,8 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
 
   const itensMenu = () => {
     const pend = celulasDa(faixa, 'pendente').filter((x) => x.cel.sugerido > 0).length;
+    const pendTodos = celulasDa(faixa, 'pendente').length;
+    const pulos = celulasDa(faixa, 'pulado');
     const lanc = celulasDa(faixa, 'lancado').length;
     const rec = linhas[sel.r]?.rec;
     const comp = comps[sel.c];
@@ -320,6 +382,10 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
       pend
         ? { rotulo: pend === 1 ? 'Lançar com o valor sugerido' : `Lançar os ${pend} pendentes`, icone: <IcoRevisado />, atalho: 'Ctrl+Enter', sub: 'o valor do último mês lançado (ou o padrão)', onEscolher: () => lancarPendentes() }
         : { rotulo: 'Lançar com o valor sugerido', icone: <IcoRevisado />, atalho: 'Ctrl+Enter', desabilitado: true, motivo: 'nada a lançar na seleção' },
+      pulos.length
+        ? { rotulo: 'Voltar a lançar', icone: <IcoNaoTeve />, atalho: 'Delete', sub: 'tira o "não teve": o mês volta a ficar a lançar', onEscolher: () => despular(pulos) }
+        : { rotulo: pendTodos > 1 ? `Não teve (${pendTodos} meses)` : 'Não teve neste mês', icone: <IcoNaoTeve />, desabilitado: !pendTodos, motivo: 'nada a lançar na seleção',
+          sub: 'o fixo não existiu: sai das pendências', onEscolher: () => pularPendentes() },
       { rotulo: 'Copiar', icone: <IcoCopiar />, atalho: 'Ctrl+C', sub: multi ? 'os valores lançados, para o Excel' : undefined, onEscolher: () => copiar() },
       { rotulo: 'Colar', icone: <IcoColar />, atalho: 'Ctrl+V', sub: 'valores do Excel: lança ou corrige cada mês', onEscolher: async () => { try { colar(await navigator.clipboard.readText()); } catch { toast.info('Use Ctrl+V com a célula selecionada.'); } } },
       lanc
@@ -377,9 +443,14 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
   const selCelulas = multi ? celulasDa(faixa) : [];
   const somaSel = selCelulas.filter((x) => x.cel.estado === 'lancado').reduce((s, x) => s + x.cel.valor, 0);
   const doMes = (c) => linhas.map((l) => l.celulas[c]);
-  const pendHoje = colHoje >= 0 ? doMes(colHoje).filter((c) => c.estado === 'pendente') : [];
   const lancHoje = colHoje >= 0 ? doMes(colHoje).filter((c) => c.estado === 'lancado') : [];
   const fmt = (v) => valorParaCampo(v).replace(/\B(?=(\d{3})+,)/g, '.');
+  // O que falta lançar: por mês (a linha "A lançar") e na seleção (a barra de baixo).
+  const pendMes = pendentesPorMes(matriz);
+  const pendAno = Object.values(pendMes).flat();
+  const pendSel = celulasDa(faixa, 'pendente');
+  const ultimaComPend = Math.max(-1, ...comps.map((c, i) => (pendMes[c] ? i : -1)));
+  const selecionarMeses = (c0, c1) => { focar(); setSel({ r: 0, c: c0 }); setExt({ r: n - 1, c: c1 }); };
 
   // O BALÃO, um só para a grade inteira: a chave diz de onde ele veio — célula ("c:r:c"), nome ("n:r"),
   // título de coluna ("h:c", "h:nome", "h:media"), média ("m:r") ou total do mês ("t:c").
@@ -396,6 +467,7 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
           nota: v ? `${v > 0 ? '+' : ''}${v}% sobre o mês anterior. Digite para corrigir o valor.` : 'Digite para corrigir o valor.' };
       }
       if (cel.estado === 'fora') return { titulo, nota: 'Fora da vigência deste gasto fixo: o início ou o fim se ajustam no cadastro (clique no nome).' };
+      if (cel.estado === 'pulado') return { titulo, nota: 'Não teve neste mês: fora das pendências. Delete volta a deixá-lo a lançar; digitar um valor lança.' };
       return { titulo, itens: [{ rotulo: 'Sugerido', valor: formatBRL(cel.sugerido) }],
         nota: `${cel.estado === 'pendente' ? 'A lançar' : 'Mês futuro'} (sugerido pelo ${cel.base}). Digite o valor e Enter, ou Ctrl+Enter com o sugerido.` };
     }
@@ -413,6 +485,16 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
       };
     }
     if (tipo === 'h' && a === 'nome') return { titulo: 'Gasto fixo', nota: 'Clique num nome para editar o cadastro (nome, dia, categoria, valor padrão e vigência). Clique aqui para selecionar tudo.' };
+    if (tipo === 'p') {
+      const lista = a === 'todos' ? pendAno : (pendMes[comps[Number(a)]] ?? []);
+      if (!lista.length) return { titulo: 'A lançar', nota: 'Nada a lançar neste mês.' };
+      return {
+        titulo: a === 'todos' ? `A lançar até ${competenciaCurta(hoje)}` : `A lançar · ${nomeCompetencia(comps[Number(a)])}`,
+        itens: [...lista.slice(0, 6).map((p) => ({ rotulo: a === 'todos' ? `${p.rec.descricao} · ${competenciaCurta(comps[p.c]).slice(0, 3)}` : p.rec.descricao, valor: formatBRL(p.sugerido) })),
+          ...(lista.length > 6 ? [{ rotulo: `+ ${lista.length - 6} outros`, valor: formatBRL(lista.slice(6).reduce((s, p) => s + p.sugerido, 0)) }] : [])],
+        nota: 'Clique para selecionar; a barra de baixo lança (Ctrl+Enter) ou marca "não teve".',
+      };
+    }
     if (tipo === 'h' && a === 'media') return { titulo: 'Média', nota: 'A média dos meses LANÇADOS no ano de cada gasto fixo (mês a lançar ou fora da vigência não entra). Passe o mouse num valor para ver o menor e o maior.' };
     if (tipo === 'h' || tipo === 't') {
       const c = Number(a);
@@ -483,6 +565,7 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
                     style={acesa || i === colHoje ? { boxShadow: 'inset 0 -2px 0 var(--grade-sel)' } : undefined}
                     className={`sticky top-0 z-20 cursor-pointer select-none border-b border-r border-gray-300 px-2 text-right text-[11px] font-semibold uppercase tracking-wide transition-colors duration-[120ms] hover:bg-gray-200 hover:text-gray-900 ${
                       acesa || i === colHoje ? 'bg-hx-eef2f7 text-gray-800' : 'bg-hx-f9fafb text-gray-500'}`}>
+                    {pendMes[c] && <span aria-label="tem fixo a lançar" className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-hx-f59e0b align-[2px]" />}
                     {competenciaCurta(c).slice(0, 3)}
                   </th>
                 );
@@ -517,7 +600,10 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
                   let fundo = '';
                   let conteudo = null;
                   if (cel.estado === 'fora') fundo = 'grade-hachura';
-                  else if (cel.estado === 'lancado') {
+                  else if (cel.estado === 'pulado') {
+                    fundo = 'grade-hachura';
+                    conteudo = <span className="text-[11px] italic text-gray-400">não teve</span>;
+                  } else if (cel.estado === 'lancado') {
                     if (atual) fundo = 'bg-hx-f0fdf4';
                     const v = pct(cel.valor, cel.antes);
                     conteudo = modo === 'variacao'
@@ -564,6 +650,29 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
                 </td>
               </tr>
             ))}
+            {/* A LINHA "A LANÇAR": quantos pendentes cada mês tem. Clicar seleciona o mês (no rótulo, todos os
+                meses até o último com pendente); a barra de baixo lança ou marca "não teve". */}
+            {pendAno.length > 0 && (
+              <tr>
+                <td className="sticky left-0 z-10 h-8 border-b border-r border-gray-300 bg-hx-fffbeb px-1.5">
+                  <button type="button" {...passa('p:todos')} onMouseDown={(e) => { e.preventDefault(); selecionarMeses(0, ultimaComPend); }}
+                    className="flex w-full items-center gap-2 rounded-[4px] px-1.5 py-[3px] text-left text-[12px] font-semibold text-hx-92400e transition-colors duration-[120ms] hover:bg-hx-fef3c7">
+                    A lançar <span className="font-normal text-hx-b45309">· {pendAno.length} até {competenciaCurta(hoje).slice(0, 3)}</span>
+                  </button>
+                </td>
+                {comps.map((c, i) => (
+                  <td key={c} className="h-8 border-b border-r border-gray-100 bg-hx-fffdf5 px-1 text-center">
+                    {pendMes[c] && (
+                      <button type="button" {...passa(`p:${i}`)} onMouseDown={(e) => { e.preventDefault(); selecionarMeses(i, i); }}
+                        className="inline-flex h-[20px] min-w-[22px] items-center justify-center rounded-[5px] bg-hx-fef3c7 px-1.5 text-[11.5px] font-bold tabular-nums text-hx-92400e ring-1 ring-inset ring-hx-fcd34d transition-[filter] duration-[120ms] hover:brightness-95 active:brightness-90">
+                        {pendMes[c].length}
+                      </button>
+                    )}
+                  </td>
+                ))}
+                <td className="border-b border-gray-100 bg-hx-fffdf5" />
+              </tr>
+            )}
             <tr className="font-semibold">
               <td className="sticky left-0 z-10 h-8 border-r border-gray-300 bg-hx-f9fafb px-3 text-gray-800">Total lançado</td>
               {comps.map((c, i) => (
@@ -577,16 +686,40 @@ export default function MatrizFixos({ matriz, hoje, setLancs, modo, onEditar, on
           </tbody>
         </table>
       </div>
-      <div className="flex h-7 items-center gap-4 rounded-b-lg border border-t-0 border-gray-300 bg-hx-f9fafb px-3 text-[12px] tabular-nums text-gray-500">
-        {colHoje >= 0 ? (
+      {/* A BARRA DE BAIXO: com pendentes na seleção, é a barra de ação ("Lançar os N" · "Não teve");
+          sem, o resumo do mês atual e do que falta no ano. */}
+      <div className={`flex min-h-[32px] items-center gap-3 rounded-b-lg border border-t-0 px-3 py-1 text-[12px] tabular-nums transition-colors duration-150 ${
+        pendSel.length ? 'border-hx-fcd34d bg-hx-fffbeb text-gray-700' : 'border-gray-300 bg-hx-f9fafb text-gray-500'}`}>
+        {pendSel.length > 0 ? (
+          <>
+            <span className="truncate">
+              <b className="font-semibold text-gray-900">{plural(pendSel.length, 'fixo a lançar', 'fixos a lançar')}</b>
+              {' '}na seleção{(() => { const ms = [...new Set(pendSel.map((x) => x.c))]; return ms.length === 1 ? ` · ${nomeCompetencia(comps[ms[0]]).replace(/ de \d+$/, '').toLowerCase()}` : ` · ${ms.length} meses`; })()}
+            </span>
+            {/* O âmbar cheio com o texto escuro, IGUAL nos dois temas (fora dos tokens de propósito: o token
+                do texto clarearia no escuro, sobre um fundo que não escurece). */}
+            <button type="button" onClick={() => lancarPendentes()} disabled={!pendSel.some((x) => x.cel.sugerido > 0)}
+              style={{ background: '#f59e0b', color: '#1f1600' }}
+              className="inline-flex h-[24px] items-center gap-1.5 whitespace-nowrap rounded-[5px] px-2.5 text-[12px] font-semibold transition-[filter] duration-[120ms] hover:brightness-95 active:brightness-90 disabled:opacity-50">
+              Lançar {pendSel.length === 1 ? '' : `os ${pendSel.length} `}· {formatBRL(pendSel.reduce((s, x) => s + x.cel.sugerido, 0))}
+            </button>
+            <button type="button" onClick={() => pularPendentes()} title={pulosAtivos ? 'O fixo não existiu nesse mês: sai das pendências (Ctrl+Z desfaz)' : AVISO_006}
+              className="inline-flex h-[24px] items-center gap-1.5 whitespace-nowrap rounded-[5px] border border-gray-300 bg-white px-2.5 text-[12px] text-gray-700 transition-colors duration-[120ms] hover:bg-gray-100 active:bg-gray-200">
+              <IcoNaoTeve /> Não teve
+            </button>
+            <span className="hidden whitespace-nowrap rounded-[3px] border border-gray-300 px-1 text-[10.5px] text-gray-500 lg:inline">Ctrl+Enter</span>
+          </>
+        ) : colHoje >= 0 ? (
           <span className="truncate">
-            {nomeCompetencia(hoje).replace(/ de \d+$/, '')}: <b className="font-semibold text-gray-800">{lancHoje.length} lançados</b>
-            {pendHoje.length > 0 && <> · <b className="font-semibold text-hx-92400e">{pendHoje.length} a lançar</b> ({formatBRL(pendHoje.reduce((s, c) => s + c.sugerido, 0))} sugeridos)</>}
+            {nomeCompetencia(hoje).replace(/ de \d+$/, '')}: <b className="font-semibold text-gray-800">{plural(lancHoje.length, 'lançado', 'lançados')}</b>
+            {pendAno.length > 0
+              ? <> · <b className="font-semibold text-hx-92400e">{pendAno.length} a lançar no ano</b> ({formatBRL(pendAno.reduce((s, p) => s + p.sugerido, 0))} sugeridos) — clique na linha “A lançar”</>
+              : <> · nada a lançar ✓</>}
           </span>
         ) : <span className="truncate">Digite o valor e Enter para lançar · Ctrl+Enter lança os pendentes · botão direito para mais</span>}
         <span className="flex-1" />
         {selo && <span className="text-hx-15803d">✓ {selo}</span>}
-        {multi && !selo && <span>{selCelulas.length} células · lançado <b className="font-semibold text-gray-800">{formatBRL(somaSel)}</b></span>}
+        {multi && !selo && <span className="whitespace-nowrap">{selCelulas.length} células · lançado <b className="font-semibold text-gray-800">{formatBRL(somaSel)}</b></span>}
       </div>
 
       <MenuContexto menu={menu?.pendente ? null : menu} onFechar={() => setMenu(null)} />
@@ -607,13 +740,14 @@ const MARCAS = [
   { id: 'pendente', rotulo: 'A lançar', amostra: <span className="h-2.5 w-3 rounded-[2px] border border-hx-fcd34d bg-hx-fffbeb" />, explica: 'Vigente e ainda sem lançamento. O cinza é o valor sugerido: o do último mês lançado (ou o padrão).' },
   { id: 'futuro', rotulo: 'Futuro', amostra: <span className="text-[13px] leading-none text-gray-400">·</span>, explica: 'Mês que ainda não chegou. Dá para lançar adiantado, digitando o valor.' },
   { id: 'fora', rotulo: 'Fora da vigência', amostra: <span className="grade-hachura h-2.5 w-3 rounded-[2px] border border-gray-200" />, explica: 'Antes do início, depois do fim ou inativo. Ajuste no cadastro (clique no nome).' },
+  { id: 'pulado', rotulo: 'Não teve', amostra: <span className="text-[10px] italic leading-none text-gray-400">nt</span>, explica: 'Marcado "não teve" naquele mês (barra de baixo ou botão direito): fora das pendências. Delete desfaz.' },
   { id: 'subiu', rotulo: 'Subiu', amostra: <span className="text-[11px] font-bold leading-none text-hx-b91c1c">123</span>, explica: 'Lançado com valor maior que o do mês anterior.' },
 ];
 
 const ATALHOS = [
   ['Digitar · Enter', 'lança o mês (ou corrige o valor lançado) e desce'],
   ['Ctrl+Enter', 'lança os pendentes da seleção com o valor sugerido'],
-  ['Delete', 'exclui os lançamentos da seleção'],
+  ['Delete', 'exclui os lançamentos da seleção (num "não teve", desfaz a marca)'],
   ['Setas · Tab', 'andam; Shift estende a seleção'],
   ['Ctrl+C · Ctrl+V', 'copia e cola valores (do Excel também)'],
   ['Ctrl+Z · Ctrl+Y', 'desfaz e refaz'],
