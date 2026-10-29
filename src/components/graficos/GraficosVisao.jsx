@@ -101,7 +101,6 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
     if (atual.length) out.push(atual);
     return out;
   };
-  const linhaSaldo = trechos((m) => (m.temDado ? m.saldo : null));
   const linhaAnterior = anterior ? trechos((m) => anterior[m.competencia] ?? null) : [];
 
   const iAtivo = balao.ativo;
@@ -147,10 +146,6 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
               <polyline key={`a${pts[0]}`} points={pts.join(' ')} fill="none" stroke={COR_ANTERIOR} strokeWidth="1.5" strokeDasharray="4 3"
                 vectorEffect="non-scaling-stroke" style={{ opacity: ctrl.opSerie('anterior'), transition: 'opacity .15s' }} />
             ))}
-            {linhaSaldo.map((pts) => (
-              <polyline key={`s${pts[0]}`} points={pts.join(' ')} fill="none" stroke={COR_SALDO} strokeWidth="2" strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke" style={{ opacity: ctrl.opSerie('saldo'), transition: 'opacity .15s' }} />
-            ))}
           </svg>
           {comRotulo && vagas((m) => m.temDado && (
             <>
@@ -159,10 +154,6 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
             </>
           ), 'pointer-events-none')}
           {ativo && <div className={CLASSE_GUIA} style={{ left: `${x(iAtivo)}%` }} />}
-          {ativo?.temDado && ctrl.opSerie('saldo') === 1 && (
-            <span className="pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-white"
-              style={{ left: `${x(iAtivo)}%`, bottom: pct(fr(ativo.saldo)), background: ativo.saldo < 0 ? varCor('#c0393d', 'texto') : COR_SALDO }} />
-          )}
           {/* Os alvos do cursor: uma camada só, por cima de tudo, com o `leave` no CONTAINER (indo de um mês ao
               vizinho, o `leave` da coluna chegaria depois do `enter` da outra e o destaque piscaria). */}
           <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
@@ -219,7 +210,7 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
   const acum = (campo) => { let t = 0; return meses.map((m) => (m.temDado ? (t += m[campo]) : null)); };
   const ent = acumulado ? acum('entradas') : meses.map((m) => (m.temDado ? m.entradas : null));
   const gas = acumulado ? acum('gastos') : meses.map((m) => (m.temDado ? m.gastos : null));
-  const sal = acumulado ? null : meses.map((m) => (m.temDado ? m.saldo : null));
+  const sal = null; // o saldo tem bloco próprio (`SaldoDoMes`); o balão ainda o conta
   let tAnt = 0;
   const ant = anterior ? meses.map((m) => { const v = anterior[m.competencia] ?? 0; tAnt += v; return acumulado ? tAnt : (v || null); }) : null;
   const todos = [...ent, ...gas, ...(sal ?? []), ...(ant ?? [])].filter((v) => v !== null);
@@ -285,61 +276,112 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
   );
 }
 
-// SALDO DO MÊS: uma barra por mês, para CIMA (verde) quando sobrou e para BAIXO (vermelha) quando
-// faltou, a partir da linha do zero. É a leitura que as colunas pareadas escondem: quanto sobrou.
-export function SaldoMensal({ meses, onMes }) {
-  const balao = useBalao(230, 120);
-  const vals = meses.map((m) => (m.temDado ? m.saldo : 0));
-  const maxPos = Math.max(0, ...vals);
-  const maxNeg = Math.max(0, ...vals.map((v) => -v));
-  const total = maxPos + maxNeg || 1;
-  const zero = maxPos / total; // a fração da altura acima da linha do zero
-  const comRotulo = meses.length <= 12;
+// O SALDO DO MÊS, NUM BLOCO PRÓPRIO (29/10/2026, opção A do mockup "o saldo num bloco próprio"): antes era a
+// linha branca por cima das colunas e uma das formas do "Entradas × gastos". Barras DIVERGENTES a partir do zero —
+// para cima quando sobrou, para baixo quando faltou — com o número em cada uma, e a linha do ACUMULADO no período
+// por cima, no mesmo eixo (ela termina dizendo quanto sobrou até ali). A calha, as vagas e a régua são as MESMAS
+// das colunas (`GradeEsq`, `gap-1.5`, `ReguaMeses`): com o bloco logo abaixo e da mesma largura, cada mês fica
+// exatamente embaixo do seu. `ctrl`: o `useDestaqueSeries` da legenda do bloco ('sobrou', 'faltou', 'acumulado').
+export const COR_SOBROU = COR_ENTRADAS;
+export const COR_FALTOU = varCor('#e5484d', 'fundo');
+export function SaldoDoMes({ meses, ctrl, onMes, rotulosAte = 12 }) {
+  const balao = useBalao(250, 150);
+  const n = meses.length;
+  let soma = 0;
+  const acum = meses.map((m) => (m.temDado ? (soma += m.saldo) : null));
+  // A escala vai do mais negativo ao mais positivo (saldo e acumulado), em passos redondos, sempre com o zero.
+  const vals = [...meses.filter((m) => m.temDado).map((m) => m.saldo), ...acum.filter((v) => v !== null)].map((c) => c / 100);
+  const hi = Math.max(0, ...vals);
+  const lo = Math.min(0, ...vals);
+  const base = escalaLinear(Math.max(hi, -lo, 1));
+  const passo = base.marcas[1] ?? base.teto;
+  const topo = Math.max(passo, Math.ceil(hi / passo) * passo);
+  const fundo = -Math.ceil(-lo / passo) * passo;
+  const marcas = [];
+  for (let v = fundo; v <= topo; v += passo) marcas.push(v);
+  const esc = { marcas, fracao: (v) => (v - fundo) / (topo - fundo) };
+  const fr = (c) => esc.fracao(c / 100);
+  const zero = esc.fracao(0);
+  const x = (i) => ((i + 0.5) / n) * 100;
+  const comRotulo = n <= rotulosAte;
+  const rot = formatoRotulo(Math.max(topo, -fundo));
   const i = balao.ativo;
   const m = i !== null ? meses[i] : null;
+
+  const trechos = [];
+  let atual = [];
+  acum.forEach((v, k) => {
+    if (v === null) { if (atual.length) trechos.push(atual); atual = []; return; }
+    atual.push(`${x(k)},${100 - fr(v) * 100}`);
+  });
+  if (atual.length) trechos.push(atual);
+  const kFim = acum.map((v, k) => (v === null ? -1 : k)).filter((k) => k >= 0).pop();
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="relative min-h-0 flex-1 pb-3 pt-5" style={{ paddingLeft: CALHA_ESQ }}>
-        <div className="relative h-full">
-          <div className="absolute left-0 right-0 border-t" style={{ top: pct(zero), borderColor: EIXO }}>
-            <span className="absolute -top-[7px] right-full mr-2 whitespace-nowrap text-[10px] tabular-nums" style={{ color: ROTULO_EIXO }}>R$ 0</span>
-          </div>
-          {i !== null && <div className={CLASSE_GUIA} style={{ left: `${((i + 0.5) / meses.length) * 100}%` }} />}
-          <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
+      <div className="min-h-0 flex-1 pb-4 pt-4">
+        <GradeEsq esc={esc}>
+          <div className="pointer-events-none absolute inset-0 flex gap-1.5">
             {meses.map((mm, k) => {
-              const v = vals[k];
-              const pos = v >= 0;
-              const h = (Math.abs(v) / total) * 100;
+              const pos = mm.saldo >= 0;
+              const h = Math.abs(fr(mm.saldo) - zero) * 100;
+              const serie = pos ? 'sobrou' : 'faltou';
               return (
-                <button key={mm.competencia} type="button" onMouseMove={balao.aoMover(k)} onClick={() => mm.temDado && onMes?.(mm.competencia)}
-                  aria-label={`${nomeCompetencia(mm.competencia)}: saldo ${formatBRL(v)}`}
-                  className={`relative h-full min-w-0 flex-1 ${mm.temDado && onMes ? 'cursor-pointer' : 'cursor-default'}`}>
-                  {mm.temDado && v !== 0 && (
-                    <span className={`absolute left-1/2 w-[46%] max-w-[26px] -translate-x-1/2 transition-opacity duration-150 ${pos ? 'rounded-t-[4px]' : 'rounded-b-[4px]'} ${balao.esmaecido(k) ? 'opacity-40' : ''}`}
-                      style={pos ? { bottom: pct(1 - zero), height: `${h}%`, background: COR_ENTRADAS } : { top: pct(zero), height: `${h}%`, background: varCor('#e5484d', 'fundo') }} />
-                  )}
-                  {comRotulo && mm.temDado && v !== 0 && (
-                    <span className={`pointer-events-none absolute left-1/2 hidden -translate-x-1/2 whitespace-nowrap text-[9.5px] font-semibold tabular-nums sm:block ${pos ? 'text-gray-700' : 'text-hx-c0393d'} ${balao.esmaecido(k) ? 'opacity-40' : ''}`}
-                      style={pos ? { bottom: `calc(${pct(1 - zero)} + ${h}% + 2px)` } : { top: `calc(${pct(zero)} + ${h}% + 2px)` }}>
-                      {brlCurto(v).replace('R$ ', '')}
-                    </span>
-                  )}
-                  {!mm.temDado && <span className="pointer-events-none absolute bottom-0 left-1/2 hidden -translate-x-1/2 text-[9.5px] text-gray-300 sm:block">sem dados</span>}
-                </button>
+                <div key={mm.competencia} className="h-full min-w-0 flex-1 transition-opacity duration-100" style={{ opacity: balao.esmaecido(k) ? 0.4 : 1 }}>
+                  <div className="relative mx-auto h-full w-full" style={{ maxWidth: LARG_VAGA }}>
+                    {mm.temDado && mm.saldo !== 0 && (
+                      <div className={`absolute left-[19%] right-[19%] transition-opacity duration-150 ${pos ? 'rounded-t-[2px]' : 'rounded-b-[2px]'}`}
+                        style={{ ...(pos ? { bottom: pct(zero) } : { top: pct(1 - zero) }), height: `${h}%`, background: pos ? COR_SOBROU : COR_FALTOU, opacity: ctrl.opSerie(serie) }} />
+                    )}
+                    {comRotulo && mm.temDado && mm.saldo !== 0 && (
+                      <span className={`absolute inset-x-[-8px] hidden text-center text-[9px] font-semibold tabular-nums sm:block ${pos ? '' : 'text-hx-c0393d'}`}
+                        style={{ ...(pos ? { bottom: `calc(${fr(mm.saldo) * 100}% + 3px)`, color: COR_ROTULO } : { top: `calc(${(1 - fr(mm.saldo)) * 100}% + 3px)` }), opacity: ctrl.opSerie(serie) < 1 ? 0.3 : 1 }}>
+                        {pos ? '' : '−'}{rot(Math.abs(mm.saldo))}
+                      </span>
+                    )}
+                    {!mm.temDado && <span className="absolute inset-x-[-12px] hidden text-center text-[9.5px] text-gray-300 sm:block" style={{ top: `calc(${(1 - zero) * 100}% + 4px)` }}>sem dados</span>}
+                  </div>
+                </div>
               );
             })}
           </div>
-        </div>
+          <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            {trechos.map((pts) => (
+              <polyline key={pts[0]} points={pts.join(' ')} fill="none" stroke={COR_SALDO} strokeWidth="2" strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke" style={{ opacity: ctrl.opSerie('acumulado'), transition: 'opacity .15s' }} />
+            ))}
+          </svg>
+          {kFim !== undefined && ctrl.opSerie('acumulado') === 1 && (
+            <>
+              <span className="pointer-events-none absolute h-[8px] w-[8px] -translate-x-1/2 translate-y-1/2 rounded-full" style={{ left: `${x(kFim)}%`, bottom: pct(fr(acum[kFim])), background: COR_SALDO }} />
+              <span className="pointer-events-none absolute ml-2 hidden translate-y-1/2 whitespace-nowrap text-[10.5px] font-semibold tabular-nums sm:block"
+                style={{ left: `${x(kFim)}%`, bottom: pct(fr(acum[kFim])), color: COR_SALDO }}>{brlCurto(acum[kFim])} no período</span>
+            </>
+          )}
+          {m && <div className={CLASSE_GUIA} style={{ left: `${x(i)}%` }} />}
+          {m?.temDado && ctrl.opSerie('acumulado') === 1 && (
+            <span className="pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-white"
+              style={{ left: `${x(i)}%`, bottom: pct(fr(acum[i])), background: COR_SALDO }} />
+          )}
+          <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
+            {meses.map((mm, k) => (
+              <button key={mm.competencia} type="button" onMouseMove={balao.aoMover(k)} onClick={() => mm.temDado && onMes?.(mm.competencia)}
+                aria-label={`${nomeCompetencia(mm.competencia)}: saldo ${formatBRL(mm.saldo)}`}
+                className={`h-full min-w-0 flex-1 ${mm.temDado && onMes ? 'cursor-pointer' : 'cursor-default'}`} />
+            ))}
+          </div>
+        </GradeEsq>
       </div>
       <ReguaMeses meses={meses} />
       {m && (
-        <BalaoGrafico pos={balao.pos} largura={230} titulo={nomeCompetencia(m.competencia)}
+        <BalaoGrafico pos={balao.pos} largura={250} titulo={nomeCompetencia(m.competencia)}
           itens={m.temDado ? [
             { rotulo: 'Entradas', valor: formatBRL(m.entradas), cor: COR_ENTRADAS },
             { rotulo: 'Gastos', valor: formatBRL(m.gastos), cor: COR_GASTOS },
-            { rotulo: m.saldo >= 0 ? 'Sobrou' : 'Faltou', valor: formatBRL(Math.abs(m.saldo)) },
+            { rotulo: m.saldo >= 0 ? 'Sobrou no mês' : 'Faltou no mês', valor: formatBRL(Math.abs(m.saldo)), cor: m.saldo >= 0 ? COR_SOBROU : COR_FALTOU },
+            { rotulo: 'Acumulado até aqui', valor: formatBRL(acum[i]), cor: COR_SALDO },
           ] : []}
-          nota={m.temDado ? (m.entradas ? `${Math.round((m.saldo / m.entradas) * 100)}% das entradas. Clique para ver o mês.` : 'Sem entradas no mês.') : 'Nenhum lançamento neste mês.'} />
+          nota={m.temDado ? [m.entradas ? `${Math.round((m.saldo / m.entradas) * 100)}% das entradas` : 'Sem entradas no mês', onMes && 'Clique para ver os lançamentos do mês'].filter(Boolean).join('. ') : 'Nenhum lançamento neste mês.'} />
       )}
     </div>
   );
@@ -601,14 +643,24 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
   return (
     <div ref={caixaRef}>
       <div ref={cabecalhoRef} className="mb-2 flex items-center gap-2">
-        <h2 className="m-0 flex-1 text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500">
-          {grupo ? (
-            <>
-              <button type="button" onClick={() => setAberto(null)} className="normal-case tracking-normal text-gray-500 hover:text-gray-800">‹ Todos os grupos</button>
-              <span className="mx-1.5 text-gray-300">/</span>{grupo.nome}
-            </>
-          ) : 'Gastos por grupo'}
-        </h2>
+        {/* Dentro de um grupo, o VOLTAR é um botão de verdade (borda, seta, hover) e o grupo aberto vem com a
+            bolinha da cor dele — antes era um texto cinza de 10,5px que se confundia com o título. */}
+        {grupo ? (
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <button type="button" onClick={() => setAberto(null)}
+              className="inline-flex h-[26px] shrink-0 items-center gap-1 rounded-[6px] border border-gray-200 bg-white pl-1.5 pr-2.5 text-[12px] font-medium text-gray-700 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 active:bg-gray-100">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+              Todos os grupos
+            </button>
+            <span className="text-gray-300" aria-hidden="true">/</span>
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-gray-800">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: grupo.cor }} />
+              <span className="truncate">{grupo.nome}</span>
+            </span>
+          </div>
+        ) : (
+          <h2 className="m-0 flex-1 text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500">Gastos por grupo</h2>
+        )}
         {(comTendencia || comVariacao) && (
           <span className="hidden text-[11px] text-gray-400 sm:inline">{[comTendencia && 'tendência', comVariacao && 'vs. ano anterior'].filter(Boolean).join(' · ')}</span>
         )}

@@ -71,6 +71,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - "IMPORTAR ARQUIVOS" (`components/ImportarArquivos.jsx`): vários CSVs de uma vez, reconhecidos pelo cabeçalho e pelo
   nome; as faturas entram dali (a repetida é pulada, ou substituída se pedir) e o extrato abre a prévia de sempre
   (`navigate('/extrato', { state: { arquivo } })`). Importou/desfez → `avisarMudanca()` refaz o número do menu.
+- O DESENHO (29/10/2026, opção A do mockup "Importar · tabela, legenda e botão"): a GRADE DO DRE — cada célula em
+  UMA linha (ponto de cor + data + número curto), o resto no cartão do hover; linha acende, célula ganha contorno;
+  o importar é um ÍCONE ↓ no canto da célula (cheio onde falta, só no hover nas outras); Situação "2 de 3" com
+  barrinha. LEGENDA EM CIMA, como a do DRE (marcas clicáveis destacam o tipo, "Legenda" explica). "Só o que falta" é
+  o interruptor do DRE dentro do trilho (`components/Toggle.jsx`, cores `.alterna` no index.css). Cabeçalho = o
+  grupo de ícones do DRE: ↓ importar arquivos · planilha · ▾ o que falta por mês (`MenuContexto` com `{ grupo }`).
+- ÁREA DE ARRASTAR (`components/AreaArrastar.jsx`, a da Importação do Gestor) nos três importadores — nunca um
+  botão "Escolher arquivo".
 
 ## Extrato da conta corrente
 
@@ -119,7 +127,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   `SeletorCategoria`, vigência pelo `CampoMes`) com todos os fixos. Muda-se em vários, acrescenta,
   marca para excluir, e "Salvar alterações (N)" grava só a diferença de cada um (`atualizarRecorrencia`); fechar
   com mudança pede para descartar. Ao lado do padrão, "≠ último lançado" (clicar o usa). Mudar o padrão não mexe
-  no que já foi lançado.
+  no que já foi lançado. A ORDEM (29/10/2026): a alça ⠿ arrasta a linha (`lib/useListaArrastavel.js`, copiado do
+  Gestor; o fantasma de um `<tr>` vai dentro de uma tabela) e grava em `recorrencias.ordem` (migration 008) junto
+  com as outras alterações; a grade e os menus de lançar seguem essa ordem. Sem a coluna, a alça fica apagada.
 - O resumo no topo dos Lançamentos (`components/graficos/CartoesResumo.jsx`, opção C com as setas): cartões com a
   curva dos últimos 6 meses (da `resumo_mensal`; o mês da tela vem da grade); clicar filtra o tipo.
 
@@ -132,7 +142,7 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - O AVISO "AGORA" (28/10/2026, opção A) é a linha do widget Alertas do Dashboard do Gestor
   (`components/dashboard/AvisoAgora.jsx`), no TOPO: pílulas no tom do que pedem — âmbar = fixos a lançar (do ano
   até hoje, com o menu de lá: por mês, "Lançar" em cada um), vermelho = a revisar, cinza = parcelas do mês que vem.
-  Sempre do mês atual, sem os filtros. Escopo do grid `visao_v3`: a disposição salva em `visao_v2` é lida uma vez
+  Sempre do mês atual, sem os filtros. Escopo `visao_v3` (hoje `visao_v4`): a disposição salva em `visao_v2` é lida uma vez
   com o aviso subindo ao topo (`aoTopo` no `ESCOPO_ANTIGO`).
 - Gráficos em `components/graficos/GraficosVisao.jsx` + `LegendaSeries.jsx` (legenda-controle do Gestor):
   colunas entradas × gastos com saldo e o ano anterior tracejado, rosca por origem (clique filtra), barras por
@@ -155,8 +165,15 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   lado ou em cima; legenda completa ou de uma linha — `arranjoRosca`): o bloco não rola. Gastos por grupo = barras na cor do grupo + curva dos meses
   + variação contra o ano anterior (só aparece com dado no mesmo período do ano anterior). As duas são a opção A dos
   mockups; a pílula de variação mora em `components/graficos/Variacao.jsx`.
-- Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos). "Entradas × gastos" tem 4 formas
-  (colunas, linhas, saldo, acumulado), escolhidas no próprio bloco.
+- Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos). "Entradas × gastos" tem 3 formas
+  (colunas, linhas, acumulado), escolhidas no próprio bloco. O cartão do Saldo também mostra a média por mês
+  (todo mês com lançamento entra, mesmo negativo).
+- O SALDO TEM BLOCO PRÓPRIO, "Saldo do mês" (`vg_saldo`, 29/10/2026, opção A do mockup): saiu das colunas (a linha
+  branca e a forma "Saldo"). `SaldoDoMes` em `GraficosVisao.jsx`: barras divergentes (sobrou para cima, faltou para
+  baixo) com o número, a linha do ACUMULADO no período e quatro números (sobrou, média, melhor e pior mês). Fica
+  logo abaixo das colunas, da mesma largura e com a mesma calha (cada mês embaixo do seu). Escopo do grid
+  `visao_v4`: quem tinha a disposição salva ganha o bloco abaixo do "Entradas × gastos" (`abaixoDe`) e ligado
+  (`ligarDepoisDe`, o `configurar` do `ESCOPO_ANTIGO` — sem ele, a lista salva o deixaria desligado).
 - "ENTRADAS × GASTOS" = O "ORÇADO × CONFIRMADO ANUAL" DO GESTOR (28/10/2026, opção A; só as cores são daqui): card
   `p-5`, título 13px + período em cinza, eixo à ESQUERDA (`GradeEsq`, calha `CALHA_ESQ` 56px), legenda EMBAIXO com a
   linha que a separa (`LegendaSeries` com `borda`), hover = guia tracejada + meses a 40% + ponto no saldo. Colunas

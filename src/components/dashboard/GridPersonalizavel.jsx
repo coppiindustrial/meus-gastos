@@ -60,7 +60,28 @@ const aoTopo = (id) => (itens) => {
   if (!alvo) return itens;
   return itens.map((i) => (i === alvo ? { ...i, x: 0, y: 0 } : i.y < alvo.y ? { ...i, y: i.y + alvo.h } : i));
 };
-const ESCOPO_ANTIGO = { visao_v2: { de: 'visao', converter: dobrar }, visao_v3: { de: 'visao_v2', converter: aoTopo('vg_agora') } };
+// `visao_v4` (29/10/2026): o bloco "Saldo do mês" (`vg_saldo`) nasceu — na disposição de quem já tinha uma,
+// ele entra LOGO ABAIXO do "Entradas × gastos" e da mesma largura (o resto desce), e na lista dos blocos ligados
+// logo depois dele. Sem isso ele iria para o fim da página (e, com a lista salva, nem apareceria).
+const abaixoDe = (ref, novo) => (itens) => {
+  if (!itens || itens.some((i) => i.widget_id === novo.widget_id)) return itens;
+  const alvo = itens.find((i) => i.widget_id === ref);
+  if (!alvo) return itens;
+  const y = alvo.y + (alvo.colapsado ? (alvo.h ?? 0) : alvo.h);
+  return [...itens.map((i) => (i.y >= y ? { ...i, y: i.y + novo.h } : i)), { ...novo, x: alvo.x, y, w: alvo.w, colapsado: false }];
+};
+const ligarDepoisDe = (ref, id) => (cfg) => {
+  if (!cfg || !Array.isArray(cfg.widgets) || cfg.widgets.includes(id)) return cfg;
+  const k = cfg.widgets.indexOf(ref);
+  const widgets = [...cfg.widgets];
+  widgets.splice(k < 0 ? widgets.length : k + 1, 0, id);
+  return { ...cfg, widgets };
+};
+const ESCOPO_ANTIGO = {
+  visao_v2: { de: 'visao', converter: dobrar },
+  visao_v3: { de: 'visao_v2', converter: aoTopo('vg_agora') },
+  visao_v4: { de: 'visao_v3', converter: abaixoDe('vg_meses', { widget_id: 'vg_saldo', h: 9 }), configurar: ligarDepoisDe('vg_meses', 'vg_saldo') },
+};
 const api = {
   get: async (rota) => {
     const atual = lerLs(rota);
@@ -69,7 +90,9 @@ const api = {
     const antigo = m && ESCOPO_ANTIGO[m[1]];
     if (!antigo) return null;
     const velho = await api.get(rota.replace(`dashboard=${m[1]}`, `dashboard=${antigo.de}`));
-    return rota.startsWith('/dashboard/layout') && velho ? antigo.converter(velho) : velho;
+    if (!velho) return velho;
+    if (rota.startsWith('/dashboard/layout')) return antigo.converter(velho);
+    return rota.startsWith('/dashboard/config') && antigo.configurar ? antigo.configurar(velho) : velho;
   },
   put: async (rota, corpo) => {
     const valor = rota.startsWith('/dashboard/layout') ? corpo.itens : corpo;

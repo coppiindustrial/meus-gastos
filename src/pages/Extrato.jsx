@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import Spinner from '../components/Spinner.jsx';
+import AreaArrastar from '../components/AreaArrastar.jsx';
 import { Etiqueta } from '../components/Comuns.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { listarCategorias } from '../api/cadastros.js';
@@ -168,6 +169,10 @@ export default function Extrato() {
               lança à mão), o pagamento da fatura do cartão, os investimentos (RDB, dinheiro guardado) e o que uma regra
               mandar ignorar. Pagamento de gasto fixo vira o fixo do mês com o valor real.
             </p>
+            <div className="mt-4">
+              <AreaArrastar onArquivos={(fs) => escolher(fs[0])} desabilitada={!base}
+                titulo={base ? 'Arraste o extrato aqui ou' : 'Carregando as regras…'} formatos=".csv do extrato da conta do Nubank (Data,Valor,Identificador,Descrição)" />
+            </div>
             {erro && <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">{erro}</p>}
             {feito && (
               <p className="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-green-800">

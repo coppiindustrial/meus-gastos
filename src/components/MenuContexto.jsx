@@ -8,12 +8,13 @@ import useEscape from '../lib/useEscape.js';
 //     pior que um que diz por que não serve);
 //   · ação que perde algo (Excluir) vai em vermelho, e a confirmação é de quem a executa.
 //
-// ITEM: `{ rotulo, icone, atalho, sub, desabilitado, motivo, perigo, filhos, onEscolher }` ou `{ sep: true }`.
+// ITEM: `{ rotulo, icone, atalho, sub, desabilitado, motivo, perigo, filhos, onEscolher }`, `{ sep: true }` ou
+// `{ grupo: 'Outubro · falta' }` (um cabeçalho no meio da lista, no estilo do título; não se escolhe).
 // TECLADO: ↑/↓ andam pulando separadores e desabilitados, → abre o submenu e ← o fecha, Enter escolhe,
 // Tab e Esc fecham. FECHA no clique fora, na rolagem, no resize e quando a janela perde o foco: ele é
 // posicionado por coordenada no instante em que abre.
 const MARGEM = 8;
-const ativavel = (it) => it && !it.sep && !it.desabilitado;
+const ativavel = (it) => it && !it.sep && !it.grupo && !it.desabilitado;
 
 const IcoSubmenu = () => (
   <svg viewBox="0 0 24 24" className="ml-2 mt-[2px] h-3 w-3 shrink-0 text-gray-400" fill="none" stroke="currentColor"
@@ -23,9 +24,10 @@ const IcoSubmenu = () => (
 );
 
 function Itens({ itens, ativo, onHover, onEscolher, refs, subAberto }) {
-  const comIcone = itens.some((it) => !it.sep && it.icone);
+  const comIcone = itens.some((it) => !it.sep && !it.grupo && it.icone);
   return itens.map((it, i) => {
     if (it.sep) return <div key={i} role="separator" className="-mx-1 my-1 h-px bg-divisoria" />;
+    if (it.grupo) return <div key={i} className="truncate px-2.5 pb-1 pt-1.5 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-gray-400">{it.grupo}</div>;
     return (
       <button key={i} type="button" tabIndex={-1} role="menuitem"
         ref={refs ? (el) => { refs.current[i] = el; } : undefined}

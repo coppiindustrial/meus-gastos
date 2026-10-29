@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from '../components/Modal.jsx';
+import AreaArrastar from '../components/AreaArrastar.jsx';
 import CampoData from '../components/CampoData.jsx';
 import SelectSimples from '../components/SelectSimples.jsx';
 import Spinner from '../components/Spinner.jsx';
@@ -105,9 +106,11 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
               Escolha o CSV da fatura <strong>como o banco exporta</strong>: Nubank (<code>date,title,amount</code>) ou XP
               (<code>Data;Estabelecimento;Portador;Valor;Parcela</code>). Não abra no Excel antes: ele estraga as parcelas.
             </p>
-            <button type="button" className="btn-primary mt-4" onClick={() => inputRef.current?.click()} disabled={!regras}>
-              {regras ? 'Escolher arquivo CSV' : 'Carregando regras…'}
-            </button>
+            <div className="mt-4">
+              <AreaArrastar onArquivos={(fs) => escolher(fs[0])} desabilitada={!regras}
+                titulo={regras ? 'Arraste a fatura aqui ou' : 'Carregando as regras…'}
+                formatos=".csv como o banco exporta — Nubank (date,title,amount) ou XP (Data;Estabelecimento;…)" />
+            </div>
             {erro && <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">{erro}</p>}
           </div>
         ) : (

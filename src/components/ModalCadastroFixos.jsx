@@ -7,6 +7,8 @@ import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { atualizarRecorrencia, excluirRecorrencia, salvarRecorrencia } from '../api/fixos.js';
 import { formatBRL, parseValor, valorParaCampo } from '../lib/dinheiro.js';
 import { competenciaAtual, competenciaCurta } from '../lib/format.js';
+import { useListaArrastavel } from '../lib/useListaArrastavel.js';
+import { IconGrip } from './icons.jsx';
 
 // O CADASTRO DOS GASTOS FIXOS NUM POP-UP (a opção A do mockup, aberto pelo ✎ do cabeçalho): todos os fixos
 // numa tabela de FORMULÁRIO — cada célula é um campo de verdade, sem jeito de planilha. Mexe-se em vários
@@ -14,6 +16,9 @@ import { competenciaAtual, competenciaCurta } from '../lib/format.js';
 // "Salvar alterações (N)" grava tudo junto; Cancelar (ou fechar) descarta, com confirmação se houver
 // mudança. Ao lado do padrão, o último valor lançado com ≠ quando difere — clicar o usa como padrão.
 // Mudar o padrão não mexe no que já foi lançado: vale para as próximas sugestões.
+// A ORDEM (29/10/2026): a alça ⠿ na primeira coluna arrasta a linha (o `useListaArrastavel` do Gestor — o fantasma
+// da linha e os vizinhos deslizando); a ordem nova entra nas alterações e vale para a grade e os menus de lançar.
+// Precisa da coluna `ordem` (migration 008): sem ela, a alça não aparece. Com busca, não arrasta (a lista é parcial).
 //
 // `recs`: as recorrências (todas). `ultimos`: { recorrencia_id: { valor_centavos, competencia } }.
 
@@ -50,18 +55,19 @@ function paraBanco(l) {
   };
 }
 
-// Só o que mudou em relação ao banco (vazio = linha intacta).
-function diferenca(l) {
-  const { campos } = paraBanco(l);
+// Só o que mudou em relação ao banco (vazio = linha intacta). `ordem`: a posição da linha (null = sem a coluna).
+function diferenca(l, ordem = null) {
+  const r = paraBanco(l);
+  const campos = r.campos && ordem != null ? { ...r.campos, ordem } : r.campos;
   if (!campos || l.novo) return campos ?? null;
   const o = l.orig;
   const antes = { ativa: o.ativa, descricao: o.descricao, categoria_id: o.categoria_id ?? null, dia_do_mes: o.dia_do_mes,
-    valor_padrao_centavos: Number(o.valor_padrao_centavos), inicio: `${mes(o.inicio)}-01`, fim: o.fim ? `${mes(o.fim)}-01` : null };
+    valor_padrao_centavos: Number(o.valor_padrao_centavos), inicio: `${mes(o.inicio)}-01`, fim: o.fim ? `${mes(o.fim)}-01` : null, ordem: o.ordem ?? null };
   return Object.fromEntries(Object.entries(campos).filter(([k, v]) => antes[k] !== v));
 }
-const mudou = (l) => {
+const mudou = (l, ordem = null) => {
   if (l.excluir || l.novo) return true;
-  const d = paraBanco(l).campos ? diferenca(l) : { invalido: true };
+  const d = paraBanco(l).campos ? diferenca(l, ordem) : { invalido: true };
   return Object.keys(d).length > 0;
 };
 
@@ -73,6 +79,15 @@ export default function ModalCadastroFixos({ recs, categorias, ultimos, onFechar
   const [erros, setErros] = useState({}); // { id: campo }
   const [salvando, setSalvando] = useState(false);
   const corpoRef = useRef(null);
+  const temOrdem = recs.some((r) => 'ordem' in r);
+  // A posição de cada linha (só as que ficam): é a `ordem` que vai para o banco.
+  const posicao = new Map(linhas.filter((l) => !l.excluir).map((l, i) => [l.id, i]));
+  const ordemDe = (l) => (temOrdem ? posicao.get(l.id) ?? null : null);
+  const arrasto = useListaArrastavel({
+    ids: linhas.map((l) => l.id),
+    onReordenar: (ids) => setLinhas((ls) => ids.map((id) => ls.find((l) => l.id === id)).filter(Boolean)),
+  });
+  const podeArrastar = temOrdem && !busca.trim();
 
   const mudar = (id, campo, valor) => {
     setLinhas((ls) => ls.map((l) => (l.id === id ? { ...l, [campo]: valor } : l)));
@@ -85,7 +100,7 @@ export default function ModalCadastroFixos({ recs, categorias, ultimos, onFechar
     return linhas.filter((l) => l.novo || semAcento(`${l.descricao} ${nomeCat(l.categoria_id)}`).includes(t));
   }, [linhas, busca, categorias]);
 
-  const alteradas = linhas.filter(mudou).filter((l) => !(l.novo && l.excluir) && !(l.novo && !l.descricao.trim()));
+  const alteradas = linhas.filter((l) => mudou(l, ordemDe(l))).filter((l) => !(l.novo && l.excluir) && !(l.novo && !l.descricao.trim()));
   const ativos = linhas.filter((l) => l.ativa && !l.excluir);
   const somaAtivos = ativos.reduce((s, l) => s + (parseValor(l.valor || '0') ?? 0), 0);
   const ultimoDe = (l) => (l.novo ? null : ultimos[l.id]);
@@ -125,9 +140,9 @@ export default function ModalCadastroFixos({ recs, categorias, ultimos, onFechar
     setSalvando(true);
     try {
       for (const l of excluir) await excluirRecorrencia(l.id);
-      for (const l of alteradas.filter((x) => x.novo && !x.excluir)) await salvarRecorrencia(paraBanco(l).campos);
+      for (const l of alteradas.filter((x) => x.novo && !x.excluir)) await salvarRecorrencia({ ...paraBanco(l).campos, ordem: ordemDe(l) });
       for (const l of alteradas.filter((x) => !x.novo && !x.excluir)) {
-        const d = diferenca(l);
+        const d = diferenca(l, ordemDe(l));
         if (Object.keys(d).length) await atualizarRecorrencia(l.id, d);
       }
       toast.success(alteradas.length === 1 ? 'Gasto fixo salvo.' : `${alteradas.length} gastos fixos salvos.`);
@@ -150,25 +165,40 @@ export default function ModalCadastroFixos({ recs, categorias, ultimos, onFechar
             e espremia a descrição). A descrição fica com o resto. */}
         <table className="w-full min-w-[980px] table-fixed border-separate border-spacing-0 text-[12.5px]">
           <colgroup>
-            <col style={{ width: 58 }} /><col /><col style={{ width: 200 }} /><col style={{ width: 64 }} />
+            <col style={{ width: 28 }} /><col style={{ width: 50 }} /><col /><col style={{ width: 200 }} /><col style={{ width: 64 }} />
             <col style={{ width: 180 }} /><col style={{ width: 156 }} /><col style={{ width: 156 }} /><col style={{ width: 44 }} />
           </colgroup>
           <thead>
             <tr>
-              <th className={`${th} pl-4`}>Ativo</th><th className={th}>Descrição</th><th className={th}>Categoria</th>
+              <th className={th} aria-label="Ordem" /><th className={th}>Ativo</th><th className={th}>Descrição</th><th className={th}>Categoria</th>
               <th className={`${th} text-right`}>Dia</th><th className={`${th} text-right`}>Valor padrão</th>
               <th className={th}>Começa</th><th className={th}>Termina</th><th className={th} />
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={arrasto.containerRef}>
             {visiveis.map((l) => {
               const u = ultimoDe(l);
               const valorAtual = parseValor(l.valor || '0');
               const difere = u && u.valor_centavos !== valorAtual;
-              const alterada = mudou(l) && !l.excluir;
+              const alterada = mudou(l, ordemDe(l)) && !l.excluir;
               return (
-                <tr key={l.id} className={`${l.excluir ? 'opacity-45' : ''} ${!l.ativa && !l.excluir ? 'text-gray-400' : ''}`}>
-                  <td className="border-b border-gray-100 py-1.5 pl-4 pr-2" style={alterada ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>
+                // A classe de transição é obrigatória para o FLIP do arraste (os vizinhos deslizam).
+                <tr key={l.id} {...arrasto.itemProps(l.id)}
+                  className={`transition-[opacity,transform] duration-200 ease-out ${l.excluir ? 'opacity-45' : ''} ${!l.ativa && !l.excluir ? 'text-gray-400' : ''} ${
+                    arrasto.dragId === l.id ? '!opacity-40' : ''}`}>
+                  <td className="border-b border-gray-100 py-1.5 pl-2" style={alterada ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>
+                    {podeArrastar ? (
+                      <span {...arrasto.alcaProps(l.id)} title="Arraste para mudar a ordem"
+                        className="flex h-8 w-5 cursor-grab items-center justify-center rounded-[4px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 active:cursor-grabbing">
+                        <IconGrip />
+                      </span>
+                    ) : (
+                      <span className="flex h-8 w-5 items-center justify-center text-gray-200" title={temOrdem ? 'Limpe a busca para arrastar' : 'A ordem precisa da migration 008'}>
+                        <IconGrip />
+                      </span>
+                    )}
+                  </td>
+                  <td className="border-b border-gray-100 py-1.5 pl-1 pr-2">
                     <button type="button" role="switch" aria-checked={l.ativa} disabled={l.excluir} onClick={() => mudar(l.id, 'ativa', !l.ativa)}
                       title={l.ativa ? 'Ativo: aparece para lançar todo mês' : 'Inativo'}
                       className={`relative inline-flex h-[16px] w-[28px] items-center rounded-full transition-colors duration-150 ${l.ativa ? 'bg-hx-16a34a' : 'bg-gray-300'}`}>
@@ -222,7 +252,7 @@ export default function ModalCadastroFixos({ recs, categorias, ultimos, onFechar
               );
             })}
             <tr>
-              <td colSpan={8} className="px-4 py-2">
+              <td colSpan={9} className="px-4 py-2">
                 <button type="button" onClick={adicionar}
                   className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900">
                   <span className="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-400 text-[11px] leading-none">+</span>

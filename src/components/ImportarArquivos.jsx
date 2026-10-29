@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Modal from './Modal.jsx';
+import AreaArrastar from './AreaArrastar.jsx';
 import Spinner from './Spinner.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import {
@@ -54,11 +55,9 @@ async function reconhecer(arquivo, cartoes, regras) {
 
 export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
   const toast = useToast();
-  const inputRef = useRef(null);
   const [regras, setRegras] = useState(null);
   const [itens, setItens] = useState([]);
   const [lendo, setLendo] = useState(false);
-  const [arrastando, setArrastando] = useState(false);
   const [gravando, setGravando] = useState('');
 
   useEffect(() => { listarRegrasParaClassificar().then(setRegras).catch((err) => toast.error(err.message)); }, [toast]);
@@ -80,7 +79,7 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
           return { ...i, acao: fica ? 'abrir' : 'nada', outroExtrato: !fica };
         });
       });
-    } catch (err) { toast.error(err.message); } finally { setLendo(false); if (inputRef.current) inputRef.current.value = ''; }
+    } catch (err) { toast.error(err.message); } finally { setLendo(false); }
   };
 
   const alternar = (nome) => setItens((xs) => xs.map((i) => (i.nome === nome ? { ...i, acao: i.acao === 'pular' ? 'substituir' : 'pular' } : i)));
@@ -154,24 +153,10 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
     <Modal open onClose={gravando ? () => {} : onFechar} title="Importar arquivos" maxWidth="max-w-3xl"
       subtitulo="faturas e extrato de uma vez — cada arquivo é reconhecido pelo nome e pelo cabeçalho">
       <div className="space-y-3 text-[12.5px] text-gray-700">
-        <div
-          onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
-          onDragLeave={() => setArrastando(false)}
-          onDrop={(e) => { e.preventDefault(); setArrastando(false); adicionar(e.dataTransfer.files); }}
-          className={`flex items-center gap-3 rounded-[10px] border-[1.5px] border-dashed px-4 ${itens.length ? 'py-3' : 'py-6'} transition-colors ${
-            arrastando ? 'border-gray-500 bg-gray-50' : 'border-gray-300'}`}>
-          <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8a4 4 0 0 1 0 8" /><path d="M12 12v8M9 15l3-3 3 3" />
-          </svg>
-          <div>
-            <span className="block font-semibold text-gray-800">{itens.length ? 'Solte mais arquivos aqui' : 'Arraste os CSVs do mês aqui'}</span>
-            <span className="text-[11.5px] text-gray-500">
-              ou <button type="button" className="underline hover:text-gray-800" onClick={() => inputRef.current?.click()} disabled={!regras}>escolha os arquivos</button>
-              {' '}· faturas do Nubank e da XP, extrato da conta do Nubank
-            </span>
-          </div>
-          {(lendo || !regras) && <Spinner className="ml-auto h-4 w-4" />}
-        </div>
+        <AreaArrastar multiplo onArquivos={adicionar} compacta={itens.length > 0} desabilitada={!regras || lendo}
+          titulo={itens.length ? 'Solte mais arquivos aqui ou' : 'Arraste os arquivos do mês aqui ou'}
+          formatos=".csv — faturas do Nubank e da XP, extrato da conta do Nubank · vários de uma vez" />
+        {(lendo || !regras) && <p className="-mt-1 flex items-center gap-2 text-[12px] text-gray-500"><Spinner className="h-3.5 w-3.5" />{regras ? 'Lendo os arquivos…' : 'Carregando as regras…'}</p>}
 
         {itens.length > 0 && (
           <div className="overflow-x-auto rounded-md border border-gray-200">
@@ -207,7 +192,6 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
           </button>
         </div>
       </div>
-      <input ref={inputRef} type="file" accept=".csv,text/csv" multiple hidden onChange={(e) => adicionar(e.target.files)} />
     </Modal>
   );
 }

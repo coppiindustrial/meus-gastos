@@ -9,7 +9,7 @@ import { SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import { CartaoKpi, CORES_KPI, variacaoSaldo } from '../components/graficos/CartoesResumo.jsx';
 import { COR_ENTRADAS, COR_GASTOS } from '../components/graficos/Graficos.jsx';
 import {
-  BarrasGrupos, COR_ANTERIOR, COR_SALDO, ColunasEntradasGastos, LinhasEntradasGastos, RoscaOrigem, SaldoMensal,
+  BarrasGrupos, COR_ANTERIOR, COR_FALTOU, COR_SALDO, COR_SOBROU, ColunasEntradasGastos, LinhasEntradasGastos, RoscaOrigem, SaldoDoMes,
 } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
 import Modal from '../components/Modal.jsx';
@@ -247,16 +247,16 @@ const CATALOGO = [
   { id: 'vg_agora', titulo: 'Agora, no mês atual', area: 'vg_numeros', x: 0, y: 0, w: 12, h: 2, alturaMedida: true, minPx: 300 },
   { id: 'vg_kpis', titulo: 'Indicadores', area: 'vg_numeros', x: 0, y: 2, w: 12, h: 4, alturaMedida: true, minPx: 300 },
   { id: 'vg_meses', titulo: 'Entradas × gastos por mês', area: 'vg_graficos', x: 0, y: 6, w: 8, h: 10, minH: 7, minPx: 420 },
-  { id: 'vg_origem', titulo: 'Gastos por origem', area: 'vg_graficos', x: 8, y: 6, w: 4, h: 10, minH: 6, minPx: 300 },
-  { id: 'vg_grupos', titulo: 'Gastos por grupo', area: 'vg_graficos', x: 0, y: 16, w: 12, h: 12, minH: 5, minPx: 360 },
-  { id: 'vg_tabela', titulo: 'Grupo × mês', area: 'vg_tabelas', x: 0, y: 28, w: 12, h: 14, minH: 6, minPx: 520 },
+  { id: 'vg_origem', titulo: 'Gastos por origem', area: 'vg_graficos', x: 8, y: 6, w: 4, h: 19, minH: 6, minPx: 300 },
+  { id: 'vg_saldo', titulo: 'Saldo do mês', area: 'vg_graficos', x: 0, y: 16, w: 8, h: 9, minH: 6, minPx: 420 },
+  { id: 'vg_grupos', titulo: 'Gastos por grupo', area: 'vg_graficos', x: 0, y: 25, w: 12, h: 12, minH: 5, minPx: 360 },
+  { id: 'vg_tabela', titulo: 'Grupo × mês', area: 'vg_tabelas', x: 0, y: 37, w: 12, h: 14, minH: 6, minPx: 520 },
 ];
 
 // AS FORMAS DO "ENTRADAS × GASTOS": a escolha fica no próprio bloco (e lembrada no navegador).
 const FORMAS = [
-  { id: 'colunas', rotulo: 'Colunas', dica: 'Entradas e gastos lado a lado, com o saldo em linha' },
+  { id: 'colunas', rotulo: 'Colunas', dica: 'Entradas (larga) e gastos (estreita, na frente) de cada mês' },
   { id: 'linhas', rotulo: 'Linhas', dica: 'As duas curvas no tempo, com a área embaixo' },
-  { id: 'saldo', rotulo: 'Saldo', dica: 'Quanto sobrou (ou faltou) em cada mês' },
   { id: 'acumulado', rotulo: 'Acumulado', dica: 'Entradas e gastos somados ao longo do período' },
 ];
 const LS_FORMA = 'visao_meses_forma';
@@ -280,11 +280,12 @@ export default function VisaoGeral() {
   const [cats, setCats] = useState([]);
   const [comparar, setCompararEstado] = useState(() => lsGet(LS_COMPARAR) || 'anterior');
   const setComparar = (v) => { setCompararEstado(v); lsSet(LS_COMPARAR, v); };
-  const [forma, setFormaEstado] = useState(() => lsGet(LS_FORMA) || 'colunas');
+  const [forma, setFormaEstado] = useState(() => (FORMAS.some((f) => f.id === lsGet(LS_FORMA)) ? lsGet(LS_FORMA) : 'colunas'));
   const setForma = (v) => { setFormaEstado(v); lsSet(LS_FORMA, v); };
   const [ampliado, setAmpliado] = useState(false);
   const [gruposAmpliado, setGruposAmpliado] = useState(false);
   const ctrl = useDestaqueSeries();
+  const ctrlSaldo = useDestaqueSeries();
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -357,6 +358,8 @@ export default function VisaoGeral() {
   const mEnt = mediaPorMes(r.porMes, 'entradas', { emAndamento: hojeComp });
   const mGas = mediaPorMes(r.porMes, 'gastos', { emAndamento: hojeComp });
   const mQtd = mediaPorMes(r.porMes, 'qtd', { emAndamento: hojeComp });
+  // O saldo pode ser zero ou negativo: entra todo mês com lançamento (não só os "maiores que zero").
+  const mSal = mediaPorMes(r.porMes, 'saldo', { emAndamento: hojeComp, presente: (m) => m.temDado });
   const textoMedia = (m) => (m.meses ? `média ${formatBRL(m.media)}/mês · ${m.meses} ${m.meses === 1 ? 'mês' : 'meses'}` : 'nada no período');
   const tituloMedia = (oQue) => `A média conta só os meses com ${oQue} lançados${r.porMes.some((m) => m.competencia === hojeComp) ? ', sem o mês atual (em andamento)' : ''}.`;
   const gastosPorMes = Object.fromEntries(r.porMes.map((m) => [m.competencia, m.gastos]));
@@ -364,7 +367,6 @@ export default function VisaoGeral() {
   const series = [
     { key: 'entradas', rotulo: 'Entradas', cor: COR_ENTRADAS },
     { key: 'gastos', rotulo: 'Gastos', cor: COR_GASTOS },
-    ...(forma === 'colunas' || forma === 'linhas' ? [{ key: 'saldo', rotulo: 'Saldo', cor: COR_SALDO, forma: 'linha' }] : []),
     ...(anterior ? [{ key: 'anterior', rotulo: 'Um ano antes', cor: COR_ANTERIOR, forma: 'tracejado' }] : []),
   ];
 
@@ -380,7 +382,6 @@ export default function VisaoGeral() {
   // O mês a mês na forma escolhida, na altura de quem o contém (o bloco do grid, ou o ampliado — que passa
   // os SEUS meses: o período da tela ou o histórico inteiro).
   const graficoMeses = (porMes = r.porMes, ant = anterior, { rotulosAte } = {}) => {
-    if (forma === 'saldo') return <SaldoMensal meses={porMes} onMes={abrirMes} />;
     if (forma === 'linhas' || forma === 'acumulado') {
       return <LinhasEntradasGastos meses={porMes} anterior={ant} ctrl={ctrl} onMes={abrirMes} acumulado={forma === 'acumulado'} />;
     }
@@ -412,7 +413,7 @@ export default function VisaoGeral() {
         <CartaoKpi compacto icone="saldo" cor={CORES_KPI.saldo} rotulo="Saldo" valor={formatBRL(r.saldo)} valorCurto={brlCurto(r.saldo)}
           corValor={r.saldo < 0 ? 'text-hx-c0393d' : 'text-gray-900'}
           variacao={rAnt ? variacaoSaldo(r.saldo, rAnt.saldo) : null} tituloVariacao={tituloVs}
-          sub={r.entradas ? `${Math.round((r.saldo / r.entradas) * 100)}% das entradas` : 'sem entradas no período'}
+          sub={[mSal.meses && `média ${formatBRL(mSal.media)}/mês`, r.entradas ? `${Math.round((r.saldo / r.entradas) * 100)}% das entradas` : 'sem entradas no período'].filter(Boolean).join(' · ')}
           serie={serieDe('saldo')} onMes={abrirMes} onClicar={() => setTipo('')} titulo="Clique para ver entradas e gastos" />
         <CartaoKpi compacto icone="lancamentos" cor={varCor('#6b7280', 'texto')} rotulo="Lançamentos" valor={r.qtd.toLocaleString('pt-BR')}
           variacao={vsAnt(r.qtd, rAnt?.qtd)} tituloVariacao={tituloVs} sub={`${mQtd.media.toLocaleString('pt-BR')} por mês`}
@@ -456,9 +457,48 @@ export default function VisaoGeral() {
               </div>
             </div>
             <div className="min-h-0 flex-1">{graficoMeses()}</div>
-            {forma !== 'saldo' && <LegendaSeries series={series} ctrl={ctrl} />}
+            <LegendaSeries series={series} ctrl={ctrl} />
           </section>
         );
+      case 'vg_saldo': {
+        // O SALDO NUM BLOCO PRÓPRIO (opção A do mockup de 29/10/2026): logo abaixo das colunas e da mesma largura,
+        // com a mesma calha — cada mês fica embaixo do seu. Os quatro números resumem o período.
+        const melhor = comDado.reduce((a, m) => (!a || m.saldo > a.saldo ? m : a), null);
+        const pior = comDado.reduce((a, m) => (!a || m.saldo < a.saldo ? m : a), null);
+        const mesCurto = (m) => nomeCompetencia(m.competencia).replace(/ de \d+$/, '').toLowerCase().slice(0, 3);
+        const num = (rot, valor, sub, cls = '') => (
+          <div className="min-w-0">
+            <div className="text-[10.5px] text-gray-400">{rot}</div>
+            <div className={`text-[13.5px] font-bold tabular-nums ${cls || 'text-gray-900'}`}>{valor}</div>
+            {sub && <div className="text-[11px] text-gray-400">{sub}</div>}
+          </div>
+        );
+        return (
+          <section className="card flex flex-col overflow-hidden p-5">
+            <div className="mb-1 flex flex-wrap items-start gap-x-6 gap-y-2">
+              <div className="flex items-baseline gap-3">
+                <span className="text-[13px] font-semibold text-gray-800">Saldo do mês</span>
+                <span className="text-[11px] text-gray-400">entradas − gastos · {textoPer}</span>
+              </div>
+              <div className="ml-auto flex flex-wrap gap-x-6 gap-y-1">
+                {num(r.saldo >= 0 ? 'Sobrou no período' : 'Faltou no período', brlCurto(Math.abs(r.saldo)),
+                  r.entradas ? `${Math.round((r.saldo / r.entradas) * 100)}% das entradas` : null, r.saldo < 0 ? 'text-hx-c0393d' : 'text-green-700')}
+                {num('Média por mês', mSal.meses ? brlCurto(mSal.media) : '—', mSal.meses ? `${mSal.meses} ${mSal.meses === 1 ? 'mês' : 'meses'}` : null)}
+                {melhor && num('Melhor mês', mesCurto(melhor), `${melhor.saldo >= 0 ? '+' : '−'}${brlCurto(Math.abs(melhor.saldo))}`)}
+                {pior && comDado.length > 1 && num('Pior mês', mesCurto(pior), `${pior.saldo >= 0 ? '+' : '−'}${brlCurto(Math.abs(pior.saldo))}`)}
+              </div>
+            </div>
+            <div className="min-h-0 flex-1">
+              <SaldoDoMes meses={r.porMes} ctrl={ctrlSaldo} onMes={abrirMes} />
+            </div>
+            <LegendaSeries ctrl={ctrlSaldo} series={[
+              { key: 'sobrou', rotulo: 'Sobrou', cor: COR_SOBROU },
+              { key: 'faltou', rotulo: 'Faltou', cor: COR_FALTOU },
+              { key: 'acumulado', rotulo: 'Acumulado no período', cor: COR_SALDO, forma: 'linha' },
+            ]} />
+          </section>
+        );
+      }
       case 'vg_origem':
         return (
           <section className="card flex flex-col overflow-hidden">
@@ -511,7 +551,7 @@ export default function VisaoGeral() {
 
   return (
     <>
-      <GridPersonalizavel escopo="visao_v3" titulo="Visão geral"
+      <GridPersonalizavel escopo="visao_v4" titulo="Visão geral"
         acessorio={linhas && <span className="hidden text-sm text-gray-500 sm:inline">{textoPer.replace(/^./, (c) => c.toUpperCase())} · {r.meses} {r.meses === 1 ? 'mês' : 'meses'} com lançamentos</span>}
         catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={renderWidget} abaixo={filtros}
         pronto={!!linhas} onAtualizar={carregar} atualizando={carregando} />

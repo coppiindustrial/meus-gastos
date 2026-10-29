@@ -5,10 +5,16 @@ import { dataNoMes } from '../lib/fixos.js';
 // Gastos fixos (tabela `recorrencias`) e os lançamentos que elas geram (origem 'fixo', com `recorrencia_id`).
 const mes = (linhas) => linhas.map((l) => ({ ...l, competencia: l.competencia.slice(0, 7) }));
 
-export function listarRecorrencias() {
-  return exigir(supabase.from('recorrencias')
-    .select('*, categoria:categorias(id, nome, grupo:grupos(nome, cor))')
-    .order('ativa', { ascending: false }).order('dia_do_mes').order('descricao'));
+// Na ORDEM do cadastro (migration 008, o arrastar); sem a coluna ainda, ativos primeiro, pelo dia e pelo nome.
+export async function listarRecorrencias() {
+  const consulta = () => supabase.from('recorrencias').select('*, categoria:categorias(id, nome, grupo:grupos(nome, cor))');
+  try {
+    return await exigir(consulta().order('ordem', { ascending: true, nullsFirst: false })
+      .order('ativa', { ascending: false }).order('dia_do_mes').order('descricao'));
+  } catch (err) {
+    if (!/ordem/.test(err?.message ?? '')) throw err;
+    return exigir(consulta().order('ativa', { ascending: false }).order('dia_do_mes').order('descricao'));
+  }
 }
 
 export function salvarRecorrencia(r) {
@@ -20,6 +26,7 @@ export function salvarRecorrencia(r) {
     inicio: r.inicio,
     fim: r.fim || null,
     ativa: r.ativa,
+    ...(r.ordem != null ? { ordem: r.ordem } : {}),
   };
   return exigir(r.id
     ? supabase.from('recorrencias').update(dados).eq('id', r.id).select().single()
