@@ -171,13 +171,17 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   dois temas) e o centro que conta a fatia sob o cursor. Ela MEDE a caixa e escolhe o arranjo que cabe (rosca ao
   lado ou em cima; legenda completa ou de uma linha — `arranjoRosca`): o bloco não rola. Gastos por grupo = barras na cor do grupo + curva dos meses
   + variação contra o ano anterior (só aparece com dado no mesmo período do ano anterior). As duas são a opção A dos
-  mockups; a pílula de variação mora em `components/graficos/Variacao.jsx`.
+  mockups; a pílula de variação mora em `components/graficos/Variacao.jsx`. O AMPLIADO do Gastos por grupo
+  (29/10/2026, opção A) é o painel do Entradas × gastos (1280px/90vh, tela cheia, CSV): `AmpliadoGrupos.jsx`, nome
+  até 320px (em "Categorias", o grupo em cinza depois, encolhendo primeiro), linha de 30px, cabeçalho das colunas
+  (com média/mês), busca e o Total preso embaixo. No bloco, o valor tem largura FIXA (com `auto`, cada linha media
+  o seu número e as barras terminavam em pontos diferentes).
 - Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos). "Entradas × gastos" tem 3 formas
   (colunas, linhas, acumulado), escolhidas no próprio bloco. O cartão do Saldo também mostra a média por mês
   (todo mês com lançamento entra, mesmo negativo).
 - O SALDO TEM BLOCO PRÓPRIO, "Saldo do mês" (`vg_saldo`, 29/10/2026, opção A do mockup): saiu das colunas (a linha
   branca e a forma "Saldo"). `SaldoDoMes` em `GraficosVisao.jsx`: barras divergentes (sobrou para cima, faltou para
-  baixo) com o número, a linha do ACUMULADO no período e quatro números (sobrou, média, melhor e pior mês). Fica
+  baixo) com o número e a linha do ACUMULADO no período (os quatro números de cima saíram: o cartão do Saldo já os diz). Fica
   logo abaixo das colunas, da mesma largura e com a mesma calha (cada mês embaixo do seu). Escopo do grid
   `visao_v4`: quem tinha a disposição salva ganha o bloco abaixo do "Entradas × gastos" (`abaixoDe`) e ligado
   (`ligarDepoisDe`, o `configurar` do `ESCOPO_ANTIGO` — sem ele, a lista salva o deixaria desligado).

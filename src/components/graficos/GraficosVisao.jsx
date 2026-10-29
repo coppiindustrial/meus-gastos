@@ -568,8 +568,7 @@ function useLargura(ref) {
 //
 // QUANTAS LINHAS: as que CABEM no bloco (medido — o bloco se redimensiona no grid). Se tudo cabe, tudo
 // aparece; se não, a última vaga vira um RESUMO quieto do resto ("+ 3 grupos menores · R$ … · 4%", com
-// o balão listando quem são), e a lista inteira fica no AMPLIAR (`onAmpliar`). `semLimite`: o ampliado,
-// que mostra tudo.
+// o balão listando quem são), e a lista inteira fica no AMPLIAR (`onAmpliar`, o `AmpliadoGrupos`).
 //
 // `grupos`: o `gruposPorMes`. `comps`: os meses do período (a curva). `anterior`: Map de "g:<id>" e
 // "c:<grupo>:<categoria>" → total um ano antes (sem ele, não há a coluna da variação).
@@ -578,11 +577,11 @@ const ALT_LINHA = 35; // a altura de uma linha antes da primeira medida
 
 // Quantas linhas cabem na caixa que rola o bloco (o pai): a altura dela menos o padding, o cabeçalho e uma
 // folga, dividida pela altura MEDIDA de uma linha.
-function useLinhasQueCabem(caixaRef, cabecalhoRef, ativo) {
+function useLinhasQueCabem(caixaRef, cabecalhoRef) {
   const [cabem, setCabem] = useState(Infinity);
   useLayoutEffect(() => {
     const caixa = caixaRef.current?.parentElement;
-    if (!ativo || !caixa) return undefined;
+    if (!caixa) return undefined;
     const medir = () => {
       const cs = getComputedStyle(caixa);
       const util = caixa.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
@@ -595,8 +594,8 @@ function useLinhasQueCabem(caixaRef, cabecalhoRef, ativo) {
     const ro = new ResizeObserver(medir);
     ro.observe(caixa);
     return () => ro.disconnect();
-  }, [caixaRef, cabecalhoRef, ativo]);
-  return ativo ? cabem : Infinity;
+  }, [caixaRef, cabecalhoRef]);
+  return cabem;
 }
 
 const IconAmpliarBloco = () => (
@@ -605,20 +604,39 @@ const IconAmpliarBloco = () => (
   </svg>
 );
 
-export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null, onAmpliar, semLimite = false }) {
+// Dentro de um grupo, o VOLTAR é um botão de verdade (borda, seta, hover) e o grupo aberto vem com a bolinha da
+// cor dele — antes era um texto cinza de 10,5px que se confundia com o título. Também no ampliado.
+export function VoltarGrupos({ grupo, onVoltar }) {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <button type="button" onClick={onVoltar}
+        className="inline-flex h-[26px] shrink-0 items-center gap-1 rounded-[6px] border border-gray-200 bg-white pl-1.5 pr-2.5 text-[12px] font-medium text-gray-700 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 active:bg-gray-100">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+        Todos os grupos
+      </button>
+      <span className="text-gray-300" aria-hidden="true">/</span>
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-gray-800">
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: grupo.cor }} />
+        <span className="truncate">{grupo.nome}</span>
+      </span>
+    </div>
+  );
+}
+
+export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null, onAmpliar }) {
   const balao = useBalao(250, 170);
   const caixaRef = useRef(null);
   const cabecalhoRef = useRef(null);
   const largura = useLargura(caixaRef);
   const [modo, setModo] = useState('grupos');
   const [aberto, setAberto] = useState(null);
-  const cabem = useLinhasQueCabem(caixaRef, cabecalhoRef, !semLimite);
+  const cabem = useLinhasQueCabem(caixaRef, cabecalhoRef);
   const grupo = grupos.find((g) => g.id === aberto);
   let lista;
   if (grupo) lista = grupo.categorias.map((c) => ({ ...c, chave: `c:${grupo.id}:${c.id}`, cor: grupo.cor, grupo }));
   else if (modo === 'categorias') {
     lista = grupos.flatMap((g) => g.categorias.map((c) => ({ ...c, id: `${g.id}:${c.id}`, chave: `c:${g.id}:${c.id}`, cor: g.cor, grupo: g })))
-      .sort((a, b) => b.total - a.total).slice(0, semLimite ? undefined : MAX_CATEGORIAS);
+      .sort((a, b) => b.total - a.total).slice(0, MAX_CATEGORIAS);
   } else lista = grupos.map((g) => ({ ...g, chave: `g:${g.id}` }));
   const sobra = lista.length > cabem;
   const itens = sobra ? lista.slice(0, cabem - 1) : lista;
@@ -629,7 +647,9 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
   const ativo = itens.find((it) => it.id === balao.ativo);
   const comTendencia = largura >= 640 && comps.length > 1;
   const comVariacao = largura >= 560 && !!anterior;
-  const colunas = `minmax(0,11rem) 1fr auto 2.6rem${comTendencia ? ' 74px' : ''}${comVariacao ? ' 4.2rem' : ''}`;
+  // O valor com LARGURA FIXA: com `auto`, cada linha (um grid só dela) media o próprio número, e a barra das
+  // linhas de R$ 5 dígitos terminava antes da das outras.
+  const colunas = `minmax(0,11rem) 1fr 6.5rem 2.6rem${comTendencia ? ' 74px' : ''}${comVariacao ? ' 4.2rem' : ''}`;
 
   let nota;
   if (balao.ativo === 'resto') nota = onAmpliar ? 'Clique para ampliar e ver a lista inteira.' : undefined;
@@ -643,22 +663,7 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
   return (
     <div ref={caixaRef}>
       <div ref={cabecalhoRef} className="mb-2 flex items-center gap-2">
-        {/* Dentro de um grupo, o VOLTAR é um botão de verdade (borda, seta, hover) e o grupo aberto vem com a
-            bolinha da cor dele — antes era um texto cinza de 10,5px que se confundia com o título. */}
-        {grupo ? (
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <button type="button" onClick={() => setAberto(null)}
-              className="inline-flex h-[26px] shrink-0 items-center gap-1 rounded-[6px] border border-gray-200 bg-white pl-1.5 pr-2.5 text-[12px] font-medium text-gray-700 shadow-sm transition-colors hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 active:bg-gray-100">
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
-              Todos os grupos
-            </button>
-            <span className="text-gray-300" aria-hidden="true">/</span>
-            <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-gray-800">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: grupo.cor }} />
-              <span className="truncate">{grupo.nome}</span>
-            </span>
-          </div>
-        ) : (
+        {grupo ? <VoltarGrupos grupo={grupo} onVoltar={() => setAberto(null)} /> : (
           <h2 className="m-0 flex-1 text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500">Gastos por grupo</h2>
         )}
         {(comTendencia || comVariacao) && (

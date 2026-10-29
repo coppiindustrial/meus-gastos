@@ -12,8 +12,8 @@ import {
   BarrasGrupos, COR_ANTERIOR, COR_FALTOU, COR_SALDO, COR_SOBROU, ColunasEntradasGastos, LinhasEntradasGastos, RoscaOrigem, SaldoDoMes,
 } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
-import Modal from '../components/Modal.jsx';
 import AmpliadoEntradasGastos from '../components/graficos/AmpliadoEntradasGastos.jsx';
+import AmpliadoGrupos from '../components/graficos/AmpliadoGrupos.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { contarPendencias, listarParcelasFuturas, listarResumoMensal } from '../api/resumo.js';
@@ -462,31 +462,13 @@ export default function VisaoGeral() {
         );
       case 'vg_saldo': {
         // O SALDO NUM BLOCO PRÓPRIO (opção A do mockup de 29/10/2026): logo abaixo das colunas e da mesma largura,
-        // com a mesma calha — cada mês fica embaixo do seu. Os quatro números resumem o período.
-        const melhor = comDado.reduce((a, m) => (!a || m.saldo > a.saldo ? m : a), null);
-        const pior = comDado.reduce((a, m) => (!a || m.saldo < a.saldo ? m : a), null);
-        const mesCurto = (m) => nomeCompetencia(m.competencia).replace(/ de \d+$/, '').toLowerCase().slice(0, 3);
-        const num = (rot, valor, sub, cls = '') => (
-          <div className="min-w-0">
-            <div className="text-[10.5px] text-gray-400">{rot}</div>
-            <div className={`text-[13.5px] font-bold tabular-nums ${cls || 'text-gray-900'}`}>{valor}</div>
-            {sub && <div className="text-[11px] text-gray-400">{sub}</div>}
-          </div>
-        );
+        // com a mesma calha — cada mês fica embaixo do seu. Os quatro números (sobrou, média, melhor e pior mês) saíram
+        // em 29/10/2026: o cartão do Saldo nos indicadores já diz o total e a média.
         return (
           <section className="card flex flex-col overflow-hidden p-5">
-            <div className="mb-1 flex flex-wrap items-start gap-x-6 gap-y-2">
-              <div className="flex items-baseline gap-3">
-                <span className="text-[13px] font-semibold text-gray-800">Saldo do mês</span>
-                <span className="text-[11px] text-gray-400">entradas − gastos · {textoPer}</span>
-              </div>
-              <div className="ml-auto flex flex-wrap gap-x-6 gap-y-1">
-                {num(r.saldo >= 0 ? 'Sobrou no período' : 'Faltou no período', brlCurto(Math.abs(r.saldo)),
-                  r.entradas ? `${Math.round((r.saldo / r.entradas) * 100)}% das entradas` : null, r.saldo < 0 ? 'text-hx-c0393d' : 'text-green-700')}
-                {num('Média por mês', mSal.meses ? brlCurto(mSal.media) : '—', mSal.meses ? `${mSal.meses} ${mSal.meses === 1 ? 'mês' : 'meses'}` : null)}
-                {melhor && num('Melhor mês', mesCurto(melhor), `${melhor.saldo >= 0 ? '+' : '−'}${brlCurto(Math.abs(melhor.saldo))}`)}
-                {pior && comDado.length > 1 && num('Pior mês', mesCurto(pior), `${pior.saldo >= 0 ? '+' : '−'}${brlCurto(Math.abs(pior.saldo))}`)}
-              </div>
+            <div className="mb-1 flex items-baseline gap-3">
+              <span className="text-[13px] font-semibold text-gray-800">Saldo do mês</span>
+              <span className="text-[11px] text-gray-400">entradas − gastos · {textoPer}</span>
             </div>
             <div className="min-h-0 flex-1">
               <SaldoDoMes meses={r.porMes} ctrl={ctrlSaldo} onMes={abrirMes} />
@@ -556,13 +538,10 @@ export default function VisaoGeral() {
         catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={renderWidget} abaixo={filtros}
         pronto={!!linhas} onAtualizar={carregar} atualizando={carregando} />
 
-      {/* O "Gastos por grupo" AMPLIADO: a lista inteira (grupos ou categorias), com tendência e variação. */}
+      {/* O "Gastos por grupo" AMPLIADO: a lista inteira (grupos ou categorias) no painel do Gestor. */}
       {gruposAmpliado && (
-        <Modal open onClose={() => setGruposAmpliado(false)} title={`Gastos por grupo · ${textoPer}`} maxWidth="max-w-5xl">
-          <div className="max-h-[70vh] overflow-auto pr-1">
-            <BarrasGrupos grupos={grupos} total={r.gastos} meses={textoPer} comps={comDado.map((m) => m.competencia)} anterior={gruposAnt} semLimite />
-          </div>
-        </Modal>
+        <AmpliadoGrupos onClose={() => setGruposAmpliado(false)} grupos={grupos} total={r.gastos} meses={textoPer}
+          comps={comDado.map((m) => m.competencia)} anterior={gruposAnt} />
       )}
 
       {ampliado && (
