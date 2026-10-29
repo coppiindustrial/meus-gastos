@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mesesDoAno, pendenciasAgora, periodoDasLinhas, unirPeriodos, vencimentoNoMes } from '../src/lib/importacoes.js';
+import { mesesDoAno, pendenciasAgora, periodoDasLinhas, resumirPlanilha, unirPeriodos, vencimentoNoMes } from '../src/lib/importacoes.js';
 
 // Dados FICTÍCIOS.
 const nubank = { id: 'nu', nome: 'Nubank', dia_vencimento: 13, ativo: true };
@@ -75,4 +75,25 @@ test('unirPeriodos e periodoDasLinhas', () => {
   assert.equal(unirPeriodos([E('2026-01-01', '2026-01-10'), E('2026-01-20', '2026-01-31')]).length, 2);
   assert.equal(unirPeriodos([E('2026-01-01', '2026-01-10'), E('2026-01-13', '2026-01-31')]).length, 1);
   assert.deepEqual(periodoDasLinhas([{ data: '2026-10-05' }, { data: '2026-10-01' }]), { de: '2026-10-01', ate: '2026-10-05' });
+});
+
+test('resumirPlanilha: por origem, por mês e a conferência no formato do planilha.json', () => {
+  // Dados FICTÍCIOS.
+  const linhas = [
+    { origem: 'cartao', tipo: 'saida', valor_centavos: 1000, competencia: '2026-02-01', fatura: { arquivo: 'Nubank_2026-02-13.csv' } },
+    { origem: 'cartao', tipo: 'saida', valor_centavos: '500', competencia: '2026-02-01', fatura: { arquivo: 'Nubank_2026-02-13.csv' } },
+    { origem: 'fixo', tipo: 'saida', valor_centavos: 300, competencia: '2026-01-01' },
+    { origem: 'manual', tipo: 'saida', valor_centavos: 200, competencia: '2026-01-01' },
+    { origem: 'entrada', tipo: 'entrada', valor_centavos: 9000, competencia: '2026-01-01' },
+  ];
+  const r = resumirPlanilha(linhas, [{ cartao: { nome: 'Nubank' } }, { cartao: { nome: 'XP' } }, { cartao: { nome: 'Nubank' } }]);
+  assert.equal(r.qtd, 5);
+  assert.deepEqual(r.porOrigem.cartao, { qtd: 2, total: 1500 });
+  assert.equal(r.gastos, 2000);
+  assert.equal(r.entradas, 9000);
+  assert.deepEqual([r.de, r.ate], ['2026-01', '2026-02']);
+  assert.deepEqual(r.porMes[0], { comp: '2026-01', cartao: 0, fixo: 300, manual: 200, entrada: 9000, qtd: 3 });
+  assert.deepEqual(r.conferencia.porFatura['Nubank_2026-02-13.csv'], { linhas: 2, total: 1500 });
+  assert.deepEqual(r.conferencia.entradas, { linhas: 1, total: 9000 });
+  assert.deepEqual(r.cartoes, { Nubank: 2, XP: 1 });
 });

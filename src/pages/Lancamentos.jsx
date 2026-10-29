@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
@@ -14,7 +14,7 @@ import { listarResumoMensal } from '../api/resumo.js';
 import { listarCartoes, listarCategorias } from '../api/cadastros.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaAtual, formatDate, nomeCompetencia } from '../lib/format.js';
-import { ORIGENS, textoOrigem } from '../lib/planilha.js';
+import { ORIGENS, ordenarLinhas, proximaOrdem, textoOrigem } from '../lib/planilha.js';
 import { lsGet, lsSet } from '../lib/storage.js';
 import { exportCsv } from '../lib/exportCsv.js';
 import { mesesAte } from '../lib/resumo.js';
@@ -24,10 +24,12 @@ const OPCOES_TIPO = [{ value: '', label: 'Todos' }, { value: 'saida', label: 'Ga
 const OPCOES_ORIGEM = Object.entries(ORIGENS).map(([value, label]) => ({ value, label }));
 const OPCOES_REVISAR = [{ value: '', label: 'Todos' }, { value: 'sim', label: 'Só os a revisar', chip: 'A revisar' }];
 const LS_MES = 'lancamentos_mes';
+const LS_ORDEM = 'lancamentos_ordem';
+const lerOrdem = () => { try { return JSON.parse(lsGet(LS_ORDEM)) || null; } catch { return null; } };
 
-// A ordem da grade: a data mais nova em cima e, no mesmo dia, o último criado primeiro. Depois de
-// carregar ela não se refaz sozinha (uma planilha não pula linhas enquanto se digita).
-const ordenar = (linhas) => [...linhas].sort((a, b) => b.data.localeCompare(a.data) || String(b.criado_em).localeCompare(String(a.criado_em)));
+// A ORDEM DA GRADE: a escolhida no cabeçalho (a seta de cada coluna; `ordenarLinhas`) ou a padrão — a data mais
+// nova em cima. Ela é aplicada ao CARREGAR e ao CLICAR, e não se refaz sozinha depois (uma planilha não pula
+// linhas enquanto se digita: corrigir um valor não manda a linha para outro lugar).
 
 const Valor = ({ l }) => (
   <span className={`tabular-nums ${l.tipo === 'entrada' ? 'font-semibold text-green-700' : 'text-gray-800'}`}>
@@ -49,6 +51,15 @@ export default function Lancamentos() {
   const [revisar, setRevisar] = useState('');
   const [modal, setModal] = useState(null); // { item } ou {} para novo
   const [resumo, setResumo] = useState([]); // a view resumo_mensal (para a curva dos meses)
+  const [ordem, setOrdemEstado] = useState(lerOrdem);
+  const ordemRef = useRef(ordem);
+  const ordenarPor = (col) => {
+    const nova = proximaOrdem(ordemRef.current, col);
+    ordemRef.current = nova;
+    setOrdemEstado(nova);
+    lsSet(LS_ORDEM, JSON.stringify(nova));
+    setTodas((ts) => (ts ? ordenarLinhas(ts, nova) : ts));
+  };
 
   useEffect(() => {
     Promise.all([listarCategorias(), listarCartoes()])
@@ -57,7 +68,7 @@ export default function Lancamentos() {
   }, [toast]);
 
   const carregar = useCallback(async () => {
-    try { setTodas(ordenar(await listarDoMes(comp))); } catch (err) { toast.error(err.message); setTodas([]); }
+    try { setTodas(ordenarLinhas(await listarDoMes(comp), ordemRef.current)); } catch (err) { toast.error(err.message); setTodas([]); }
   }, [comp, toast]);
   useEffect(() => { setTodas(null); carregar(); }, [carregar]);
   useEffect(() => { listarResumoMensal().then(setResumo).catch((err) => toast.error(err.message)); }, [toast]);
@@ -157,7 +168,7 @@ export default function Lancamentos() {
           <>
             {/* Computador: a grade de planilha (com a linha em branco no fim, mesmo sem lançamentos). */}
             <div className="hidden md:block">
-              <GradeLancamentos linhas={visiveis} todas={todas} setTodas={setTodas} categorias={categorias} comp={comp}
+              <GradeLancamentos linhas={visiveis} todas={todas} setTodas={setTodas} categorias={categorias} comp={comp} ordem={ordem} onOrdenar={ordenarPor}
                 onAbrir={(l) => setModal({ item: l })} onRecarregar={carregar}
                 onCategoriaCriada={(cat) => setCategorias((c) => (c.some((x) => x.id === cat.id) ? c : [...c, cat]))} />
               <p className="mt-2 text-right text-xs text-gray-500">

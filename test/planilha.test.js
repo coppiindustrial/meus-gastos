@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  faixaDe, interpretar, ladrilhar, lerBloco, lerData, limparFaixa, planejarColagem, preencherAbaixo, resumoSelecao, textoDaFaixa,
+  faixaDe, interpretar, ladrilhar, lerBloco, lerData, limparFaixa, ordenarLinhas, planejarColagem, preencherAbaixo, proximaOrdem, resumoSelecao, textoDaFaixa,
 } from '../src/lib/planilha.js';
 
 // Dados FICTÍCIOS. Colunas: 0 Data · 1 Descrição · 2 Categoria · 3 Origem · 4 Valor · 5 Observação.
@@ -93,4 +93,23 @@ test('ladrilhar: um valor enche a seleção; um bloco se repete só em múltiplo
   assert.deepEqual(ladrilhar([['a'], ['b']], 4, 1), [['a'], ['b'], ['a'], ['b']]);
   assert.deepEqual(ladrilhar([['a'], ['b']], 3, 1), [['a'], ['b']]);  // 3 não é múltiplo de 2: cola uma vez
   assert.deepEqual(ladrilhar([['a', 'b']], 1, 1), [['a', 'b']]);      // seleção menor: cola o bloco inteiro
+});
+
+test('ordenarLinhas e proximaOrdem: ordem pelo cabeçalho, empate no padrão, rascunhos no fim', () => {
+  // Dados FICTÍCIOS.
+  const L = (id, data, descricao, valor_centavos, extra = {}) => ({ id, data, descricao, valor_centavos, criado_em: `${data}T10:00:00Z`, origem: 'manual', ...extra });
+  const ls = [
+    L('a', '2026-09-03', 'Padaria', 1250, { categoria: { nome: 'Mercado' } }),
+    L('b', '2026-09-10', 'Álcool gel', 900),
+    L('c', '2026-09-05', 'mercado', 1250, { categoria: { nome: 'Casa' } }),
+    { id: 'r', rascunho: true, data: '', descricao: '' },
+  ];
+  assert.deepEqual(ordenarLinhas(ls, null).map((l) => l.id), ['b', 'c', 'a', 'r']);
+  assert.deepEqual(ordenarLinhas(ls, { col: 'descricao', dir: 'asc' }).map((l) => l.id), ['b', 'c', 'a', 'r']);
+  assert.deepEqual(ordenarLinhas(ls, { col: 'valor', dir: 'desc' }).map((l) => l.id), ['c', 'a', 'b', 'r']); // empate: data mais nova
+  assert.deepEqual(ordenarLinhas(ls, { col: 'categoria', dir: 'asc' }).map((l) => l.id), ['c', 'a', 'b', 'r']); // sem categoria no fim
+  assert.deepEqual(proximaOrdem(null, 'valor'), { col: 'valor', dir: 'desc' });
+  assert.deepEqual(proximaOrdem({ col: 'valor', dir: 'desc' }, 'valor'), { col: 'valor', dir: 'asc' });
+  assert.equal(proximaOrdem({ col: 'valor', dir: 'asc' }, 'valor'), null);
+  assert.deepEqual(proximaOrdem({ col: 'valor', dir: 'asc' }, 'data'), { col: 'data', dir: 'asc' });
 });

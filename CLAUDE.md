@@ -53,13 +53,17 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   Linha nova é RASCUNHO só na tela até ter data e valor; aí vira avulso (ou entrada, com "+" no valor) no mês da tela.
   Grava campo a campo (`atualizarCampos`), otimista, numa fila. Cartão/parcela/mês: "Abrir no formulário" (Shift+F2).
   No celular continua a lista (só leitura + formulário).
+  ORDENAR (29/10/2026): o título da coluna SELECIONA (planilha); a SETA ao lado ORDENA (aparece no hover, fica à vista
+  na ordenada; 3ª vez volta ao padrão, data mais nova em cima) — `ordenarLinhas`/`proximaOrdem` em `lib/planilha.js`,
+  a escolha lembrada no navegador. A ordem vale ao carregar e ao clicar, e não se refaz sozinha (editar não pula a
+  linha). ESC TIRA A SELEÇÃO, como no DRE (nada aceso, sem a soma); seta/Tab/Enter ou clique a trazem de volta.
 - **Categorias = planilha agrupada** (opção A): grupos recolhíveis, e por categoria o uso tirado da `resumo_mensal`
   (`lib/usoCategorias.js`: 12 meses, total no mês, média pelos meses com dado, último uso).
 
 ## Importar (a tela, 28/10/2026)
 
 - UM ITEM SÓ NO MENU, "Importar" (`SOLTOS` em `lib/navegacao.js`, com o número do que falta — `useContadores`):
-  o Extrato e o Importar histórico saíram dos grupos (as rotas continuam, abertas daqui). `pages/Importar.jsx`.
+  o Extrato saiu do grupo (a rota continua, aberta daqui). `pages/Importar.jsx`.
 - ABA "POR MÊS": linha = mês do ano (filtro de ano), coluna = FONTE (cada cartão e o extrato); a célula diz QUANDO
   entrou ou o que falta (`mesesDoAno` em `lib/importacoes.js`, testada). Fonte DEVE o mês quando ele já pode ser
   importado: a fatura a partir do vencimento; o extrato quando o mês acabou (o mês corrente é "em andamento" ou
@@ -76,7 +80,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   o importar é um ÍCONE ↓ no canto da célula (cheio onde falta, só no hover nas outras); Situação "2 de 3" com
   barrinha. LEGENDA EM CIMA, como a do DRE (marcas clicáveis destacam o tipo, "Legenda" explica). "Só o que falta" é
   o interruptor do DRE dentro do trilho (`components/Toggle.jsx`, cores `.alterna` no index.css). Cabeçalho = o
-  grupo de ícones do DRE: ↓ importar arquivos · planilha · ▾ o que falta por mês (`MenuContexto` com `{ grupo }`).
+  grupo de ícones do DRE: ↓ importar arquivos · ▾ o que falta por mês (`MenuContexto` com `{ grupo }`).
+- O HISTÓRICO DA PLANILHA NÃO TEM TELA (29/10/2026, opção A do mockup): a linha dela na aba Histórico abre o
+  `components/ModalPlanilha.jsx` — o que é, os números, por origem e mês a mês (`lerDaPlanilha` +
+  `resumirPlanilha`, testada), "Conferir com o arquivo…" (o `planilha.json`, fatura a fatura) e "Desfazer".
 - ÁREA DE ARRASTAR (`components/AreaArrastar.jsx`, a da Importação do Gestor) nos três importadores — nunca um
   botão "Escolher arquivo".
 
@@ -209,7 +216,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 ## Histórico da planilha (fase 2, já importado)
 
 `scripts/migrar-planilha.mjs "…\Gastos total.xlsx"` → `dados/planilha.json` (pasta no `.gitignore`: dados financeiros
-NUNCA no git). A tela Cadastros → Importar histórico grava e confere por fatura. Parcelas que o Excel virou data
+NUNCA no git). A tela que gravava (Cadastros → Importar histórico) saiu em 29/10/2026: foi usada uma vez; o que
+ficou é o pop-up do histórico (conferir e desfazer). A gravação está no histórico do git (`importarPlanilha`). Parcelas que o Excel virou data
 ("06/dez", "46363,0") são lidas por `lib/parcela.js` (dia = parcela, mês = total) — reaproveitar nos importadores da fase 3.
 
 ## Convenções

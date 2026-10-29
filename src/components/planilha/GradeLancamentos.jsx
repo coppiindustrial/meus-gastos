@@ -4,6 +4,7 @@ import MenuContexto from '../MenuContexto.jsx';
 import BordaCopia, { bordaDaCopia, medirCopia } from './BordaCopia.jsx';
 import ModalCategoria from '../ModalCategoria.jsx';
 import { Etiqueta } from '../Comuns.jsx';
+import { IconSetaOrdenacao } from '../icons.jsx';
 import { opcoesCategoria } from '../SelectBusca.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
@@ -69,7 +70,7 @@ function textoEdicao(l, c) {
 
 // `linhas`: as da tela (filtradas, na ordem mostrada, com os rascunhos). `todas`/`setTodas`: a lista
 // inteira do mês, que é da página (os indicadores e os filtros saem dela).
-export default function GradeLancamentos({ linhas, todas, setTodas, categorias, comp, onAbrir, onRecarregar, onCategoriaCriada }) {
+export default function GradeLancamentos({ linhas, todas, setTodas, categorias, comp, onAbrir, onRecarregar, onCategoriaCriada, ordem = null, onOrdenar }) {
   const toast = useToast();
   const todasRef = useRef(todas);
   todasRef.current = todas;
@@ -77,6 +78,14 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   const caixaRef = useRef(null);
   const [sel, setSel] = useState({ r: 0, c: 0 });
   const [ext, setExt] = useState(null);
+  // Esc TIRA A SELEÇÃO (como na grade do DRE): nada aceso, sem a barra da soma. A célula de antes fica guardada
+  // em `sel`; uma seta, Tab, Enter ou um clique a traz de volta (qualquer `setSel`/`setExt` novo a acende).
+  const [apagada, setApagada] = useState(false);
+  const apagando = useRef(false);
+  useEffect(() => {
+    if (apagando.current) { apagando.current = false; return; }
+    setApagada(false);
+  }, [sel, ext]);
   const [editor, setEditor] = useState(null);     // { r, c, texto, digitando }
   const [menu, setMenu] = useState(null);
   const [marcas, setMarcas] = useState(null);     // { alcance, fora: Map("r:c" → motivo) } — a última colagem
@@ -93,6 +102,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   const n = linhas.length;
   const faixa = faixaDe(sel, ext ?? sel);
   const multi = faixa.r0 !== faixa.r1 || faixa.c0 !== faixa.c1;
+  const vis = !apagada; // a seleção aparece
   const catPorId = useMemo(() => new Map(categorias.map((c) => [c.id, c])), [categorias]);
   const comCategoria = useCallback((l) => ({ ...l, categoria: l.categoria_id ? catPorId.get(l.categoria_id) ?? l.categoria : null }), [catPorId]);
   const anoBase = Number(comp.slice(0, 4));
@@ -449,6 +459,19 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     const ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && (k === 'z' || k === 'Z') && !e.shiftKey) { e.preventDefault(); andarPilha('desfazer'); return; }
     if (ctrl && (k === 'y' || k === 'Y' || ((k === 'z' || k === 'Z') && e.shiftKey))) { e.preventDefault(); andarPilha('refazer'); return; }
+    if (k === 'Escape') {
+      // Já sem seleção, o Esc segue para quem estiver em volta (um modal, por exemplo).
+      if (apagada) return;
+      e.preventDefault(); e.stopPropagation();
+      if (ext) { apagando.current = true; setExt(null); }
+      setMarcas(null); setSelo(null); setCopia(null); setApagada(true);
+      return;
+    }
+    if (apagada) {
+      // Sem seleção, só o que a traz de volta (na célula de antes); o resto não tem onde agir.
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'F2', 'Home', 'End'].includes(k)) { e.preventDefault(); setApagada(false); }
+      return;
+    }
     if (ctrl && (k === 'c' || k === 'C')) { e.preventDefault(); copiar(); return; }
     if (ctrl && (k === 'd' || k === 'D')) { e.preventDefault(); preencher(); return; }
     if (ctrl && (k === 'a' || k === 'A')) { e.preventDefault(); setSel({ r: 0, c: 0 }); setExt({ r: Math.max(0, n - 1), c: ULTIMA_COL }); return; }
@@ -473,7 +496,6 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     if (k === 'Tab') { e.preventDefault(); mover(0, e.shiftKey ? -1 : 1); return; }
     if (k === 'Enter' || k === 'F2') { e.preventDefault(); comecarEdicao(sel.r, sel.c); return; }
     if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); limpar(); return; }
-    if (k === 'Escape') { setExt(null); setMarcas(null); setSelo(null); setCopia(null); return; }
     if (k.length === 1 && !ctrl && !e.altKey) { e.preventDefault(); comecarEdicao(sel.r, sel.c, k); }
   };
 
@@ -581,7 +603,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
 
   // ------------------------------------------------------------ desenho
 
-  const resumo = multi ? resumoSelecao(linhas, { ...faixa, r1: Math.min(faixa.r1, n - 1) }) : null;
+  const resumo = vis && multi ? resumoSelecao(linhas, { ...faixa, r1: Math.min(faixa.r1, n - 1) }) : null;
   const larguraTotal = 44 + Object.values(LARGURAS).reduce((s, w) => s + (w ?? 260), 0);
   const fPreencher = alvoPreencher != null && alvoPreencher > faixa.r1 ? { ...faixa, r0: faixa.r1 + 1, r1: alvoPreencher } : null;
 
@@ -597,8 +619,8 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
 
   const celula = (l, r, c) => {
     const col = COLUNAS[c];
-    const ativa = sel.r === r && sel.c === c;
-    const dentro = multi && naFaixa(faixa, r, c);
+    const ativa = vis && sel.r === r && sel.c === c;
+    const dentro = vis && multi && naFaixa(faixa, r, c);
     const motivoFora = marcas?.fora.get(`${r}:${c}`);
     const editando = editor && editor.r === r && editor.c === c;
     const sombras = [];
@@ -629,7 +651,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     } else if (c === 1) {
       conteudo = <span className="text-gray-400">Digite para lançar…</span>;
     }
-    const ultimaFaixa = multi && r === faixa.r1 && c === faixa.c1 && !editor;
+    const ultimaFaixa = vis && multi && r === faixa.r1 && c === faixa.c1 && !editor;
     return (
       <td key={c} data-cel={`${r}:${c}`} title={motivoFora || undefined}
         onMouseDown={(e) => aoPressionar(e, r, c)} onMouseEnter={() => aoPassar(r, c)}
@@ -672,7 +694,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
         // COLAR: o Ctrl+V segue para o evento `paste`, que é onde o navegador entrega o que foi copiado
         // (do Excel ou desta grade). Com um campo aberto, o texto vai para o campo.
         onPaste={(e) => {
-          if (editor || (e.target !== caixaRef.current && e.target.closest?.('input, textarea'))) return;
+          if (editor || apagada || (e.target !== caixaRef.current && e.target.closest?.('input, textarea'))) return;
           e.preventDefault();
           colarTexto(e.clipboardData?.getData('text/plain') ?? '');
         }}
@@ -687,13 +709,30 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
             <tr>
               <th className="sticky left-0 top-0 z-30 h-[33px] border-b border-r border-gray-300 bg-hx-f9fafb" aria-label="Linha" />
               {COLUNAS.map((col, c) => {
-                const acesa = c >= faixa.c0 && c <= faixa.c1;
+                const acesa = vis && c >= faixa.c0 && c <= faixa.c1;
+                const ordenada = ordem?.col === col.id;
+                // O TÍTULO seleciona a coluna (o jeito da planilha); a SETA ao lado ORDENA — ela aparece no hover
+                // (apagada) e fica sempre à vista, escura, na coluna ordenada. A 3ª vez volta à ordem padrão.
                 return (
                   <th key={col.id} onMouseDown={(e) => { e.preventDefault(); selecionarColuna(c); }}
                     style={acesa ? { boxShadow: `inset 0 -2px 0 ${AZUL}` } : undefined}
-                    className={`sticky top-0 z-20 h-[33px] cursor-pointer select-none border-b border-r border-gray-300 px-2.5 text-left text-[11px] font-semibold uppercase tracking-wide last:border-r-0 ${
-                      acesa ? 'bg-hx-eef2f7 text-gray-800' : 'bg-hx-f9fafb text-gray-500'} ${col.id === 'valor' ? 'text-right' : ''}`}>
-                    {col.nome}
+                    aria-sort={ordenada ? (ordem.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                    className={`group/th sticky top-0 z-20 h-[33px] cursor-pointer select-none border-b border-r border-gray-300 px-2.5 text-left text-[11px] font-semibold uppercase tracking-wide last:border-r-0 ${
+                      acesa ? 'bg-hx-eef2f7 text-gray-800' : ordenada ? 'bg-hx-f9fafb text-gray-800' : 'bg-hx-f9fafb text-gray-500'}`}>
+                    <div className={`flex items-center gap-1 ${col.id === 'valor' ? 'flex-row-reverse' : ''}`}>
+                      <span className="truncate">{col.nome}</span>
+                      {onOrdenar && (
+                        <button type="button" tabIndex={-1}
+                          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          onClick={(e) => { e.stopPropagation(); onOrdenar(col.id); }}
+                          title={ordenada ? (ordem.dir === 'asc' ? 'Crescente · clique para inverter' : 'Decrescente · clique para inverter (ou voltar à ordem padrão)') : `Ordenar por ${col.nome.toLowerCase()}`}
+                          aria-label={`Ordenar por ${col.nome.toLowerCase()}`}
+                          className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] transition-[opacity,background-color] duration-150 hover:bg-gray-200 ${
+                            ordenada ? 'text-gray-800 opacity-100' : 'text-gray-400 opacity-0 group-hover/th:opacity-100'}`}>
+                          <IconSetaOrdenacao className="h-3.5 w-3.5" descendente={ordenada && ordem.dir === 'desc'} />
+                        </button>
+                      )}
+                    </div>
                   </th>
                 );
               })}
@@ -701,7 +740,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
           </thead>
           <tbody>
             {[...linhas, null].map((l, r) => {
-              const acesa = r >= faixa.r0 && r <= faixa.r1;
+              const acesa = vis && r >= faixa.r0 && r <= faixa.r1;
               return (
                 <tr key={l?.id ?? 'branco'} className={l?.rascunho || !l ? 'bg-hx-fbfcfd' : ''}>
                   <td onMouseDown={(e) => selecionarLinhas(e, r)} onContextMenu={(e) => { if (!naFaixa(faixa, r, 0)) selecionarLinhas(e, r); abrirMenu(e, r, 0); }}

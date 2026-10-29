@@ -10,7 +10,6 @@ import EmBreve from './pages/EmBreve.jsx';
 import Lancamentos from './pages/Lancamentos.jsx';
 import Categorias from './pages/Categorias.jsx';
 import Cartoes from './pages/Cartoes.jsx';
-import ImportarHistorico from './pages/ImportarHistorico.jsx';
 import Faturas from './pages/Faturas.jsx';
 import Pendencias from './pages/Pendencias.jsx';
 import Regras from './pages/Regras.jsx';
@@ -43,7 +42,6 @@ export default function App() {
       <Route path="/lancamentos" element={<Protected><Lancamentos /></Protected>} />
       <Route path="/cadastros/categorias" element={<Protected><Categorias /></Protected>} />
       <Route path="/cadastros/cartoes" element={<Protected><Cartoes /></Protected>} />
-      <Route path="/cadastros/importar" element={<Protected><ImportarHistorico /></Protected>} />
       <Route path="/faturas" element={<Protected><Faturas /></Protected>} />
       <Route path="/pendencias" element={<Protected><Pendencias /></Protected>} />
       <Route path="/cadastros/regras" element={<Protected><Regras /></Protected>} />

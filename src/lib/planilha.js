@@ -30,6 +30,42 @@ export function textoOrigem(l) {
 }
 
 const norm = (s) => String(s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+// A ORDEM DA GRADE (29/10/2026, pelo cabeçalho): `ordem` = { col, dir: 'asc' | 'desc' } ou null — o PADRÃO, a data
+// mais nova em cima e, no mesmo dia, o último criado primeiro. Empate em qualquer coluna cai no padrão. Os
+// RASCUNHOS (linhas ainda não gravadas) ficam no fim, na ordem em que estão.
+const padraoGrade = (a, b) => String(b.data ?? '').localeCompare(String(a.data ?? '')) || String(b.criado_em ?? '').localeCompare(String(a.criado_em ?? ''));
+const CHAVES = {
+  data: (l) => l.data ?? '',
+  descricao: (l) => norm(l.descricao),
+  categoria: (l) => (l.categoria?.nome ? norm(l.categoria.nome) : '\uffff'), // sem categoria vai para o fim no crescente
+  origem: (l) => norm(textoOrigem(l)),
+  valor: (l) => Number(l.valor_centavos) || 0,
+  obs: (l) => (l.obs ? norm(l.obs) : '\uffff'),
+};
+export function ordenarLinhas(linhas, ordem) {
+  const reais = linhas.filter((l) => !l.rascunho);
+  const rascunhos = linhas.filter((l) => l.rascunho);
+  const chave = ordem && CHAVES[ordem.col];
+  const sinal = ordem?.dir === 'desc' ? -1 : 1;
+  const cmp = chave
+    ? (a, b) => {
+      const x = chave(a);
+      const y = chave(b);
+      const d = typeof x === 'number' ? x - y : x.localeCompare(y, 'pt-BR');
+      return d ? d * sinal : padraoGrade(a, b);
+    }
+    : padraoGrade;
+  return [...reais.sort(cmp), ...rascunhos];
+}
+
+// O próximo passo do clique no cabeçalho: a 1ª vez ordena (valor do maior para o menor, o resto crescente), a
+// 2ª inverte, a 3ª volta ao padrão.
+export function proximaOrdem(atual, col) {
+  if (atual?.col !== col) return { col, dir: col === 'valor' ? 'desc' : 'asc' };
+  const primeira = col === 'valor' ? 'desc' : 'asc';
+  return atual.dir === primeira ? { col, dir: primeira === 'asc' ? 'desc' : 'asc' } : null;
+}
 const p2 = (n) => String(n).padStart(2, '0');
 
 // Uma faixa a partir de dois cantos (a célula ativa e o outro).

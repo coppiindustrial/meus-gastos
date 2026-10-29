@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import Toggle from '../components/Toggle.jsx';
@@ -11,6 +11,7 @@ import { PageLoading } from '../components/Spinner.jsx';
 import { DivisorFaixa, FaixaProvider, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { SegUnico } from '../components/filtros/Segmentos.jsx';
 import ImportarArquivos from '../components/ImportarArquivos.jsx';
+import ModalPlanilha from '../components/ModalPlanilha.jsx';
 import ImportarFatura from './ImportarFatura.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
@@ -29,7 +30,8 @@ import useEscape from '../lib/useEscape.js';
 // em UMA linha (ponto de cor + data + o número curto) e o resto num cartão que abre no hover; a linha sob o cursor
 // acende e a célula ganha contorno; o importar é um ÍCONE ↓ no canto da célula (sempre à vista onde falta, só no
 // hover nas outras). A LEGENDA fica EM CIMA, como a do DRE: as marcas destacam aquele tipo de célula. O cabeçalho
-// é o grupo de ícones do DRE (importar arquivos · histórico da planilha · ▾ o que falta, por mês).
+// é o grupo de ícones do DRE (importar arquivos · ▾ o que falta, por mês). O HISTÓRICO DA PLANILHA não tem mais
+// tela nem botão: ela foi importada uma vez, e a linha dela na aba Histórico abre o pop-up (`ModalPlanilha`).
 
 const COR = { ok: '#22a06b', pl: '#9ca3af', parcial: '#4b8fe2', falta: '#e8a317' };
 const Ico = ({ children, className = 'h-3.5 w-3.5' }) => (
@@ -224,6 +226,7 @@ export default function Importar() {
   const [arquivos, setArquivos] = useState(false);
   const [desfazendo, setDesfazendo] = useState(null);
   const [menu, setMenu] = useState(null);
+  const [planilha, setPlanilha] = useState(null); // a linha do histórico da planilha aberta no pop-up
   const menuAbertoNoClique = useRef(false);
 
   const carregar = useCallback(async () => {
@@ -279,7 +282,6 @@ export default function Importar() {
     if (!itens.length) itens.push({ grupo: 'Nada falta importar' });
     itens.push({ sep: true });
     itens.push({ rotulo: agora?.faltam > 1 ? `Importar os ${agora.faltam} de uma vez…` : 'Importar arquivos…', icone: <IcoImportar />, sub: 'faturas e extrato juntos, arrastando os CSVs', onEscolher: () => setArquivos(true) });
-    itens.push({ rotulo: 'Histórico da planilha', icone: <IcoPlanilha />, onEscolher: () => navigate('/cadastros/importar') });
     setMenu({ x: r.right - 280, y: r.bottom + 4, titulo: agora?.faltam ? `${agora.faltam} ${agora.faltam === 1 ? 'importação falta' : 'importações faltam'}` : 'Importar', itens });
   };
 
@@ -310,7 +312,12 @@ export default function Importar() {
         ? <button type="button" className="btn-secondary !px-2.5 !py-1 !text-[12px]" disabled={desfazendo === i.id} onClick={() => desfazer(i)}>Desfazer</button>
         : null;
     }
-    return <Link to="/cadastros/importar" className="text-[12px] text-gray-500 underline hover:text-gray-800">abrir</Link>;
+    return (
+      <button type="button" onClick={() => setPlanilha(i)}
+        className="inline-flex items-center gap-1 rounded-[5px] border border-gray-200 bg-white px-2.5 py-1 text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50">
+        Ver <IconSeta className="-rotate-90" />
+      </button>
+    );
   };
 
   const depois = async (extrato) => {
@@ -331,11 +338,6 @@ export default function Importar() {
             <Tooltip label="Importar arquivos (faturas e extrato)">
               <button type="button" aria-label="Importar arquivos" onClick={() => setArquivos(true)} disabled={!dados} className={`${ICONE} w-[38px]`}>
                 <IcoImportar />
-              </button>
-            </Tooltip>
-            <Tooltip label="Histórico da planilha">
-              <button type="button" aria-label="Histórico da planilha" onClick={() => navigate('/cadastros/importar')} className={`${ICONE} w-[38px] border-l border-gray-200`}>
-                <IcoPlanilha />
               </button>
             </Tooltip>
             <Tooltip label={agora?.faltam ? `${agora.faltam} a importar` : 'Opções de importação'}>
@@ -465,6 +467,7 @@ export default function Importar() {
       )}
 
       <Dica dica={dica} />
+      {planilha && <ModalPlanilha imp={planilha} onFechar={() => setPlanilha(null)} onDesfeito={() => { setPlanilha(null); carregar(); }} />}
       <MenuContexto menu={menu} onFechar={() => setMenu(null)} />
       {fatura && (
         <ImportarFatura cartoes={dados.cartoes} inicial={fatura.inicial} onFechar={() => setFatura(null)}

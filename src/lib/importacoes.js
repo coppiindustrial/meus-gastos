@@ -112,3 +112,44 @@ export function periodoDasLinhas(linhas) {
   const ds = linhas.map((l) => l.data).sort();
   return ds.length ? { de: ds[0], ate: ds[ds.length - 1] } : { de: null, ate: null };
 }
+
+// O QUE ENTROU DA PLANILHA (o pop-up do histórico da planilha, 29/10/2026): os lançamentos que ela trouxe
+// (`importado_de = 'planilha'`), somados por origem e por mês, e a CONFERÊNCIA do banco no formato que o
+// `planilha.json` traz (por fatura, pelo nome do arquivo, e os três grupos sem fatura). `faturas`: as faturas
+// dela, com o cartão — para "Nubank 8 · XP 4".
+export function resumirPlanilha(linhas, faturas = []) {
+  const vazio = () => ({ qtd: 0, total: 0 });
+  const porOrigem = { cartao: vazio(), fixo: vazio(), manual: vazio(), entrada: vazio() };
+  const meses = new Map();
+  const conf = { porFatura: {}, fixos: { linhas: 0, total: 0 }, manuais: { linhas: 0, total: 0 }, entradas: { linhas: 0, total: 0 } };
+  linhas.forEach((l) => {
+    const v = Number(l.valor_centavos) || 0;
+    const origem = l.tipo === 'entrada' ? 'entrada' : (porOrigem[l.origem] ? l.origem : 'manual');
+    porOrigem[origem].qtd += 1;
+    porOrigem[origem].total += v;
+    const comp = String(l.competencia).slice(0, 7);
+    const m = meses.get(comp) ?? { comp, cartao: 0, fixo: 0, manual: 0, entrada: 0, qtd: 0 };
+    m[origem] += v;
+    m.qtd += 1;
+    meses.set(comp, m);
+    const alvo = l.origem === 'cartao' ? (conf.porFatura[l.fatura?.arquivo] ||= { linhas: 0, total: 0 })
+      : l.origem === 'fixo' ? conf.fixos : l.origem === 'manual' ? conf.manuais : conf.entradas;
+    alvo.linhas += 1;
+    alvo.total += v;
+  });
+  const porMes = [...meses.values()].sort((a, b) => a.comp.localeCompare(b.comp));
+  const cartoes = {};
+  faturas.forEach((f) => { const n = f.cartao?.nome ?? 'Cartão'; cartoes[n] = (cartoes[n] ?? 0) + 1; });
+  return {
+    qtd: linhas.length,
+    porOrigem,
+    porMes,
+    de: porMes[0]?.comp ?? null,
+    ate: porMes[porMes.length - 1]?.comp ?? null,
+    gastos: porOrigem.cartao.total + porOrigem.fixo.total + porOrigem.manual.total,
+    entradas: porOrigem.entrada.total,
+    faturas: faturas.length,
+    cartoes,
+    conferencia: conf,
+  };
+}
