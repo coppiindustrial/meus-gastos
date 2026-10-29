@@ -183,7 +183,8 @@ function TabelaGrupoMes({ grupos, comps, total, porMes, onExportar }) {
         <span className="flex-1" />
         <button type="button" onClick={onExportar} className="text-xs font-medium text-gray-500 underline hover:text-gray-800">Exportar CSV</button>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      {/* `scrollbar-gutter: stable`: abrir um grupo que passa da altura do bloco não cria a barra e encolhe a tabela */}
+      <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
       <div ref={caixaRef}>
         <table className="w-full border-separate border-spacing-0 text-[12.5px]" style={{ minWidth: 300 + comps.length * 74 }}>
           <thead>

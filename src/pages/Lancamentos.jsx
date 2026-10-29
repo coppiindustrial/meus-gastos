@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
+import Tooltip from '../components/Tooltip.jsx';
+import { IconMais, IconUpload } from '../components/icons.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { Bolinha } from '../components/Comuns.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
@@ -132,8 +134,17 @@ export default function Lancamentos() {
         titulo="Lançamentos"
         acoes={(
           <>
-            <button type="button" className="btn-secondary hidden md:inline-flex" onClick={exportar} disabled={!gravadas.length}>Exportar CSV</button>
+            {/* O GRUPO DO DRE (o mesmo dos Gastos fixos e do Importar): os ícones numa caixa só, o nome no tooltip. */}
+            <div className="hidden overflow-hidden rounded-md border border-gray-300 bg-white md:inline-flex">
+              <Tooltip label={`Exportar ${nomeCompetencia(comp).toLowerCase()} (CSV)`}>
+                <button type="button" aria-label="Exportar CSV" onClick={exportar} disabled={!gravadas.length}
+                  className="flex h-9 w-[38px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent">
+                  <IconUpload className="h-4 w-4" />
+                </button>
+              </Tooltip>
+            </div>
             <button type="button" className="btn-primary" onClick={() => setModal({})}>
+              <IconMais className="h-[11px] w-[11px]" />
               <span className="sm:hidden">Novo</span><span className="hidden sm:inline">Novo lançamento</span>
             </button>
           </>

@@ -42,6 +42,32 @@ export function excluirCategoria(id) {
   return exigir(supabase.from('categorias').delete().eq('id', id));
 }
 
+// Só os campos que mudaram (o cadastro em pop-up grava a diferença de cada linha).
+export function atualizarGrupo(id, campos) {
+  return exigir(supabase.from('grupos').update(campos).eq('id', id));
+}
+export function atualizarCategoria(id, campos) {
+  return exigir(supabase.from('categorias').update(campos).eq('id', id));
+}
+
+// JUNTAR uma categoria em outra: os lançamentos, os gastos fixos e as regras dela passam para a que fica, e ela
+// sai. Sem transação (o PostgREST não tem): a ordem é a que deixa o banco são se parar no meio — mover tudo
+// primeiro, apagar por último (a regra apagaria em cascata se a categoria saísse antes).
+export async function juntarCategoria(de, para) {
+  for (const tabela of ['lancamentos', 'recorrencias', 'regras']) {
+    await exigir(supabase.from(tabela).update({ categoria_id: para }).eq('categoria_id', de));
+  }
+  await exigir(supabase.from('categorias').delete().eq('id', de));
+}
+
+// Quantas regras apontam para cada categoria: { categoria_id: n }.
+export async function contarRegrasPorCategoria() {
+  const linhas = await exigir(supabase.from('regras').select('categoria_id'));
+  const n = {};
+  linhas.forEach((r) => { if (r.categoria_id) n[r.categoria_id] = (n[r.categoria_id] ?? 0) + 1; });
+  return n;
+}
+
 // Quantos lançamentos usam a categoria (para avisar antes de excluir).
 export async function contarUsoCategoria(id) {
   const { count, error } = await supabase.from('lancamentos').select('id', { count: 'exact', head: true }).eq('categoria_id', id);

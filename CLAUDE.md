@@ -59,6 +59,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   linha). ESC TIRA A SELEÇÃO, como no DRE (nada aceso, sem a soma); seta/Tab/Enter ou clique a trazem de volta.
 - **Categorias = planilha agrupada** (opção A): grupos recolhíveis, e por categoria o uso tirado da `resumo_mensal`
   (`lib/usoCategorias.js`: 12 meses, total no mês, média pelos meses com dado, último uso).
+  GERIR (29/10/2026, opção A do mockup "Categorias · gerir mais fácil"): o cabeçalho é o grupo do DRE (✎ Gerir
+  categorias · ▾ Novo grupo / Exportar CSV) + "+ Nova categoria". O ✎ abre `components/ModalCadastroCategorias.jsx`,
+  o cadastro no jeito do dos fixos: grupos como cabeçalho, categorias embaixo, cada célula um campo (nome, grupo,
+  cor/tipo do grupo, ativa); a alça ⠿ arrasta (abaixo de outro cabeçalho = muda de grupo), ▲▼ ordenam os grupos
+  (as colunas `ordem` já existiam). "Salvar alterações (N)" grava só a diferença (contas puras e testadas em
+  `lib/cadastroCategorias.js`). MARCAR categorias → Mover para, Desativar e JUNTAR EM UMA (`juntarCategoria`:
+  lançamentos, fixos e regras passam para a que fica, e ela sai — ao salvar, com confirmação). Categoria com
+  lançamentos não se exclui (junta ou desativa); excluir leva as REGRAS dela (FK em cascata) e a confirmação diz.
 
 ## Importar (a tela, 28/10/2026)
 
@@ -243,6 +251,11 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
   `CampoMes` — os dois em `components/CampoData.jsx`, o calendário COPIADO do Gestor (`CalendarioData` +
   `calendario/CabecalhoCalendario.jsx`, sem os feriados) e o `CalendarioMes` no mesmo desenho. O calendário vai
   PORTADO ao body (lá era `absolute`). `min`/`max` hachuram o que não vale; `compacto` = altura de tabela.
+- **Barra de rolagem não empurra a tela** (29/10/2026): `scrollbar-gutter: stable` no `<html>` (index.css; o
+  `travarRolagem` não compensa mais o padding) e na caixa que rola por dentro e muda de altura (a "Grupo × mês").
+  Caixa nova que abre/recolhe linhas e rola por dentro: `[scrollbar-gutter:stable]`.
+- **Botões do cabeçalho = o grupo do DRE** (Fixos, Importar, Lançamentos): ícones numa caixa só, nome no tooltip,
+  e o gesto do dia a dia como botão de destaque ao lado.
 - `localStorage` só por `lsGet`/`lsSet` (`lib/storage.js`) e só para preferência de tela — nunca dado financeiro.
 - Confirmação é `useConfirmacao()` com `await` (nunca `window.confirm`); avisos por `useToast()`.
 - Nunca logar valores financeiros nem dados pessoais.

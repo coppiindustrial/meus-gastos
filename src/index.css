@@ -6,6 +6,9 @@
   /* Reduz fontes E espaçamentos (rem) em ~12,5% globalmente: 16px → 14px de base. */
   html {
     font-size: 87.5%;
+    /* O ESPAÇO DA BARRA DE ROLAGEM FICA RESERVADO (29/10/2026): abrir um grupo que fazia a página passar da tela
+       criava a barra e tudo andava ~15px para a esquerda; fechar, voltava. O `travarRolagem` sabe disso. */
+    scrollbar-gutter: stable;
   }
   body {
     /* `bg-pagina`: branco no claro; no escuro, o fundo da página fica um degrau abaixo dos cartões. */

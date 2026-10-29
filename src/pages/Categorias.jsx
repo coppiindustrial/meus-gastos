@@ -3,15 +3,18 @@ import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Modal from '../components/Modal.jsx';
 import SegmentedFiltro from '../components/SegmentedFiltro.jsx';
 import ModalCategoria from '../components/ModalCategoria.jsx';
+import ModalCadastroCategorias from '../components/ModalCadastroCategorias.jsx';
+import MenuContexto from '../components/MenuContexto.jsx';
+import Tooltip from '../components/Tooltip.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { Bolinha, BotaoAcao, BotaoEditar, BotaoExcluir, Campo, Etiqueta, RodapeForm } from '../components/Comuns.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { BuscaFaixa, SegMes, SegUnico } from '../components/filtros/Segmentos.jsx';
-import { IconExpandirTudo, IconMais } from '../components/icons.jsx';
+import { IconExpandirTudo, IconLapis, IconMais, IconSeta } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import {
-  contarUsoCategoria, criarCategoriasSugeridas, excluirCategoria, excluirGrupo, listarCategorias, listarGrupos,
+  contarRegrasPorCategoria, contarUsoCategoria, criarCategoriasSugeridas, excluirCategoria, excluirGrupo, listarCategorias, listarGrupos,
   salvarGrupo,
 } from '../api/cadastros.js';
 import { listarResumoMensal } from '../api/resumo.js';
@@ -20,6 +23,7 @@ import { usoPorCategoria } from '../lib/usoCategorias.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaAtual, competenciaCurta } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
+import { exportCsv } from '../lib/exportCsv.js';
 import useLinhasAnimadas, { atributosLinha } from '../lib/useLinhasAnimadas.js';
 
 const TIPOS = [{ valor: 'saida', rotulo: 'Gasto' }, { valor: 'entrada', rotulo: 'Entrada' }];
@@ -161,7 +165,8 @@ export default function Categorias() {
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
   // O uso vem à parte: a tela abre com o cadastro e os números chegam em seguida.
-  useEffect(() => { listarResumoMensal().then(setResumo).catch((err) => toast.error(err.message)); }, [toast]);
+  const carregarResumo = useCallback(() => listarResumoMensal().then(setResumo).catch((err) => toast.error(err.message)), [toast]);
+  useEffect(() => { carregarResumo(); }, [carregarResumo]);
 
   const { uso } = useMemo(() => usoPorCategoria(resumo, comp, 12, competenciaAtual()), [resumo, comp]);
 
@@ -236,14 +241,66 @@ export default function Categorias() {
   const vazio = grupos && grupos.length === 0;
   const mesCurto = competenciaCurta(comp);
 
+  // O CADASTRO EM POP-UP (✎): os lançamentos de cada categoria em TODO o histórico (da `resumo_mensal`) e as
+  // regras de cada uma (lidas ao abrir).
+  const [cadastro, setCadastro] = useState(null); // { regras } quando aberto
+  const qtdTotal = useMemo(() => {
+    const n = {};
+    resumo.forEach((l) => { if (l.categoria_id) n[l.categoria_id] = (n[l.categoria_id] ?? 0) + Number(l.qtd); });
+    return n;
+  }, [resumo]);
+  const abrirCadastro = async () => {
+    const regras = await contarRegrasPorCategoria().catch(() => ({}));
+    setCadastro({ regras });
+  };
+  const [mais, setMais] = useState(null);
+  const maisAbertoNoClique = useRef(false);
+  const abrirMais = (el) => {
+    const r = el.getBoundingClientRect();
+    setMais({ x: r.right - 250, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+      { rotulo: 'Novo grupo', sub: 'nome, tipo e cor', onEscolher: () => setModal({ tipo: 'grupo' }) },
+      { rotulo: 'Exportar categorias (CSV)', sub: `grupo, categoria e o uso até ${mesCurto}`, onEscolher: exportar },
+    ] });
+  };
+  const exportar = () => exportCsv('categorias', categorias, [
+    { key: 'grupo', label: 'Grupo', map: (c) => c.grupo?.nome ?? '' },
+    { key: 'tipo', label: 'Tipo', map: (c) => (c.grupo?.tipo === 'entrada' ? 'Entrada' : 'Gasto') },
+    { key: 'nome', label: 'Categoria' },
+    { key: 'ativa', label: 'Ativa', map: (c) => (c.ativa ? 'sim' : 'não') },
+    { key: 'qtd', label: 'Lançamentos (12 meses)', map: (c) => uso.get(c.id)?.qtd ?? 0 },
+    { key: 'media', label: 'Média por mês', tipo: 'dinheiro', map: (c) => (uso.get(c.id)?.media ?? 0) / 100 },
+    { key: 'ultimo', label: 'Último uso', map: (c) => uso.get(c.id)?.ultimo ?? '' },
+  ]);
+  const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
+
   return (
     <div>
       <CabecalhoPagina
         titulo="Categorias e grupos"
+        acessorio={!vazio && grupos && <span className="hidden text-sm text-gray-500 sm:inline">{categorias.length} categorias em {grupos.length} grupos</span>}
         acoes={!vazio && grupos && (
           <>
-            <button type="button" className="btn-secondary" onClick={() => setModal({ tipo: 'grupo' })}>Novo grupo</button>
-            <button type="button" className="btn-primary" onClick={() => setModal({ tipo: 'categoria' })}>Nova categoria</button>
+            {/* O GRUPO DO DRE (o mesmo dos Gastos fixos): ✎ o cadastro em pop-up e ▾ "Mais ações"; ao lado, o gesto
+                do dia a dia em destaque. */}
+            <div className="inline-flex overflow-hidden rounded-md border border-gray-300 bg-white">
+              <Tooltip label="Gerir categorias">
+                <button type="button" aria-label="Gerir categorias" onClick={abrirCadastro} className={`${ICONE} w-[38px]`}>
+                  <IconLapis className="h-3.5 w-3.5" />
+                </button>
+              </Tooltip>
+              <Tooltip label="Mais ações">
+                {/* abre e fecha no mesmo botão (o mousedown anota se o menu estava aberto — ver Fixos.jsx) */}
+                <button type="button" aria-label="Mais ações" aria-haspopup="menu" aria-expanded={!!mais}
+                  onMouseDown={() => { maisAbertoNoClique.current = !!mais; }}
+                  onClick={(e) => { if (maisAbertoNoClique.current || mais) { maisAbertoNoClique.current = false; setMais(null); } else abrirMais(e.currentTarget); }}
+                  className={`${ICONE} w-[28px] border-l border-gray-200 ${mais ? 'bg-gray-100' : ''}`}>
+                  <IconSeta className={`transition-transform duration-200 ease-out ${mais ? 'rotate-180' : ''}`} />
+                </button>
+              </Tooltip>
+            </div>
+            <button type="button" className="btn-primary" onClick={() => setModal({ tipo: 'categoria' })}>
+              <IconMais className="h-[11px] w-[11px]" />Nova categoria
+            </button>
           </>
         )}
       />
@@ -365,6 +422,11 @@ export default function Categorias() {
         </>
       )}
 
+      {cadastro && (
+        <ModalCadastroCategorias grupos={grupos} categorias={categorias} qtd={qtdTotal} regras={cadastro.regras}
+          onFechar={() => setCadastro(null)} onSalvo={() => { setCadastro(null); carregar(); carregarResumo(); }} />
+      )}
+      <MenuContexto menu={mais} onFechar={() => setMais(null)} />
       {modal?.tipo === 'grupo' && <ModalGrupo grupo={modal.item} onFechar={() => setModal(null)} onSalvo={fecharESalvar} />}
       {modal?.tipo === 'categoria' && (
         <ModalCategoria categoria={modal.item} grupos={grupos} onFechar={() => setModal(null)} onSalvo={fecharESalvar} />

@@ -21,7 +21,10 @@ function travar() {
   const barra = window.innerWidth - document.documentElement.clientWidth;
   antes = { overflow: document.body.style.overflow, padding: document.body.style.paddingRight };
   document.body.style.overflow = 'hidden';
-  if (barra > 0) document.body.style.paddingRight = `${barra}px`;
+  // Com o espaço da barra reservado no <html> (`scrollbar-gutter: stable`, index.css), esconder a rolagem não
+  // desloca nada, e o padding de compensação empurraria a página para o outro lado.
+  const reservado = getComputedStyle(document.documentElement).scrollbarGutter?.includes('stable');
+  if (barra > 0 && !reservado) document.body.style.paddingRight = `${barra}px`;
 }
 
 function destravar() {
