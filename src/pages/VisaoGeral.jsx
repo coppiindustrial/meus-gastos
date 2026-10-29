@@ -367,6 +367,8 @@ export default function VisaoGeral() {
   const series = [
     { key: 'entradas', rotulo: 'Entradas', cor: COR_ENTRADAS },
     { key: 'gastos', rotulo: 'Gastos', cor: COR_GASTOS },
+    // a linha do saldo do mês volta (29/10/2026, a pedido): o bloco "Saldo do mês" detalha, mas aqui ela ajuda a ler
+    ...(forma !== 'acumulado' ? [{ key: 'saldo', rotulo: 'Saldo', cor: COR_SALDO, forma: 'linha' }] : []),
     ...(anterior ? [{ key: 'anterior', rotulo: 'Um ano antes', cor: COR_ANTERIOR, forma: 'tracejado' }] : []),
   ];
 

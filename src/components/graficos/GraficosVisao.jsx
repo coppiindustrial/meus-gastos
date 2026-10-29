@@ -102,6 +102,7 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
     return out;
   };
   const linhaAnterior = anterior ? trechos((m) => anterior[m.competencia] ?? null) : [];
+  const linhaSaldo = trechos((m) => (m.temDado ? m.saldo : null));
 
   const iAtivo = balao.ativo;
   const antesNaSerie = iAtivo > 0 && meses[iAtivo - 1].temDado ? meses[iAtivo - 1] : null;
@@ -146,7 +147,18 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
               <polyline key={`a${pts[0]}`} points={pts.join(' ')} fill="none" stroke={COR_ANTERIOR} strokeWidth="1.5" strokeDasharray="4 3"
                 vectorEffect="non-scaling-stroke" style={{ opacity: ctrl.opSerie('anterior'), transition: 'opacity .15s' }} />
             ))}
+            {linhaSaldo.map((pts) => (
+              <polyline key={`s${pts[0]}`} points={pts.join(' ')} fill="none" stroke={COR_SALDO} strokeWidth="1.75" strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke" style={{ opacity: ctrl.opSerie('saldo'), transition: 'opacity .15s' }} />
+            ))}
           </svg>
+          {/* O ponto do saldo em cada mês (vermelho quando faltou: a linha fica no zero, o balão diz quanto); maior no
+              mês sob o cursor. Em HTML, porque o SVG esticado (`preserveAspectRatio="none"`) achataria o círculo. */}
+          {meses.map((m, i) => m.temDado && (
+            <span key={`p${m.competencia}`} className={`pointer-events-none absolute -translate-x-1/2 translate-y-1/2 rounded-full border-white transition-[opacity,width,height] duration-150 ${
+              iAtivo === i ? 'h-[9px] w-[9px] border-2' : 'h-[6px] w-[6px] border'}`}
+              style={{ left: `${x(i)}%`, bottom: pct(fr(m.saldo)), background: m.saldo < 0 ? COR_FALTOU : COR_SALDO, opacity: ctrl.opSerie('saldo') }} />
+          ))}
           {comRotulo && vagas((m) => m.temDado && (
             <>
               {m.entradas > 0 && rotulo(fr(m.entradas), m.gastos > 0 ? fr(m.gastos) : null, rot(m.entradas), 'entradas')}
@@ -210,7 +222,8 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
   const acum = (campo) => { let t = 0; return meses.map((m) => (m.temDado ? (t += m[campo]) : null)); };
   const ent = acumulado ? acum('entradas') : meses.map((m) => (m.temDado ? m.entradas : null));
   const gas = acumulado ? acum('gastos') : meses.map((m) => (m.temDado ? m.gastos : null));
-  const sal = null; // o saldo tem bloco próprio (`SaldoDoMes`); o balão ainda o conta
+  // o saldo do mês (só no mensal: no acumulado, a distância entre as curvas já é o que sobrou)
+  const sal = acumulado ? null : meses.map((m) => (m.temDado ? m.saldo : null));
   let tAnt = 0;
   const ant = anterior ? meses.map((m) => { const v = anterior[m.competencia] ?? 0; tAnt += v; return acumulado ? tAnt : (v || null); }) : null;
   const todos = [...ent, ...gas, ...(sal ?? []), ...(ant ?? [])].filter((v) => v !== null);
