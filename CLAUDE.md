@@ -69,7 +69,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   lançamentos não se exclui (junta ou desativa); excluir leva as REGRAS dela (FK em cascata) e a confirmação diz.
   O pop-up ocupa a tela (até 1280px, a lista com 90vh menos o resto). A `ordem` do banco NÃO é 0, 1, 2… (muitas
   categorias com 0, ordenadas pelo nome): ela só conta como alteração na lista que a pessoa mexeu (`ordens` compara
-  a sequência com a de quando abriu, `pos`) — antes, só abrir dava dezenas de "alterações".
+  a sequência com a de quando abriu, `pos`) — antes, só abrir dava dezenas de "alterações". Os GRUPOS RECOLHEM
+  (a seta no cabeçalho e "Recolher tudo / Expandir tudo", lembrados no navegador; buscando, tudo aberto; mover ou
+  criar categoria num recolhido o abre). SALVAR NÃO FECHA: a tela recarrega e o rascunho recomeça do banco novo.
 
 ## Importar (a tela, 28/10/2026)
 

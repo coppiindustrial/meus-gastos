@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from './Modal.jsx';
 import SelectSimples from './SelectSimples.jsx';
 import Toggle from './Toggle.jsx';
-import { IconGrip } from './icons.jsx';
+import { IconExpandirTudo, IconGrip } from './icons.jsx';
+import { lsGet, lsSet } from '../lib/storage.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { atualizarCategoria, atualizarGrupo, excluirCategoria, excluirGrupo, juntarCategoria, salvarCategoria, salvarGrupo } from '../api/cadastros.js';
@@ -27,19 +28,32 @@ const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 let seq = 0;
 const novoId = () => `novo-${(seq += 1)}`;
 
+// RECOLHER OS GRUPOS (30/10/2026, a pedido): a seta no cabeçalho do grupo e "Recolher tudo / Expandir tudo" na faixa,
+// os mesmos da tela Categorias; o que ficou recolhido é lembrado no navegador. Buscando, tudo aparece aberto.
+const LS_RECOLHIDOS = 'cadastro_categorias_recolhidos';
+const lerRecolhidos = () => { try { return new Set(JSON.parse(lsGet(LS_RECOLHIDOS) || '[]')); } catch { return new Set(); } };
+const IconChevron = ({ aberto }) => (
+  <svg viewBox="0 0 24 24" className={`h-3.5 w-3.5 text-gray-500 transition-transform duration-150 ${aberto ? 'rotate-90' : ''}`} fill="none"
+    stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 6l6 6-6 6" />
+  </svg>
+);
+
 // `pos`: a posição ao abrir (a ordem só conta como alteração na lista que a pessoa mexeu — `ordens`).
 const doGrupo = (g, pos) => ({ id: g.id, pos, novo: false, excluir: false, orig: g, nome: g.nome, tipo: g.tipo, cor: g.cor });
 const daCategoria = (c, pos) => ({ id: c.id, pos, novo: false, excluir: false, juntarEm: null, orig: c, nome: c.nome, grupo_id: c.grupo_id, ativa: c.ativa });
+
+// As categorias na ordem dos grupos (a lista já vem por grupo e ordem).
+const rascunhoCats = (gruposBanco, categorias) => {
+  const ordemG = new Map(gruposBanco.map((g, i) => [g.id, i]));
+  return [...categorias].sort((a, b) => (ordemG.get(a.grupo_id) ?? 0) - (ordemG.get(b.grupo_id) ?? 0)).map(daCategoria);
+};
 
 export default function ModalCadastroCategorias({ grupos: gruposBanco, categorias, qtd = {}, regras = {}, onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   const [grupos, setGrupos] = useState(() => gruposBanco.map(doGrupo));
-  const [cats, setCats] = useState(() => {
-    // na ordem dos grupos (a lista já vem por grupo e ordem)
-    const ordemG = new Map(gruposBanco.map((g, i) => [g.id, i]));
-    return [...categorias].sort((a, b) => (ordemG.get(a.grupo_id) ?? 0) - (ordemG.get(b.grupo_id) ?? 0)).map(daCategoria);
-  });
+  const [cats, setCats] = useState(() => rascunhoCats(gruposBanco, categorias));
   const [busca, setBusca] = useState('');
   const [soAtivas, setSoAtivas] = useState(false);
   const [marcadas, setMarcadas] = useState(() => new Set());
@@ -47,7 +61,21 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
   const [corAberta, setCorAberta] = useState(null);
   const [erro, setErro] = useState(null); // { id, campo }
   const [salvando, setSalvando] = useState(false);
+  const [recolhidos, setRecolhidosEstado] = useState(lerRecolhidos);
+  const setRecolhidos = (s) => { setRecolhidosEstado(s); lsSet(LS_RECOLHIDOS, JSON.stringify([...s])); };
+  const abrirGrupo = (id) => { if (recolhidos.has(id)) { const n = new Set(recolhidos); n.delete(id); setRecolhidos(n); } };
+  const alternarGrupo = (id) => { const n = new Set(recolhidos); if (n.has(id)) n.delete(id); else n.add(id); setRecolhidos(n); };
   const corpoRef = useRef(null);
+
+  // SALVAR NÃO FECHA (30/10/2026, a pedido): a tela recarrega e devolve o banco novo (`grupos`/`categorias`); o
+  // rascunho recomeça dele, e a busca, o filtro, os recolhidos e a rolagem ficam como estavam.
+  const primeira = useRef(true);
+  useEffect(() => {
+    if (primeira.current) { primeira.current = false; return; }
+    setGrupos(gruposBanco.map(doGrupo));
+    setCats(rascunhoCats(gruposBanco, categorias));
+    setMarcadas(new Set()); setJuntando(null); setErro(null); setCorAberta(null);
+  }, [gruposBanco, categorias]);
 
   const nomeDe = (id) => cats.find((c) => c.id === id)?.nome || 'a categoria';
   const t = semAcento(busca).trim();
@@ -58,8 +86,11 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
     const grupoCasa = t && semAcento(g.nome).includes(t);
     const itens = doG.filter((c) => (!soAtivas || c.ativa || c.novo) && (!t || grupoCasa || c.novo || semAcento(c.nome).includes(t)));
     if (t && !grupoCasa && !itens.length && !g.novo) return [];
-    return [{ id: `g:${g.id}`, grupo: g, n: ficamNoGrupo(cats, g.id).length }, ...itens.map((c) => ({ id: `c:${c.id}`, cat: c, grupo: g }))];
-  }), [grupos, cats, t, soAtivas]);
+    const fechado = !t && recolhidos.has(g.id);
+    return [{ id: `g:${g.id}`, grupo: g, n: ficamNoGrupo(cats, g.id).length, fechado }, ...(fechado ? [] : itens.map((c) => ({ id: `c:${c.id}`, cat: c, grupo: g })))];
+  }), [grupos, cats, t, soAtivas, recolhidos]);
+  const tudoAberto = grupos.every((g) => !recolhidos.has(g.id));
+  const alternarTudo = () => setRecolhidos(tudoAberto ? new Set(grupos.map((g) => g.id)) : new Set());
 
   const arrasto = useListaArrastavel({
     ids: linhas.map((x) => x.id),
@@ -70,14 +101,17 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
   const nAlt = totalAlteracoes(alt);
   const mudaGrupo = (id, campo, v) => { setGrupos((gs) => gs.map((g) => (g.id === id ? { ...g, [campo]: v } : g))); setErro(null); };
   const mudaCat = (id, campo, v) => { setCats((cs) => cs.map((c) => (c.id === id ? { ...c, [campo]: v } : c))); setErro(null); };
-  // Mover para outro grupo: vai para o FIM dele (é o que se espera de "mover para").
-  const moverPara = (ids, grupoId) => setCats((cs) => {
-    const vao = cs.filter((c) => ids.includes(c.id)).map((c) => ({ ...c, grupo_id: grupoId }));
-    const ficam = cs.filter((c) => !ids.includes(c.id));
-    const ultimo = ficam.map((c) => c.grupo_id).lastIndexOf(grupoId);
-    const at = ultimo < 0 ? ficam.length : ultimo + 1;
-    return [...ficam.slice(0, at), ...vao, ...ficam.slice(at)];
-  });
+  // Mover para outro grupo: vai para o FIM dele (é o que se espera de "mover para"), que se abre se estava recolhido.
+  const moverPara = (ids, grupoId) => {
+    abrirGrupo(grupoId);
+    setCats((cs) => {
+      const vao = cs.filter((c) => ids.includes(c.id)).map((c) => ({ ...c, grupo_id: grupoId }));
+      const ficam = cs.filter((c) => !ids.includes(c.id));
+      const ultimo = ficam.map((c) => c.grupo_id).lastIndexOf(grupoId);
+      const at = ultimo < 0 ? ficam.length : ultimo + 1;
+      return [...ficam.slice(0, at), ...vao, ...ficam.slice(at)];
+    });
+  };
   const subirGrupo = (id, passo) => setGrupos((gs) => {
     const i = gs.findIndex((g) => g.id === id);
     const j = i + passo;
@@ -97,7 +131,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
       const ultimo = cs.map((x) => x.grupo_id).lastIndexOf(grupoId);
       return [...cs.slice(0, ultimo + 1), c, ...cs.slice(ultimo + 1)];
     });
-    setBusca(''); setSoAtivas(false);
+    setBusca(''); setSoAtivas(false); abrirGrupo(grupoId);
     focar(c.id);
   };
   const novoGrupo = () => {
@@ -124,7 +158,12 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
 
   const salvar = async () => {
     const problema = validar(grupos, cats);
-    if (problema) { setErro(problema); toast.error(`Não salvou — ${problema.motivo}.`); return; }
+    if (problema) {
+      setErro(problema);
+      abrirGrupo(cats.find((c) => c.id === problema.id)?.grupo_id);
+      toast.error(`Não salvou — ${problema.motivo}.`);
+      return;
+    }
     const { gruposNovos, gruposMudados, gruposExcluir, catsNovas, catsMudadas, catsJuntar, catsExcluir, ordens } = alt;
     if (catsJuntar.length || catsExcluir.length || gruposExcluir.length) {
       const partes = [
@@ -149,12 +188,12 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
       // 3) por último, os grupos que saem (já vazios)
       for (const g of gruposExcluir) await excluirGrupo(g.id);
       toast.success(nAlt === 1 ? 'Alteração salva.' : `${nAlt} alterações salvas.`);
-      onSalvo();
     } catch (err) {
       toast.error(/duplicate|unique/i.test(err.message) ? 'Já existe uma categoria ou grupo com esse nome.' : err.message);
-      setSalvando(false);
-      onSalvo(); // parte pode ter gravado: fecha e a tela recarrega com o que ficou no banco
+      // parte pode ter gravado: o rascunho recomeça do que ficou no banco
     }
+    await onSalvo();
+    setSalvando(false);
   };
 
   const borda = (id, campo) => (erro?.id === id && erro.campo === campo ? '!border-hx-e5484d' : '');
@@ -176,6 +215,11 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
         </label>
         {filtrando && <span className="text-[11.5px] text-gray-400">Com busca ou filtro, a alça não arrasta (a lista está parcial).</span>}
         <span className="flex-1" />
+        <button type="button" onClick={alternarTudo} disabled={!!t}
+          className="inline-flex h-8 items-center gap-1.5 rounded-[6px] border border-gray-300 bg-hx-f6f7f8 px-2.5 text-[12px] font-medium text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-800 disabled:opacity-50">
+          <IconExpandirTudo fechar={tudoAberto} />
+          {tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}
+        </button>
         <button type="button" className="btn-secondary !h-8 !px-3 !text-[12.5px]" onClick={novoGrupo}>+ Novo grupo</button>
       </div>
       <div ref={corpoRef} className="max-h-[calc(90vh-190px)] min-h-[240px] overflow-auto border-t border-gray-100 [scrollbar-gutter:stable]">
@@ -199,7 +243,13 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
                 const mudou = g.novo || (!g.excluir && Object.keys(diferencaGrupo(g, alt.ordens.grupo.get(g.id))).length > 0);
                 return [
                   <tr key={x.id} {...arrasto.itemProps(x.id)} className={`transition-[opacity,transform] duration-200 ease-out ${g.excluir ? 'opacity-45' : ''}`}>
-                    <td className={`${td} bg-hx-f6f7f8`} style={mudou && !g.excluir ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined} />
+                    <td className={`${td} bg-hx-f6f7f8 !px-0 text-center`} style={mudou && !g.excluir ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>
+                      <button type="button" onClick={() => alternarGrupo(g.id)} disabled={!!t} aria-expanded={!x.fechado}
+                        title={x.fechado ? 'Expandir o grupo' : 'Recolher o grupo'} aria-label={x.fechado ? `Expandir ${g.nome}` : `Recolher ${g.nome}`}
+                        className="mx-auto inline-flex h-7 w-6 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200 disabled:opacity-40">
+                        <IconChevron aberto={!x.fechado} />
+                      </button>
+                    </td>
                     <td className={`${td} bg-hx-f6f7f8 !px-0`}>
                       <span className="flex flex-col items-center leading-none">
                         <button type="button" disabled={i === 0} onClick={() => subirGrupo(g.id, -1)} title="Subir o grupo"

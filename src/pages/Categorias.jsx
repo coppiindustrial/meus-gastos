@@ -253,6 +253,11 @@ export default function Categorias() {
     const regras = await contarRegrasPorCategoria().catch(() => ({}));
     setCadastro({ regras });
   };
+  // Salvar no cadastro NÃO o fecha: a tela recarrega (grupos, categorias, o uso e as regras) e o pop-up recomeça disso.
+  const salvouCadastro = async () => {
+    const [regras] = await Promise.all([contarRegrasPorCategoria().catch(() => cadastro?.regras ?? {}), carregar(), carregarResumo()]);
+    setCadastro((c) => (c ? { regras } : c));
+  };
   const [mais, setMais] = useState(null);
   const maisAbertoNoClique = useRef(false);
   const abrirMais = (el) => {
@@ -424,7 +429,7 @@ export default function Categorias() {
 
       {cadastro && (
         <ModalCadastroCategorias grupos={grupos} categorias={categorias} qtd={qtdTotal} regras={cadastro.regras}
-          onFechar={() => setCadastro(null)} onSalvo={() => { setCadastro(null); carregar(); carregarResumo(); }} />
+          onFechar={() => setCadastro(null)} onSalvo={salvouCadastro} />
       )}
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
       {modal?.tipo === 'grupo' && <ModalGrupo grupo={modal.item} onFechar={() => setModal(null)} onSalvo={fecharESalvar} />}
