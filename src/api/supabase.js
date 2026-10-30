@@ -7,8 +7,20 @@ const chave = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const nuvemConfigurada = Boolean(url && chave);
 
+// TODA GRAVAÇÃO NOS DADOS avisa a tela (`EVENTO_DADOS`): os números do menu (`useContadores`) se refazem sem
+// que cada tela que grava precise lembrar de avisar. Só as do PostgREST (`/rest/v1/`) que não são leitura.
+export const EVENTO_DADOS = 'meusgastos:dados';
+const buscar = async (entrada, opcoes) => {
+  const resposta = await fetch(entrada, opcoes);
+  const metodo = (opcoes?.method || entrada?.method || 'GET').toUpperCase();
+  if (metodo !== 'GET' && metodo !== 'HEAD' && String(entrada?.url ?? entrada).includes('/rest/v1/')) {
+    window.dispatchEvent(new Event(EVENTO_DADOS));
+  }
+  return resposta;
+};
+
 export const supabase = nuvemConfigurada
-  ? createClient(url, chave, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'mg:auth' } })
+  ? createClient(url, chave, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'mg:auth' }, global: { fetch: buscar } })
   : null;
 
 // Mensagens do Supabase em português. Só o que a pessoa pode resolver vira texto próprio; o resto

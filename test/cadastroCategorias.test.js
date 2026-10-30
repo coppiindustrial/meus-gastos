@@ -24,6 +24,17 @@ test('reorganizar: arrastar para baixo de outro cabeçalho muda o grupo; a ordem
   assert.equal(reorganizar(['c:l', 'g:a', 'c:m', 'c:r', 'g:b'], cats)[0].grupo_id, 'a');
 });
 
+test('ordem do banco fora de 0, 1, 2… não é alteração; mexer na lista grava a ordem dela inteira', () => {
+  // como no banco real: muitas com ordem 0 (ordenadas pelo nome), grupos com buracos
+  const gs = [G('a', 'Alimentação', 3, { pos: 0 }), G('b', 'Casa', 7, { pos: 1 })];
+  const cs = [C('m', 'Mercado', 'a', 0, { pos: 0 }), C('r', 'Restaurante', 'a', 0, { pos: 1 }), C('l', 'Luz', 'b', 0, { pos: 2 })];
+  assert.equal(totalAlteracoes(alteracoes(gs, cs)), 0);
+  const a = alteracoes(gs, [cs[1], cs[0], cs[2]]); // Restaurante sobe
+  assert.deepEqual(a.catsMudadas.map((c) => c.id), ['m']); // Restaurante já era 0; Mercado vai de 0 para 1
+  assert.deepEqual(diferencaCategoria(cs[0], a.ordens.categoria.get('m')), { ordem: 1 });
+  assert.equal(a.gruposMudados.length, 0); // a lista dos grupos não foi mexida
+});
+
 test('juntar e excluir saem da ordem e do grupo; linha nova em branco não conta', () => {
   const r = [C('m', 'Mercado', 'a', 0, { juntarEm: 'r' }), C('r', 'Restaurante', 'a', 1), C('l', 'Luz', 'b', 0),
     { id: 'n1', nome: '', grupo_id: 'b', ativa: true, novo: true, excluir: false, juntarEm: null, orig: null }];

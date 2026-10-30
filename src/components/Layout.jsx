@@ -115,6 +115,14 @@ const flyoutLinkClass = ({ isActive }) =>
   }`;
 const chevAtivo = <SbChevron className="h-[15px] w-[15px] shrink-0 text-hx-9aa1ac" />;
 
+// O NÚMERO DO QUE FALTA (`contador` do item, de `useContadores`): a pílula âmbar ao lado do nome; onde não cabe
+// (o ícone com a barra recolhida, o grupo fechado), um ponto âmbar.
+const Numero = ({ n, dica }) => (n > 0 ? (
+  <span className="inline-grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-full bg-hx-fdf3d9 px-1.5 text-[11px] font-semibold text-hx-9a6f00"
+    title={`${n} ${dica}`}>{n}</span>
+) : null);
+const Ponto = ({ className = '' }) => <span className={`h-[7px] w-[7px] shrink-0 rounded-full bg-hx-f59e0b ${className}`} />;
+
 // Etiqueta das telas que ainda não existem (a fase do PLANO.md em que chegam).
 const Fase = ({ n }) => <span className="ml-1 shrink-0 text-[10.5px] font-medium text-hx-aab0ba">fase {n}</span>;
 
@@ -137,6 +145,7 @@ export default function Layout({ children }) {
   const [tema, setTema] = useTema();
   const { pathname } = useLocation();
   const contadores = useContadores(Boolean(user));
+  const temNumero = (grp) => grp.items.some((it) => contadores[it.contador] > 0);
 
   const [collapsedPref, setCollapsed] = useState(() => lsGet(LS_COLLAPSED) === 'true');
   const [openGroups, setOpenGroups] = useState(() => {
@@ -267,12 +276,12 @@ export default function Layout({ children }) {
           {collapsed ? (
             <>
               {SOLTOS.map((it) => (
-                <Tooltip key={it.to} label={contadores[it.contador] ? `${it.label} · ${contadores[it.contador]} a fazer` : it.label}><NavLink to={it.to} end={it.end}
+                <Tooltip key={it.to} label={contadores[it.contador] ? `${it.label} · ${contadores[it.contador]} ${it.dica}` : it.label}><NavLink to={it.to} end={it.end}
                   className={({ isActive }) => `relative flex items-center justify-center h-[42px] w-[42px] mx-auto my-[2.25px] rounded-[10px] transition ${
                     isActive ? 'bg-hx-f0f1f3 text-hx-20262f' : 'text-hx-6b727d hover:bg-hx-f3f4f6 hover:text-hx-2a3140'
                   }`}>
                   <it.icon className="h-[19px] w-[19px]" />
-                  {contadores[it.contador] > 0 && <span className="absolute right-[7px] top-[7px] h-[7px] w-[7px] rounded-full bg-hx-f59e0b" />}
+                  {contadores[it.contador] > 0 && <Ponto className="absolute right-[7px] top-[7px]" />}
                 </NavLink></Tooltip>
               ))}
               {GRUPOS.map((grp) => (
@@ -280,10 +289,11 @@ export default function Layout({ children }) {
                   onMouseEnter={() => setFlyout(grp.label)} onMouseLeave={() => setFlyout(null)}
                   onFocus={() => setFlyout(grp.label)}>
                   <div
-                    className={`flex items-center justify-center h-[42px] w-[42px] mx-auto my-[2.25px] rounded-[10px] transition ${
+                    className={`relative flex items-center justify-center h-[42px] w-[42px] mx-auto my-[2.25px] rounded-[10px] transition ${
                       groupActive(grp) ? 'bg-hx-f0f1f3 text-hx-20262f' : 'text-hx-6b727d group-hover:bg-hx-f3f4f6 group-hover:text-hx-2a3140'
                     }`}>
                     <grp.icon className="h-[19px] w-[19px]" />
+                    {temNumero(grp) && <Ponto className="absolute right-[7px] top-[7px]" />}
                   </div>
                   <div className={`${flyout === grp.label ? 'visible opacity-100' : 'invisible opacity-0'}
                                   absolute left-[62px] top-0 z-50 transition-opacity duration-150`}>
@@ -298,6 +308,7 @@ export default function Layout({ children }) {
                           <NavLink key={it.to} to={it.to} className={flyoutLinkClass} onClick={() => setFlyout(null)}>
                             <span className="flex items-center">
                               <span className="flex-1">{it.label}</span>
+                              <Numero n={contadores[it.contador]} dica={it.dica} />
                               {it.fase && <Fase n={it.fase} />}
                             </span>
                           </NavLink>
@@ -319,10 +330,7 @@ export default function Layout({ children }) {
                     <>
                       <it.icon className="h-[18px] w-[18px] shrink-0" />
                       <span className="flex-1 min-w-0 truncate text-left">{it.label}</span>
-                      {contadores[it.contador] > 0 && (
-                        <span className="inline-grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-full bg-hx-fdf3d9 px-1.5 text-[11px] font-semibold text-hx-9a6f00"
-                          title="O que falta importar">{contadores[it.contador]}</span>
-                      )}
+                      <Numero n={contadores[it.contador]} dica={it.dica} />
                       {isActive && chevAtivo}
                     </>
                   )}
@@ -334,6 +342,7 @@ export default function Layout({ children }) {
                     className="w-full flex items-center gap-2.5 h-[37px] my-[2px] rounded-[9px] pl-3 pr-2 text-[12.5px] font-semibold text-hx-3b4350 hover:text-hx-20262f hover:bg-hx-f3f4f6 transition-colors whitespace-nowrap">
                     <grp.icon className="h-[18px] w-[18px] shrink-0" />
                     <span className="flex-1 text-left min-w-0 truncate">{grp.label}</span>
+                    {!isOpen(grp.label) && temNumero(grp) && <Ponto />}
                     <SbChevron className={`h-[15px] w-[15px] shrink-0 text-hx-aab0ba transition-transform ${isOpen(grp.label) ? 'rotate-90' : ''}`} />
                   </button>
                   {/* Recolhe/expande com transição suave de altura (grid 0fr↔1fr). */}
@@ -344,6 +353,7 @@ export default function Layout({ children }) {
                           {({ isActive }) => (
                             <>
                               <span className="flex-1 min-w-0 truncate">{it.label}</span>
+                              <Numero n={contadores[it.contador]} dica={it.dica} />
                               {it.fase && <Fase n={it.fase} />}
                               {isActive && chevAtivo}
                             </>

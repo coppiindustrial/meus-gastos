@@ -27,8 +27,9 @@ const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 let seq = 0;
 const novoId = () => `novo-${(seq += 1)}`;
 
-const doGrupo = (g) => ({ id: g.id, novo: false, excluir: false, orig: g, nome: g.nome, tipo: g.tipo, cor: g.cor });
-const daCategoria = (c) => ({ id: c.id, novo: false, excluir: false, juntarEm: null, orig: c, nome: c.nome, grupo_id: c.grupo_id, ativa: c.ativa });
+// `pos`: a posição ao abrir (a ordem só conta como alteração na lista que a pessoa mexeu — `ordens`).
+const doGrupo = (g, pos) => ({ id: g.id, pos, novo: false, excluir: false, orig: g, nome: g.nome, tipo: g.tipo, cor: g.cor });
+const daCategoria = (c, pos) => ({ id: c.id, pos, novo: false, excluir: false, juntarEm: null, orig: c, nome: c.nome, grupo_id: c.grupo_id, ativa: c.ativa });
 
 export default function ModalCadastroCategorias({ grupos: gruposBanco, categorias, qtd = {}, regras = {}, onFechar, onSalvo }) {
   const toast = useToast();
@@ -167,7 +168,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
   );
 
   return (
-    <Modal open onClose={fechar} title="Cadastro das categorias" maxWidth="max-w-[1120px]" padding="p-0" acoes={acoes}
+    <Modal open onClose={fechar} title="Cadastro das categorias" maxWidth="max-w-[min(1280px,96vw)]" padding="p-0" acoes={acoes}
       subtitulo={`${plural(grupos.filter((g) => !g.excluir).length, 'grupo', 'grupos')} · ${plural(visiveisN, 'categoria', 'categorias')} · arraste ⠿ para ordenar ou mover de grupo`}>
       <div className="flex items-center gap-4 px-4 py-2.5">
         <label className="inline-flex cursor-pointer items-center gap-2 text-[12.5px] text-gray-600">
@@ -177,7 +178,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
         <span className="flex-1" />
         <button type="button" className="btn-secondary !h-8 !px-3 !text-[12.5px]" onClick={novoGrupo}>+ Novo grupo</button>
       </div>
-      <div ref={corpoRef} className="max-h-[60vh] overflow-auto border-t border-gray-100 [scrollbar-gutter:stable]">
+      <div ref={corpoRef} className="max-h-[calc(90vh-190px)] min-h-[240px] overflow-auto border-t border-gray-100 [scrollbar-gutter:stable]">
         <table className="w-full min-w-[900px] table-fixed border-separate border-spacing-0 text-[12.5px]">
           <colgroup>
             <col style={{ width: 34 }} /><col style={{ width: 30 }} /><col /><col style={{ width: 200 }} />

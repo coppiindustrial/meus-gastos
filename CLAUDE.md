@@ -67,6 +67,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   `lib/cadastroCategorias.js`). MARCAR categorias → Mover para, Desativar e JUNTAR EM UMA (`juntarCategoria`:
   lançamentos, fixos e regras passam para a que fica, e ela sai — ao salvar, com confirmação). Categoria com
   lançamentos não se exclui (junta ou desativa); excluir leva as REGRAS dela (FK em cascata) e a confirmação diz.
+  O pop-up ocupa a tela (até 1280px, a lista com 90vh menos o resto). A `ordem` do banco NÃO é 0, 1, 2… (muitas
+  categorias com 0, ordenadas pelo nome): ela só conta como alteração na lista que a pessoa mexeu (`ordens` compara
+  a sequência com a de quando abriu, `pos`) — antes, só abrir dava dezenas de "alterações".
 
 ## Importar (a tela, 28/10/2026)
 
@@ -262,6 +265,11 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
   Caixa nova que abre/recolhe linhas e rola por dentro: `[scrollbar-gutter:stable]`.
 - **Botões do cabeçalho = o grupo do DRE** (Fixos, Importar, Lançamentos): ícones numa caixa só, nome no tooltip,
   e o gesto do dia a dia como botão de destaque ao lado.
+- **Números do menu** (30/10/2026): o que ainda pede a pessoa depois de importar — Importar (a importar), Gastos
+  fixos (a lançar, do ano até hoje) e Revisar pendências (a revisar). `contador` + `dica` no item de
+  `lib/navegacao.js`, contas em `lib/useContadores.js`; pílula âmbar ao lado do nome, ponto âmbar no grupo fechado e
+  no ícone da barra recolhida. Refazem sozinhos: o `fetch` do supabase (`api/supabase.js`) solta `EVENTO_DADOS` em
+  toda gravação no PostgREST, e o hook reconta 800 ms depois da rajada — tela nova que grava não precisa avisar.
 - `localStorage` só por `lsGet`/`lsSet` (`lib/storage.js`) e só para preferência de tela — nunca dado financeiro.
 - Confirmação é `useConfirmacao()` com `await` (nunca `window.confirm`); avisos por `useToast()`.
 - Nunca logar valores financeiros nem dados pessoais.

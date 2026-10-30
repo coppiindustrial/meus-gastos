@@ -25,15 +25,24 @@ export function reorganizar(ids, cats) {
 // As categorias de um grupo que FICAM (sem as marcadas para excluir ou juntar), na ordem da tela.
 export const ficamNoGrupo = (cats, grupoId) => cats.filter((c) => c.grupo_id === grupoId && !c.excluir && !c.juntarEm);
 
-// A `ordem` de cada linha: a posição do grupo entre os que ficam; a da categoria, dentro do grupo dela.
+// A `ordem` de cada linha: a posição do grupo entre os que ficam; a da categoria, dentro do grupo dela. SÓ NAS
+// LISTAS QUE A PESSOA MEXEU (a dos grupos, ou as categorias de um grupo): no banco a `ordem` não é 0, 1, 2… (muitas
+// ficaram 0 e se ordenam pelo nome), e comparar com a posição na tela dava dezenas de "alterações" ao só abrir. Nas
+// outras listas o mapa não tem a linha (`undefined`), e a diferença não leva `ordem`. `pos` = a posição ao abrir.
+const sequencia = (linhas) => linhas.map((x) => x.id).join();
+const aoAbrir = (linhas) => linhas.filter((x) => !x.novo).sort((a, b) => (a.pos ?? a.orig.ordem) - (b.pos ?? b.orig.ordem));
 export function ordens(grupos, cats) {
-  const g = new Map(grupos.filter((x) => !x.excluir).map((x, i) => [x.id, i]));
+  const ficam = grupos.filter((x) => !x.excluir);
+  const g = new Map(sequencia(ficam) !== sequencia(aoAbrir(grupos)) ? ficam.map((x, i) => [x.id, i]) : []);
   const c = new Map();
-  g.forEach((_, gid) => ficamNoGrupo(cats, gid).forEach((x, i) => c.set(x.id, i)));
+  ficam.forEach(({ id: gid }) => {
+    const doGrupo = ficamNoGrupo(cats, gid);
+    if (sequencia(doGrupo) !== sequencia(aoAbrir(cats.filter((x) => x.orig?.grupo_id === gid)))) doGrupo.forEach((x, i) => c.set(x.id, i));
+  });
   return { grupo: g, categoria: c };
 }
 
-const so = (campos, antes) => Object.fromEntries(Object.entries(campos).filter(([k, v]) => antes[k] !== v));
+const so = (campos, antes) => Object.fromEntries(Object.entries(campos).filter(([k, v]) => v !== undefined && antes[k] !== v));
 
 // Só o que mudou num grupo (as linhas novas devolvem todos os campos).
 export function diferencaGrupo(g, ordem) {
