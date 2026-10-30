@@ -26,6 +26,10 @@ import { agrupar, fonteDe, nomeDe, ORDENS, ordenarGrupos, planoClassificar, prob
 // (`planoClassificar`, testado), com "Desfazer" para a última vez. Marcar várias e escolher uma categoria vale para todas.
 
 const LS_ORDEM = 'pendencias_ordem';
+// TIRAR A ESCOLHA (30/10/2026, a pedido): a primeira opção da lista desfaz a categoria escolhida na linha (para
+// deixar para depois — por exemplo, quando falta criar o grupo antes).
+const NENHUMA = [{ value: '-', label: 'Não classificar agora' }];
+const daLista = (v) => (v === '-' ? '' : v); // o '-' só existe na lista: a linha sem escolha mostra o "Escolher…"
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const diaMes = (d) => formatDate(d).slice(0, 5);
 
@@ -227,7 +231,7 @@ export default function Pendencias() {
                         </td>
                         <td className={`${td} text-right tabular-nums text-gray-800`}>{formatBRL(g.total)}</td>
                         <td className={td}>
-                          <SeletorCategoria value={e.categoriaId} onChange={(v) => escolher([g.chave], { categoriaId: v })} categorias={categorias} tipo="saida"
+                          <SeletorCategoria value={e.categoriaId} onChange={(v) => escolher([g.chave], { categoriaId: daLista(v) })} categorias={categorias} tipo="saida" extras={NENHUMA}
                             onCriada={() => listarCategorias().then(setCategorias).catch(() => {})} placeholder="Escolher…" className="!h-8 text-[12.5px]" />
                         </td>
                         <td className={td}>
@@ -254,7 +258,7 @@ export default function Pendencias() {
                 <span className="min-w-0 text-[12.5px] text-gray-700"><b className="font-semibold">{plural(marcadas.size, 'marcada', 'marcadas')}</b></span>
                 <span className="flex-1" />
                 <span className="w-[260px]">
-                  <SeletorCategoria value="" onChange={(v) => { escolher([...marcadas], { categoriaId: v }); setMarcadas(new Set()); }} categorias={categorias} tipo="saida"
+                  <SeletorCategoria value={null} onChange={(v) => { escolher([...marcadas], { categoriaId: daLista(v) }); setMarcadas(new Set()); }} categorias={categorias} tipo="saida" extras={NENHUMA}
                     onCriada={() => listarCategorias().then(setCategorias).catch(() => {})} placeholder={`Categoria para as ${marcadas.size}…`} className="!h-8 text-[12.5px]" />
                 </span>
                 <button type="button" className="btn-secondary !h-8 !px-3 !text-[12.5px]" onClick={() => setMarcadas(new Set())}>Desmarcar</button>

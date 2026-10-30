@@ -76,7 +76,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   categorias com 0, ordenadas pelo nome): ela só conta como alteração na lista que a pessoa mexeu (`ordens` compara
   a sequência com a de quando abriu, `pos`) — antes, só abrir dava dezenas de "alterações". Os GRUPOS RECOLHEM
   (a seta no cabeçalho e "Recolher tudo / Expandir tudo", lembrados no navegador; buscando, tudo aberto; mover ou
-  criar categoria num recolhido o abre). SALVAR NÃO FECHA: a tela recarrega e o rascunho recomeça do banco novo.
+  criar categoria num recolhido o abre), ANIMADOS com o `useLinhasAnimadas` (o da tela Categorias: as linhas do
+  recolhido ficam montadas e escondidas — o arrasto vê todas). SALVAR NÃO FECHA: a tela recarrega e o rascunho
+  recomeça do banco novo. O ARRASTO TERMINA MESMO SEM `dragend` (`useListaArrastavel`, 30/10/2026): a linha que
+  muda de lugar às vezes perde o evento, e o `dragId` preso deixava a linha esmaecida; o fim vem também da janela.
 
 ## Importar (a tela, 28/10/2026)
 
@@ -117,7 +120,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   LINHA (`SeletorCategoria`) e a coluna Regra já com o nome ("pega N"; vazia = só estas compras). Escolher NÃO grava:
   "Classificar N" grava tudo (`planoClassificar` em `lib/pendencias.js`, testada: a regra pega também os
   estabelecimentos não escolhidos, nunca os escolhidos com outra categoria) e "Desfazer" volta a última vez
-  (`desclassificar` + apaga as regras criadas). Marcar várias → "Categoria para as N". Filtros: busca, cartão
+  (`desclassificar` + apaga as regras criadas). Marcar várias → "Categoria para as N". "Não classificar agora", a
+  primeira opção da lista, tira a escolha (o valor '-' só existe na lista). Filtros: busca, cartão
   (ou Extrato), ordem (lembrada). Cabeçalho: ☰ Regras de classificação · ▾ Exportar CSV + "Classificar N".
 
 ## Extrato da conta corrente

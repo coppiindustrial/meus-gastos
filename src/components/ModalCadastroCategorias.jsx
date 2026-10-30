@@ -10,6 +10,7 @@ import { atualizarCategoria, atualizarGrupo, excluirCategoria, excluirGrupo, jun
 import { alteracoes, diferencaCategoria, diferencaGrupo, ficamNoGrupo, reorganizar, totalAlteracoes, validar } from '../lib/cadastroCategorias.js';
 import { CORES_GRUPO } from '../lib/sugestoes.js';
 import { useListaArrastavel } from '../lib/useListaArrastavel.js';
+import useLinhasAnimadas, { atributosLinha } from '../lib/useLinhasAnimadas.js';
 
 // O CADASTRO DAS CATEGORIAS NUM POP-UP (29/10/2026, opção A do mockup "Categorias · gerir mais fácil"), no jeito do
 // cadastro dos fixos (`ModalCadastroFixos`): os grupos como linhas de cabeçalho e as categorias embaixo, numa tabela
@@ -87,8 +88,13 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
     const itens = doG.filter((c) => (!soAtivas || c.ativa || c.novo) && (!t || grupoCasa || c.novo || semAcento(c.nome).includes(t)));
     if (t && !grupoCasa && !itens.length && !g.novo) return [];
     const fechado = !t && recolhidos.has(g.id);
-    return [{ id: `g:${g.id}`, grupo: g, n: ficamNoGrupo(cats, g.id).length, fechado }, ...(fechado ? [] : itens.map((c) => ({ id: `c:${c.id}`, cat: c, grupo: g })))];
+    return [{ id: `g:${g.id}`, grupo: g, n: ficamNoGrupo(cats, g.id).length, fechado }, ...itens.map((c) => ({ id: `c:${c.id}`, cat: c, grupo: g, fechado }))];
   }), [grupos, cats, t, soAtivas, recolhidos]);
+  // RECOLHER ANIMADO, como na tela Categorias (`useLinhasAnimadas`, o do DRE): as linhas de um grupo recolhido
+  // continuam montadas e escondidas, e o grupo some/aparece deslizando — também o ÚLTIMO, que antes abria seco
+  // (o que dava a impressão de suave era só o deslize das linhas de baixo). O arrasto vê TODAS as linhas.
+  const abertas = useMemo(() => linhas.filter((x) => !x.cat || !x.fechado), [linhas]);
+  const desenhadas = useLinhasAnimadas(linhas, abertas, corpoRef);
   const tudoAberto = grupos.every((g) => !recolhidos.has(g.id));
   const alternarTudo = () => setRecolhidos(tudoAberto ? new Set(grupos.map((g) => g.id)) : new Set());
 
@@ -236,13 +242,13 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
             </tr>
           </thead>
           <tbody ref={arrasto.containerRef}>
-            {linhas.map((x) => {
+            {desenhadas.map(({ linha: x, estado }) => {
               if (!x.cat) {
                 const g = x.grupo;
                 const i = grupos.indexOf(g);
                 const mudou = g.novo || (!g.excluir && Object.keys(diferencaGrupo(g, alt.ordens.grupo.get(g.id))).length > 0);
                 return [
-                  <tr key={x.id} {...arrasto.itemProps(x.id)} className={`transition-[opacity,transform] duration-200 ease-out ${g.excluir ? 'opacity-45' : ''}`}>
+                  <tr key={x.id} {...arrasto.itemProps(x.id)} {...atributosLinha(x.id, estado)} className={`transition-[opacity,transform] duration-200 ease-out ${g.excluir ? 'opacity-45' : ''}`}>
                     <td className={`${td} bg-hx-f6f7f8 !px-0 text-center`} style={mudou && !g.excluir ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>
                       <button type="button" onClick={() => alternarGrupo(g.id)} disabled={!!t} aria-expanded={!x.fechado}
                         title={x.fechado ? 'Expandir o grupo' : 'Recolher o grupo'} aria-label={x.fechado ? `Expandir ${g.nome}` : `Recolher ${g.nome}`}
@@ -300,7 +306,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
               const mudou = c.novo || (!sai && Object.keys(diferencaCategoria(c, alt.ordens.categoria.get(c.id))).length > 0);
               return (
                 // A classe de transição é obrigatória para o FLIP do arraste (os vizinhos deslizam).
-                <tr key={x.id} {...arrasto.itemProps(x.id)}
+                <tr key={x.id} {...arrasto.itemProps(x.id)} {...atributosLinha(x.id, estado)}
                   className={`transition-[opacity,transform] duration-200 ease-out ${sai ? 'opacity-50' : ''} ${marcadas.has(c.id) ? 'bg-blue-50' : ''} ${
                     arrasto.dragId === x.id ? '!opacity-40' : ''}`}>
                   <td className={`${td} text-center`} style={mudou && !sai ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>

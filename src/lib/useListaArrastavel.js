@@ -89,11 +89,37 @@ export function useListaArrastavel({ ids, onReordenar, aoSoltar, seletorFantasma
   const ghostRef = useRef(null);       // clone usado como imagem de arraste (o "fantasma")
   const containerRef = useRef(null);
   const posRef = useRef({});
+  const ouvindo = useRef(null);        // os ouvintes da janela do arrasto em curso (ver `terminar`)
   useEffect(() => { idsRef.current = ids; }, [ids]);
+
+  // As posições de agora (as linhas escondidas — um grupo recolhido — ficam de fora).
+  const medir = () => {
+    const atual = {};
+    containerRef.current?.querySelectorAll('[data-arrasto]').forEach((el) => {
+      if (!el.hidden) atual[el.getAttribute('data-arrasto')] = el.getBoundingClientRect().top;
+    });
+    return atual;
+  };
+
+  // O FIM DO ARRASTO, UMA VEZ SÓ (Meus Gastos, 30/10/2026). Quando a linha arrastada MUDA DE LUGAR na tabela
+  // (o React move o nó dela), o Chrome às vezes não entrega o `dragend` à alça: o `dragId` ficava preso, a
+  // linha seguia esmaecida e o campo dela estranho até fechar o pop-up. Agora o fim também vem da JANELA — o
+  // `drop`/`dragend` que chegam lá e, por garantia, o primeiro movimento do mouse depois do arrasto (durante
+  // ele o navegador não manda `mousemove`).
+  const terminar = () => {
+    if (!ouvindo.current) return;
+    ouvindo.current.forEach(([tipo, fn]) => window.removeEventListener(tipo, fn, true));
+    ouvindo.current = null;
+    if (ghostRef.current) { ghostRef.current.remove(); ghostRef.current = null; }
+    if (soltou.current) aoSoltar?.(idsRef.current);
+    else if (antes.current) onReordenar(antes.current);   // cancelou (Esc, soltou fora) → reverte
+    setDragId(null);
+  };
 
   const onDragStart = (id) => (e) => {
     antes.current = ids;
     soltou.current = false;
+    posRef.current = medir();   // a rolagem muda as posições: o FLIP parte das de agora
     // O FANTASMA é a linha inteira (semitransparente, com sombra e leve inclinação) seguindo o
     // cursor — não a alça, que é um traço de 9px e não diz o que está sendo movido. O clone fica
     // fora da tela só para o navegador tirar o snapshot do `setDragImage`.
@@ -101,8 +127,14 @@ export function useListaArrastavel({ ids, onReordenar, aoSoltar, seletorFantasma
     // O snapshot do fantasma é tirado quando o `dragstart` TERMINA — se o React re-renderizar nesse
     // meio (aplicando o esmaecido), o Chrome descarta a imagem custom e volta ao retângulo padrão.
     // Por isso o estado só entra no próximo tick.
-    setTimeout(() => setDragId(id), 0);
+    setTimeout(() => {
+      setDragId(id);
+      if (ouvindo.current) ouvindo.current.forEach(([tipo, fn]) => window.removeEventListener(tipo, fn, true));
+      ouvindo.current = [['drop', () => { soltou.current = true; }], ['dragend', terminar], ['mousemove', terminar]];
+      ouvindo.current.forEach(([tipo, fn]) => window.addEventListener(tipo, fn, true));
+    }, 0);
   };
+  useEffect(() => () => { ouvindo.current?.forEach(([tipo, fn]) => window.removeEventListener(tipo, fn, true)); }, []);
 
   const onDragOver = (id) => (e) => {
     e.preventDefault();
@@ -122,12 +154,7 @@ export function useListaArrastavel({ ids, onReordenar, aoSoltar, seletorFantasma
 
   const onDrop = (e) => { e.preventDefault(); soltou.current = true; };
 
-  const onDragEnd = () => {
-    if (ghostRef.current) { ghostRef.current.remove(); ghostRef.current = null; }
-    if (soltou.current) aoSoltar?.(idsRef.current);
-    else if (antes.current) onReordenar(antes.current);   // cancelou (Esc, soltou fora) → reverte
-    setDragId(null);
-  };
+  const onDragEnd = () => terminar();
 
   // FLIP: quando a ordem muda, os itens que cederam lugar DESLIZAM até a posição nova em vez de
   // pular. Mede antes/depois e anima o delta por `transform`. O item arrastado não anima — ele já
@@ -140,6 +167,7 @@ export function useListaArrastavel({ ids, onReordenar, aoSoltar, seletorFantasma
     const anterior = posRef.current;
     const atual = {};
     cont.querySelectorAll('[data-arrasto]').forEach((el) => {
+      if (el.hidden) return;
       const id = el.getAttribute('data-arrasto');
       const top = el.getBoundingClientRect().top;
       atual[id] = top;
