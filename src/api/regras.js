@@ -31,6 +31,21 @@ export function excluirRegra(id) {
   return exigir(supabase.from('regras').delete().eq('id', id));
 }
 
+// O CADASTRO EM TABELA (tela Regras, 30/10/2026): grava só os campos que mudaram; a nova já com a prioridade.
+export function atualizarRegra(id, campos) {
+  return exigir(supabase.from('regras').update(campos).eq('id', id));
+}
+export function criarRegra(campos) {
+  return exigir(supabase.from('regras').insert(campos).select().single());
+}
+
+// Os nomes dos lançamentos que as regras classificam (fatura e extrato gravam o `estabelecimento`), para contar o
+// uso de cada regra (`usoDasRegras`).
+export function listarNomesClassificaveis() {
+  return buscarTudo(() => supabase.from('lancamentos').select('id, estabelecimento, data')
+    .not('estabelecimento', 'is', null).order('id'));
+}
+
 // ------------------------------------------------------------ Pendências
 
 export function listarPendencias() {

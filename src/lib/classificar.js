@@ -6,7 +6,7 @@
 // O SEARCH do Excel aceita CURINGAS, e 42 regras da planilha dependem deles ("Dl*Uberrides"):
 //   *  qualquer sequência de caracteres     ?  um caractere qualquer     ~*  ~?  o próprio * ou ?
 
-function padraoDe(palavra) {
+export function padraoDe(palavra) {
   let re = '';
   const s = String(palavra);
   for (let i = 0; i < s.length; i += 1) {

@@ -124,6 +124,22 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   primeira opção da lista, tira a escolha (o valor '-' só existe na lista). Filtros: busca, cartão
   (ou Extrato), ordem (lembrada). Cabeçalho: ☰ Regras de classificação · ▾ Exportar CSV + "Classificar N".
 
+## Cartões e Regras de classificação (30/10/2026, opção A dos mockups "· overhaul")
+
+- CARTÕES (`pages/Cartoes.jsx`): UM BLOCO POR CARTÃO — última fatura (↗ os lançamentos do mês), próxima (vence em
+  N dias; já entrou ou a importar, com o ↓ que abre o `ImportarFatura` com cartão e vencimento), parcelas que vêm (view
+  `parcelas_futuras`), média por fatura (12 meses) e as 12 faturas em colunas (a última na cor `--serie-gastos`).
+  Contas em `lib/cartoes.js` (testada). Cabeçalho do DRE: ✎ `ModalCadastroCartoes` (tabela de formulário, "Salvar
+  alterações (N)"; cartão com lançamentos não se exclui) · ▾ Exportar CSV / Importar; "+ Novo cartão" = o formulário
+  de um (clicar no nome do bloco também o abre).
+- REGRAS (`pages/Regras.jsx`): a TABELA DE FORMULÁRIO dos cadastros — a ordem é a alça ⠿ (a primeira que pega
+  decide), palavra e categoria (ou "Ignorar") são campos, marcar várias muda a categoria ou exclui, "Salvar
+  alterações (N)" grava a diferença. A prioridade só conta como alteração se a ORDEM mudou (aí renumera 1, 2, 3…; a
+  nova no fim vai depois da maior) — `prioridades` em `lib/regras.js` (testada). PEGOU e AVISO ("escondida por #N",
+  "sem uso") saem dos lançamentos com `estabelecimento`, pela ordem GRAVADA (`usoDasRegras`). ⌕ abre o TESTE de um
+  nome (pela ordem da tela); filtros categoria / tipo / uso e "Agrupar" por categoria (sem arrastar). ▾ "Aplicar nas
+  pendências agora" (as de ignorar ficam de fora) e Exportar CSV.
+
 ## Extrato da conta corrente
 
 - `lib/lerExtrato.js`: CSV do extrato do Nubank (`Data,Valor,Identificador,Descrição`); a `contraparte` (quem recebeu
