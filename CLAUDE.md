@@ -71,18 +71,24 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 ## Importar (a tela, 28/10/2026)
 
 - UM ITEM SÓ NO MENU, "Importar" (`SOLTOS` em `lib/navegacao.js`, com o número do que falta — `useContadores`):
-  o Extrato saiu do grupo (a rota continua, aberta daqui). `pages/Importar.jsx`.
+  `pages/Importar.jsx`. NADA DE IMPORTAR ABRE OUTRA TELA (29/10/2026): os três importadores são POP-UPS abertos dali —
+  `ImportarFatura`, `ImportarExtrato` (era a tela /extrato; com a prévia, cresce para o painel dos ampliados, 1100px/90vh,
+  rodapé preso) e `ImportarArquivos`. A TELA FATURAS SAIU: cada fatura está na aba Por mês (a célula que entrou tem
+  o ↗ "Ver os lançamentos do mês") e sai pelo "Excluir" da linha dela no Histórico; as da PLANILHA (sem linha própria)
+  saem pela lista "As faturas dela" do pop-up da planilha. `/faturas` e `/extrato` levam ao Importar, e "Revisar
+  pendências" foi para Movimentação. O ↓ de importar é O MESMO botão cheio em toda célula (à vista no "Falta", no hover
+  nas outras).
 - ABA "POR MÊS": linha = mês do ano (filtro de ano), coluna = FONTE (cada cartão e o extrato); a célula diz QUANDO
   entrou ou o que falta (`mesesDoAno` em `lib/importacoes.js`, testada). Fonte DEVE o mês quando ele já pode ser
   importado: a fatura a partir do vencimento; o extrato quando o mês acabou (o mês corrente é "em andamento" ou
   "até dd/mm", sem contar como pendência). Antes da primeira importação da fonte, "—". A célula que falta abre o
-  importador da fatura já com cartão e vencimento (`inicial`) ou a tela do Extrato.
+  importador da fatura já com cartão e vencimento (`inicial`) ou o do extrato.
 - ABA "HISTÓRICO" = tabela `importacoes` (migration 007, que também preenche o passado): toda importação chama
-  `registrarImportacao` (fatura, extrato, planilha; sem a tabela, ignora em silêncio). "Desfazer": a fatura (apaga a
-  fatura) e o ÚLTIMO extrato (`desfazer` = ids criados + os fixos corrigidos como eram, de `gravarExtrato`).
+  `registrarImportacao` (fatura, extrato, planilha; sem a tabela, ignora em silêncio). "Excluir" a fatura (apaga a
+  fatura) e "Desfazer" o ÚLTIMO extrato (`desfazer` = ids criados + os fixos corrigidos como eram, de `gravarExtrato`).
 - "IMPORTAR ARQUIVOS" (`components/ImportarArquivos.jsx`): vários CSVs de uma vez, reconhecidos pelo cabeçalho e pelo
   nome; as faturas entram dali (a repetida é pulada, ou substituída se pedir) e o extrato abre a prévia de sempre
-  (`navigate('/extrato', { state: { arquivo } })`). Importou/desfez → `avisarMudanca()` refaz o número do menu.
+  (o pop-up `ImportarExtrato` com o `arquivo`). Importou/desfez → `avisarMudanca()` refaz o número do menu.
 - O DESENHO (29/10/2026, opção A do mockup "Importar · tabela, legenda e botão"): a GRADE DO DRE — cada célula em
   UMA linha (ponto de cor + data + número curto), o resto no cartão do hover; linha acende, célula ganha contorno;
   o importar é um ÍCONE ↓ no canto da célula (cheio onde falta, só no hover nas outras); Situação "2 de 3" com

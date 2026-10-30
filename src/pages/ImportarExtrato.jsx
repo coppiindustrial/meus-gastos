@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Modal from '../components/Modal.jsx';
 import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import Spinner from '../components/Spinner.jsx';
 import AreaArrastar from '../components/AreaArrastar.jsx';
@@ -19,13 +18,14 @@ import { criarClassificador } from '../lib/classificar.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { formatDate } from '../lib/format.js';
 
-// EXTRATO DA CONTA (Nubank). Escolher o CSV → a prévia mostra o destino de cada movimentação
-// (lib/planoExtrato.js) → o que ainda não tem regra pode ser classificado ali mesmo, criando a regra
-// (ou uma regra de IGNORAR, para as transferências entre as suas contas) → importar.
+// IMPORTAR O EXTRATO DA CONTA (Nubank), num POP-UP como o da fatura (29/10/2026: antes era a tela /extrato, que
+// abria fora do Importar). Escolher o CSV → a prévia mostra o destino de cada movimentação (lib/planoExtrato.js) →
+// o que ainda não tem regra pode ser classificado ali mesmo, criando a regra (ou uma regra de IGNORAR, para as
+// transferências entre as suas contas) → importar. Com a prévia, o pop-up cresce para o painel dos ampliados
+// (1100px, 90% da altura) e o rodapé com o "Importar" fica preso embaixo.
 // Decisões (2026-10-27): entradas continuam à mão; pagamento de fatura e investimentos ficam de fora;
-// o pagamento de um gasto fixo vira o fixo do mês com o valor real.
-// A tela é aberta pela tela Importar (não está mais no menu); o "Importar arquivos" de lá chega com o arquivo
-// já escolhido (`location.state.arquivo`). Cada importação vai para o histórico, com o que desfazê-la.
+// o pagamento de um gasto fixo vira o fixo do mês com o valor real. Cada importação vai para o histórico, com o
+// que desfazê-la. `arquivo`: o File já escolhido no "Importar arquivos" (abre direto na prévia).
 const IGNORAR = '__ignorar';
 const EXTRAS_IGNORAR = [{ value: IGNORAR, label: 'Ignorar sempre (não é gasto)' }];
 
@@ -63,18 +63,14 @@ function SemRegra({ grupo, categorias, onCriar, onCategoriaCriada }) {
   );
 }
 
-export default function Extrato() {
+export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFechar, onImportado }) {
   const toast = useToast();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const inputRef = useRef(null);
   const [base, setBase] = useState(null); // { categorias, regras, recorrencias, fixos }
   const [arquivo, setArquivo] = useState(null); // { nome, linhas }
   const [ja, setJa] = useState(new Set());
   const [erro, setErro] = useState('');
   const [gravando, setGravando] = useState(false);
   const [andamento, setAndamento] = useState('');
-  const [feito, setFeito] = useState(null);
 
   const carregarBase = useCallback(async () => {
     const [categorias, regras, recorrencias, fixos] = await Promise.all([listarCategorias(), listarRegrasParaClassificar(), listarRecorrencias(), fixosLancados()]);
@@ -84,21 +80,15 @@ export default function Extrato() {
 
   const escolher = async (f) => {
     if (!f) return;
-    setErro(''); setFeito(null);
+    setErro('');
     try {
       const linhas = lerExtrato(await f.text());
       setJa(await idsJaImportados(linhas.map((l) => l.id_externo)));
       setArquivo({ nome: f.name, linhas });
-    } catch (err) { setArquivo(null); setErro(err.message); } finally { if (inputRef.current) inputRef.current.value = ''; }
+    } catch (err) { setArquivo(null); setErro(err.message); }
   };
-
-  // Veio do "Importar arquivos" com o arquivo na mão: abre a prévia dele (uma vez; o estado é limpo).
-  useEffect(() => {
-    const f = location.state?.arquivo;
-    if (!f) return;
-    navigate(location.pathname, { replace: true, state: null });
-    escolher(f);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Veio do "Importar arquivos" com o arquivo na mão: abre direto a prévia dele.
+  useEffect(() => { if (arquivoInicial) escolher(arquivoInicial); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const plano = useMemo(() => {
     if (!arquivo || !base) return null;
@@ -130,6 +120,10 @@ export default function Extrato() {
     }
   };
 
+  const conta = (acao) => (plano ?? []).filter((p) => p.acao === acao);
+  const aGravar = [...conta('fixo_novo'), ...conta('fixo_corrigir'), ...conta('avulso')];
+  const totalGravar = aGravar.reduce((s, p) => s + -p.linha.valor_centavos, 0);
+
   const importar = async () => {
     setGravando(true);
     try {
@@ -143,61 +137,47 @@ export default function Extrato() {
           `${conta('ignorar').length + conta('ja').length} de fora`, revisar && `${revisar} sem regra`].filter(Boolean).join(' · '),
         desfazer: { apagar, restaurar },
       });
-      setFeito({ n, revisar });
-      toast.success(`${n} movimentação(ões) importadas.`);
-      setArquivo(null);
-      await carregarBase();
+      toast.success(`${n} movimentação(ões) importadas.${revisar ? ` ${revisar} ficaram sem categoria: veja em Revisar pendências.` : ''}`);
+      onImportado();
     } catch (err) {
       toast.error(/duplicate|unique/i.test(err.message) ? 'Parte deste extrato já tinha sido importada. Escolha o arquivo de novo para ver o que falta.' : err.message);
-    } finally { setGravando(false); setAndamento(''); }
+      setGravando(false); setAndamento('');
+    }
   };
 
-  const conta = (acao) => (plano ?? []).filter((p) => p.acao === acao);
-  const aGravar = [...conta('fixo_novo'), ...conta('fixo_corrigir'), ...conta('avulso')];
-  const totalGravar = aGravar.reduce((s, p) => s + -p.linha.valor_centavos, 0);
-
+  const comPrevia = !!(arquivo && plano);
   return (
-    <div>
-      <CabecalhoPagina titulo="Extrato da conta" acessorio={<Link to="/importar" className="text-[12.5px] text-gray-500 hover:text-gray-800">← Importar</Link>}
-        acoes={<button type="button" className="btn-primary" onClick={() => inputRef.current?.click()} disabled={!base}>Escolher extrato (CSV)</button>} />
-
-      <div className="mt-4 max-w-5xl space-y-4">
-        {!arquivo && (
-          <div className="card p-5 text-sm text-gray-700">
-            <p>
-              Exporte o extrato da conta no app do Nubank (CSV) e escolha o arquivo. Ficam de fora as entradas (você as
-              lança à mão), o pagamento da fatura do cartão, os investimentos (RDB, dinheiro guardado) e o que uma regra
-              mandar ignorar. Pagamento de gasto fixo vira o fixo do mês com o valor real.
-            </p>
-            <div className="mt-4">
-              <AreaArrastar onArquivos={(fs) => escolher(fs[0])} desabilitada={!base}
-                titulo={base ? 'Arraste o extrato aqui ou' : 'Carregando as regras…'} formatos=".csv do extrato da conta do Nubank (Data,Valor,Identificador,Descrição)" />
-            </div>
-            {erro && <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">{erro}</p>}
-            {feito && (
-              <p className="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-green-800">
-                {feito.n} movimentação(ões) importadas.{' '}
-                {feito.revisar > 0 && <>{feito.revisar} ficaram sem categoria: <Link to="/pendencias" className="font-semibold underline">Revisar pendências</Link>.</>}
-              </p>
-            )}
+    <Modal open onClose={gravando ? () => {} : onFechar} title="Importar extrato da conta" alturaCheia={comPrevia} animarTamanho
+      maxWidth={comPrevia ? 'max-w-[min(1100px,95vw)]' : 'max-w-xl'} altura="h-[90vh]" padding={comPrevia ? 'p-0' : 'p-5'}
+      subtitulo={comPrevia ? `${arquivo.nome} · ${arquivo.linhas.length} movimentações` : 'o CSV do extrato do Nubank'}>
+      {!comPrevia ? (
+        <div className="space-y-4 text-sm text-gray-700">
+          <p>
+            Exporte o extrato da conta no app do Nubank (CSV) e escolha o arquivo. Ficam de fora as entradas (você as lança à
+            mão), o pagamento da fatura do cartão, os investimentos (RDB, dinheiro guardado) e o que uma regra mandar ignorar.
+            Pagamento de gasto fixo vira o fixo do mês com o valor real.
+          </p>
+          {arquivo && !base ? <p className="flex items-center gap-2 text-gray-500"><Spinner className="h-4 w-4" /> Lendo as regras…</p> : (
+            <AreaArrastar onArquivos={(fs) => escolher(fs[0])} desabilitada={!base}
+              titulo={base ? 'Arraste o extrato aqui ou' : 'Carregando as regras…'} formatos=".csv do extrato da conta do Nubank (Data,Valor,Identificador,Descrição)" />
+          )}
+          {erro && <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">{erro}</p>}
+        </div>
+      ) : (
+        <div className="flex min-h-full flex-col">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-b border-gray-100 px-5 py-3 text-sm text-gray-700">
+            <span><strong>{aGravar.length}</strong> a importar · {formatBRL(totalGravar)}</span>
+            <span><strong>{conta('fixo_novo').length + conta('fixo_corrigir').length}</strong> como gasto fixo</span>
+            <span><strong>{conta('ignorar').length}</strong> fora</span>
+            {conta('ja').length > 0 && <span><strong>{conta('ja').length}</strong> já importadas</span>}
+            <span className="flex-1" />
+            <button type="button" onClick={() => setArquivo(null)} disabled={gravando} className="text-[12px] text-gray-500 underline underline-offset-2 hover:text-gray-800">Escolher outro arquivo</button>
           </div>
-        )}
 
-        {arquivo && plano && (
-          <>
-            <div className="card p-4 text-sm text-gray-700">
-              <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
-                <span className="font-medium text-gray-800">{arquivo.nome}</span>
-                <span><strong>{aGravar.length}</strong> a importar · {formatBRL(totalGravar)}</span>
-                <span><strong>{conta('fixo_novo').length + conta('fixo_corrigir').length}</strong> como gasto fixo</span>
-                <span><strong>{conta('ignorar').length}</strong> fora</span>
-                {conta('ja').length > 0 && <span><strong>{conta('ja').length}</strong> já importadas</span>}
-              </div>
-            </div>
-
+          <div className="flex-1 space-y-4 px-5 py-4">
             {semRegra.length > 0 && (
-              <section className="card overflow-hidden">
-                <header className="border-b border-gray-200 px-4 py-2.5">
+              <section className="overflow-hidden rounded-md border border-gray-200">
+                <header className="border-b border-gray-200 bg-hx-f9fafb px-4 py-2.5">
                   <h2 className="text-sm font-semibold text-gray-800">Sem regra ({semRegra.length})</h2>
                   <p className="text-xs text-gray-500">
                     Escolha a categoria e crie a regra: vale para os próximos extratos. Transferência entre contas suas: “Ignorar sempre”.
@@ -210,7 +190,7 @@ export default function Extrato() {
               </section>
             )}
 
-            <div className="card overflow-x-auto">
+            <div className="overflow-x-auto rounded-md border border-gray-200">
               <table className="w-full">
                 <thead className="border-b border-gray-200 bg-gray-50">
                   <tr>
@@ -235,18 +215,18 @@ export default function Extrato() {
                 </tbody>
               </table>
             </div>
+          </div>
 
-            <div className="flex items-center justify-end gap-3">
-              {andamento && <span className="text-sm text-gray-500">Gravando… {andamento}</span>}
-              <button type="button" className="btn-secondary" onClick={() => setArquivo(null)} disabled={gravando}>Cancelar</button>
-              <button type="button" className="btn-primary" onClick={importar} disabled={gravando || aGravar.length === 0}>
-                {gravando ? <><Spinner className="h-4 w-4" /> Importando…</> : `Importar ${aGravar.length}`}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-      <input ref={inputRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => escolher(e.target.files?.[0])} />
-    </div>
+          {/* o rodapé preso embaixo enquanto a prévia rola */}
+          <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-gray-200 bg-hx-f9fafb px-5 py-3">
+            {andamento && <span className="text-sm text-gray-500">Gravando… {andamento}</span>}
+            <button type="button" className="btn-secondary" onClick={onFechar} disabled={gravando}>Cancelar</button>
+            <button type="button" className="btn-primary" onClick={importar} disabled={gravando || aGravar.length === 0}>
+              {gravando ? <><Spinner className="h-4 w-4" /> Importando…</> : `Importar ${aGravar.length}`}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }

@@ -17,7 +17,7 @@ import { varCor } from '../lib/varCor.js';
 // "IMPORTAR ARQUIVOS" (a tela Importar, 28/10/2026): solta os arquivos do mês de uma vez — faturas e o
 // extrato — e cada um é reconhecido pelo CABEÇALHO (o formato) e pelo NOME (cartão e vencimento, como no
 // importador da fatura). As faturas entram daqui mesmo; a já importada é PULADA (ou substituída, se pedir).
-// O extrato não grava aqui: ele abre a prévia de sempre (a tela do Extrato, com as regras), depois das faturas.
+// O extrato não grava aqui: ele abre a prévia de sempre (o pop-up `ImportarExtrato`, com as regras), depois das faturas.
 // `onFeito(arquivoDoExtrato | null)`.
 
 const TOM_OK = { background: varCor('#e7f6ee', 'fundo'), color: varCor('#15803d', 'texto') };

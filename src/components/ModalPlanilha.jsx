@@ -7,9 +7,10 @@ import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { desfazerImportacao, lerDaPlanilha } from '../api/importacao.js';
 import { avisarMudanca } from '../api/importacoes.js';
+import { excluirFatura } from '../api/faturas.js';
 import { resumirPlanilha } from '../lib/importacoes.js';
 import { formatBRL } from '../lib/dinheiro.js';
-import { competenciaCurta, formatDateTime } from '../lib/format.js';
+import { competenciaCurta, formatDate, formatDateTime } from '../lib/format.js';
 
 // O HISTÓRICO DA PLANILHA NUM POP-UP (29/10/2026, opção A do mockup): ela foi importada UMA vez, no começo, e não
 // precisa mais de tela própria (a "Cadastros → Importar histórico" saiu). Aberto pela linha dela na aba Histórico
@@ -63,7 +64,7 @@ function Conferencia({ esperado, obtido }) {
   );
 }
 
-export default function ModalPlanilha({ imp, onFechar, onDesfeito }) {
+export default function ModalPlanilha({ imp, onFechar, onDesfeito, onMudou }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   const [r, setR] = useState(null);
@@ -71,11 +72,28 @@ export default function ModalPlanilha({ imp, onFechar, onDesfeito }) {
   const [esperado, setEsperado] = useState(null); // a `conferencia` do planilha.json escolhido
   const [ocupado, setOcupado] = useState(false);
 
-  useEffect(() => {
-    lerDaPlanilha()
-      .then(({ linhas, faturas, regras }) => setR({ ...resumirPlanilha(linhas, faturas), regras }))
-      .catch((err) => { toast.error(err.message); onFechar(); });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [faturas, setFaturas] = useState([]);
+  const [excluindo, setExcluindo] = useState(null);
+  const ler = () => lerDaPlanilha()
+    .then(({ linhas, faturas: fs, regras }) => { setR({ ...resumirPlanilha(linhas, fs), regras }); setFaturas(fs); })
+    .catch((err) => { toast.error(err.message); onFechar(); });
+  useEffect(() => { ler(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // EXCLUIR UMA FATURA DA PLANILHA (29/10/2026): as importadas pelo app saem pelo "Excluir" da linha delas no Histórico;
+  // as da planilha não têm linha própria, então saem daqui. A FK leva os lançamentos dela junto.
+  const excluir = async (f) => {
+    const n = f.lancamentos?.[0]?.count ?? 0;
+    const ok = await confirmar({
+      titulo: `Excluir a fatura ${f.cartao?.nome ?? ''} de ${formatDate(f.vencimento)}?`,
+      texto: `A fatura e os ${n} lançamentos dela são apagados. As outras faturas da planilha ficam.`,
+      confirmar: 'Excluir',
+      perigo: true,
+    });
+    if (!ok) return;
+    setExcluindo(f.id);
+    try { await excluirFatura(f.id); avisarMudanca(); toast.success('Fatura excluída.'); await ler(); onMudou?.(); } catch (err) { toast.error(err.message); }
+    setExcluindo(null);
+  };
 
   const lerArquivo = async (arquivos) => {
     try {
@@ -168,6 +186,35 @@ export default function ModalPlanilha({ imp, onFechar, onDesfeito }) {
                     </tbody>
                   </table>
                 </div>
+
+                {faturas.length > 0 && (
+                  <>
+                    {sec(`As faturas dela · ${faturas.length}`)}
+                    <div className="overflow-x-auto rounded-md border border-gray-200">
+                      <table className="w-full text-[12.5px]">
+                        <thead>
+                          <tr><th className={TH}>Cartão</th><th className={TH}>Vencimento</th><th className={`${TH} text-right`}>Compras</th><th className={`${TH} text-right`}>Total</th><th className={TH} /></tr>
+                        </thead>
+                        <tbody>
+                          {faturas.map((f) => (
+                            <tr key={f.id} className="hover:bg-hx-f9fafb">
+                              <td className={`${TD} text-gray-800`}>{f.cartao?.nome ?? '—'}</td>
+                              <td className={`${TD} text-gray-700`}>{formatDate(f.vencimento)}</td>
+                              <td className={`${TD} text-right text-gray-500`}>{f.lancamentos?.[0]?.count ?? 0}</td>
+                              <td className={`${TD} text-right text-gray-700`}>{formatBRL(Number(f.total_centavos ?? 0))}</td>
+                              <td className={`${TD} w-[1%] text-right`}>
+                                <button type="button" onClick={() => excluir(f)} disabled={ocupado || excluindo === f.id}
+                                  className="rounded-[5px] border border-gray-200 bg-white px-2.5 py-0.5 text-[12px] font-medium text-gray-600 transition-colors hover:border-red-200 hover:bg-hx-fdeaea hover:text-hx-c0393d">
+                                  {excluindo === f.id ? 'Excluindo…' : 'Excluir'}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
 
                 {conferindo && (
                   <>

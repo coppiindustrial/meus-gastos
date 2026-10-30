@@ -11,7 +11,7 @@ export const ORIGEM_PLANILHA = 'planilha';
 export async function lerDaPlanilha() {
   const [linhas, faturas, regras] = await Promise.all([
     buscarTudo(() => supabase.from('lancamentos').select('origem, tipo, valor_centavos, competencia, fatura:faturas(arquivo)').eq('importado_de', ORIGEM_PLANILHA).order('id')),
-    exigir(supabase.from('faturas').select('id, cartao:cartoes(nome)').eq('importado_de', ORIGEM_PLANILHA)),
+    exigir(supabase.from('faturas').select('id, vencimento, total_centavos, cartao:cartoes(nome), lancamentos(count)').eq('importado_de', ORIGEM_PLANILHA).order('vencimento')),
     supabase.from('regras').select('id', { count: 'exact', head: true }).eq('importado_de', ORIGEM_PLANILHA),
   ]);
   return { linhas, faturas, regras: regras.count ?? 0 };

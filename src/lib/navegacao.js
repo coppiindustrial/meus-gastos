@@ -1,6 +1,6 @@
 // O CATÁLOGO DAS TELAS: a barra lateral (e o menu do celular) leem daqui. Tela nova entra aqui e no
 // `App.jsx`. `fase` marca as telas que ainda não existem (ver PLANO.md): aparecem esmaecidas.
-import { SbChart, SbCompass, SbDashboard, SbDoc, SbFinanceiro, SbImportar } from '../components/sidebarIcons.jsx';
+import { SbChart, SbCompass, SbDashboard, SbFinanceiro, SbImportar } from '../components/sidebarIcons.jsx';
 
 export const DASHBOARD = { to: '/', label: 'Visão geral', icon: SbDashboard, end: true };
 // IMPORTAR (28/10/2026): o lugar único de tudo o que se importa — as faturas, o extrato e o histórico da
@@ -16,13 +16,8 @@ export const GRUPOS = [
     items: [
       { to: '/lancamentos', label: 'Lançamentos' },
       { to: '/fixos', label: 'Gastos fixos' },
-    ],
-  },
-  {
-    label: 'Cartões',
-    icon: SbDoc,
-    items: [
-      { to: '/faturas', label: 'Faturas' },
+      // As FATURAS saíram do menu (29/10/2026): cada uma está no Importar (aba Por mês, com o ↗ para os lançamentos
+      // do mês; o "Desfazer" no Histórico), e o grupo "Cartões" ficou só com isto.
       { to: '/pendencias', label: 'Revisar pendências' },
     ],
   },

@@ -6,13 +6,14 @@ import AbasPilula from '../components/AbasPilula.jsx';
 import Toggle from '../components/Toggle.jsx';
 import Tooltip from '../components/Tooltip.jsx';
 import MenuContexto from '../components/MenuContexto.jsx';
-import { IconSeta } from '../components/icons.jsx';
+import { IconAbrir, IconSeta } from '../components/icons.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { DivisorFaixa, FaixaProvider, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { SegUnico } from '../components/filtros/Segmentos.jsx';
 import ImportarArquivos from '../components/ImportarArquivos.jsx';
 import ModalPlanilha from '../components/ModalPlanilha.jsx';
 import ImportarFatura from './ImportarFatura.jsx';
+import ImportarExtrato from './ImportarExtrato.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { carregarSituacao, desfazerImportacao } from '../api/importacoes.js';
@@ -21,6 +22,7 @@ import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaCurta, formatDate, formatDateTime, nomeCompetencia, todayISO } from '../lib/format.js';
 import posicionarPopover from '../lib/posicionarPopover.js';
 import useEscape from '../lib/useEscape.js';
+import { lsSet } from '../lib/storage.js';
 
 // A TELA IMPORTAR: o lugar único de tudo o que se importa. "Por mês" = uma linha por mês do ano, uma coluna por
 // FONTE (cada cartão e o extrato) e em cada célula QUANDO aquilo entrou ou o que falta (as contas em
@@ -80,7 +82,7 @@ function detalhe(cel, col, comp) {
 }
 
 // Uma célula: uma linha só. `apagada`: fora do destaque da legenda.
-function Celula({ cel, col, comp, apagada, onAgir, onDica }) {
+function Celula({ cel, col, comp, apagada, onAgir, onAbrir, onDica }) {
   const tipo = tipoDe(cel);
   const acao = ['falta', 'parcial', 'andamento'].includes(cel.estado);
   let texto;
@@ -107,14 +109,23 @@ function Celula({ cel, col, comp, apagada, onAgir, onDica }) {
         {tipo !== 'outro' && <Ponto tipo={tipo} />}
         {tipo === 'na' ? null : texto}
         {curto && <span className="truncate text-[11.5px] text-gray-400">{curto}</span>}
+        {/* O QUE ENTROU: o ↗ abre os lançamentos do mês (era o link da tela Faturas, que saiu em 29/10/2026). */}
+        {cel.estado === 'ok' && (
+          <span className="ml-auto shrink-0">
+            <Tooltip label="Ver os lançamentos do mês">
+              <button type="button" onClick={onAbrir} aria-label="Ver os lançamentos do mês"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] border border-gray-200 bg-white text-gray-600 opacity-0 transition hover:bg-gray-50 focus:opacity-100 group-hover/cel:opacity-100">
+                <IconAbrir className="h-3 w-3" />
+              </button>
+            </Tooltip>
+          </span>
+        )}
         {acao && (
           <span className="ml-auto shrink-0">
           <Tooltip label={col.tipo === 'fatura' ? `Importar a fatura ${col.cartao.nome}` : 'Importar o extrato'}>
             <button type="button" onClick={onAgir} aria-label="Importar"
-              className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] border transition ${
-                cel.estado === 'falta'
-                  ? 'inverte-no-escuro border-gray-800 bg-gray-800 text-white hover:bg-gray-700'
-                  : 'border-gray-200 bg-white text-gray-600 opacity-0 hover:bg-gray-50 group-hover/cel:opacity-100 focus:opacity-100'}`}>
+              className={`inverte-no-escuro inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] border border-gray-800 bg-gray-800 text-white transition hover:bg-gray-700 ${
+                cel.estado === 'falta' ? '' : 'opacity-0 focus:opacity-100 group-hover/cel:opacity-100'}`}>
               <IcoImportar className="h-3 w-3" />
             </button>
           </Tooltip>
@@ -224,6 +235,7 @@ export default function Importar() {
   const [dica, setDica] = useState(null);
   const [fatura, setFatura] = useState(null); // { inicial } do importador da fatura aberto
   const [arquivos, setArquivos] = useState(false);
+  const [extrato, setExtrato] = useState(null); // { arquivo } do importador do extrato aberto (o arquivo é opcional)
   const [desfazendo, setDesfazendo] = useState(null);
   const [menu, setMenu] = useState(null);
   const [planilha, setPlanilha] = useState(null); // a linha do histórico da planilha aberta no pop-up
@@ -254,7 +266,7 @@ export default function Importar() {
   const ultimoExtrato = (dados?.importacoes ?? []).find((i) => i.tipo === 'extrato');
 
   const agir = (col, cel) => {
-    if (col.tipo === 'extrato') { navigate('/extrato'); return; }
+    if (col.tipo === 'extrato') { setExtrato({}); return; }
     setFatura({ inicial: { cartaoId: col.cartao.id, vencimento: cel.vence ?? '' } });
   };
   const mostrarDica = useCallback((el, info) => {
@@ -288,24 +300,24 @@ export default function Importar() {
   const desfazer = async (i) => {
     const d = descrever(i);
     const ok = await confirmar({
-      titulo: `Desfazer: ${d.oque}?`,
+      titulo: i.tipo === 'fatura' ? `Excluir a ${d.oque.replace(/^F/, 'f')}?` : `Desfazer: ${d.oque}?`,
       texto: i.tipo === 'fatura'
         ? `A fatura e os ${i.linhas} lançamentos dela são apagados.`
         : `Os ${i.desfazer?.apagar?.length ?? 0} lançamentos que este extrato criou são apagados${i.desfazer?.restaurar?.length ? `, e os ${i.desfazer.restaurar.length} fixos que ele corrigiu voltam ao valor de antes` : ''}.`,
-      confirmar: 'Desfazer',
+      confirmar: i.tipo === 'fatura' ? 'Excluir' : 'Desfazer',
       perigo: true,
     });
     if (!ok) return;
     setDesfazendo(i.id);
-    try { await desfazerImportacao(i); toast.success('Importação desfeita.'); await carregar(); } catch (err) { toast.error(err.message); }
+    try { await desfazerImportacao(i); toast.success(i.tipo === 'fatura' ? 'Fatura excluída.' : 'Importação desfeita.'); await carregar(); } catch (err) { toast.error(err.message); }
     setDesfazendo(null);
   };
 
   const acaoHistorico = (i) => {
     if (i.tipo === 'fatura') {
       return i.fatura_id
-        ? <button type="button" className="btn-secondary !px-2.5 !py-1 !text-[12px]" disabled={desfazendo === i.id} onClick={() => desfazer(i)}>Desfazer</button>
-        : <span className="text-[11.5px] text-gray-400" title="A fatura foi substituída por outra importação ou excluída em Faturas">substituída ou excluída</span>;
+        ? <button type="button" className="btn-secondary !px-2.5 !py-1 !text-[12px]" disabled={desfazendo === i.id} onClick={() => desfazer(i)} title="Apaga a fatura e os lançamentos dela">Excluir</button>
+        : <span className="text-[11.5px] text-gray-400" title="A fatura foi substituída por outra importação ou excluída">substituída ou excluída</span>;
     }
     if (i.tipo === 'extrato') {
       return i.desfazer && i.id === ultimoExtrato?.id
@@ -323,7 +335,7 @@ export default function Importar() {
   const depois = async (extrato) => {
     setArquivos(false);
     await carregar();
-    if (extrato) navigate('/extrato', { state: { arquivo: extrato } });
+    if (extrato) setExtrato({ arquivo: extrato });
   };
 
   const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
@@ -409,7 +421,7 @@ export default function Importar() {
                           const cel = l.celulas[c.key];
                           return (
                             <Celula key={c.key} cel={cel} col={c} comp={l.comp} apagada={destaque && tipoDe(cel) !== destaque}
-                              onAgir={() => { setDica(null); agir(c, cel); }} onDica={mostrarDica} />
+                              onAgir={() => { setDica(null); agir(c, cel); }} onAbrir={() => { setDica(null); lsSet('lancamentos_mes', l.comp); navigate('/lancamentos'); }} onDica={mostrarDica} />
                           );
                         })}
                         <td className="h-[38px] border-b border-gray-100 px-3"><Situacao linha={l} /></td>
@@ -467,13 +479,14 @@ export default function Importar() {
       )}
 
       <Dica dica={dica} />
-      {planilha && <ModalPlanilha imp={planilha} onFechar={() => setPlanilha(null)} onDesfeito={() => { setPlanilha(null); carregar(); }} />}
+      {planilha && <ModalPlanilha imp={planilha} onMudou={carregar} onFechar={() => setPlanilha(null)} onDesfeito={() => { setPlanilha(null); carregar(); }} />}
       <MenuContexto menu={menu} onFechar={() => setMenu(null)} />
       {fatura && (
         <ImportarFatura cartoes={dados.cartoes} inicial={fatura.inicial} onFechar={() => setFatura(null)}
           onImportada={() => { setFatura(null); carregar(); }} />
       )}
       {arquivos && <ImportarArquivos cartoes={dados.cartoes} onFechar={() => setArquivos(false)} onFeito={depois} />}
+      {extrato && <ImportarExtrato arquivo={extrato.arquivo} onFechar={() => setExtrato(null)} onImportado={() => { setExtrato(null); carregar(); }} />}
     </div>
   );
 }

@@ -107,7 +107,8 @@ no dia 1 do mês (o front mostra `AAAA-MM`).
 
 - **Resumo** (inicial): seletor de mês; entradas, gastos e saldo; comparação com a média de 3 meses; gastos por origem; top grupos e categorias; parcelas comprometidas; pendências e fixos não lançados.
 - **Lançamentos:** tabela do mês com busca, filtros (origem, categoria, cartão) e ordenação; novo/editar em painel lateral; exportar CSV.
-- **Faturas:** importar fatura (CSV original), lista de faturas importadas, revisar pendências.
+- **Faturas:** importar fatura (CSV original), lista de faturas importadas, revisar pendências. (29/10/2026: a lista
+  saiu — as faturas ficam na tela Importar, aba Por mês.)
 - **Gastos fixos** · **Patrimônio** (contas, saldos, evolução) · ~~Evolução mensal~~ (28/10/2026: virou a ampliação do
   "Entradas × gastos" da Visão geral, com a tabela completa e "Todo o histórico").
 - **Cadastros:** categorias e grupos, regras, cartões.
