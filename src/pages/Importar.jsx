@@ -39,7 +39,8 @@ const COR = { ok: '#22a06b', pl: '#9ca3af', parcial: '#4b8fe2', falta: '#e8a317'
 const Ico = ({ children, className = 'h-3.5 w-3.5' }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
 );
-const IcoImportar = (p) => <Ico {...p}><path d="M12 4v11M7 10l5 5 5-5" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></Ico>;
+// O desenho ocupa de y=4 a y=20 (centro 12, o do quadro): antes ia até 21 e, no botão de 24px, o ícone parecia fora do centro.
+const IcoImportar = (p) => <Ico {...p}><path d="M12 4v10M7.5 9.5 12 14l4.5-4.5" /><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></Ico>;
 const IcoPlanilha = (p) => <Ico {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /></Ico>;
 const IcoCartao = (p) => <Ico {...p}><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></Ico>;
 const IcoBanco = (p) => <Ico {...p}><path d="M3 10l9-6 9 6" /><line x1="5" y1="10" x2="5" y2="18" /><line x1="10" y1="10" x2="10" y2="18" /><line x1="14" y1="10" x2="14" y2="18" /><line x1="19" y1="10" x2="19" y2="18" /><line x1="3" y1="21" x2="21" y2="21" /></Ico>;
@@ -124,9 +125,9 @@ function Celula({ cel, col, comp, apagada, onAgir, onAbrir, onDica }) {
           <span className="ml-auto shrink-0">
           <Tooltip label={col.tipo === 'fatura' ? `Importar a fatura ${col.cartao.nome}` : 'Importar o extrato'}>
             <button type="button" onClick={onAgir} aria-label="Importar"
-              className={`inverte-no-escuro inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] border border-gray-800 bg-gray-800 text-white transition hover:bg-gray-700 ${
+              className={`botao-celula inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] border transition duration-150 ${
                 cel.estado === 'falta' ? '' : 'opacity-0 focus:opacity-100 group-hover/cel:opacity-100'}`}>
-              <IcoImportar className="h-3 w-3" />
+              <IcoImportar className="block h-3.5 w-3.5" />
             </button>
           </Tooltip>
           </span>
