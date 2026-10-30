@@ -47,7 +47,10 @@ export function resumoDosCartoes({ cartoes, faturas, parcelas, hoje }) {
         compras: new Set(ps.map((p) => p.lancamento_id)).size,
       } : null,
       media: doAno.length ? Math.round(doAno.reduce((s, f) => s + Number(f.total_centavos ?? 0), 0) / doAno.length) : null,
-      serie: meses.map((comp) => ({ comp, total: fs.filter((f) => f.competencia === comp).reduce((s, f) => s + Number(f.total_centavos ?? 0), 0) })),
+      serie: meses.map((comp) => {
+        const doMes = fs.filter((f) => f.competencia === comp);
+        return { comp, total: doMes.reduce((s, f) => s + Number(f.total_centavos ?? 0), 0), qtd: doMes.reduce((s, f) => s + (f.qtd ?? 0), 0), vencimento: doMes[0]?.vencimento.slice(0, 10) ?? null };
+      }),
       faturas: fs.length,
     };
   });

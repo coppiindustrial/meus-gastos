@@ -9,7 +9,7 @@ import { PageLoading } from '../components/Spinner.jsx';
 import { Bolinha } from '../components/Comuns.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { BuscaFaixa, SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
-import { IconGrip, IconMais, IconSeta } from '../components/icons.jsx';
+import { IconGrip, IconMais, IconSeta, IconSetaOrdenacao } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { listarCategorias } from '../api/cadastros.js';
@@ -36,12 +36,34 @@ const EXTRAS_IGNORAR = [{ value: IGNORAR, label: 'Ignorar — não é gasto' }];
 const OPCOES_TIPO = [{ value: '', label: 'Todas' }, { value: 'categoria', label: 'Com categoria' }, { value: 'ignorar', label: 'Ignorar' }];
 const OPCOES_USO = [{ value: '', label: 'Todas' }, { value: 'sem-uso', label: 'Sem uso' }, { value: 'escondida', label: 'Escondidas' }];
 const LS_AGRUPAR = 'regras_agrupar';
+// ORDENAR PELO CABEÇALHO (30/10/2026, a pedido): clicar no título ordena a VISTA (a 1ª vez crescente — "Pegou" do
+// maior para o menor —, a 2ª inverte, a 3ª volta); o "#" volta à ordem das regras. Ordenada, a alça não arrasta:
+// a prioridade continua a do "#". A escolha fica lembrada no navegador.
+const LS_ORDEM = 'regras_ordem';
+const ROTULO_ORDEM = { palavra: 'palavra-chave', categoria: 'categoria', pegou: 'uso' };
+const lerOrdem = () => { try { const o = JSON.parse(lsGet(LS_ORDEM)); return ROTULO_ORDEM[o?.col] ? o : null; } catch { return null; } };
+const semAcento = (x) => String(x ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 let seq = 0;
 const daRegra = (r, pos) => ({
   id: r.id, pos, novo: false, excluir: false, orig: r,
   palavra_chave: r.palavra_chave, categoria_id: r.categoria_id ?? '', ignorar: !!r.ignorar,
 });
+
+// O título de uma coluna que ordena: a seta fica à vista na coluna ordenada e aparece no hover nas outras.
+function Titulo({ col, ordem, onOrdenar, title, direita = false, children }) {
+  const ativa = col ? ordem?.col === col : !ordem;
+  return (
+    <button type="button" onClick={() => onOrdenar(col)} title={title}
+      className={`group/tit inline-flex items-center gap-1 uppercase tracking-wide transition-colors hover:text-gray-800 ${direita ? 'w-full justify-end' : ''} ${ativa && col ? 'text-gray-800' : ''}`}>
+      {children}
+      {col && (
+        <IconSetaOrdenacao descendente={ativa && ordem.dir === 'desc'}
+          className={`h-3 w-3 transition-opacity ${ativa ? 'opacity-100' : 'opacity-0 group-hover/tit:opacity-60'}`} />
+      )}
+    </button>
+  );
+}
 
 export default function Regras() {
   const toast = useToast();
@@ -56,6 +78,13 @@ export default function Regras() {
   const [usoF, setUsoF] = useState('');
   const [agrupar, setAgruparEstado] = useState(() => lsGet(LS_AGRUPAR) === 'sim');
   const setAgrupar = (v) => { setAgruparEstado(v); lsSet(LS_AGRUPAR, v ? 'sim' : ''); };
+  const [ordem, setOrdemEstado] = useState(lerOrdem);
+  const ordenar = (col) => {
+    const primeira = col === 'pegou' ? 'desc' : 'asc';
+    const nova = !col ? null : ordem?.col !== col ? { col, dir: primeira } : ordem.dir === primeira ? { col, dir: primeira === 'asc' ? 'desc' : 'asc' } : null;
+    setOrdemEstado(nova);
+    lsSet(LS_ORDEM, JSON.stringify(nova));
+  };
   const [testando, setTestando] = useState(false);
   const [teste, setTeste] = useState('');
   const [marcadas, setMarcadas] = useState(() => new Set());
@@ -92,7 +121,7 @@ export default function Regras() {
   // Os filtros. A busca procura na palavra, na categoria e TESTA a regra contra o texto ("qual regra pega X").
   const t = busca.trim().toLowerCase();
   const filtrando = Boolean(t || cats.length || tipo || usoF);
-  const visiveis = useMemo(() => linhas.filter((l) => {
+  const filtradas = useMemo(() => linhas.filter((l) => {
     if (l.novo) return true;
     if (t && !(l.palavra_chave.toLowerCase().includes(t) || catPorId.get(l.categoria_id)?.nome.toLowerCase().includes(t)
       || (l.ignorar && 'ignorar'.includes(t)) || regraPega(l.palavra_chave, busca.trim()))) return false;
@@ -101,6 +130,22 @@ export default function Regras() {
     if (usoF && uso?.get(l.id)?.aviso?.tipo !== usoF) return false;
     return true;
   }), [linhas, t, busca, cats, tipo, usoF, uso, catPorId]);
+  const visiveis = useMemo(() => {
+    if (!ordem) return filtradas;
+    const chave = {
+      palavra: (l) => semAcento(l.palavra_chave),
+      categoria: (l) => (l.ignorar ? '\uffff' : semAcento(catPorId.get(l.categoria_id)?.nome ?? '\ufffe')),
+      pegou: (l) => uso?.get(l.id)?.pegou ?? -1,
+    }[ordem.col];
+    const sinal = ordem.dir === 'desc' ? -1 : 1;
+    const reais = filtradas.filter((l) => !l.novo).sort((a, b) => {
+      const x = chave(a);
+      const y = chave(b);
+      const d = typeof x === 'number' ? x - y : x.localeCompare(y, 'pt-BR');
+      return d ? d * sinal : (posicao.get(a.id) ?? 0) - (posicao.get(b.id) ?? 0);
+    });
+    return [...reais, ...filtradas.filter((l) => l.novo)];
+  }, [filtradas, ordem, uso, catPorId, posicao]);
 
   // Agrupada: por categoria, na ordem do cadastro; "Ignorar" no fim. Cada grupo mantém a ordem das regras.
   const grupos = useMemo(() => {
@@ -119,7 +164,7 @@ export default function Regras() {
     ids: linhas.map((l) => l.id),
     onReordenar: (ids) => setLinhas((ls) => ids.map((id) => ls.find((l) => l.id === id)).filter(Boolean)),
   });
-  const podeArrastar = !filtrando && !agrupar;
+  const podeArrastar = !filtrando && !agrupar && !ordem;
 
   const muda = (ids, campos) => { setLinhas((ls) => ls.map((l) => (ids.includes(l.id) ? { ...l, ...campos } : l))); setErro(null); };
   const daLista = (v) => (v === IGNORAR ? { ignorar: true, categoria_id: '' } : { ignorar: false, categoria_id: v ?? '' });
@@ -340,7 +385,7 @@ export default function Regras() {
           )}
 
           <div className="card mt-4 overflow-hidden">
-            <div ref={caixaRef} className="max-h-[calc(100vh-300px)] min-h-[240px] overflow-auto [scrollbar-gutter:stable]">
+            <div ref={caixaRef} className="max-h-[calc(100vh-215px)] min-h-[240px] overflow-auto [scrollbar-gutter:stable]">
               <table className="w-full min-w-[1000px] table-fixed border-separate border-spacing-0 text-[12.5px]">
                 <colgroup>
                   <col style={{ width: 40 }} /><col style={{ width: 30 }} /><col style={{ width: 52 }} /><col style={{ width: 280 }} />
@@ -349,10 +394,11 @@ export default function Regras() {
                 <thead>
                   <tr>
                     <th className={`${th} text-center`}><Checkbox size="sm" checked={todasMarcadas} indeterminate={marcadas.size > 0} onChange={() => setMarcadas(todasMarcadas ? new Set() : new Set(visiveis.filter((l) => !l.novo && !l.excluir).map((l) => l.id)))} title="Marcar todas" /></th>
-                    <th className={th} aria-label="Ordem" /><th className={`${th} text-right`} title="A ordem: a primeira que pega decide">#</th>
-                    <th className={th} title="Em qualquer parte do nome, sem diferenciar maiúscula. * = qualquer coisa, ? = um caractere.">Palavra-chave</th>
-                    <th className={th}>Categoria</th>
-                    <th className={th} title="Quantos lançamentos do histórico ela classificaria hoje (pela ordem gravada), e o último">Pegou</th>
+                    <th className={th} aria-label="Ordem" />
+                    <th className={`${th} text-right`}><Titulo col={null} ordem={ordem} onOrdenar={ordenar} title="A ordem das regras: a primeira que pega decide" direita>#</Titulo></th>
+                    <th className={th}><Titulo col="palavra" ordem={ordem} onOrdenar={ordenar} title="Em qualquer parte do nome, sem diferenciar maiúscula. * = qualquer coisa, ? = um caractere.">Palavra-chave</Titulo></th>
+                    <th className={th}><Titulo col="categoria" ordem={ordem} onOrdenar={ordenar}>Categoria</Titulo></th>
+                    <th className={th}><Titulo col="pegou" ordem={ordem} onOrdenar={ordenar} title="Quantos lançamentos do histórico ela classificaria hoje (pela ordem gravada), e o último">Pegou</Titulo></th>
                     <th className={th}>Aviso</th><th className={th} />
                   </tr>
                 </thead>
@@ -395,7 +441,9 @@ export default function Regras() {
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-200 bg-hx-f9fafb px-4 py-3">
                 <span className="text-[12px] text-gray-500">
                   {nAlt ? <><b className="font-semibold text-hx-92400e">{plural(nAlt, 'alteração', 'alterações')}</b> · ainda não salvo · o que já foi classificado não muda</>
-                    : podeArrastar ? 'Arraste ⠿ para mudar a ordem: a primeira regra que pega o nome decide.' : 'Com filtro ou agrupada, a ordem não se arrasta.'}
+                    : podeArrastar ? 'Arraste ⠿ para mudar a ordem: a primeira regra que pega o nome decide.'
+                      : ordem ? <>Ordenada por {ROTULO_ORDEM[ordem.col]}: a prioridade é a do #, e não se arrasta. <button type="button" className="underline underline-offset-2 hover:text-gray-800" onClick={() => ordenar(null)}>Voltar à ordem das regras</button></>
+                        : 'Com filtro ou agrupada, a ordem não se arrasta.'}
                 </span>
                 <span className="flex-1" />
                 {nAlt > 0 && <button type="button" className="btn-secondary" onClick={descartar} disabled={salvando}>Descartar</button>}

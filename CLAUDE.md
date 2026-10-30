@@ -128,7 +128,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 
 - CARTÕES (`pages/Cartoes.jsx`): UM BLOCO POR CARTÃO — última fatura (↗ os lançamentos do mês), próxima (vence em
   N dias; já entrou ou a importar, com o ↓ que abre o `ImportarFatura` com cartão e vencimento), parcelas que vêm (view
-  `parcelas_futuras`), média por fatura (12 meses) e as 12 faturas em colunas (a última na cor `--serie-gastos`).
+  `parcelas_futuras`), média por fatura (12 meses) e as 12 faturas em colunas (a última na cor `--serie-gastos`;
+  hover = a coluna cheia, as outras a 40% e o `BalaoGrafico` com total, compras e a diferença para a média; clicar
+  abre os lançamentos do mês). O bloco ganha borda e sombra no hover.
   Contas em `lib/cartoes.js` (testada). Cabeçalho do DRE: ✎ `ModalCadastroCartoes` (tabela de formulário, "Salvar
   alterações (N)"; cartão com lançamentos não se exclui) · ▾ Exportar CSV / Importar; "+ Novo cartão" = o formulário
   de um (clicar no nome do bloco também o abre).
@@ -137,7 +139,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   alterações (N)" grava a diferença. A prioridade só conta como alteração se a ORDEM mudou (aí renumera 1, 2, 3…; a
   nova no fim vai depois da maior) — `prioridades` em `lib/regras.js` (testada). PEGOU e AVISO ("escondida por #N",
   "sem uso") saem dos lançamentos com `estabelecimento`, pela ordem GRAVADA (`usoDasRegras`). ⌕ abre o TESTE de um
-  nome (pela ordem da tela); filtros categoria / tipo / uso e "Agrupar" por categoria (sem arrastar). ▾ "Aplicar nas
+  nome (pela ordem da tela); filtros categoria / tipo / uso e "Agrupar" por categoria (sem arrastar). ORDENAR PELO
+  CABEÇALHO: clicar no título ordena a vista (palavra, categoria, pegou — este do maior; 3ª vez volta; "#" = a ordem
+  das regras), lembrado em `regras_ordem`; ordenada, a alça não arrasta. ▾ "Aplicar nas
   pendências agora" (as de ignorar ficam de fora) e Exportar CSV.
 
 ## Extrato da conta corrente
