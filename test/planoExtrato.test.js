@@ -57,3 +57,28 @@ test('recorrência fora da vigência não pega', () => {
   const p = planejarExtrato([L('y', '2025-12-04', -14990, 'PROVEDOR X')], { classificar, recorrencias, fixosLancados: [], jaImportados: new Set() });
   assert.equal(p[0].acao, 'avulso');
 });
+
+test('trazer as entradas: o crédito vira entrada; o de uma conta sua e o já lançado à mão ficam de fora', () => {
+  const c = criarClassificador([
+    { palavra_chave: 'EMPRESA', categoria_id: 'salario', prioridade: 1 },
+    { palavra_chave: 'EU MESMO', categoria_id: null, ignorar: true, prioridade: 2 },
+    { palavra_chave: 'PADARIA', categoria_id: 'padaria', prioridade: 3 },
+  ]);
+  const linhas = [
+    L('s', '2026-09-05', 800000, 'EMPRESA X'),     // salário → entrada com a categoria (de entrada)
+    L('t', '2026-09-06', 50000, 'EU MESMO'),       // transferência de uma conta sua → regra de ignorar
+    L('u', '2026-09-10', 12000, 'FULANO'),         // já lançada à mão no dia 9 com o mesmo valor
+    L('v', '2026-09-12', 1500, 'PADARIA DO ZE'),   // estorno: a regra é de gasto → entrada sem categoria
+    L('w', '2026-09-13', 30000, 'RDB', 'Resgate RDB'), // investimento: sempre de fora
+  ];
+  const base = { classificar: c, recorrencias: [], fixosLancados: [], jaImportados: new Set(), ehEntrada: (id) => id === 'salario' };
+  const sem = planejarExtrato(linhas, base);
+  assert.deepEqual(sem.map((x) => x.acao), ['ignorar', 'ignorar', 'ignorar', 'ignorar', 'ignorar']); // o padrão continua
+  const com = planejarExtrato(linhas, { ...base, entradas: true, entradasManuais: [{ id: 'm', data: '2026-09-09', valor_centavos: 12000 }] });
+  assert.deepEqual(com.map((x) => x.acao), ['entrada', 'ignorar', 'ignorar', 'entrada', 'ignorar']);
+  assert.equal(com[0].categoriaId, 'salario');
+  assert.equal(com[1].motivo, 'regra de ignorar');
+  assert.equal(com[2].motivo, 'já lançada à mão (09/09)');
+  assert.equal(com[3].categoriaId, null);
+  assert.equal(com[4].motivo, 'investimento');
+});

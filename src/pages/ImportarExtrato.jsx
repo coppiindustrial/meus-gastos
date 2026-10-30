@@ -4,12 +4,13 @@ import SeletorCategoria from '../components/SeletorCategoria.jsx';
 import Spinner from '../components/Spinner.jsx';
 import AreaArrastar from '../components/AreaArrastar.jsx';
 import { Etiqueta } from '../components/Comuns.jsx';
+import Toggle from '../components/Toggle.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { listarCategorias } from '../api/cadastros.js';
 import { listarRegrasParaClassificar } from '../api/faturas.js';
 import { listarRecorrencias } from '../api/fixos.js';
 import { salvarRegra } from '../api/regras.js';
-import { fixosLancados, gravarExtrato, idsJaImportados } from '../api/extrato.js';
+import { entradasManuais, fixosLancados, gravarExtrato, idsJaImportados } from '../api/extrato.js';
 import { registrarImportacao } from '../api/importacoes.js';
 import { periodoDasLinhas } from '../lib/importacoes.js';
 import { lerExtrato } from '../lib/lerExtrato.js';
@@ -17,19 +18,26 @@ import { planejarExtrato } from '../lib/planoExtrato.js';
 import { criarClassificador } from '../lib/classificar.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { formatDate } from '../lib/format.js';
+import { lsGet, lsSet } from '../lib/storage.js';
 
 // IMPORTAR O EXTRATO DA CONTA (Nubank), num POP-UP como o da fatura (29/10/2026: antes era a tela /extrato, que
 // abria fora do Importar). Escolher o CSV → a prévia mostra o destino de cada movimentação (lib/planoExtrato.js) →
 // o que ainda não tem regra pode ser classificado ali mesmo, criando a regra (ou uma regra de IGNORAR, para as
 // transferências entre as suas contas) → importar. Com a prévia, o pop-up cresce para o painel dos ampliados
 // (1100px, 90% da altura) e o rodapé com o "Importar" fica preso embaixo.
-// Decisões (2026-10-27): entradas continuam à mão; pagamento de fatura e investimentos ficam de fora;
+// Decisões (2026-10-27): entradas continuam à mão — a não ser que a pessoa ligue "Trazer as entradas" (30/10/2026, a
+// preferência fica lembrada; a que já foi lançada à mão não entra de novo); pagamento de fatura e investimentos ficam de fora;
 // o pagamento de um gasto fixo vira o fixo do mês com o valor real. Cada importação vai para o histórico, com o
 // que desfazê-la. `arquivo`: o File já escolhido no "Importar arquivos" (abre direto na prévia).
 const IGNORAR = '__ignorar';
 const EXTRAS_IGNORAR = [{ value: IGNORAR, label: 'Ignorar sempre (não é gasto)' }];
 
+const LS_ENTRADAS = 'extrato_entradas';
+// A data a N dias (para procurar as entradas lançadas à mão um pouco antes e depois do período do arquivo).
+const maisDias = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
+
 const ROTULO = {
+  entrada: (p, nomeCat) => <Etiqueta tom="verde">Entrada{p.categoriaId ? ` · ${nomeCat(p.categoriaId)}` : ''}</Etiqueta>,
   ignorar: (p) => <Etiqueta>Fora: {p.motivo}</Etiqueta>,
   ja: () => <Etiqueta>Já importada</Etiqueta>,
   fixo_novo: (p) => <Etiqueta tom="verde">Fixo: {p.recorrencia.descricao}</Etiqueta>,
@@ -68,6 +76,9 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
   const [base, setBase] = useState(null); // { categorias, regras, recorrencias, fixos }
   const [arquivo, setArquivo] = useState(null); // { nome, linhas }
   const [ja, setJa] = useState(new Set());
+  const [manuais, setManuais] = useState([]);
+  const [comEntradas, setComEntradasEstado] = useState(() => lsGet(LS_ENTRADAS) === 'sim');
+  const setComEntradas = (v) => { setComEntradasEstado(v); lsSet(LS_ENTRADAS, v ? 'sim' : ''); };
   const [erro, setErro] = useState('');
   const [gravando, setGravando] = useState(false);
   const [andamento, setAndamento] = useState('');
@@ -84,6 +95,8 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
     try {
       const linhas = lerExtrato(await f.text());
       setJa(await idsJaImportados(linhas.map((l) => l.id_externo)));
+      const per = periodoDasLinhas(linhas);
+      setManuais(per.de ? await entradasManuais(maisDias(per.de, -3), maisDias(per.ate, 3)) : []);
       setArquivo({ nome: f.name, linhas });
     } catch (err) { setArquivo(null); setErro(err.message); }
   };
@@ -94,8 +107,9 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
     if (!arquivo || !base) return null;
     return planejarExtrato(arquivo.linhas, {
       classificar: criarClassificador(base.regras), recorrencias: base.recorrencias, fixosLancados: base.fixos, jaImportados: ja,
+      entradas: comEntradas, entradasManuais: manuais, ehEntrada: (id) => base.categorias.find((c) => c.id === id)?.grupo?.tipo === 'entrada',
     });
-  }, [arquivo, base, ja]);
+  }, [arquivo, base, ja, comEntradas, manuais]);
 
   const nomeCat = useCallback((id) => base?.categorias.find((c) => c.id === id)?.nome ?? '—', [base]);
 
@@ -121,8 +135,11 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
   };
 
   const conta = (acao) => (plano ?? []).filter((p) => p.acao === acao);
-  const aGravar = [...conta('fixo_novo'), ...conta('fixo_corrigir'), ...conta('avulso')];
-  const totalGravar = aGravar.reduce((s, p) => s + -p.linha.valor_centavos, 0);
+  const gastos = [...conta('fixo_novo'), ...conta('fixo_corrigir'), ...conta('avulso')];
+  const aGravar = [...gastos, ...conta('entrada')];
+  const totalGravar = gastos.reduce((s, p) => s + -p.linha.valor_centavos, 0);
+  const totalEntradas = conta('entrada').reduce((s, p) => s + p.linha.valor_centavos, 0);
+  const nCreditos = (arquivo?.linhas ?? []).filter((l) => l.valor_centavos > 0).length;
 
   const importar = async () => {
     setGravando(true);
@@ -133,7 +150,7 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
       const fixos = conta('fixo_novo').length + conta('fixo_corrigir').length;
       await registrarImportacao({
         tipo: 'extrato', arquivo: arquivo.nome, periodo_de: per.de, periodo_ate: per.ate, linhas: n, total_centavos: totalGravar,
-        resumo: [`${arquivo.linhas.length} movimentações → ${conta('avulso').length} avulsos`, fixos && `${fixos} fixos`,
+        resumo: [`${arquivo.linhas.length} movimentações → ${conta('avulso').length} avulsos`, fixos && `${fixos} fixos`, conta('entrada').length && `${conta('entrada').length} entradas`,
           `${conta('ignorar').length + conta('ja').length} de fora`, revisar && `${revisar} sem regra`].filter(Boolean).join(' · '),
         desfazer: { apagar, restaurar },
       });
@@ -153,8 +170,9 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
       {!comPrevia ? (
         <div className="space-y-4 text-sm text-gray-700">
           <p>
-            Exporte o extrato da conta no app do Nubank (CSV) e escolha o arquivo. Ficam de fora as entradas (você as lança à
-            mão), o pagamento da fatura do cartão, os investimentos (RDB, dinheiro guardado) e o que uma regra mandar ignorar.
+            Exporte o extrato da conta no app do Nubank (CSV) e escolha o arquivo. Ficam de fora o pagamento da fatura do cartão,
+            os investimentos (RDB, dinheiro guardado) e o que uma regra mandar ignorar. As entradas também, a não ser que você
+            ligue “Trazer as entradas” na prévia (a que já foi lançada à mão não entra de novo).
             Pagamento de gasto fixo vira o fixo do mês com o valor real.
           </p>
           {arquivo && !base ? <p className="flex items-center gap-2 text-gray-500"><Spinner className="h-4 w-4" /> Lendo as regras…</p> : (
@@ -166,11 +184,17 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
       ) : (
         <div className="flex min-h-full flex-col">
           <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-b border-gray-100 px-5 py-3 text-sm text-gray-700">
-            <span><strong>{aGravar.length}</strong> a importar · {formatBRL(totalGravar)}</span>
+            <span><strong>{gastos.length}</strong> gastos a importar · {formatBRL(totalGravar)}</span>
+            {comEntradas && <span className="text-green-700"><strong>{conta('entrada').length}</strong> entradas · {formatBRL(totalEntradas)}</span>}
             <span><strong>{conta('fixo_novo').length + conta('fixo_corrigir').length}</strong> como gasto fixo</span>
             <span><strong>{conta('ignorar').length}</strong> fora</span>
             {conta('ja').length > 0 && <span><strong>{conta('ja').length}</strong> já importadas</span>}
             <span className="flex-1" />
+            {nCreditos > 0 && (
+              <label className="inline-flex cursor-pointer items-center gap-2 text-[12.5px] text-gray-700" title="Os créditos do extrato (Pix recebido, salário…) entram como entradas. A que você já lançou à mão (mesmo valor, até 3 dias) fica de fora.">
+                <Toggle compacto checked={comEntradas} onChange={setComEntradas} rotulo="Trazer as entradas" disabled={gravando} /> Trazer as entradas ({nCreditos})
+              </label>
+            )}
             <button type="button" onClick={() => setArquivo(null)} disabled={gravando} className="text-[12px] text-gray-500 underline underline-offset-2 hover:text-gray-800">Escolher outro arquivo</button>
           </div>
 

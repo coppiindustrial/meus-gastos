@@ -16,7 +16,7 @@ import ImportarFatura from './ImportarFatura.jsx';
 import ImportarExtrato from './ImportarExtrato.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
-import { carregarSituacao, desfazerImportacao } from '../api/importacoes.js';
+import { carregarSituacao, desfazerImportacao, idsDoExtratoAntigo } from '../api/importacoes.js';
 import { mesesDoAno } from '../lib/importacoes.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaCurta, formatDate, formatDateTime, nomeCompetencia, todayISO } from '../lib/format.js';
@@ -264,7 +264,6 @@ export default function Importar() {
   }, [tabela]);
   const linhas = tabela ? tabela.linhas.filter((l) => !soFalta || Object.values(l.celulas).some((c) => c.pendente || c.estado === 'parcial')) : [];
   const historico = (dados?.importacoes ?? []).filter((i) => i.criado_em.startsWith(`${ano}-`));
-  const ultimoExtrato = (dados?.importacoes ?? []).find((i) => i.tipo === 'extrato');
 
   const agir = (col, cel) => {
     if (col.tipo === 'extrato') { setExtrato({}); return; }
@@ -298,19 +297,29 @@ export default function Importar() {
     setMenu({ x: r.right - 280, y: r.bottom + 4, titulo: agora?.faltam ? `${agora.faltam} ${agora.faltam === 1 ? 'importação falta' : 'importações faltam'}` : 'Importar', itens });
   };
 
+  // EXCLUIR uma importação. O extrato: qualquer um (antes só o último), para importar de novo o mês; o antigo (sem
+  // o `desfazer`) conta antes quantos lançamentos vão sair, para a confirmação dizer.
   const desfazer = async (i) => {
     const d = descrever(i);
+    let n = i.desfazer?.apagar?.length ?? 0;
+    if (i.tipo === 'extrato' && !i.desfazer) {
+      setDesfazendo(i.id);
+      try { n = (await idsDoExtratoAntigo(i)).length; } catch (err) { toast.error(err.message); setDesfazendo(null); return; }
+      setDesfazendo(null);
+    }
+    const restaura = i.desfazer?.restaurar?.length ?? 0;
     const ok = await confirmar({
-      titulo: i.tipo === 'fatura' ? `Excluir a ${d.oque.replace(/^F/, 'f')}?` : `Desfazer: ${d.oque}?`,
+      titulo: i.tipo === 'fatura' ? `Excluir a ${d.oque.replace(/^F/, 'f')}?` : `Excluir: ${d.oque}?`,
       texto: i.tipo === 'fatura'
         ? `A fatura e os ${i.linhas} lançamentos dela são apagados.`
-        : `Os ${i.desfazer?.apagar?.length ?? 0} lançamentos que este extrato criou são apagados${i.desfazer?.restaurar?.length ? `, e os ${i.desfazer.restaurar.length} fixos que ele corrigiu voltam ao valor de antes` : ''}.`,
-      confirmar: i.tipo === 'fatura' ? 'Excluir' : 'Desfazer',
+        : `Os ${n} lançamentos que este extrato criou são apagados${restaura ? `, e os ${restaura} fixos que ele corrigiu voltam ao valor de antes` : ''}.${
+          i.desfazer ? '' : ' Os fixos lançados à mão que ele corrigiu ficam como estão.'} Depois, é só importar o extrato de novo.`,
+      confirmar: 'Excluir',
       perigo: true,
     });
     if (!ok) return;
     setDesfazendo(i.id);
-    try { await desfazerImportacao(i); toast.success(i.tipo === 'fatura' ? 'Fatura excluída.' : 'Importação desfeita.'); await carregar(); } catch (err) { toast.error(err.message); }
+    try { await desfazerImportacao(i); toast.success(i.tipo === 'fatura' ? 'Fatura excluída.' : 'Extrato excluído: pode importar de novo.'); await carregar(); } catch (err) { toast.error(err.message); }
     setDesfazendo(null);
   };
 
@@ -321,9 +330,7 @@ export default function Importar() {
         : <span className="text-[11.5px] text-gray-400" title="A fatura foi substituída por outra importação ou excluída">substituída ou excluída</span>;
     }
     if (i.tipo === 'extrato') {
-      return i.desfazer && i.id === ultimoExtrato?.id
-        ? <button type="button" className="btn-secondary !px-2.5 !py-1 !text-[12px]" disabled={desfazendo === i.id} onClick={() => desfazer(i)}>Desfazer</button>
-        : null;
+      return <button type="button" className="btn-secondary !px-2.5 !py-1 !text-[12px]" disabled={desfazendo === i.id} onClick={() => desfazer(i)} title="Apaga os lançamentos que este extrato criou (para importar de novo)">Excluir</button>;
     }
     return (
       <button type="button" onClick={() => setPlanilha(i)}

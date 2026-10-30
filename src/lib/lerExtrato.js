@@ -67,11 +67,12 @@ const SEMPRE_IGNORAR = [
 
 // Por que a linha fica de fora (ou null se é um gasto a importar). `regraIgnorar(linha)` diz se alguma
 // regra de ignorar pega a linha (as transferências para as suas próprias contas).
+export const MOTIVO_ENTRADA = 'entrada (lançada à mão)';
 export function motivoIgnorar(linha, regraIgnorar) {
   // Primeiro os de sempre: o resgate de um investimento é crédito, mas não é "entrada".
   const fixo = SEMPRE_IGNORAR.find(([re]) => re.test(linha.descricao_original));
   if (fixo) return fixo[1];
-  if (linha.valor_centavos > 0) return 'entrada (lançada à mão)';
+  if (linha.valor_centavos > 0) return MOTIVO_ENTRADA;
   if (regraIgnorar?.(linha)) return 'regra de ignorar';
   return null;
 }

@@ -98,7 +98,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   importador da fatura já com cartão e vencimento (`inicial`) ou o do extrato.
 - ABA "HISTÓRICO" = tabela `importacoes` (migration 007, que também preenche o passado): toda importação chama
   `registrarImportacao` (fatura, extrato, planilha; sem a tabela, ignora em silêncio). "Excluir" a fatura (apaga a
-  fatura) e "Desfazer" o ÚLTIMO extrato (`desfazer` = ids criados + os fixos corrigidos como eram, de `gravarExtrato`).
+  fatura) e "Excluir" QUALQUER extrato (30/10/2026; antes só o último), para importar o mês de novo: `desfazer` = ids
+  criados + os fixos corrigidos como eram (de `gravarExtrato`); o extrato ANTIGO, sem `desfazer` (o que a 007
+  preencheu), apaga o que `idsDoExtratoAntigo` acha — marca `extrato` + o minuto em que foi gravado.
 - "IMPORTAR ARQUIVOS" (`components/ImportarArquivos.jsx`): vários CSVs de uma vez, reconhecidos pelo cabeçalho e pelo
   nome; as faturas entram dali (a repetida é pulada, ou substituída se pedir) e o extrato abre a prévia de sempre
   (o pop-up `ImportarExtrato` com o `arquivo`). Importou/desfez → `avisarMudanca()` refaz o número do menu.
@@ -149,7 +151,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - `lib/lerExtrato.js`: CSV do extrato do Nubank (`Data,Valor,Identificador,Descrição`); a `contraparte` (quem recebeu
   ou enviou) sai da descrição sem CPF/banco. `lib/planoExtrato.js` dá o destino de cada linha (fora, já importada,
   fixo novo, corrige o fixo, avulso) — a prévia mostra exatamente o plano, e `api/extrato.js` grava.
-- Decisões do usuário: entradas do extrato ficam de fora (lançadas à mão); pagamento de fatura e investimentos
+- Decisões do usuário: entradas do extrato ficam de fora (lançadas à mão) — a não ser com "Trazer as entradas" na
+  prévia (30/10/2026, lembrado em `extrato_entradas`): o crédito vira entrada (categoria da regra só se for de
+  entrada), e o já lançado à mão (mesmo valor, até 3 dias — `entradasManuais`) fica de fora; pagamento de fatura e investimentos
   (RDB, dinheiro guardado) sempre de fora; transferência entre contas próprias por REGRA DE IGNORAR
   (`regras.ignorar`, migration 005 — também vale nas faturas); pagamento cuja categoria é a de uma recorrência
   vigente vira o fixo do mês com o valor real (se o fixo já foi lançado à mão, o valor é corrigido).

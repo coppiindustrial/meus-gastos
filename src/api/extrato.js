@@ -21,10 +21,17 @@ export async function fixosLancados() {
   return linhas.map((l) => ({ ...l, competencia: l.competencia.slice(0, 7) }));
 }
 
+// As entradas lançadas À MÃO (sem identificador do banco) neste período, para o plano não trazer de novo a mesma
+// entrada do extrato.
+export function entradasManuais(de, ate) {
+  return exigir(supabase.from('lancamentos').select('id, data, valor_centavos')
+    .eq('tipo', 'entrada').is('id_externo', null).gte('data', de).lte('data', ate));
+}
+
 // Grava o plano: só as ações que mexem no banco (ignorar e "já importada" não fazem nada). Devolve
 // { n, apagar, restaurar }: os ids criados e, dos fixos corrigidos, como eles eram — o "Desfazer" do histórico.
 export async function gravarExtrato(plano, aoAvancar) {
-  const acoes = plano.filter((p) => ['fixo_novo', 'fixo_corrigir', 'avulso'].includes(p.acao));
+  const acoes = plano.filter((p) => ['fixo_novo', 'fixo_corrigir', 'avulso', 'entrada'].includes(p.acao));
   const apagar = [];
   const restaurar = [];
   let n = 0;
@@ -36,7 +43,16 @@ export async function gravarExtrato(plano, aoAvancar) {
       id_externo: l.id_externo,
       importado_de: ORIGEM_EXTRATO,
     };
-    if (p.acao === 'fixo_corrigir') {
+    if (p.acao === 'entrada') {
+      // O crédito vira uma ENTRADA (valor positivo como veio); sem categoria de entrada, fica sem — não vai para
+      // Revisar pendências, que classifica gastos.
+      const criado = await exigir(supabase.from('lancamentos').insert({
+        data: l.data, valor_centavos: l.valor_centavos, id_externo: l.id_externo, importado_de: ORIGEM_EXTRATO,
+        tipo: 'entrada', origem: 'entrada', competencia: competenciaParaBanco(competenciaDe(l.data)),
+        descricao: l.nome, estabelecimento: l.contraparte, categoria_id: p.categoriaId, revisar: false,
+      }).select('id').single());
+      apagar.push(criado.id);
+    } else if (p.acao === 'fixo_corrigir') {
       // O fixo lançado à mão passa a ter o valor e a data reais do pagamento.
       const e = p.existente;
       restaurar.push({ id: e.id, data: e.data, valor_centavos: e.valor_centavos, id_externo: e.id_externo ?? null, importado_de: e.importado_de ?? null });

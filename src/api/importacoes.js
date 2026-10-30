@@ -52,13 +52,24 @@ export async function carregarSituacao() {
   };
 }
 
-// DESFAZER. A fatura: apaga a fatura (os lançamentos dela vão junto, pela FK) e a linha do histórico. O
-// extrato: apaga o que ele criou, devolve aos fixos corrigidos o valor e a data de antes, e apaga a linha.
+// O EXTRATO ANTIGO (30/10/2026): o que foi importado antes do histórico (a migration 007 o preencheu SEM o
+// `desfazer`) é achado pela marca do extrato e pelo minuto em que foi gravado — a 007 juntou cada importação
+// assim. Devolve os ids. Os fixos que ele corrigiu (lançados à mão antes) não entram: ficam com o valor do extrato.
+export async function idsDoExtratoAntigo(imp) {
+  const fim = new Date(Math.floor(Date.parse(imp.criado_em) / 60000) * 60000 + 60000).toISOString();
+  const linhas = await buscarTudo(() => supabase.from('lancamentos').select('id').eq('importado_de', 'extrato')
+    .gte('criado_em', imp.criado_em).lt('criado_em', fim).order('id'));
+  return linhas.map((l) => l.id);
+}
+
+// DESFAZER / EXCLUIR. A fatura: apaga a fatura (os lançamentos dela vão junto, pela FK) e a linha do histórico. O
+// extrato (QUALQUER um, não só o último — 30/10/2026): apaga o que ele criou, devolve aos fixos corrigidos o valor e
+// a data de antes, e apaga a linha; o antigo, sem o `desfazer`, apaga o que `idsDoExtratoAntigo` achar.
 export async function desfazerImportacao(imp) {
   if (imp.tipo === 'fatura' && imp.fatura_id) {
     await exigir(supabase.from('faturas').delete().eq('id', imp.fatura_id));
-  } else if (imp.tipo === 'extrato' && imp.desfazer) {
-    const { apagar = [], restaurar = [] } = imp.desfazer;
+  } else if (imp.tipo === 'extrato') {
+    const { apagar = await idsDoExtratoAntigo(imp), restaurar = [] } = imp.desfazer ?? {};
     for (let i = 0; i < apagar.length; i += 100) {
       await exigir(supabase.from('lancamentos').delete().in('id', apagar.slice(i, i + 100)));
     }
