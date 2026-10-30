@@ -43,7 +43,9 @@ function celulaExtrato(comp, hoje, unidos, importacoes, primeiro) {
   if (comp > mesHoje) return { estado: 'futuro' };
   const toca = unidos.filter((u) => u.de <= fim && u.ate >= ini);
   if (!toca.length) {
-    if (!primeiro || comp < primeiro) return { estado: 'na' };
+    // ANTES DA PRIMEIRA IMPORTAÇÃO o mês não é cobrado ("—"), mas pode ser importado (`antes`): é o caso de quem
+    // exclui o extrato de um mês para importar de novo e ele fica antes do primeiro que sobrou (30/10/2026).
+    if (!primeiro || comp < primeiro) return { estado: 'na', antes: true };
     return comp === mesHoje ? { estado: 'andamento' } : { estado: 'falta', pendente: true };
   }
   // A data em que o mês entrou: a importação mais recente que tem algum dia dele.
@@ -67,7 +69,10 @@ function celulaFatura(comp, hoje, cartao, fats) {
     };
   }
   const comps = fats.map((x) => x.competencia).sort();
-  if (!comps.length || comp < comps[0]) return { estado: 'na' };
+  if (!comps.length || comp < comps[0]) {
+    const vence = vencimentoNoMes(comp, cartao.dia_vencimento);
+    return cartao.ativo && vence <= hoje ? { estado: 'na', antes: true, vence } : { estado: 'na' };
+  }
   if (!cartao.ativo && comp > comps[comps.length - 1]) return { estado: 'na' };
   const vence = vencimentoNoMes(comp, cartao.dia_vencimento);
   return vence <= hoje ? { estado: 'falta', vence, pendente: true } : { estado: 'futuro', vence };

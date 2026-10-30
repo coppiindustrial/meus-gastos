@@ -94,7 +94,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - ABA "POR MÊS": linha = mês do ano (filtro de ano), coluna = FONTE (cada cartão e o extrato); a célula diz QUANDO
   entrou ou o que falta (`mesesDoAno` em `lib/importacoes.js`, testada). Fonte DEVE o mês quando ele já pode ser
   importado: a fatura a partir do vencimento; o extrato quando o mês acabou (o mês corrente é "em andamento" ou
-  "até dd/mm", sem contar como pendência). Antes da primeira importação da fonte, "—". A célula que falta abre o
+  "até dd/mm", sem contar como pendência). Antes da primeira importação da fonte, "—" — que não cobra, mas tem o ↓ no
+  hover (`antes`: excluir o extrato de um mês o deixa antes do primeiro que sobrou, e ele precisa poder voltar). A célula que falta abre o
   importador da fatura já com cartão e vencimento (`inicial`) ou o do extrato.
 - ABA "HISTÓRICO" = tabela `importacoes` (migration 007, que também preenche o passado): toda importação chama
   `registrarImportacao` (fatura, extrato, planilha; sem a tabela, ignora em silêncio). "Excluir" a fatura (apaga a

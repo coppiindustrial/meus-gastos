@@ -79,13 +79,14 @@ function detalhe(cel, col, comp) {
   if (cel.estado === 'falta') return { titulo, linhas: [col.tipo === 'fatura' ? `Venceu em ${formatDate(cel.vence)} e ainda não entrou.` : 'O mês acabou e o extrato dele não entrou.'], acao: true };
   if (cel.estado === 'andamento') return { titulo, linhas: ['O mês ainda não acabou.'], acao: true };
   if (cel.estado === 'futuro') return { titulo, linhas: [cel.vence ? `Vence em ${formatDate(cel.vence)}.` : 'Mês que ainda não chegou.'] };
+  if (cel.antes) return { titulo, linhas: ['Antes da primeira importação desta fonte: não conta como pendência.', 'Dá para importar mesmo assim (o ↓ no canto).'], acao: true };
   return { titulo, linhas: ['A fonte ainda não existia aqui neste mês.'] };
 }
 
 // Uma célula: uma linha só. `apagada`: fora do destaque da legenda.
 function Celula({ cel, col, comp, apagada, onAgir, onAbrir, onDica }) {
   const tipo = tipoDe(cel);
-  const acao = ['falta', 'parcial', 'andamento'].includes(cel.estado);
+  const acao = ['falta', 'parcial', 'andamento'].includes(cel.estado) || !!cel.antes;
   let texto;
   let curto = null;
   if (cel.estado === 'ok') {

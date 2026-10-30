@@ -51,6 +51,8 @@ test('extrato: mês inteiro, mês em andamento parcial e meses antes do primeiro
   assert.equal(out.faltamDias, 8);
   assert.equal(out.pendente, undefined); // o mês corrente não deve ainda
   assert.equal(linha('2026-07').celulas.extrato.estado, 'na');
+  assert.equal(linha('2026-07').celulas.extrato.antes, true); // não cobra, mas deixa importar
+  assert.equal(linha('2026-07').celulas.extrato.pendente, undefined);
   assert.equal(linha('2026-11').celulas.extrato.estado, 'futuro');
 });
 
