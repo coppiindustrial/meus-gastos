@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import Tooltip from '../components/Tooltip.jsx';
-import { IconMais, IconUpload } from '../components/icons.jsx';
+import MenuContexto from '../components/MenuContexto.jsx';
+import { IconMais, IconSeta } from '../components/icons.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { Bolinha } from '../components/Comuns.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
@@ -116,6 +117,18 @@ export default function Lancamentos() {
   const filtrando = Boolean(busca || tipo || origens.length || cats.length || revisar);
   const limpar = () => { setBusca(''); setTipo(''); setOrigens([]); setCats([]); setRevisar(''); };
 
+  // O ▾ "MAIS AÇÕES" (30/10/2026, como nos Gastos fixos): o exportar mora nele; "Novo lançamento" fica à vista.
+  const [mais, setMais] = useState(null); // o menu (posição)
+  const maisAbertoNoClique = useRef(false);
+  const abrirMais = (el) => {
+    const r = el.getBoundingClientRect();
+    const vazio = !gravadas.length;
+    setMais({ x: r.right - 250, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+      { rotulo: `Exportar ${nomeCompetencia(comp).toLowerCase()} (CSV)`, sub: 'o que está na tela, com os filtros e a ordem',
+        desabilitado: vazio, motivo: vazio ? 'nada no mês' : undefined, onEscolher: exportar },
+    ] });
+  };
+
   // Exporta o que está na tela (mês + filtros + ordem), no padrão do Excel em pt-BR.
   const exportar = () => exportCsv(`lancamentos-${comp}`, gravadas.map((l) => ({ ...l, origem_texto: textoOrigem(l), categoria_nome: l.categoria?.nome ?? '' })), [
     { key: 'data', label: 'Data', tipo: 'data' },
@@ -134,12 +147,15 @@ export default function Lancamentos() {
         titulo="Lançamentos"
         acoes={(
           <>
-            {/* O GRUPO DO DRE (o mesmo dos Gastos fixos e do Importar): os ícones numa caixa só, o nome no tooltip. */}
+            {/* O GRUPO DO DRE (o mesmo dos Gastos fixos e do Importar): a caixa com o ▾ "Mais ações" (o exportar).
+                Abre e fecha no mesmo botão: o mousedown anota se o menu estava aberto (ver Fixos.jsx). */}
             <div className="hidden overflow-hidden rounded-md border border-gray-300 bg-white md:inline-flex">
-              <Tooltip label={`Exportar ${nomeCompetencia(comp).toLowerCase()} (CSV)`}>
-                <button type="button" aria-label="Exportar CSV" onClick={exportar} disabled={!gravadas.length}
-                  className="flex h-9 w-[38px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent">
-                  <IconUpload className="h-4 w-4" />
+              <Tooltip label="Mais ações">
+                <button type="button" aria-label="Mais ações" aria-haspopup="menu" aria-expanded={!!mais}
+                  onMouseDown={() => { maisAbertoNoClique.current = !!mais; }}
+                  onClick={(e) => { if (maisAbertoNoClique.current || mais) { maisAbertoNoClique.current = false; setMais(null); } else abrirMais(e.currentTarget); }}
+                  className={`flex h-9 w-[34px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200 ${mais ? 'bg-gray-100' : ''}`}>
+                  <IconSeta className={`transition-transform duration-200 ease-out ${mais ? 'rotate-180' : ''}`} />
                 </button>
               </Tooltip>
             </div>
@@ -218,6 +234,7 @@ export default function Lancamentos() {
         <ModalLancamento lancamento={modal.item} compPadrao={comp} categorias={categorias} cartoes={cartoes}
           onFechar={() => setModal(null)} onSalvo={() => { setModal(null); carregar(); }} />
       )}
+      <MenuContexto menu={mais} onFechar={() => setMais(null)} />
     </div>
   );
 }

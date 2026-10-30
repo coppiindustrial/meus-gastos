@@ -8,8 +8,9 @@ import { Campo } from '../components/Comuns.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { excluirLancamento, salvarLancamento } from '../api/lancamentos.js';
-import { parseValor, valorParaCampo } from '../lib/dinheiro.js';
+import { calcularValor, valorParaCampo } from '../lib/dinheiro.js';
 import { addMeses, competenciaDe, nomeCompetencia, todayISO } from '../lib/format.js';
+import { descricaoDaEntrada } from '../lib/planilha.js';
 
 const TIPOS = [{ valor: 'saida', rotulo: 'Gasto' }, { valor: 'entrada', rotulo: 'Entrada' }];
 const SEM_CATEGORIA = [{ value: '', label: 'Sem categoria' }];
@@ -53,10 +54,16 @@ export default function ModalLancamento({ lancamento, compPadrao, categorias, ca
       if (campo === 'tipo' && valor === 'entrada') n.origem = 'entrada';
       if (campo === 'tipo' && valor === 'saida' && f.origem === 'entrada') n.origem = 'manual';
       if (campo === 'tipo') n.categoria_id = ''; // as categorias de gasto e de entrada são outras
+      // numa entrada, a categoria escolhida dá a descrição, se ela está vazia (`descricaoDaEntrada`)
+      if (campo === 'categoria_id') {
+        const nova = descricaoDaEntrada({ tipo: n.tipo, descricao: f.descricao,
+          catAntes: categorias.find((c) => c.id === f.categoria_id), catDepois: categorias.find((c) => c.id === valor) });
+        if (nova) n.descricao = nova;
+      }
       if (!compManual && (campo === 'data' || campo === 'origem' || campo === 'tipo')) n.competencia = compSugerida(n.data, n.origem);
       return n;
     });
-    setErros((e) => ({ ...e, [campo]: undefined }));
+    setErros((e) => ({ ...e, [campo]: undefined, ...(campo === 'categoria_id' ? { descricao: undefined } : {}) }));
   };
 
   const entrada = form.tipo === 'entrada';
@@ -78,7 +85,7 @@ export default function ModalLancamento({ lancamento, compPadrao, categorias, ca
 
   const enviar = async (e) => {
     e.preventDefault();
-    const centavos = parseValor(form.valor);
+    const centavos = calcularValor(form.valor); // aceita conta: "=100+50"
     const pa = Number(form.parcela_atual);
     const pt = Number(form.parcela_total);
     const temParcela = cartao && (form.parcela_atual !== '' || form.parcela_total !== '');

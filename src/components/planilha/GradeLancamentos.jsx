@@ -12,7 +12,7 @@ import {
   atualizarCampos, criarLancamentos, excluirLancamentos, restaurarLancamentos,
 } from '../../api/lancamentos.js';
 import {
-  COLUNAS, colunaEditavel, faixaDe, interpretar, ladrilhar, lerBloco, limparFaixa, naFaixa, planejarColagem, preencherAbaixo,
+  COLUNAS, colunaEditavel, descricaoDaEntrada, faixaDe, interpretar, ladrilhar, lerBloco, limparFaixa, naFaixa, planejarColagem, preencherAbaixo,
   resumoSelecao, textoDaFaixa, textoOrigem,
 } from '../../lib/planilha.js';
 import { formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
@@ -189,15 +189,30 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
         Object.entries(campos).forEach(([k, v]) => {
           if ((l[k] ?? null) !== (v ?? null)) { antes[k] = l[k] ?? null; depois[k] = v; }
         });
-        if ('categoria_id' in depois) antes.revisar = l.revisar;
+        if ('categoria_id' in depois) {
+          antes.revisar = l.revisar;
+          // numa entrada, a categoria escolhida dá a descrição (`descricaoDaEntrada`)
+          const nova = descricaoDaEntrada({ tipo: l.tipo, descricao: 'descricao' in depois ? depois.descricao : l.descricao,
+            catAntes: catPorId.get(l.categoria_id), catDepois: catPorId.get(depois.categoria_id) });
+          if (nova) { if (!('descricao' in antes)) antes.descricao = l.descricao ?? null; depois.descricao = nova; }
+        }
         if (Object.keys(depois).length) edicoes.push({ id: l.id, antes, depois });
         return;
       }
       let d = { ...(l ?? novoRascunho(ref)), ...campos };
       if (entradas.has(r)) d.tipo = 'entrada';
-      d.origem = d.tipo === 'entrada' ? 'entrada' : 'manual';
+      // NUMA LINHA NOVA, A CATEGORIA DECIDE O TIPO (30/10/2026): escolher "Salário" faz dela uma entrada (antes a
+      // lista só mostrava as do tipo da linha de cima). O "+" do valor manda mais: com ele, a categoria que não
+      // combina sai.
       const cat = catPorId.get(d.categoria_id);
-      if (cat && cat.grupo.tipo !== d.tipo) d.categoria_id = null;
+      if (cat && cat.grupo.tipo !== d.tipo) {
+        if ('categoria_id' in campos && !entradas.has(r)) d.tipo = cat.grupo.tipo; else d.categoria_id = null;
+      }
+      d.origem = d.tipo === 'entrada' ? 'entrada' : 'manual';
+      if ('categoria_id' in campos) {
+        const nova = descricaoDaEntrada({ tipo: d.tipo, descricao: d.descricao, catAntes: catPorId.get(l?.categoria_id), catDepois: catPorId.get(d.categoria_id) });
+        if (nova) d.descricao = nova;
+      }
       d = comCategoria(d);
       rascunhos.push({ existente: !!l, d });
       ref = d;
@@ -390,7 +405,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     const tipoCat = id ? catPorId.get(id)?.grupo.tipo : null;
     for (let r = r0; r <= r1; r++) {
       const l = linhas[r];
-      if (l && tipoCat && l.tipo !== tipoCat) continue;
+      if (l && !l.rascunho && tipoCat && l.tipo !== tipoCat) continue;
       if (!l && tipoCat === 'entrada') { mudancas.push({ r, campo: 'tipo', valor: 'entrada' }); }
       mudancas.push({ r, campo: 'categoria_id', valor: id });
     }
@@ -761,7 +776,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
       <div className="flex h-7 items-center gap-4 rounded-b-lg border border-t-0 border-gray-300 bg-hx-f9fafb px-3 text-[12px] tabular-nums text-gray-500">
         <span className="truncate">
           {selo ? <span className="text-hx-15803d">✓ {selo}</span>
-            : 'Clique direito para mais ações · Ctrl+V cola do Excel · Ctrl+Z desfaz'}
+            : 'Clique direito para mais ações · Ctrl+V cola do Excel · Ctrl+Z desfaz · no valor, =100+50 faz a conta'}
         </span>
         <span className="flex-1" />
         {resumo && (
@@ -801,7 +816,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
             onCategoriaCriada(cat);
             // A lista de categorias da página ainda não tem a nova: grava direto pelo id.
             const mudancas = [];
-            for (let r = r0; r <= r1; r++) if (!linhas[r] || linhas[r].tipo === cat.grupo?.tipo) mudancas.push({ r, campo: 'categoria_id', valor: cat.id });
+            for (let r = r0; r <= r1; r++) if (!linhas[r] || linhas[r].rascunho || linhas[r].tipo === cat.grupo?.tipo) mudancas.push({ r, campo: 'categoria_id', valor: cat.id });
             aplicar(mudancas, `categoria “${cat.nome}”`);
             setTimeout(focar, 0);
           }} />
@@ -826,10 +841,11 @@ function EditorCelula({ editor, linha, categorias, onTexto, onFechar, onCategori
     el.setSelectionRange(fim, fim);
   }, []);
 
-  // As opções da categoria: as do tipo da linha, filtradas pelo que se digita (nome ou grupo).
+  // As opções da categoria: as do tipo da linha, filtradas pelo que se digita (nome ou grupo). Numa linha NOVA
+  // (rascunho ou a em branco) todas — de gasto e de entrada —, porque a categoria escolhida decide o tipo.
   const opcoes = useMemo(() => {
     if (!ehCategoria) return [];
-    const tipo = linha?.tipo ?? (editor.texto.startsWith('+') ? 'entrada' : undefined);
+    const tipo = linha && !linha.rascunho ? linha.tipo : (editor.texto.startsWith('+') ? 'entrada' : undefined);
     const t = norm(editor.texto);
     const lista = opcoesCategoria(categorias, { tipo, atual: linha?.categoria_id })
       .filter((o) => !t || norm(o.label).includes(t) || norm(o.grupo.nome).includes(t));

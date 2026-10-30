@@ -1,4 +1,4 @@
-import { parseValor, valorParaCampo } from './dinheiro.js';
+import { calcularValor, valorParaCampo } from './dinheiro.js';
 import { formatDate } from './format.js';
 
 // A GRADE DE LANÇAMENTOS como planilha (a tabela D do mockup, no jeito da grade do DRE do Gestor):
@@ -103,8 +103,19 @@ export function acharCategoria(texto, categorias, tipo) {
   return categorias.find((c) => c.grupo?.tipo === tipo && norm(c.nome) === t) ?? null;
 }
 
+// A DESCRIÇÃO DA ENTRADA (30/10/2026, a pedido): numa ENTRADA, escolher a categoria preenche a descrição com o
+// nome dela — se a descrição está vazia ou ainda é o nome da categoria de antes (o que a própria troca pôs). O que
+// a pessoa escreveu não se mexe. Devolve a descrição nova, ou null quando ela fica como está.
+export function descricaoDaEntrada({ tipo, descricao, catAntes, catDepois }) {
+  if (tipo !== 'entrada' || !catDepois?.nome) return null;
+  const d = (descricao ?? '').trim();
+  if (d && d !== catAntes?.nome) return null;
+  return d === catDepois.nome ? null : catDepois.nome;
+}
+
 // O que um texto vira numa coluna. Devolve { campo, valor } ou { motivo } (por que não serve).
-// `entrada` (só no valor): o texto começa com "+", o que numa linha NOVA faz dela uma entrada.
+// `entrada` (só no valor): o texto começa com "+", o que numa linha NOVA faz dela uma entrada. O valor aceita CONTA
+// (`calcularValor`): "=846,43+192,39", "100+50"; com o "+" da entrada na frente: "+=1000+500".
 export function interpretar(c, texto, { tipo = 'saida', categorias = [], anoBase } = {}) {
   const col = COLUNAS[c];
   const t = String(texto ?? '').trim();
@@ -114,8 +125,9 @@ export function interpretar(c, texto, { tipo = 'saida', categorias = [], anoBase
     return iso ? { campo: 'data', valor: iso } : { motivo: `"${t}" não é uma data.` };
   }
   if (col.id === 'valor') {
-    const centavos = parseValor(t.replace(/^\+/, ''));
-    if (!centavos) return { motivo: `"${t}" não é um valor.` };
+    const centavos = calcularValor(t.replace(/^\+/, ''));
+    if (!centavos) return { motivo: `"${t}" não é um valor nem uma conta.` };
+    if (centavos < 0 && /\d[+\-*/]/.test(t)) return { motivo: `a conta "${t}" deu negativo.` };
     return { campo: 'valor_centavos', valor: Math.abs(centavos), entrada: t.startsWith('+') };
   }
   if (col.id === 'categoria') {

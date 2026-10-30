@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  faixaDe, interpretar, ladrilhar, lerBloco, lerData, limparFaixa, ordenarLinhas, planejarColagem, preencherAbaixo, proximaOrdem, resumoSelecao, textoDaFaixa,
+  descricaoDaEntrada, faixaDe, interpretar, ladrilhar, lerBloco, lerData, limparFaixa, ordenarLinhas, planejarColagem, preencherAbaixo, proximaOrdem, resumoSelecao, textoDaFaixa,
 } from '../src/lib/planilha.js';
 
 // Dados FICTÍCIOS. Colunas: 0 Data · 1 Descrição · 2 Categoria · 3 Origem · 4 Valor · 5 Observação.
@@ -21,6 +21,19 @@ const linhas = [
   L('b', '2026-10-25', 'Remédio', null, 3590),
   L('c', '2026-10-20', 'Pagamento', 'sal', 850000, 'entrada'),
 ];
+
+test('descricaoDaEntrada: a categoria dá a descrição da entrada vazia; o que foi escrito fica', () => {
+  const [merc, , sal] = categorias;
+  const bonus = { id: 'bon', nome: 'Bônus', grupo: grupoE };
+  assert.equal(descricaoDaEntrada({ tipo: 'entrada', descricao: '', catDepois: sal }), 'Salário');
+  assert.equal(descricaoDaEntrada({ tipo: 'entrada', descricao: '  ', catDepois: sal }), 'Salário');
+  // trocar a categoria troca a descrição que ela mesma tinha posto
+  assert.equal(descricaoDaEntrada({ tipo: 'entrada', descricao: 'Salário', catAntes: sal, catDepois: bonus }), 'Bônus');
+  // o que a pessoa escreveu não muda; gasto não muda; sem categoria não muda
+  assert.equal(descricaoDaEntrada({ tipo: 'entrada', descricao: 'Pagamento empresa X', catAntes: sal, catDepois: bonus }), null);
+  assert.equal(descricaoDaEntrada({ tipo: 'saida', descricao: '', catDepois: merc }), null);
+  assert.equal(descricaoDaEntrada({ tipo: 'entrada', descricao: '', catDepois: null }), null);
+});
 
 test('lerData: com e sem ano, e o que não é data', () => {
   assert.equal(lerData('27/10', 2026), '2026-10-27');
@@ -112,4 +125,12 @@ test('ordenarLinhas e proximaOrdem: ordem pelo cabeçalho, empate no padrão, ra
   assert.deepEqual(proximaOrdem({ col: 'valor', dir: 'desc' }, 'valor'), { col: 'valor', dir: 'asc' });
   assert.equal(proximaOrdem({ col: 'valor', dir: 'asc' }, 'valor'), null);
   assert.deepEqual(proximaOrdem({ col: 'valor', dir: 'asc' }, 'data'), { col: 'data', dir: 'asc' });
+});
+
+test('interpretar: conta no valor, com e sem o "+" da entrada', () => {
+  assert.deepEqual(interpretar(4, '=100+50'), { campo: 'valor_centavos', valor: 15000, entrada: false });
+  assert.deepEqual(interpretar(4, '+=1000+500'), { campo: 'valor_centavos', valor: 150000, entrada: true });
+  assert.deepEqual(interpretar(4, '+100+50'), { campo: 'valor_centavos', valor: 15000, entrada: true });
+  assert.match(interpretar(4, '=100-250').motivo, /negativo/);
+  assert.match(interpretar(4, '=abc').motivo, /nem uma conta/);
 });

@@ -47,6 +47,13 @@ export async function classificarLancamentos(ids, categoriaId) {
   }
 }
 
+// O DESFAZER da tela Revisar pendências: estes lançamentos voltam a ficar sem categoria e "a revisar".
+export async function desclassificar(ids) {
+  for (let i = 0; i < ids.length; i += 100) {
+    await exigir(supabase.from('lancamentos').update({ categoria_id: null, revisar: true }).in('id', ids.slice(i, i + 100)));
+  }
+}
+
 // Cria a regra e aplica nas pendências que ela pega (todas, não só as do estabelecimento escolhido).
 // Devolve quantas pendências foram classificadas.
 export async function criarRegraEAplicar(palavra, categoriaId, pendencias) {

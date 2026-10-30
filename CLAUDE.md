@@ -53,6 +53,11 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   Linha nova é RASCUNHO só na tela até ter data e valor; aí vira avulso (ou entrada, com "+" no valor) no mês da tela.
   Grava campo a campo (`atualizarCampos`), otimista, numa fila. Cartão/parcela/mês: "Abrir no formulário" (Shift+F2).
   No celular continua a lista (só leitura + formulário).
+  NA LINHA NOVA A CATEGORIA DECIDE O TIPO (30/10/2026): a lista mostra as de gasto e as de entrada, e escolher uma
+  de renda faz dela uma entrada (o "+" do valor manda mais). ENTRADA: escolher a categoria preenche a descrição VAZIA
+  com o nome dela (`descricaoDaEntrada`, também no formulário; o que foi escrito não muda). CONTA NO VALOR, como no
+  Excel: "=846,43+192,39", "100+50", "+=1000+500" (entrada) — `calcularValor` em `lib/dinheiro.js` (sem `eval`,
+  arredonda no fim; vale também no formulário). Grava-se o resultado, não a fórmula.
   ORDENAR (29/10/2026): o título da coluna SELECIONA (planilha); a SETA ao lado ORDENA (aparece no hover, fica à vista
   na ordenada; 3ª vez volta ao padrão, data mais nova em cima) — `ordenarLinhas`/`proximaOrdem` em `lib/planilha.js`,
   a escolha lembrada no navegador. A ordem vale ao carregar e ao clicar, e não se refaz sozinha (editar não pula a
@@ -105,6 +110,15 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   `resumirPlanilha`, testada), "Conferir com o arquivo…" (o `planilha.json`, fatura a fatura) e "Desfazer".
 - ÁREA DE ARRASTAR (`components/AreaArrastar.jsx`, a da Importação do Gestor) nos três importadores — nunca um
   botão "Escolher arquivo".
+
+## Revisar pendências (30/10/2026, opção A do mockup "Revisar pendências · a tabela")
+
+- `pages/Pendencias.jsx`: os importados sem categoria, UMA LINHA POR ESTABELECIMENTO, com a categoria escolhida NA
+  LINHA (`SeletorCategoria`) e a coluna Regra já com o nome ("pega N"; vazia = só estas compras). Escolher NÃO grava:
+  "Classificar N" grava tudo (`planoClassificar` em `lib/pendencias.js`, testada: a regra pega também os
+  estabelecimentos não escolhidos, nunca os escolhidos com outra categoria) e "Desfazer" volta a última vez
+  (`desclassificar` + apaga as regras criadas). Marcar várias → "Categoria para as N". Filtros: busca, cartão
+  (ou Extrato), ordem (lembrada). Cabeçalho: ☰ Regras de classificação · ▾ Exportar CSV + "Classificar N".
 
 ## Extrato da conta corrente
 
@@ -266,7 +280,8 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
   `travarRolagem` não compensa mais o padding) e na caixa que rola por dentro e muda de altura (a "Grupo × mês").
   Caixa nova que abre/recolhe linhas e rola por dentro: `[scrollbar-gutter:stable]`.
 - **Botões do cabeçalho = o grupo do DRE** (Fixos, Importar, Lançamentos): ícones numa caixa só, nome no tooltip,
-  e o gesto do dia a dia como botão de destaque ao lado.
+  e o gesto do dia a dia como botão de destaque ao lado. Nos Lançamentos (30/10/2026): a caixa só com o ▾ "Mais
+  ações" (Exportar o mês em CSV) e "+ Novo lançamento" sempre à vista.
 - **Números do menu** (30/10/2026): o que ainda pede a pessoa depois de importar — Importar (a importar), Gastos
   fixos (a lançar, do ano até hoje) e Revisar pendências (a revisar). `contador` + `dica` no item de
   `lib/navegacao.js`, contas em `lib/useContadores.js`; pílula âmbar ao lado do nome, ponto âmbar no grupo fechado e

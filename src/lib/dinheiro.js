@@ -48,6 +48,52 @@ export function parseValor(texto) {
   return negativo ? -centavos : centavos;
 }
 
+// CONTAS NO VALOR, como no Excel (30/10/2026, a pedido): "=846,43+192,39", "=1.200/3", "=(100+50)*2". Também sem o
+// "=" quando há uma conta entre números ("100+50"). Cada número é lido como `parseValor` (vírgula decimal), a conta
+// é feita uma vez e arredondada para centavos no fim. Devolve CENTAVOS, ou null se o texto não é uma conta válida.
+// Só números, + − * / (x e × também multiplicam) e parênteses: nada de `eval`.
+export function calcularValor(texto) {
+  let t = String(texto ?? '').trim().replace(/R\$\s?/gi, '');
+  const comIgual = t.startsWith('=');
+  if (comIgual) t = t.slice(1);
+  t = t.replace(/\s/g, '').replace(/[x×]/gi, '*').replace(/÷/g, '/').replace(/−/g, '-');
+  if (!comIgual && !/[\d)][+\-*/][\d(]/.test(t)) return parseValor(t);
+  const tokens = t.match(/\d[\d.,]*|[+\-*/()]/g);
+  if (!tokens || tokens.join('') !== t) return null;
+  let i = 0;
+  const fator = () => {
+    const k = tokens[i++];
+    if (k === '-') { const v = fator(); return v === null ? null : -v; }
+    if (k === '+') return fator();
+    if (k === '(') { const v = soma(); return tokens[i++] === ')' ? v : null; }
+    const c = parseValor(k);
+    return c === null ? null : c / 100;
+  };
+  const termo = () => {
+    let v = fator();
+    while (v !== null && (tokens[i] === '*' || tokens[i] === '/')) {
+      const op = tokens[i++];
+      const d = fator();
+      if (d === null || (op === '/' && d === 0)) return null;
+      v = op === '*' ? v * d : v / d;
+    }
+    return v;
+  };
+  function soma() {
+    let v = termo();
+    while (v !== null && (tokens[i] === '+' || tokens[i] === '-')) {
+      const op = tokens[i++];
+      const d = termo();
+      if (d === null) return null;
+      v = op === '+' ? v + d : v - d;
+    }
+    return v;
+  }
+  const v = soma();
+  if (v === null || i !== tokens.length || !Number.isFinite(v)) return null;
+  return Math.round(v * 100);
+}
+
 // Centavos → texto para editar num campo: 123456 → "1234,56".
 export function valorParaCampo(centavos) {
   if (centavos === null || centavos === undefined) return '';
