@@ -116,19 +116,21 @@ export function gruposPorMes(linhas, comps, categorias, emAndamento) {
     const c = cat.get(l.categoria_id);
     const gid = c?.grupo?.id ?? 'sem';
     if (!grupos.has(gid)) {
-      grupos.set(gid, { id: gid, nome: c?.grupo?.nome ?? 'Sem categoria', cor: c?.grupo?.cor ?? '#9ca3af', total: 0, qtd: 0, meses: {}, categorias: new Map() });
+      grupos.set(gid, { id: gid, nome: c?.grupo?.nome ?? 'Sem categoria', cor: c?.grupo?.cor ?? '#9ca3af', total: 0, qtd: 0, meses: {}, qtdMeses: {}, categorias: new Map() });
     }
     const g = grupos.get(gid);
     const v = Number(l.total_centavos);
     g.total += v;
     g.qtd += Number(l.qtd);
     g.meses[l.competencia] = (g.meses[l.competencia] ?? 0) + v;
+    g.qtdMeses[l.competencia] = (g.qtdMeses[l.competencia] ?? 0) + Number(l.qtd); // os lançamentos do mês (o balão do Grupo × mês)
     const cid = c?.id ?? 'sem';
-    const k = g.categorias.get(cid) ?? { id: cid, nome: c?.nome ?? 'Sem categoria', total: 0, fixo: 0, qtd: 0, meses: {} };
+    const k = g.categorias.get(cid) ?? { id: cid, nome: c?.nome ?? 'Sem categoria', total: 0, fixo: 0, qtd: 0, meses: {}, qtdMeses: {} };
     k.total += v;
     if (l.origem === 'fixo') k.fixo += v;
     k.qtd += Number(l.qtd);
     k.meses[l.competencia] = (k.meses[l.competencia] ?? 0) + v;
+    k.qtdMeses[l.competencia] = (k.qtdMeses[l.competencia] ?? 0) + Number(l.qtd);
     g.categorias.set(cid, k);
   });
   return [...grupos.values()]

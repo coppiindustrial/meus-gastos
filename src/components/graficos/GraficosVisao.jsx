@@ -295,7 +295,8 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
 // por cima, no mesmo eixo (ela termina dizendo quanto sobrou até ali). A calha, as vagas e a régua são as MESMAS
 // das colunas (`GradeEsq`, `gap-1.5`, `ReguaMeses`): com o bloco logo abaixo e da mesma largura, cada mês fica
 // exatamente embaixo do seu. `ctrl`: o `useDestaqueSeries` da legenda do bloco ('sobrou', 'faltou', 'acumulado').
-export const COR_SOBROU = COR_ENTRADAS;
+// O SOBROU tem cor própria (02/11/2026): com o verde das entradas, o saldo se lia como entrada.
+export const COR_SOBROU = 'var(--serie-sobrou)';
 export const COR_FALTOU = varCor('#e5484d', 'fundo');
 export function SaldoDoMes({ meses, ctrl, onMes, rotulosAte = 12 }) {
   const balao = useBalao(250, 150);

@@ -7,8 +7,9 @@ export const DASHBOARD = { to: '/', label: 'Visão geral', icon: SbDashboard, en
 // planilha saíram dos grupos. O NÚMERO AO LADO (`contador`, de `useContadores`) é o que ainda pede a pessoa
 // depois de importar — aqui, o que falta importar; `dica` diz o que ele conta.
 export const IMPORTAR = { to: '/importar', label: 'Importar', icon: SbImportar, contador: 'importar', dica: 'a importar' };
-// Os itens soltos, no topo, antes dos grupos.
-export const SOLTOS = [DASHBOARD, IMPORTAR];
+// Os itens soltos, no topo, antes dos grupos. O IMPORTAR foi para dentro de Cadastros (02/11/2026, a pedido), com o
+// mesmo número do que falta importar.
+export const SOLTOS = [DASHBOARD];
 
 export const GRUPOS = [
   {
@@ -23,19 +24,21 @@ export const GRUPOS = [
     ],
   },
   {
-    label: 'Análises',
-    icon: SbChart,
-    items: [
-      { to: '/patrimonio', label: 'Patrimônio' },
-    ],
-  },
-  {
     label: 'Cadastros',
     icon: SbCompass,
     items: [
       { to: '/cadastros/categorias', label: 'Categorias e grupos' },
       { to: '/cadastros/cartoes', label: 'Cartões' },
       { to: '/cadastros/regras', label: 'Regras de classificação' },
+      { to: IMPORTAR.to, label: IMPORTAR.label, contador: IMPORTAR.contador, dica: IMPORTAR.dica },
+    ],
+  },
+  // O PATRIMÔNIO NO FIM (02/11/2026, a pedido): depois dos cadastros, o último item da barra.
+  {
+    label: 'Análises',
+    icon: SbChart,
+    items: [
+      { to: '/patrimonio', label: 'Patrimônio' },
     ],
   },
 ];

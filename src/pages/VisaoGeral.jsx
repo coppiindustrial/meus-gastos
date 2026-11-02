@@ -14,6 +14,7 @@ import {
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
 import AmpliadoEntradasGastos from '../components/graficos/AmpliadoEntradasGastos.jsx';
 import AmpliadoGrupos from '../components/graficos/AmpliadoGrupos.jsx';
+import BlocoGrupoMes from '../components/graficos/TabelaGrupoMes.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { contarPendencias, listarParcelasFuturas, listarResumoMensal } from '../api/resumo.js';
@@ -26,7 +27,6 @@ import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
 import { exportCsv } from '../lib/exportCsv.js';
 import { lsGet, lsSet } from '../lib/storage.js';
-import useLinhasAnimadas, { atributosLinha } from '../lib/useLinhasAnimadas.js';
 import { varCor } from '../lib/varCor.js';
 
 // A VISÃO GERAL (tela inicial) — o Dashboard da planilha refeito no estilo do Gestor: não é a foto de
@@ -147,96 +147,7 @@ const IconAmpliar = () => (
   </svg>
 );
 
-const IconChevron = ({ aberto }) => (
-  <svg viewBox="0 0 24 24" className={`h-3 w-3 shrink-0 text-gray-400 transition-transform duration-150 ${aberto ? 'rotate-90' : ''}`} fill="none"
-    stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M9 6l6 6-6 6" />
-  </svg>
-);
-
-// GRUPO × MÊS: o "Gastos por tipo" da planilha aberto por mês. Cada grupo abre nas categorias (com a
-// animação de recolher do DRE). A cor de fundo é a intensidade NA LINHA: o mês mais caro do grupo é o
-// tom mais forte (uma rampa só, do azul dos gastos).
-function TabelaGrupoMes({ grupos, comps, total, porMes, onExportar }) {
-  const [abertos, setAbertos] = useState(new Set());
-  const caixaRef = useRef(null);
-  const todas = useMemo(() => grupos.flatMap((g) => [
-    { id: `g:${g.id}`, tipo: 'grupo', g },
-    ...g.categorias.map((c) => ({ id: `c:${g.id}:${c.id}`, tipo: 'cat', g, c })),
-  ]), [grupos]);
-  const visiveis = useMemo(() => todas.filter((x) => x.tipo === 'grupo' || abertos.has(x.g.id)), [todas, abertos]);
-  const desenhadas = useLinhasAnimadas(todas, visiveis, caixaRef);
-  const alternar = (id) => setAbertos((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const fundo = (v, max) => (v ? { background: `color-mix(in srgb, ${COR_GASTOS} ${Math.round(4 + 24 * (v / max) ** 2)}%, transparent)` } : undefined);
-  const celulas = (item, forte) => {
-    const max = Math.max(1, ...comps.map((c) => item.meses[c] ?? 0));
-    return comps.map((c) => (
-      <td key={c} className={`border-b border-r border-gray-100 px-2 text-right tabular-nums ${forte ? 'text-gray-800' : 'text-gray-600'}`} style={fundo(item.meses[c], max)}>
-        {item.meses[c] ? Math.round(item.meses[c] / 100).toLocaleString('pt-BR') : <span className="text-gray-300">—</span>}
-      </td>
-    ));
-  };
-  return (
-    <section className="card flex flex-col overflow-hidden !p-0">
-      <div className="flex shrink-0 items-center gap-2 px-4 pb-2.5 pt-3.5">
-        <Titulo>Grupo × mês <span className="font-medium normal-case tracking-normal text-gray-400">· em reais · o tom mais forte é o mês mais caro de cada linha</span></Titulo>
-        <span className="flex-1" />
-        <button type="button" onClick={onExportar} className="text-xs font-medium text-gray-500 underline hover:text-gray-800">Exportar CSV</button>
-      </div>
-      {/* `scrollbar-gutter: stable`: abrir um grupo que passa da altura do bloco não cria a barra e encolhe a tabela */}
-      <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
-      <div ref={caixaRef}>
-        <table className="w-full border-separate border-spacing-0 text-[12.5px]" style={{ minWidth: 300 + comps.length * 74 }}>
-          <thead>
-            <tr className="bg-hx-f9fafb">
-              <th className="sticky left-0 z-10 border-b border-r border-gray-200 bg-hx-f9fafb px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Grupo</th>
-              {comps.map((c) => <th key={c} className="border-b border-r border-gray-100 px-2 py-2 text-right text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">{comps.length > 12 ? competenciaCurta(c) : MESES_CURTOS[Number(c.slice(5)) - 1]}</th>)}
-              <th className="border-b border-r border-gray-100 px-2 py-2 text-right text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Total</th>
-              <th className="border-b border-gray-100 px-3 py-2 text-right text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Média</th>
-            </tr>
-          </thead>
-          <tbody>
-            {desenhadas.map(({ linha: x, estado }) => {
-              const attrs = atributosLinha(x.id, estado);
-              if (x.tipo === 'grupo') {
-                const aberto = abertos.has(x.g.id);
-                return (
-                  <tr key={x.id} {...attrs} className="bg-white">
-                    <td className="sticky left-0 z-10 h-8 border-b border-r border-gray-200 bg-white px-3">
-                      <button type="button" onClick={() => alternar(x.g.id)} aria-expanded={aberto} className="flex max-w-[200px] items-center gap-2 text-left">
-                        <IconChevron aberto={aberto} />
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: x.g.cor }} />
-                        <span className="truncate font-semibold text-gray-800">{x.g.nome}</span>
-                      </button>
-                    </td>
-                    {celulas(x.g, true)}
-                    <td className="border-b border-r border-gray-100 bg-hx-f9fafb px-2 text-right font-semibold tabular-nums text-gray-900">{Math.round(x.g.total / 100).toLocaleString('pt-BR')}</td>
-                    <td className="border-b border-gray-100 px-3 text-right tabular-nums text-gray-600">{Math.round(x.g.media / 100).toLocaleString('pt-BR')}</td>
-                  </tr>
-                );
-              }
-              return (
-                <tr key={x.id} {...attrs} className="bg-white">
-                  <td className="sticky left-0 z-10 h-8 border-b border-r border-gray-200 bg-white py-0 pl-[38px] pr-3"><span className="block max-w-[180px] truncate text-gray-600">{x.c.nome}</span></td>
-                  {celulas(x.c, false)}
-                  <td className="border-b border-r border-gray-100 bg-hx-f9fafb px-2 text-right tabular-nums text-gray-700">{Math.round(x.c.total / 100).toLocaleString('pt-BR')}</td>
-                  <td className="border-b border-gray-100 px-3 text-right tabular-nums text-gray-500">{Math.round(x.c.media / 100).toLocaleString('pt-BR')}</td>
-                </tr>
-              );
-            })}
-            <tr className="bg-hx-f9fafb font-semibold">
-              <td className="sticky left-0 z-10 h-8 border-r border-gray-200 bg-hx-f9fafb px-3 text-gray-800">Total de gastos</td>
-              {comps.map((c) => <td key={c} className="border-r border-gray-100 px-2 text-right tabular-nums text-gray-900">{porMes[c] ? Math.round(porMes[c] / 100).toLocaleString('pt-BR') : '—'}</td>)}
-              <td className="border-r border-gray-100 px-2 text-right tabular-nums text-gray-900">{Math.round(total / 100).toLocaleString('pt-BR')}</td>
-              <td />
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      </div>
-    </section>
-  );
-}
+// O GRUPO × MÊS mora em `components/graficos/TabelaGrupoMes.jsx` (o bloco, a tabela com o hover e o ampliado).
 
 // ------------------------------------------------------------ o catálogo do grid
 
@@ -503,7 +414,7 @@ export default function VisaoGeral() {
         );
       case 'vg_tabela':
         return grupos.length
-          ? <TabelaGrupoMes grupos={grupos} comps={comps} total={r.gastos} porMes={gastosPorMes} onExportar={exportarTabela} />
+          ? <BlocoGrupoMes grupos={grupos} comps={comps} total={r.gastos} porMes={gastosPorMes} periodo={textoPer} onMes={abrirMes} onExportar={exportarTabela} />
           : <section className="card p-4"><Titulo>Grupo × mês</Titulo><p className="mt-6 text-center text-sm text-gray-400">Nenhum gasto no período.</p></section>;
       default: return null;
     }

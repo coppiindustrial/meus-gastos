@@ -83,7 +83,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 
 ## Importar (a tela, 28/10/2026)
 
-- UM ITEM SÓ NO MENU, "Importar" (`SOLTOS` em `lib/navegacao.js`, com o número do que falta — `useContadores`):
+- UM ITEM SÓ NO MENU, "Importar" (com o número do que falta — `useContadores`; desde 02/11/2026 é FILHO de
+  Cadastros, e o grupo Análises/Patrimônio é o último da barra — `lib/navegacao.js`):
   `pages/Importar.jsx`. NADA DE IMPORTAR ABRE OUTRA TELA (29/10/2026): os três importadores são POP-UPS abertos dali —
   `ImportarFatura`, `ImportarExtrato` (era a tela /extrato; com a prévia, cresce para o painel dos ampliados, 1100px/90vh,
   rodapé preso) e `ImportarArquivos`. A TELA FATURAS SAIU: cada fatura está na aba Por mês (a célula que entrou tem
@@ -217,6 +218,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   colunas entradas × gastos com saldo e o ano anterior tracejado, rosca por origem (clique filtra), barras por
   grupo que abrem nas categorias, e a tabela grupo × mês (recolhe com `useLinhasAnimadas`). Clicar num mês abre
   os Lançamentos dele.
+- O GRUPO × MÊS (02/11/2026, opção A do mockup) mora em `components/graficos/TabelaGrupoMes.jsx`: o HOVER É A CRUZ
+  (a célula com contorno, a linha e a coluna dela acesas — `.gm-acesa`, um véu por tema como CAMADA sobre o fundo da
+  intensidade, que por isso vai em `backgroundColor`) e o `BalaoGrafico` em toda célula, também nos totais (coluna
+  Total = o grupo no período; linha Total = os maiores grupos do mês). Cabeçalho preso. Ícones do DRE no canto: ⇕
+  expandir/recolher tudo, ⬇ CSV, ⤢ o AMPLIADO (o painel de 1280px/90vh, tela cheia, busca e "Valores | % do mês").
+  `gruposPorMes` também dá `qtdMeses` (os lançamentos de cada mês, para o balão).
+- O "SOBROU" do Saldo do mês tem cor própria, violeta (`--serie-sobrou`, 02/11/2026): era o verde das entradas.
 - A TELA É UM GRID PERSONALIZÁVEL copiado do Dashboard Comercial do Gestor (`components/dashboard/GridPersonalizavel.jsx`,
   react-grid-layout 2.2.3 exato): arrastar, redimensionar, minimizar, ligar/desligar blocos, separadores, disposição
   compacta. Diferenças da cópia: grava no NAVEGADOR (um `api` falso sobre `lsGet`/`lsSet` com as rotas de lá como
