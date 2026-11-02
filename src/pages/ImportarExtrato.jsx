@@ -53,48 +53,34 @@ const ROTULO = {
     : <Etiqueta tom="ambar">Sem regra</Etiqueta>),
 };
 
-// Uma linha por contraparte sem regra: escolher a categoria (ou Ignorar) cria a regra na hora — ou vale SÓ DESTA VEZ
-// (02/11/2026, a pedido: o Pix de um amigo, a compra de um celular — o que não se repete não merece regra, que
-// classificaria todo Pix futuro para a mesma pessoa). `escolhida`: a escolha "só desta vez" já feita (com o Desfazer).
-function SemRegra({ grupo, categorias, onCriar, onCategoriaCriada, escolhida, nomeCat, onSoAgora }) {
-  const [categoria, setCategoria] = useState('');
+// Uma linha por contraparte sem regra. ESCOLHER JÁ VALE (02/11/2026): a categoria (ou "Ignorar sempre") escolhida na
+// lista já é o destino destas movimentações NESTA importação — antes, sem clicar em "Criar regra", a escolha se perdia
+// e a linha entrava como pendência (a Luana e a Letícia, marcadas para ignorar, caíram em Revisar pendências).
+// "Criar regra" torna a escolha permanente (os próximos extratos); sem ela, vale só desta vez — o certo para o que
+// não se repete (o Pix de um amigo, uma compra única). `escolhida`: a escolha desta importação; "Nenhuma" a tira.
+function SemRegra({ grupo, categorias, onCriar, onCategoriaCriada, escolhida, onEscolher }) {
   const [palavra, setPalavra] = useState(grupo.contraparte);
   const [salvando, setSalvando] = useState(false);
   const criar = async () => {
     setSalvando(true);
-    await onCriar(palavra.trim(), categoria);
+    await onCriar(palavra.trim(), escolhida);
     setSalvando(false);
   };
-  const cabeca = (
-    <span className="min-w-[10rem] flex-1">
-      <span className="block truncate text-sm text-gray-800">{grupo.contraparte}</span>
-      <span className="block text-xs text-gray-500">{grupo.n} movimentação(ões) · {formatBRL(grupo.total)}</span>
-    </span>
-  );
-  if (escolhida) {
-    return (
-      <li className="flex flex-wrap items-center gap-2 bg-hx-f9fafb px-4 py-2.5">
-        {cabeca}
-        <span className="text-[12.5px] text-gray-600">
-          Só desta vez: <b className="font-semibold text-gray-800">{escolhida === IGNORAR ? 'fica de fora' : nomeCat(escolhida)}</b>
-          <span className="ml-1 text-gray-400">· sem regra</span>
-        </span>
-        <button type="button" className="text-[12px] text-gray-500 underline underline-offset-2 hover:text-gray-800" onClick={() => onSoAgora(null)}>Desfazer</button>
-      </li>
-    );
-  }
   return (
-    <li className="flex flex-wrap items-center gap-2 px-4 py-2.5">
-      {cabeca}
+    <li className={`flex flex-wrap items-center gap-2 px-4 py-2.5 ${escolhida ? 'bg-hx-f9fafb' : ''}`}>
+      <span className="min-w-[10rem] flex-1">
+        <span className="block truncate text-sm text-gray-800">{grupo.contraparte}</span>
+        <span className="block text-xs text-gray-500">
+          {grupo.n} movimentação(ões) · {formatBRL(grupo.total)}
+          {escolhida && <span className="ml-1 text-gray-600">· {escolhida === IGNORAR ? 'fica de fora' : 'entra com esta categoria'} nesta importação</span>}
+        </span>
+      </span>
       <input className="input !w-44 !py-1.5" value={palavra} onChange={(e) => setPalavra(e.target.value)} aria-label="Palavra-chave da regra" />
-      <SeletorCategoria className="w-64" value={categoria} onChange={(v) => setCategoria(v === NENHUMA ? '' : v)} categorias={categorias} tipo="saida"
+      <SeletorCategoria className="w-64" value={escolhida ?? ''} onChange={(v) => onEscolher(v === NENHUMA ? null : v)} categorias={categorias} tipo="saida"
         extras={EXTRAS_IGNORAR} onCriada={onCategoriaCriada} />
-      <button type="button" className="btn-secondary !py-1.5" disabled={!categoria || !palavra.trim() || salvando} onClick={criar}>
+      <button type="button" className="btn-secondary !py-1.5" disabled={!escolhida || !palavra.trim() || salvando} onClick={criar}
+        title="Vale também para os próximos extratos (sem a regra, a escolha vale só nesta importação)">
         {salvando ? 'Criando…' : 'Criar regra'}
-      </button>
-      <button type="button" className="btn-secondary !py-1.5" disabled={!categoria || salvando} onClick={() => onSoAgora(categoria)}
-        title="Usa a categoria só nesta importação, sem criar regra (o próximo Pix para esta pessoa volta a perguntar)">
-        Só desta vez
       </button>
     </li>
   );
@@ -241,14 +227,14 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
                 <header className="border-b border-gray-200 bg-hx-f9fafb px-4 py-2.5">
                   <h2 className="text-sm font-semibold text-gray-800">Sem regra ({semRegra.length})</h2>
                   <p className="text-xs text-gray-500">
-                    Escolha a categoria e crie a regra: vale para os próximos extratos. O que não se repete (o Pix de um amigo, uma compra única): “Só desta vez”, sem regra. Transferência entre contas suas, ou um pagamento que você já lança à mão (a empregada no gasto fixo): “Ignorar sempre”.
+                    Escolha a categoria e crie a regra: vale para os próximos extratos. A escolha já vale nesta importação; sem “Criar regra”, vale só desta vez — o certo para o que não se repete (o Pix de um amigo, uma compra única). Transferência entre contas suas, ou um pagamento que você já lança à mão (a empregada no gasto fixo): “Ignorar sempre”.
                     O que ficar sem regra entra assim mesmo e vai para Revisar pendências.
                   </p>
                 </header>
                 <ul className="divide-y divide-gray-100">
                   {semRegra.map((g) => <SemRegra key={g.contraparte} grupo={g} categorias={base.categorias} onCriar={criarRegra} onCategoriaCriada={carregarBase}
-                    escolhida={soAgora[g.contraparte]} nomeCat={nomeCat}
-                    onSoAgora={(cat) => setSoAgora((x) => { const n = { ...x }; if (cat) n[g.contraparte] = cat; else delete n[g.contraparte]; return n; })} />)}
+                    escolhida={soAgora[g.contraparte]}
+                    onEscolher={(cat) => setSoAgora((x) => { const n = { ...x }; if (cat) n[g.contraparte] = cat; else delete n[g.contraparte]; return n; })} />)}
                 </ul>
               </section>
             )}

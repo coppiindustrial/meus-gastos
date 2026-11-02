@@ -11,6 +11,8 @@ import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../component
 import { BuscaFaixa, SegUnico } from '../components/filtros/Segmentos.jsx';
 import { IconLista, IconSeta } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
+import { useConfirmacao } from '../context/ConfirmContext.jsx';
+import { excluirLancamentos } from '../api/lancamentos.js';
 import { listarCategorias } from '../api/cadastros.js';
 import { classificarLancamentos, desclassificar, excluirRegra, listarPendencias, salvarRegra } from '../api/regras.js';
 import { formatBRL } from '../lib/dinheiro.js';
@@ -28,13 +30,18 @@ import { agrupar, fonteDe, nomeDe, ORDENS, ordenarGrupos, planoClassificar, prob
 const LS_ORDEM = 'pendencias_ordem';
 // TIRAR A ESCOLHA (30/10/2026, a pedido): a primeira opção da lista desfaz a categoria escolhida na linha (para
 // deixar para depois — por exemplo, quando falta criar o grupo antes).
-const NENHUMA = [{ value: '-', label: 'Não classificar agora' }];
+// IGNORAR SEMPRE (02/11/2026): o que não é gasto, ou que já se lança à mão (a empregada no gasto fixo) — cria a regra de
+// ignorar (os próximos extratos e faturas deixam de fora) e TIRA do app os lançamentos que já entraram (com confirmação;
+// o "Desfazer" não os devolve).
+const IGNORAR = '__ignorar';
+const NENHUMA = [{ value: '-', label: 'Não classificar agora' }, { value: IGNORAR, label: 'Ignorar sempre (tirar do app)' }];
 const daLista = (v) => (v === '-' ? '' : v); // o '-' só existe na lista: a linha sem escolha mostra o "Escolher…"
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const diaMes = (d) => formatDate(d).slice(0, 5);
 
 export default function Pendencias() {
   const toast = useToast();
+  const confirmar = useConfirmacao();
   const navigate = useNavigate();
   const [pendencias, setPendencias] = useState(null);
   const [categorias, setCategorias] = useState([]);
@@ -84,15 +91,36 @@ export default function Pendencias() {
       toast.error(`Não gravou — ${todos.find((g) => g.chave === chave)?.nome}: ${motivo}.`);
       return;
     }
+    const ignorar = plano.passos.filter((p) => p.categoriaId === IGNORAR);
+    if (ignorar.length) {
+      const n = ignorar.reduce((x, p) => x + p.ids.length, 0);
+      const ok = await confirmar({
+        titulo: `Ignorar sempre ${ignorar.map((p) => p.nome).slice(0, 3).join(', ')}${ignorar.length > 3 ? '…' : ''}?`,
+        texto: `${plural(n, 'lançamento sai', 'lançamentos saem')} do app e os próximos extratos e faturas deixam estes nomes de fora${ignorar.some((p) => !p.regra) ? ' (onde a coluna Regra está vazia, só sai o lançamento, sem regra)' : ''}. O Desfazer não os devolve.`,
+        confirmar: 'Ignorar e tirar', perigo: true,
+      });
+      if (!ok) return;
+    }
     setSalvando(true);
     const feito = { ids: [], regras: [] };
+    let tirados = 0;
     try {
       for (const p of plano.passos) {
+        if (p.categoriaId === IGNORAR) {
+          if (p.regra) {
+            try { await salvarRegra({ palavra_chave: p.regra, ignorar: true }); } catch (err) { if (!/duplicate|unique/i.test(err.message)) throw err; } // a regra já existia: segue
+          }
+          for (let i = 0; i < p.ids.length; i += 100) await excluirLancamentos(p.ids.slice(i, i + 100));
+          tirados += p.ids.length;
+          continue;
+        }
         if (p.regra) feito.regras.push((await salvarRegra({ palavra_chave: p.regra, categoria_id: p.categoriaId })).id);
         await classificarLancamentos(p.ids, p.categoriaId);
         feito.ids.push(...p.ids);
       }
-      toast.success(`${plural(feito.ids.length, 'lançamento classificado', 'lançamentos classificados')}${feito.regras.length ? ` · ${plural(feito.regras.length, 'regra nova', 'regras novas')}` : ''}.`);
+      toast.success([feito.ids.length && plural(feito.ids.length, 'lançamento classificado', 'lançamentos classificados'),
+        feito.regras.length && plural(feito.regras.length, 'regra nova', 'regras novas'),
+        tirados && `${plural(tirados, 'ignorado', 'ignorados')} (fora do app)`].filter(Boolean).join(' · ') + '.');
     } catch (err) {
       toast.error(/duplicate|unique/i.test(err.message) ? 'Já existe uma regra com essa palavra-chave (veja em Regras de classificação).' : err.message);
     }
