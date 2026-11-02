@@ -66,7 +66,9 @@ function leitura(alvo, { grupos, porMes, total, periodo, comps }) {
       titulo: `${item.nome} · ${periodo}`,
       itens: [
         { rotulo: 'No período', valor: `${formatBRL(item.total)} · ${pctDe(item.total, total)}% dos gastos`, cor: item.cor },
-        { rotulo: 'Média por mês', valor: `${formatBRL(item.media)}${item.desde ? ` · desde ${competenciaCurta(item.desde)}` : ''}` },
+        // `desde`: o mês ('AAAA-MM') de um fixo que começou depois, ou 'parcial' no GRUPO que tem um deles (a média dele é
+        // a soma das categorias) — 'parcial' não é mês: formatá-lo como um derrubava a tela (02/11/2026).
+        { rotulo: 'Média por mês', valor: `${formatBRL(item.media)}${item.desde === 'parcial' ? ' · soma das categorias' : item.desde ? ` · desde ${competenciaCurta(item.desde)}` : ''}` },
         ...(item.meses[maisCaro] ? [{ rotulo: 'O mês mais caro', valor: `${competenciaCurta(maisCaro)} · ${formatBRL(item.meses[maisCaro])}` }] : []),
         { rotulo: 'Lançamentos', valor: String(item.qtd) },
       ],
@@ -138,10 +140,11 @@ export function TabelaGrupoMes({ grupos, comps, total, porMes, periodo, onMes, a
   const th = `${th0} px-2 text-right`;
   const balaoInfo = ativo && (() => {
     const linhaObj = todas.find((x) => x.id === ativo.linha);
-    if (ativo.linha === 'total') return leitura({ tipo: ativo.col === 'total' ? 'totalGeral' : 'totalMes', comp: ativo.col }, ctx);
+    if (ativo.linha === 'total') return leitura({ tipo: comps.includes(ativo.col) ? 'totalMes' : 'totalGeral', comp: ativo.col }, ctx);
     if (!linhaObj) return null;
     const item = linhaObj.tipo === 'grupo' ? linhaObj.g : { ...linhaObj.c, cor: linhaObj.g.cor };
-    if (ativo.col === 'total' || ativo.col === 'media') return leitura({ tipo: 'total', item }, ctx);
+    // o nome, o Total e a Média contam o item no período; só as colunas dos MESES leem um mês
+    if (!comps.includes(ativo.col)) return leitura({ tipo: 'total', item }, ctx);
     return leitura({ tipo: 'mes', item, comp: ativo.col }, ctx);
   })();
 

@@ -30,7 +30,7 @@ import { lsGet, lsSet } from '../lib/storage.js';
 // o pagamento de um gasto fixo vira o fixo do mês com o valor real. Cada importação vai para o histórico, com o
 // que desfazê-la. `arquivo`: o File já escolhido no "Importar arquivos" (abre direto na prévia).
 const IGNORAR = '__ignorar';
-const EXTRAS_IGNORAR = [{ value: IGNORAR, label: 'Ignorar sempre (não é gasto)' }];
+const EXTRAS_IGNORAR = [{ value: IGNORAR, label: 'Ignorar sempre (não é gasto, ou você já lança à mão)' }];
 
 const LS_ENTRADAS = 'extrato_entradas';
 // A data a N dias (para procurar as entradas lançadas à mão um pouco antes e depois do período do arquivo).
@@ -204,7 +204,7 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
                 <header className="border-b border-gray-200 bg-hx-f9fafb px-4 py-2.5">
                   <h2 className="text-sm font-semibold text-gray-800">Sem regra ({semRegra.length})</h2>
                   <p className="text-xs text-gray-500">
-                    Escolha a categoria e crie a regra: vale para os próximos extratos. Transferência entre contas suas: “Ignorar sempre”.
+                    Escolha a categoria e crie a regra: vale para os próximos extratos. Transferência entre contas suas, ou um pagamento que você já lança à mão (a empregada no gasto fixo): “Ignorar sempre”.
                     O que ficar sem regra entra assim mesmo e vai para Revisar pendências.
                   </p>
                 </header>
