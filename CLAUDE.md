@@ -52,6 +52,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   Ctrl+Z/Y desfazem (antes/depois de cada ação; excluir e desfazer devolve o MESMO id), botão direito = `MenuContexto`.
   Linha nova é RASCUNHO só na tela até ter data e valor; aí vira avulso (ou entrada, com "+" no valor) no mês da tela.
   Grava campo a campo (`atualizarCampos`), otimista, numa fila. Cartão/parcela/mês: "Abrir no formulário" (Shift+F2).
+  ARRASTAR ROLA (02/11/2026): selecionando ou puxando a alça com o botão apertado, o cursor perto da borda VISÍVEL da
+  caixa (ou fora dela) rola a grade — mais rápido quanto mais longe, e parado na borda segue rolando — e a faixa segue
+  a célula sob o cursor (`elementFromPoint` preso à área útil; a caixa pode passar do fim da janela).
   No celular continua a lista (só leitura + formulário).
   NA LINHA NOVA A CATEGORIA DECIDE O TIPO (30/10/2026): a lista mostra as de gasto e as de entrada, e escolher uma
   de renda faz dela uma entrada (o "+" do valor manda mais). ENTRADA: escolher a categoria preenche a descrição VAZIA
@@ -248,7 +251,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   desde janeiro); o EVENTUAL segue dividido por todos os meses do período (a festa de um mês pesa no ano). A média do
   GRUPO = a soma das médias das categorias (fecha com o Total). Vale no Gastos por grupo, na tabela grupo × mês e na
   tela Categorias (`usoCategorias`); onde a média começou depois, "desde mmm/aa" ao lado do número.
-- Gastos por origem = rosca com UMA COR POR ORIGEM (`--origem-cartao/-fixo/-manual` no index.css, validadas nos
+- Gastos por origem = rosca com UMA COR POR ORIGEM (`--origem-cartao/-fixo/-manual` no index.css — azul, laranja e,
+  desde 02/11/2026, CINZA nos avulsos: o violeta se confundia com o "Sobrou" do Saldo do mês ao lado — validadas nos
   dois temas) e o centro que conta a fatia sob o cursor. Ela MEDE a caixa e escolhe o arranjo que cabe (rosca ao
   lado ou em cima; legenda completa ou de uma linha — `arranjoRosca`): o bloco não rola. Gastos por grupo = barras na cor do grupo + curva dos meses
   + variação contra o ano anterior (só aparece com dado no mesmo período do ano anterior). As duas são a opção A dos

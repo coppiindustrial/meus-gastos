@@ -543,6 +543,61 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     return () => window.removeEventListener('mouseup', soltar);
   });
 
+  // ROLAR SOZINHO AO ARRASTAR (02/11/2026, a pedido): selecionando (ou puxando a alça de preencher) com o botão
+  // apertado, o cursor perto da borda da caixa — ou já fora dela — rola a grade, mais rápido quanto mais longe, e
+  // continua rolando com o mouse parado; a faixa segue a célula sob o cursor (preso dentro da caixa). Antes ela só
+  // andava quando o cursor entrava numa célula, e a caixa não rolava: não dava para selecionar além do que se via.
+  const passarRef = useRef(aoPassar);
+  passarRef.current = aoPassar;
+  useEffect(() => {
+    let ponto = null;
+    let quadro = null;
+    let ultima = '';
+    const BORDA = 28;
+    const vel = (d) => Math.min(28, Math.max(2, Math.ceil(d / 3)));
+    const passo = () => {
+      quadro = null;
+      const caixa = caixaRef.current;
+      if (!arrasto.current || !caixa || !ponto) { ultima = ''; return; }
+      // a área ÚTIL da caixa (sem as barras de rolagem: a de baixo não é célula, e o ponto preso nela não achava nada)
+      const caixaR = caixa.getBoundingClientRect();
+      // — e só a parte VISÍVEL dela: com os cartões do resumo em cima, a caixa passa do fim da janela, e a borda que
+      // vale é a da janela (é onde o cursor para)
+      const r = { left: Math.max(0, caixaR.left + caixa.clientLeft), right: Math.min(window.innerWidth, caixaR.left + caixa.clientLeft + caixa.clientWidth),
+        top: Math.max(0, caixaR.top + caixa.clientTop), bottom: Math.min(window.innerHeight, caixaR.top + caixa.clientTop + caixa.clientHeight) };
+      const topo = r.top + (caixa.querySelector('thead')?.getBoundingClientRect().height ?? 0);
+      let dy = 0;
+      let dx = 0;
+      if (ponto.y < topo + BORDA) dy = -vel(topo + BORDA - ponto.y);
+      else if (ponto.y > r.bottom - BORDA) dy = vel(ponto.y - (r.bottom - BORDA));
+      if (ponto.x < r.left + BORDA) dx = -vel(r.left + BORDA - ponto.x);
+      else if (ponto.x > r.right - BORDA) dx = vel(ponto.x - (r.right - BORDA));
+      if (dy) caixa.scrollTop += dy;
+      if (dx) caixa.scrollLeft += dx;
+      const x = Math.min(Math.max(ponto.x, r.left + 2), r.right - 3);
+      const y = Math.min(Math.max(ponto.y, topo + 2), r.bottom - 3);
+      const cel = document.elementFromPoint(x, y)?.closest?.('[data-cel]');
+      if (cel && caixa.contains(cel) && cel.dataset.cel !== ultima) {
+        ultima = cel.dataset.cel;
+        const [rr, cc] = ultima.split(':').map(Number);
+        passarRef.current(rr, cc);
+      }
+      if (dy || dx) quadro = setTimeout(passo, 16); // parado na borda, segue rolando
+    };
+    const mover = (e) => {
+      ponto = { x: e.clientX, y: e.clientY };
+      if (arrasto.current && !quadro) quadro = setTimeout(passo, 0);
+    };
+    const soltar = () => { ultima = ''; };
+    window.addEventListener('mousemove', mover);
+    window.addEventListener('mouseup', soltar);
+    return () => {
+      window.removeEventListener('mousemove', mover);
+      window.removeEventListener('mouseup', soltar);
+      if (quadro) clearTimeout(quadro);
+    };
+  }, []);
+
   const selecionarLinhas = (e, r) => {
     e.preventDefault();
     focar();

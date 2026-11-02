@@ -649,18 +649,19 @@ html[data-tema='escuro'] { --serie-sobrou: #7d6ae8; }
 html[data-tema='escuro'] { --gm-realce: rgba(255, 255, 255, .06); }
 .gm-acesa { background-image: linear-gradient(var(--gm-realce), var(--gm-realce)); }
 
-/* AS ORIGENS DOS GASTOS (a rosca da Visão geral): uma cor por origem — azul (cartão), laranja (fixos) e
-   violeta (avulsos), a ordem da paleta categórica de referência sem o verde, que é das entradas. Passou
-   no validador do skill de dataviz nos dois temas (daltonismo ΔE ≥ 24, contraste ≥ 3:1). */
+/* AS ORIGENS DOS GASTOS (a rosca da Visão geral): uma cor por origem — azul (cartão), laranja (fixos) e CINZA
+   (avulsos: o que não é cartão nem fixo, "o resto"). Os avulsos eram violeta e se confundiam com o "Sobrou" do Saldo
+   do mês, no bloco ao lado (02/11/2026, opção A do mockup). O cinza passou no validador do skill de dataviz contra o
+   azul e o laranja nos dois temas (ΔE ≥ 15,5, também para daltônicos; contraste ≥ 3:1) — só "lê como cinza", de propósito. */
 :root {
   --origem-cartao: #2a78d6;
   --origem-fixo: #eb6834;
-  --origem-manual: #6250d6;
+  --origem-manual: #59606b;
 }
 html[data-tema='escuro'] {
   --origem-cartao: #3987e5;
   --origem-fixo: #d95926;
-  --origem-manual: #9085e9;
+  --origem-manual: #a3a9b2;
 }
 
 /* A GRADE DE LANÇAMENTOS (planilha, `components/planilha/GradeLancamentos.jsx`): o azul da seleção, o
