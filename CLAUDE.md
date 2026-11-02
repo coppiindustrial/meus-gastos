@@ -159,6 +159,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (RDB, dinheiro guardado) sempre de fora; transferência entre contas próprias por REGRA DE IGNORAR
   (`regras.ignorar`, migration 005 — também vale nas faturas); pagamento cuja categoria é a de uma recorrência
   vigente vira o fixo do mês com o valor real (se o fixo já foi lançado à mão, o valor é corrigido).
+- O "SEM REGRA" DA PRÉVIA (02/11/2026): cada contraparte tem "Criar regra" e "SÓ DESTA VEZ" (a categoria, ou ficar de
+  fora, só nesta importação, sem regra — o Pix de um amigo, uma compra única; o próximo Pix volta a perguntar; Desfazer
+  na linha). A primeira opção da lista, "Nenhuma (não criar regra)", tira a escolha. "Ignorar sempre" também serve ao
+  pagamento que já se lança à mão (a empregada no gasto fixo).
 - **Classificar só pela contraparte**, nunca pela descrição inteira: a regra "4" → Outros da planilha pegava todo
   Pix pelos dígitos do CPF. `id_externo` (identificador do banco, índice único) impede importar duas vezes.
 
