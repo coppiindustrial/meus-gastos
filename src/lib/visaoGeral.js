@@ -86,15 +86,30 @@ export function mesesDaMedia(linhas, comps, emAndamento) {
   return meses;
 }
 
-// GASTOS POR GRUPO E POR MÊS no período: cada grupo com o total, a média (pelos `mesesDaMedia`), o valor
-// de cada mês e as categorias dele (idem). Do maior para o menor. O que não tem categoria vira o grupo
-// "Sem categoria". `emAndamento`: o mês atual (fora da média, ver `mediaPorMes`).
+// A MÉDIA DO GASTO FIXO (02/11/2026, a pedido): a categoria que é sobretudo fixo (metade ou mais do valor vem de
+// lançamentos de origem `fixo`) só tem média A PARTIR DO PRIMEIRO MÊS em que aparece no período — o condomínio de
+// quem se mudou em maio não divide o ano desde janeiro. O gasto EVENTUAL continua dividido por todos os meses do
+// período (`mesesDaMedia`): a festa de um mês pesa no ano inteiro, que é o que a média dele quer dizer.
+// Devolve { media, meses, desde } (desde = o 1º mês, só no fixo que começou depois do período).
+export function mediaDaCategoria(item, daMedia) {
+  const nMedia = daMedia.length || 1;
+  const soma = (ms) => ms.reduce((s, c) => s + (item.meses[c] ?? 0), 0);
+  const fixo = item.fixo * 2 >= item.total && item.total > 0;
+  const primeiro = Object.keys(item.meses).filter((c) => item.meses[c] > 0).sort()[0];
+  if (!fixo || !primeiro || primeiro <= daMedia[0]) return { media: Math.round(soma(daMedia) / nMedia), meses: nMedia, desde: null };
+  let ms = daMedia.filter((c) => c >= primeiro);
+  if (!ms.length) ms = [primeiro]; // só no mês em andamento: é o que há
+  return { media: Math.round(soma(ms) / ms.length), meses: ms.length, desde: primeiro };
+}
+
+// GASTOS POR GRUPO E POR MÊS no período: cada grupo com o total, o valor de cada mês e as categorias dele, cada uma
+// com a média (`mediaDaCategoria`); a média do GRUPO é a soma das médias das categorias (fecha com o Total da tabela).
+// Do maior para o menor. O que não tem categoria vira o grupo "Sem categoria". `emAndamento`: o mês atual (fora da
+// média, ver `mediaPorMes`).
 export function gruposPorMes(linhas, comps, categorias, emAndamento) {
   const dentro = new Set(comps);
   const cat = new Map(categorias.map((c) => [c.id, c]));
   const daMedia = mesesDaMedia(linhas, comps, emAndamento);
-  const nMedia = daMedia.length || 1;
-  const media = (item) => Math.round(daMedia.reduce((s, c) => s + (item.meses[c] ?? 0), 0) / nMedia);
   const grupos = new Map();
   linhas.forEach((l) => {
     if (!dentro.has(l.competencia) || l.tipo !== 'saida') return;
@@ -109,20 +124,20 @@ export function gruposPorMes(linhas, comps, categorias, emAndamento) {
     g.qtd += Number(l.qtd);
     g.meses[l.competencia] = (g.meses[l.competencia] ?? 0) + v;
     const cid = c?.id ?? 'sem';
-    const k = g.categorias.get(cid) ?? { id: cid, nome: c?.nome ?? 'Sem categoria', total: 0, qtd: 0, meses: {} };
+    const k = g.categorias.get(cid) ?? { id: cid, nome: c?.nome ?? 'Sem categoria', total: 0, fixo: 0, qtd: 0, meses: {} };
     k.total += v;
+    if (l.origem === 'fixo') k.fixo += v;
     k.qtd += Number(l.qtd);
     k.meses[l.competencia] = (k.meses[l.competencia] ?? 0) + v;
     g.categorias.set(cid, k);
   });
   return [...grupos.values()]
-    .map((g) => ({
-      ...g,
-      media: media(g),
-      categorias: [...g.categorias.values()]
-        .map((k) => ({ ...k, media: media(k) }))
-        .sort((a, b) => b.total - a.total),
-    }))
+    .map((g) => {
+      const cats = [...g.categorias.values()]
+        .map((k) => { const m = mediaDaCategoria(k, daMedia); return { ...k, media: m.media, mesesMedia: m.meses, desde: m.desde }; })
+        .sort((a, b) => b.total - a.total);
+      return { ...g, media: cats.reduce((s, k) => s + k.media, 0), desde: cats.some((k) => k.desde) ? 'parcial' : null, categorias: cats };
+    })
     .sort((a, b) => b.total - a.total);
 }
 

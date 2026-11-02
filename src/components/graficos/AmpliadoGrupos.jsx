@@ -9,6 +9,7 @@ import { MiniCurva, VoltarGrupos } from './GraficosVisao.jsx';
 import { IconMaximize, IconMinimize } from '../icons.jsx';
 import { variacao } from '../../lib/visaoGeral.js';
 import { formatBRL } from '../../lib/dinheiro.js';
+import { competenciaCurta } from '../../lib/format.js';
 import { exportCsv } from '../../lib/exportCsv.js';
 
 // O "GASTOS POR GRUPO" AMPLIADO (29/10/2026, opção A do mockup): a mesma lista do bloco no PAINEL do Gestor (o do
@@ -69,7 +70,9 @@ export default function AmpliadoGrupos({ onClose, grupos, total, meses, comps = 
   if (ativo) {
     const v = antes(ativo) ? variacao(ativo.total, antes(ativo)) : null;
     const vs = v === null ? '' : ` · ${v > 0 ? '+' : ''}${v}% sobre o ano anterior`;
-    const parte = `${pctDe(ativo.total)}% dos gastos · média ${formatBRL(ativo.media)}/mês${vs}`;
+    // o fixo que começou depois: a média conta a partir do 1º mês dele (`mediaDaCategoria`), e o balão diz
+    const desde = ativo.desde && ativo.desde !== 'parcial' ? ` (gasto fixo: ${ativo.mesesMedia} ${ativo.mesesMedia === 1 ? 'mês' : 'meses'}, desde ${competenciaCurta(ativo.desde)})` : '';
+    const parte = `${pctDe(ativo.total)}% dos gastos · média ${formatBRL(ativo.media)}/mês${desde}${vs}`;
     nota = ativo.categorias ? `${parte}. Clique para abrir as categorias.` : `${parte} · ${ativo.qtd} lançamento(s).`;
   }
 
@@ -151,7 +154,11 @@ export default function AmpliadoGrupos({ onClose, grupos, total, meses, comps = 
                       </span>
                       <span className="whitespace-nowrap text-right text-[12.5px] font-medium tabular-nums text-gray-900">{formatBRL(it.total)}</span>
                       <span className="text-right text-[11.5px] tabular-nums text-gray-500">{pctDe(it.total)}%</span>
-                      <span className="whitespace-nowrap text-right text-[11.5px] tabular-nums text-gray-500">{formatBRL(it.media)}</span>
+                      <span className="whitespace-nowrap text-right text-[11.5px] tabular-nums text-gray-500"
+                        title={it.desde === 'parcial' ? 'A soma das médias das categorias (a do gasto fixo conta desde o 1º mês dele)'
+                          : it.desde ? `Gasto fixo: a média conta desde ${competenciaCurta(it.desde)} (${it.mesesMedia} ${it.mesesMedia === 1 ? 'mês' : 'meses'})` : undefined}>
+                        {it.desde && it.desde !== 'parcial' && <span className="mr-1 text-[10.5px] text-gray-400">desde {competenciaCurta(it.desde)}</span>}{formatBRL(it.media)}
+                      </span>
                       {comTendencia && <MiniCurva valores={comps.map((c) => it.meses?.[c] ?? 0)} cor={it.cor} largura={96} altura={20} />}
                       {comVariacao && <span className="flex justify-end"><Variacao v={v} sobeBom={false} titulo="Contra o mesmo período do ano anterior" /></span>}
                     </button>

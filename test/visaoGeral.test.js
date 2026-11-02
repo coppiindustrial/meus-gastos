@@ -83,6 +83,27 @@ test('mediaPorMes: só os meses com o valor, e sem o mês em andamento quando h�
   assert.deepEqual(mediaPorMes([porMes[1]], 'entradas'), { media: 0, meses: 0 });
 });
 
+test('gruposPorMes: o fixo que começou depois divide só a partir do 1º mês; o eventual, pelo período', () => {
+  const ls = [
+    L('2026-01', 'saida', 'cartao', 'merc', 10000),
+    L('2026-02', 'saida', 'cartao', 'merc', 10000),
+    L('2026-03', 'saida', 'cartao', 'merc', 10000),
+    L('2026-04', 'saida', 'cartao', 'merc', 10000),
+    L('2026-03', 'saida', 'fixo', 'luz', 20000), // o fixo começa em março
+    L('2026-04', 'saida', 'fixo', 'luz', 20000),
+    L('2026-02', 'saida', 'manual', 'festa', 40000), // eventual: um mês só
+  ];
+  const cats = [...categorias, { id: 'festa', nome: 'Festa', grupo: casa }];
+  const g = gruposPorMes(ls, periodo([2026], [1, 2, 3, 4]), cats);
+  const casaG = g.find((x) => x.nome === 'Casa');
+  const luz = casaG.categorias.find((k) => k.id === 'luz');
+  const festa = casaG.categorias.find((k) => k.id === 'festa');
+  assert.deepEqual([luz.media, luz.mesesMedia, luz.desde], [20000, 2, '2026-03']); // 40000 / 2, não / 4
+  assert.deepEqual([festa.media, festa.mesesMedia, festa.desde], [10000, 4, null]); // 40000 / 4
+  assert.equal(casaG.media, 30000); // a soma das médias das categorias
+  assert.equal(g.find((x) => x.nome === 'Alimentação').media, 10000);
+});
+
 test('gruposPorMes: a média do grupo não conta o mês em andamento', () => {
   const g = gruposPorMes(linhas, periodo([2026], [7, 8]), categorias, '2026-08');
   assert.equal(g[0].media, 30000); // Mercado: só julho (agosto em andamento)

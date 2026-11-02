@@ -229,6 +229,11 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   com `y`/`h` dobrados (`ESCOPO_ANTIGO` no topo do grid).
 - MÉDIAS POR MÊS (toda tela): só os meses em que o valor aparece (mês sem entrada cadastrada não é "entrada zero")
   e sem o mês em andamento quando há outros — `mediaPorMes`/`mesesDaMedia` em `lib/visaoGeral.js` (testadas).
+  GASTO FIXO (02/11/2026): a categoria que é sobretudo fixo (metade ou mais do valor de origem `fixo`) só divide A
+  PARTIR DO 1º MÊS em que aparece no período (`mediaDaCategoria`; o condomínio de quem se mudou em junho não divide
+  desde janeiro); o EVENTUAL segue dividido por todos os meses do período (a festa de um mês pesa no ano). A média do
+  GRUPO = a soma das médias das categorias (fecha com o Total). Vale no Gastos por grupo, na tabela grupo × mês e na
+  tela Categorias (`usoCategorias`); onde a média começou depois, "desde mmm/aa" ao lado do número.
 - Gastos por origem = rosca com UMA COR POR ORIGEM (`--origem-cartao/-fixo/-manual` no index.css, validadas nos
   dois temas) e o centro que conta a fatia sob o cursor. Ela MEDE a caixa e escolhe o arranjo que cabe (rosca ao
   lado ou em cima; legenda completa ou de uma linha — `arranjoRosca`): o bloco não rola. Gastos por grupo = barras na cor do grupo + curva dos meses

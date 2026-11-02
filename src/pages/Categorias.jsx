@@ -407,7 +407,11 @@ export default function Categorias() {
                       <td className="border-b border-gray-100 px-3 text-[13px]">
                         <TotalComBarra centavos={u?.noMes ?? 0} maximo={maximo} cor={g.cor} entrada={entrada} />
                       </td>
-                      <td className="border-b border-gray-100 px-3 text-right text-[13px] tabular-nums text-gray-600">{u?.media ? formatBRL(u.media) : <span className="text-gray-300">—</span>}</td>
+                      <td className="border-b border-gray-100 px-3 text-right text-[13px] tabular-nums text-gray-600"
+                          title={u?.desde ? `Gasto fixo: a média conta desde ${competenciaCurta(u.desde)}` : undefined}>
+                          {u?.desde && <span className="mr-1 text-[11px] text-gray-400">desde {competenciaCurta(u.desde)}</span>}
+                          {u?.media ? formatBRL(u.media) : <span className="text-gray-300">—</span>}
+                        </td>
                       <td className="border-b border-gray-100 px-3 text-right text-[12.5px] text-gray-500">{u?.ultimo ? competenciaCurta(u.ultimo) : <span className="text-gray-300">nunca</span>}</td>
                       <td className="border-b border-gray-100 pr-2">
                         <span className="flex justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/linha:opacity-100 md:focus-within:opacity-100">

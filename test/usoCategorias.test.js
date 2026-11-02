@@ -33,3 +33,17 @@ test('usoPorCategoria: o mês em andamento fica fora da média', () => {
   assert.equal(uso.get('merc').media, 1000);
   assert.equal(uso.get('merc').soma, 1300); // a soma dos 12 meses continua com tudo
 });
+
+test('usoPorCategoria: o gasto fixo que começou depois divide só desde o 1º mês dele', () => {
+  const ls = [
+    { competencia: '2026-07', tipo: 'saida', origem: 'cartao', categoria_id: 'merc', qtd: 1, total_centavos: 10000 },
+    { competencia: '2026-08', tipo: 'saida', origem: 'cartao', categoria_id: 'merc', qtd: 1, total_centavos: 10000 },
+    { competencia: '2026-09', tipo: 'saida', origem: 'cartao', categoria_id: 'merc', qtd: 1, total_centavos: 10000 },
+    { competencia: '2026-08', tipo: 'saida', origem: 'fixo', categoria_id: 'cond', qtd: 1, total_centavos: 60000 },
+    { competencia: '2026-09', tipo: 'saida', origem: 'fixo', categoria_id: 'cond', qtd: 1, total_centavos: 60000 },
+  ];
+  const { uso } = usoPorCategoria(ls, '2026-09', 12);
+  assert.equal(uso.get('cond').media, 60000); // 120000 / 2 (agosto e setembro), não / 3
+  assert.equal(uso.get('cond').desde, '2026-08');
+  assert.equal(uso.get('merc').media, 10000);
+});
