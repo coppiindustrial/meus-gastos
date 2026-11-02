@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mesesDoAno, pendenciasAgora, periodoDasLinhas, resumirPlanilha, unirPeriodos, vencimentoNoMes } from '../src/lib/importacoes.js';
+import { faltaAgora, mesesDoAno, pendenciasAgora, periodoDasLinhas, resumirPlanilha, unirPeriodos, vencimentoNoMes } from '../src/lib/importacoes.js';
 
 // Dados FICTÍCIOS.
 const nubank = { id: 'nu', nome: 'Nubank', dia_vencimento: 13, ativo: true };
@@ -98,4 +98,17 @@ test('resumirPlanilha: por origem, por mês e a conferência no formato do plani
   assert.deepEqual(r.conferencia.porFatura['Nubank_2026-02-13.csv'], { linhas: 2, total: 1500 });
   assert.deepEqual(r.conferencia.entradas, { linhas: 1, total: 9000 });
   assert.deepEqual(r.cartoes, { Nubank: 2, XP: 1 });
+});
+
+test('faltaAgora: em janeiro, a linha de dezembro do ano anterior entra, com as colunas do ano dela', () => {
+  // o extrato foi até 30/11/2026; em 05/01/2027, o de dezembro falta (o mês acabou)
+  const ext = [E('2026-11-01', '2026-11-30', '2026-12-01T10:00:00Z')];
+  const f = faltaAgora({ hoje: '2027-01-05', cartoes: [nubank], faturas: [F('nu', '2026-11'), F('nu', '2026-12')], extratos: ext });
+  const dez = f.linhas.find((l) => l.comp === '2026-12');
+  assert.ok(dez, 'dezembro de 2026 está nas linhas');
+  assert.equal(dez.celulas.extrato.pendente, true);
+  assert.deepEqual(dez.colunas.map((c) => c.key), ['nu', 'extrato']);
+  assert.equal(f.faltam, pendenciasAgora({ hoje: '2027-01-05', cartoes: [nubank], faturas: [F('nu', '2026-11'), F('nu', '2026-12')], extratos: ext }));
+  // fora de janeiro, só o ano corrente
+  assert.equal(faltaAgora({ hoje: '2026-10-28', cartoes: [xp, nubank, velho], faturas, extratos }).linhas.every((l) => l.comp.startsWith('2026-')), true);
 });

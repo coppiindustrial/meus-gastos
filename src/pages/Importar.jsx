@@ -17,7 +17,7 @@ import ImportarExtrato from './ImportarExtrato.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { carregarSituacao, desfazerImportacao, idsDoExtratoAntigo } from '../api/importacoes.js';
-import { mesesDoAno } from '../lib/importacoes.js';
+import { faltaAgora, mesesDoAno } from '../lib/importacoes.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaCurta, formatDate, formatDateTime, nomeCompetencia, todayISO } from '../lib/format.js';
 import posicionarPopover from '../lib/posicionarPopover.js';
@@ -249,8 +249,9 @@ export default function Importar() {
   useEffect(() => { carregar(); }, [carregar]);
 
   const tabela = useMemo(() => (dados ? mesesDoAno({ ano, hoje, ...dados }) : null), [dados, ano, hoje]);
-  // O que falta AGORA (o menu do ▾): sempre do ano corrente, qualquer que seja o ano da tela.
-  const agora = useMemo(() => (dados ? mesesDoAno({ ano: anoAtual, hoje, ...dados }) : null), [dados, anoAtual, hoje]);
+  // O que falta AGORA (o menu do ▾): o ano corrente e, em janeiro, o dezembro de antes (`faltaAgora`) — qualquer que
+  // seja o ano da tela.
+  const agora = useMemo(() => (dados ? faltaAgora({ hoje, ...dados }) : null), [dados, hoje]);
   const opcoesAno = useMemo(() => {
     const s = new Set([anoAtual]);
     (dados?.faturas ?? []).forEach((f) => s.add(Number(f.competencia.slice(0, 4))));
@@ -280,8 +281,9 @@ export default function Importar() {
     const r = el.getBoundingClientRect();
     const itens = [];
     (agora?.linhas ?? []).filter((l) => l.faltam > 0).forEach((l) => {
-      itens.push({ grupo: `${mesNome(l.comp)} · falta` });
-      agora.colunas.forEach((col) => {
+      // o mês de outro ano (o dezembro de antes, em janeiro) leva o ano no nome
+      itens.push({ grupo: `${l.comp.startsWith(String(anoAtual)) ? mesNome(l.comp) : nomeCompetencia(l.comp)} · falta` });
+      l.colunas.forEach((col) => {
         const cel = l.celulas[col.key];
         if (!cel.pendente) return;
         itens.push({

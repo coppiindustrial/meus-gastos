@@ -99,7 +99,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   entrou ou o que falta (`mesesDoAno` em `lib/importacoes.js`, testada). Fonte DEVE o mês quando ele já pode ser
   importado: a fatura a partir do vencimento; o extrato quando o mês acabou (o mês corrente é "em andamento" ou
   "até dd/mm", sem contar como pendência). Antes da primeira importação da fonte, "—" — que não cobra, mas tem o ↓ no
-  hover (`antes`: excluir o extrato de um mês o deixa antes do primeiro que sobrou, e ele precisa poder voltar). A célula que falta abre o
+  hover (`antes`: excluir o extrato de um mês o deixa antes do primeiro que sobrou, e ele precisa poder voltar).
+  O ANO da tela é o de hoje (troca sozinho em 1º de janeiro; a lista tem os anos com dado). EM JANEIRO o que falta
+  inclui DEZEMBRO do ano anterior — no número do menu e no ▾ (`faltaAgora`, testada; o mês leva o ano no nome). A célula que falta abre o
   importador da fatura já com cartão e vencimento (`inicial`) ou o do extrato.
 - ABA "HISTÓRICO" = tabela `importacoes` (migration 007, que também preenche o passado): toda importação chama
   `registrarImportacao` (fatura, extrato, planilha; sem a tabela, ignora em silêncio). "Excluir" a fatura (apaga a

@@ -101,16 +101,25 @@ export function mesesDoAno({ ano, hoje, cartoes, faturas, extratos }) {
   return { colunas, linhas, faltam: linhas.reduce((s, l) => s + l.faltam, 0) };
 }
 
-// O número do menu: as pendências do ano corrente e do mês anterior a ele (em janeiro, a fatura de
-// dezembro ainda pode estar faltando).
-export function pendenciasAgora({ hoje, cartoes, faturas, extratos }) {
+// O QUE FALTA AGORA: as linhas do ano corrente e, em JANEIRO, a de dezembro do ano anterior (a fatura de dezembro
+// ainda pode estar faltando, e o extrato de dezembro só passa a faltar quando o mês acaba). Cada linha leva as
+// colunas do ano dela (um cartão novo só existe no ano em que entrou). Devolve { linhas, faltam } — o ▾ do Importar
+// lista as linhas (03/11/2026: antes ele via só o ano corrente, e em janeiro o dezembro sumia do menu).
+export function faltaAgora({ hoje, cartoes, faturas, extratos }) {
   const ano = Number(hoje.slice(0, 4));
-  const esteAno = mesesDoAno({ ano, hoje, cartoes, faturas, extratos }).faltam;
+  const esteAno = mesesDoAno({ ano, hoje, cartoes, faturas, extratos });
+  const linhas = esteAno.linhas.map((l) => ({ ...l, colunas: esteAno.colunas }));
   const antes = addMeses(competenciaDe(hoje), -1);
-  if (!antes.startsWith(`${ano - 1}-`)) return esteAno;
-  const linha = mesesDoAno({ ano: ano - 1, hoje, cartoes, faturas, extratos }).linhas.find((l) => l.comp === antes);
-  return esteAno + (linha?.faltam ?? 0);
+  if (antes.startsWith(`${ano - 1}-`)) {
+    const anoAntes = mesesDoAno({ ano: ano - 1, hoje, cartoes, faturas, extratos });
+    const linha = anoAntes.linhas.find((l) => l.comp === antes);
+    if (linha) linhas.push({ ...linha, colunas: anoAntes.colunas });
+  }
+  return { linhas, faltam: linhas.reduce((s, l) => s + l.faltam, 0) };
 }
+
+// O número do menu: o que falta agora (`faltaAgora`).
+export const pendenciasAgora = (dados) => faltaAgora(dados).faltam;
 
 // O período de um extrato lido (da primeira à última movimentação do arquivo).
 export function periodoDasLinhas(linhas) {
