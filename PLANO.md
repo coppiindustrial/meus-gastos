@@ -26,8 +26,10 @@
 > (`lib/modeloCsv.js`, testada; Nubank e XP viraram modelos prontos e o `lerFatura` lê por eles) e o que o assistente
 > vai sugerir (separador, cabeçalho, colunas, data, sinal, parcela). **Fase 7.2 pronta (2026-11-03)**: o assistente
 > (`components/AssistenteModelo.jsx`: o arquivo → as colunas → conferir e salvar), aberto pelo "+ Ensinar um formato
-> novo…" do cartão (formulário e cadastro); o modelo salvo já fica no cartão. Falta 7.3 (os importadores reconhecerem
-> os modelos pelo cabeçalho e importarem por eles + a lista de modelos em Cadastros); depois, modelos de extrato.
+> novo…" do cartão (formulário e cadastro); o modelo salvo já fica no cartão. **Fase 7.3 pronta (2026-11-03)**: o
+> importador de fatura e o "Importar arquivos" leem pelos modelos (os ensinados antes dos prontos —
+> `lerFaturaComModelos`), o arquivo desconhecido oferece "Ensinar este formato" (o assistente já com ele) e a tela
+> Cadastros › Modelos de importação lista, renomeia, ensina de novo e exclui. Falta: modelos de EXTRATO de outra conta.
 > No ar em https://coppiindustrial.github.io/meus-gastos/ (repo `coppiindustrial/meus-gastos`, Supabase `abofajutoxukbvrfisem`).
 > Substitui a planilha `OneDrive\CONTAS\Gastos\Gastos total.xlsx`.
 
@@ -154,7 +156,7 @@ Nomes, comentários e UI em português, como no Gestor.
 | **4. Resumo do mês** | Dashboard completo, parcelas futuras, evolução mensal, exportar CSV | Substitui o Dashboard da planilha |
 | **5. Gastos fixos** | Recorrências + sugestão mensal | Fixos do mês lançados com 1 clique cada |
 | **6. Patrimônio** | Contas, saldos, gráfico de evolução | Você vê seu patrimônio mês a mês |
-| **7. Importador configurável** | 7.1 modelo de importação + leitura pelo modelo (feito) · 7.2 assistente (arquivo → colunas → conferir e salvar) (feito) · 7.3 importadores reconhecem os modelos; modelos em Cadastros · depois, modelos de extrato | Um cartão de banco novo entra sem programar: ensina o formato uma vez e os próximos CSVs entram sozinhos |
+| **7. Importador configurável** | 7.1 modelo de importação + leitura pelo modelo (feito) · 7.2 assistente (arquivo → colunas → conferir e salvar) (feito) · 7.3 importadores reconhecem os modelos; modelos em Cadastros (feito) · depois, modelos de extrato | Um cartão de banco novo entra sem programar: ensina o formato uma vez e os próximos CSVs entram sozinhos |
 | **Futuro** | Importar extrato da conta corrente (OFX/CSV) | — |
 
 **Dependência:** a fase 3 precisa de **um CSV original, sem converter, de cada banco** (Nubank e XP).

@@ -12,6 +12,7 @@ import Categorias from './pages/Categorias.jsx';
 import Cartoes from './pages/Cartoes.jsx';
 import Pendencias from './pages/Pendencias.jsx';
 import Regras from './pages/Regras.jsx';
+import Modelos from './pages/Modelos.jsx';
 import Fixos from './pages/Fixos.jsx';
 import Patrimonio from './pages/Patrimonio.jsx';
 import Importar from './pages/Importar.jsx';
@@ -43,6 +44,7 @@ export default function App() {
       <Route path="/faturas" element={<Navigate to="/importar" replace />} />
       <Route path="/pendencias" element={<Protected><Pendencias /></Protected>} />
       <Route path="/cadastros/regras" element={<Protected><Regras /></Protected>} />
+      <Route path="/cadastros/modelos" element={<Protected><Modelos /></Protected>} />
       <Route path="/fixos" element={<Protected><Fixos /></Protected>} />
       <Route path="/patrimonio" element={<Protected><Patrimonio /></Protected>} />
       <Route path="/extrato" element={<Navigate to="/importar" replace />} />

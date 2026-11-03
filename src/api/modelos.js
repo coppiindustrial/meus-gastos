@@ -29,6 +29,13 @@ export function salvarModelo({ id, nome, tipo = 'fatura', cabecalho, config }) {
     : supabase.from('modelos_importacao').insert(dados).select().single());
 }
 
-export function excluirModelo(id) {
+// Excluir: os cartões que o usavam voltam a "lançamento manual" antes (a FK só apagaria o `modelo_id`, e o cartão
+// ficaria num formato 'modelo' sem modelo).
+export async function excluirModelo(id) {
+  await exigir(supabase.from('cartoes').update({ formato: 'manual', modelo_id: null }).eq('modelo_id', id));
   return exigir(supabase.from('modelos_importacao').delete().eq('id', id));
+}
+
+export function renomearModelo(id, nome) {
+  return exigir(supabase.from('modelos_importacao').update({ nome: nome.trim() }).eq('id', id).select().single());
 }

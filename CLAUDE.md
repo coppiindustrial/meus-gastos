@@ -349,6 +349,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   das regras; o vencimento — `vencimentoDoArquivo` em `lib/lerFatura.js`; "reconhecer pelo cabeçalho"; o nome).
   Abre pelo "+ Ensinar um formato novo…" (`ENSINAR` em `opcoesFormato`) no formulário e no cadastro do cartão; o
   modelo salvo já fica escolhido. Sem a migration 011, salvar explica que ela falta.
+  OS IMPORTADORES (7.3, 03/11/2026): `ImportarFatura` e `ImportarArquivos` leem o texto dos BYTES (`decodificar`) e a
+  fatura por `lerFaturaComModelos` (`lib/lerFatura.js`, testada): o primeiro modelo que reconhece o cabeçalho (os do
+  usuário antes dos prontos), o cartão (pronto: nome do arquivo / célula / único do formato; do usuário: célula /
+  único ligado ao modelo) e o vencimento (o do modelo; o da célula vale sobre o palpite do dia). Nenhum reconhece →
+  `naoReconhecido` e o botão "Ensinar este formato" (o assistente com `arquivoInicial`; salvo, o arquivo é relido).
+  A TELA `pages/Modelos.jsx` (/cadastros/modelos, em Cadastros): os prontos (só leitura) e os do usuário — clicar no
+  nome renomeia, "Ensinar de novo" (o assistente com `modelo`: com o mesmo cabeçalho, as colunas dele) e "Excluir"
+  (`excluirModelo` devolve os cartões dele ao lançamento manual antes).
 - `lib/lerFatura.js`: reconhece o formato pelo CABEÇALHO — Nubank original (`date,title,amount`, parcela no fim do
   título: "Loja - Parcela 9/12") e o da XP (`Data;Estabelecimento;Portador;Valor;Parcela`, também o das faturas do
   Nubank que o usuário converteu). Valor negativo (pagamento, estorno) fica de fora, como na planilha. Desde 03/11/2026

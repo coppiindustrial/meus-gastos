@@ -55,3 +55,35 @@ export function vencimentoDoArquivo(config, nomeArquivo, linhas, diaVencimento) 
   const doDia = vencimentoProvavel(linhas, diaVencimento);
   return { vencimento: doDia, como: doDia ? 'dia' : 'perguntar' };
 }
+
+// A FATURA PELOS MODELOS (fase 7.3 do importador configurável): o que os dois importadores (o de uma fatura e o
+// "Importar arquivos") fazem com um arquivo. O MODELO é o primeiro que reconhece o cabeçalho — os do usuário antes
+// dos prontos. O CARTÃO: num pronto, pelo nome do arquivo, senão a célula que abriu o importador (`inicial`), senão o
+// único cartão daquele formato; num modelo do usuário, a célula, senão o único cartão ligado a ele. O VENCIMENTO: num
+// pronto, o do nome ou o da célula ou o dia do cartão; num do usuário, o que o modelo diz (`vencimentoDoArquivo`),
+// com o da célula valendo sobre o palpite do dia. Nenhum modelo reconhece: erro com `naoReconhecido` (a tela oferece
+// "Ensinar este formato"). Devolve { modelo, formato, linhas, ignoradas, cartao, vencimento }.
+export const NAO_RECONHECIDO = 'Formato de CSV não reconhecido: não é o do Nubank, nem o da XP, nem um dos formatos que você ensinou.';
+export function lerFaturaComModelos(texto, nomeArquivo, { modelos = [], cartoes = [], inicial = null } = {}) {
+  if (!linhasDoTexto(texto).length) throw new Error('O arquivo está vazio.');
+  const modelo = reconhecerModelo(texto, [...modelos.filter((m) => m.tipo !== 'extrato' && !m.pronto), ...MODELOS_PRONTOS]);
+  if (!modelo) throw Object.assign(new Error(NAO_RECONHECIDO), { naoReconhecido: true });
+  const r = lerComModelo(texto, modelo.config);
+  const ativos = cartoes.filter((c) => c.ativo);
+  const daCelula = inicial?.cartaoId ? ativos.find((x) => x.id === inicial.cartaoId) ?? null : null;
+  let cartao;
+  let vencimento;
+  if (modelo.pronto) {
+    const pista = pistaDoArquivo(nomeArquivo);
+    const porFormato = ativos.filter((c) => c.formato === modelo.id);
+    const celula = pista.cartao ? null : daCelula;
+    cartao = ativos.find((x) => x.formato === pista.cartao) ?? celula ?? (porFormato.length === 1 ? porFormato[0] : null);
+    vencimento = pista.vencimento ?? (celula ? inicial.vencimento : null) ?? vencimentoProvavel(r.linhas, cartao?.dia_vencimento) ?? null;
+  } else {
+    const doModelo = ativos.filter((c) => c.formato === 'modelo' && c.modelo_id === modelo.id);
+    cartao = daCelula ?? (doModelo.length === 1 ? doModelo[0] : null);
+    const v = vencimentoDoArquivo(modelo.config, nomeArquivo, r.linhas, cartao?.dia_vencimento);
+    vencimento = (v.como === 'nome' ? v.vencimento : (daCelula && inicial.vencimento) || v.vencimento) ?? null;
+  }
+  return { modelo, formato: modelo.pronto ? (modelo.id === 'nubank' ? 'nubank' : 'padrao') : 'modelo', ...r, cartao, vencimento };
+}

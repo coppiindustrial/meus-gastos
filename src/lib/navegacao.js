@@ -30,6 +30,7 @@ export const GRUPOS = [
       { to: '/cadastros/categorias', label: 'Categorias e grupos' },
       { to: '/cadastros/cartoes', label: 'Cartões' },
       { to: '/cadastros/regras', label: 'Regras de classificação' },
+      { to: '/cadastros/modelos', label: 'Modelos de importação' },
       { to: IMPORTAR.to, label: IMPORTAR.label, contador: IMPORTAR.contador, dica: IMPORTAR.dica },
     ],
   },

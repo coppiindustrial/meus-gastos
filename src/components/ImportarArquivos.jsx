@@ -7,7 +7,10 @@ import {
   classificarLinhas, faturaExistente, hashDoTexto, importarFatura, listarRegrasParaClassificar,
 } from '../api/faturas.js';
 import { registrarImportacao } from '../api/importacoes.js';
-import { lerFatura, pistaDoArquivo, vencimentoProvavel } from '../lib/lerFatura.js';
+import { lerFaturaComModelos } from '../lib/lerFatura.js';
+import { decodificar } from '../lib/modeloCsv.js';
+import { listarModelos } from '../api/modelos.js';
+import AssistenteModelo from './AssistenteModelo.jsx';
 import { lerExtrato } from '../lib/lerExtrato.js';
 import { periodoDasLinhas } from '../lib/importacoes.js';
 import { formatBRL } from '../lib/dinheiro.js';
@@ -19,25 +22,24 @@ import { varCor } from '../lib/varCor.js';
 // importador da fatura). As faturas entram daqui mesmo; a já importada é PULADA (ou substituída, se pedir).
 // O extrato não grava aqui: ele abre a prévia de sempre (o pop-up `ImportarExtrato`, com as regras), depois das faturas.
 // `onFeito(arquivoDoExtrato | null)`.
+// OS MODELOS (03/11/2026, fase 7.3): a fatura é lida pelo primeiro modelo que reconhece o cabeçalho (os ensinados,
+// depois Nubank e XP — `lerFaturaComModelos`), do texto dos BYTES (UTF-8 ou Windows-1252). O arquivo que ninguém
+// reconhece (nem como extrato) ganha "Ensinar este formato": o assistente já com ele, e salvo, a linha se refaz.
 
 const TOM_OK = { background: varCor('#e7f6ee', 'fundo'), color: varCor('#15803d', 'texto') };
 const TOM_AVISO = { background: varCor('#fdf3d9', 'fundo'), color: varCor('#9a6f00', 'texto') };
 const TOM_ERRO = { background: varCor('#fdeaea', 'fundo'), color: varCor('#c0393d', 'texto') };
 const CHIP = 'inline-flex items-center rounded-[4px] px-1.5 py-0.5 text-[11.5px] font-semibold whitespace-nowrap';
 
-async function reconhecer(arquivo, cartoes, regras) {
-  const texto = await arquivo.text();
+async function reconhecer(arquivo, cartoes, regras, modelos) {
+  const texto = decodificar(new Uint8Array(await arquivo.arrayBuffer()));
   try {
-    const r = lerFatura(texto);
-    const ativos = cartoes.filter((c) => c.ativo);
-    const pista = pistaDoArquivo(arquivo.name);
-    const porFormato = ativos.filter((c) => c.formato === (r.formato === 'nubank' ? 'nubank' : 'xp'));
-    const cartao = ativos.find((x) => x.formato === pista.cartao) ?? (porFormato.length === 1 ? porFormato[0] : null);
-    const vencimento = pista.vencimento ?? vencimentoProvavel(r.linhas, cartao?.dia_vencimento) ?? null;
+    const r = lerFaturaComModelos(texto, arquivo.name, { modelos, cartoes });
+    const { cartao, vencimento } = r;
     const linhas = classificarLinhas(r.linhas, regras).filter((l) => !l.ignorar);
     const existente = cartao && vencimento ? await faturaExistente(cartao.id, vencimento) : null;
     return {
-      tipo: 'fatura', nome: arquivo.name, cartao, vencimento, linhas, existente,
+      tipo: 'fatura', nome: arquivo.name, cartao, vencimento, linhas, existente, modelo: r.modelo,
       hash: await hashDoTexto(texto),
       total: linhas.reduce((s, l) => s + l.valor_centavos, 0),
       semRegra: linhas.filter((l) => !l.categoria_id).length,
@@ -48,7 +50,7 @@ async function reconhecer(arquivo, cartoes, regras) {
       const linhas = lerExtrato(texto);
       return { tipo: 'extrato', nome: arquivo.name, arquivo, qtd: linhas.length, ...periodoDasLinhas(linhas), acao: 'abrir' };
     } catch {
-      return { tipo: 'erro', nome: arquivo.name, acao: 'nada' };
+      return { tipo: 'erro', nome: arquivo.name, arquivo, acao: 'nada' };
     }
   }
 }
@@ -59,15 +61,26 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
   const [itens, setItens] = useState([]);
   const [lendo, setLendo] = useState(false);
   const [gravando, setGravando] = useState('');
+  const [modelos, setModelos] = useState([]);
+  const [ensinando, setEnsinando] = useState(null); // o item do arquivo desconhecido
 
-  useEffect(() => { listarRegrasParaClassificar().then(setRegras).catch((err) => toast.error(err.message)); }, [toast]);
+  useEffect(() => {
+    listarRegrasParaClassificar().then(setRegras).catch((err) => toast.error(err.message));
+    listarModelos().then((m) => setModelos(m ?? [])).catch(() => {});
+  }, [toast]);
+
+  // Ensinado o formato: a linha do arquivo se refaz com o modelo novo (no mesmo lugar da lista).
+  const reler = async (item, ms) => {
+    const novo = await reconhecer(item.arquivo, cartoes, regras, ms);
+    setItens((xs) => xs.map((i) => (i.nome === item.nome ? novo : i)));
+  };
 
   const adicionar = async (lista) => {
     const novos = [...lista].filter((f) => !itens.some((i) => i.nome === f.name));
     if (!novos.length || !regras) return;
     setLendo(true);
     try {
-      const lidos = await Promise.all(novos.map((f) => reconhecer(f, cartoes, regras)));
+      const lidos = await Promise.all(novos.map((f) => reconhecer(f, cartoes, regras, modelos)));
       setItens((atual) => {
         const todos = [...atual, ...lidos];
         // Um extrato por vez: o primeiro abre a prévia, os outros ficam de fora.
@@ -122,12 +135,23 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
     return '—';
   };
   const reconhecido = (i) => {
-    if (i.tipo === 'fatura') return i.cartao ? `Fatura ${i.cartao.nome}${i.vencimento ? ` · venc. ${formatDate(i.vencimento)}` : ''}` : 'Fatura (cartão não reconhecido)';
+    if (i.tipo === 'fatura') {
+      const pelo = i.modelo && !i.modelo.pronto ? ` (modelo ${i.modelo.nome})` : '';
+      return i.cartao ? `Fatura ${i.cartao.nome}${i.vencimento ? ` · venc. ${formatDate(i.vencimento)}` : ''}${pelo}` : `Fatura (cartão não reconhecido)${pelo}`;
+    }
     if (i.tipo === 'extrato') return 'Extrato da conta';
     return 'Formato não reconhecido';
   };
   const destino = (i) => {
-    if (i.tipo === 'erro') return <span className={CHIP} style={TOM_ERRO}>fica de fora</span>;
+    if (i.tipo === 'erro') {
+      return (
+        <>
+          <span className={CHIP} style={TOM_ERRO}>fica de fora</span>
+          <button type="button" onClick={() => setEnsinando(i)} disabled={Boolean(gravando)}
+            className="mt-0.5 block text-[11px] text-gray-500 underline hover:text-gray-800">Ensinar este formato</button>
+        </>
+      );
+    }
     if (i.tipo === 'extrato') {
       return i.outroExtrato
         ? <span className={CHIP} style={TOM_AVISO}>um extrato por vez</span>
@@ -155,7 +179,7 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
       <div className="space-y-3 text-[12.5px] text-gray-700">
         <AreaArrastar multiplo onArquivos={adicionar} compacta={itens.length > 0} desabilitada={!regras || lendo}
           titulo={itens.length ? 'Solte mais arquivos aqui ou' : 'Arraste os arquivos do mês aqui ou'}
-          formatos=".csv — faturas do Nubank e da XP, extrato da conta do Nubank · vários de uma vez" />
+          formatos={`.csv — faturas do Nubank, da XP${modelos.length ? ` e dos formatos ensinados (${modelos.map((m) => m.nome).join(', ')})` : ''}, extrato da conta do Nubank · vários de uma vez`} />
         {(lendo || !regras) && <p className="-mt-1 flex items-center gap-2 text-[12px] text-gray-500"><Spinner className="h-3.5 w-3.5" />{regras ? 'Lendo os arquivos…' : 'Carregando as regras…'}</p>}
 
         {itens.length > 0 && (
@@ -192,6 +216,10 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
           </button>
         </div>
       </div>
+      {ensinando && (
+        <AssistenteModelo arquivoInicial={ensinando.arquivo} cartao={null} onFechar={() => setEnsinando(null)}
+          onSalvo={(m) => { const ms = [...modelos, m]; setModelos(ms); const item = ensinando; setEnsinando(null); reler(item, ms).catch((err) => toast.error(err.message)); }} />
+      )}
     </Modal>
   );
 }

@@ -26,7 +26,9 @@ import { formatDate } from '../lib/format.js';
 //   3 · CONFERIR E SALVAR: como cada compra vai entrar (com a categoria das regras), o vencimento de cada arquivo,
 //       o "reconhecer sozinho pelo cabeçalho" e o nome. Salva em `modelos_importacao` (migration 011).
 // As contas são de `lib/modeloCsv.js` (testada). `cartao`: { nome, dia_vencimento } (o nome do modelo e o vencimento
-// do exemplo). `onSalvo(modelo)`: a linha gravada.
+// do exemplo). `onSalvo(modelo)`: a linha gravada. 7.3: `arquivoInicial` (File) — aberto pelo "Ensinar este formato"
+// de um CSV que nenhum modelo reconheceu, já começa nele; `modelo` — ENSINAR DE NOVO um modelo que existe (o nome, o
+// reconhecer e, se o arquivo novo tem o mesmo cabeçalho, as colunas dele; salvar troca o mesmo modelo).
 
 const SEPARADORES = [{ value: ';', label: '; (ponto e vírgula)' }, { value: ',', label: ', (vírgula)' }, { value: '\t', label: 'Tabulação' }];
 const CODIFICACOES = [{ value: 'auto', label: 'Automática' }, { value: 'utf-8', label: 'UTF-8' }, { value: 'windows-1252', label: 'Windows-1252 (Excel)' }];
@@ -64,7 +66,7 @@ const Rotulo = ({ children, sub }) => (
   <div className="mb-1.5 flex items-baseline gap-2"><span className={TH}>{children}</span>{sub && <span className="text-[11.5px] text-gray-400">{sub}</span>}</div>
 );
 
-export default function AssistenteModelo({ cartao, onFechar, onSalvo }) {
+export default function AssistenteModelo({ cartao, arquivoInicial = null, modelo = null, onFechar, onSalvo }) {
   const toast = useToast();
   const [passo, setPasso] = useState(1);
   const [arquivo, setArquivo] = useState(null); // { nome, bytes }
@@ -72,8 +74,8 @@ export default function AssistenteModelo({ cartao, onFechar, onSalvo }) {
   const [formato, setFormato] = useState(null); // { separador, linhaCabecalho, ignorarNoFim }
   const [config, setConfig] = useState(null);
   const [sugeridoPara, setSugeridoPara] = useState('');
-  const [nome, setNome] = useState(`${cartao?.nome?.trim() || 'Banco'} · fatura`);
-  const [reconhecer, setReconhecer] = useState(true);
+  const [nome, setNome] = useState(modelo?.nome ?? `${cartao?.nome?.trim() || 'Banco'} · fatura`);
+  const [reconhecer, setReconhecer] = useState(modelo ? !!modelo.cabecalho : true);
   const [apoio, setApoio] = useState(null); // { regras, categorias } do passo 3
   const [salvando, setSalvando] = useState(false);
 
@@ -86,16 +88,26 @@ export default function AssistenteModelo({ cartao, onFechar, onSalvo }) {
     const t = decodificar(bytes, 'auto');
     if (!linhasDoTexto(t).length) { toast.error('O arquivo está vazio.'); return; }
     const d = detectarFormato(t);
+    // Ensinando de novo um arquivo do mesmo cabeçalho: o separador, o cabeçalho e o rodapé do modelo.
+    const mesmo = modelo?.cabecalho && assinatura(linhasDoTexto(t)[(modelo.config.linhaCabecalho ?? 1) - 1]).startsWith(modelo.cabecalho);
     setArquivo({ nome: f.name, bytes, tamanho: f.size });
     setCodificacao('auto');
-    setFormato({ separador: d.separador, linhaCabecalho: d.linhaCabecalho, ignorarNoFim: d.ignorarNoFim });
+    setFormato(mesmo
+      ? { separador: modelo.config.separador, linhaCabecalho: modelo.config.linhaCabecalho, ignorarNoFim: modelo.config.ignorarNoFim ?? 0 }
+      : { separador: d.separador, linhaCabecalho: d.linhaCabecalho, ignorarNoFim: d.ignorarNoFim });
     setConfig(null);
   };
+  useEffect(() => { if (arquivoInicial) escolher(arquivoInicial); }, [arquivoInicial]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Do passo 1 para o 2: as colunas sugeridas (de novo só se o arquivo ou o passo 1 mudou).
+  // Do passo 1 para o 2: as colunas sugeridas (de novo só se o arquivo ou o passo 1 mudou) — ou as do modelo que se
+  // ensina de novo, quando o cabeçalho é o dele.
   const chave = JSON.stringify([arquivo?.nome, arquivo?.tamanho, codificacao, formato]);
   const irPara2 = () => {
-    if (chave !== sugeridoPara || !config) { setConfig(sugerirColunas(texto, formato)); setSugeridoPara(chave); }
+    if (chave !== sugeridoPara || !config) {
+      const doModelo = modelo?.cabecalho && assinatura(linhasDoTexto(texto)[formato.linhaCabecalho - 1]).startsWith(modelo.cabecalho);
+      setConfig(doModelo ? { ...modelo.config } : sugerirColunas(texto, formato));
+      setSugeridoPara(chave);
+    }
     setPasso(2);
   };
   // O modelo em vigor: as colunas e opções (passo 2) sobre o separador, o cabeçalho e o rodapé (passo 1).
@@ -124,9 +136,9 @@ export default function AssistenteModelo({ cartao, onFechar, onSalvo }) {
     if (!nome.trim()) { toast.error('Dê um nome ao modelo.'); return; }
     setSalvando(true);
     try {
-      const modelo = await salvarModelo({ nome, tipo: 'fatura', cabecalho: reconhecer ? assinatura(cabecalho) : null, config: cfg });
-      toast.success(`Modelo "${modelo.nome}" salvo.`);
-      onSalvo?.(modelo);
+      const salvo = await salvarModelo({ id: modelo?.id, nome, tipo: 'fatura', cabecalho: reconhecer ? assinatura(cabecalho) : null, config: cfg });
+      toast.success(`Modelo "${salvo.nome}" salvo.`);
+      onSalvo?.(salvo);
     } catch (err) {
       toast.error(/modelos_importacao/.test(err.message) ? 'Falta aplicar a migration 011 no Supabase (SQL Editor) para guardar modelos.'
         : /duplicate|unique/i.test(err.message) ? 'Já existe um modelo com esse nome.' : err.message);
@@ -345,7 +357,7 @@ export default function AssistenteModelo({ cartao, onFechar, onSalvo }) {
   );
 
   return (
-    <Modal open onClose={salvando ? () => {} : onFechar} title="Ensinar um formato de CSV" alturaCheia padding="p-0"
+    <Modal open onClose={salvando ? () => {} : onFechar} title={modelo ? `Ensinar de novo · ${modelo.nome}` : 'Ensinar um formato de CSV'} alturaCheia padding="p-0"
       subtitulo={`${cartao?.nome ? `para o cartão ${cartao.nome} · ` : ''}uma vez só: os próximos arquivos entram sozinhos`}
       acoes={<Passos passo={passo} />} maxWidth="max-w-[min(1120px,95vw)]" altura="h-[86vh]">
       <div className="flex h-full min-h-0 flex-col">

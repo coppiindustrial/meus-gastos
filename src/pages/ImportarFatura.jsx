@@ -10,7 +10,10 @@ import {
   classificarLinhas, faturaExistente, hashDoTexto, importarFatura, listarRegrasParaClassificar,
 } from '../api/faturas.js';
 import { registrarImportacao } from '../api/importacoes.js';
-import { lerFatura, pistaDoArquivo, vencimentoProvavel } from '../lib/lerFatura.js';
+import { lerFaturaComModelos } from '../lib/lerFatura.js';
+import { decodificar } from '../lib/modeloCsv.js';
+import { listarModelos } from '../api/modelos.js';
+import AssistenteModelo from '../components/AssistenteModelo.jsx';
 import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaDe, formatDate, formatDateTime, nomeCompetencia } from '../lib/format.js';
 
@@ -20,6 +23,10 @@ import { competenciaDe, formatDate, formatDateTime, nomeCompetencia } from '../l
 // editáveis. Se já existe fatura do mesmo cartão e vencimento, só entra SUBSTITUINDO a anterior.
 // `inicial` ({ cartaoId, vencimento }): aberto pela célula "falta importar" da tela Importar — vale quando
 // o nome do arquivo não diz outra coisa. Cada importação vai para o histórico (`registrarImportacao`).
+// OS MODELOS (03/11/2026, fase 7.3 do importador configurável): o arquivo é lido pelo primeiro modelo que reconhece o
+// cabeçalho — os que você ensinou, depois Nubank e XP (`lerFaturaComModelos`, testada), e o texto sai dos BYTES
+// (UTF-8 ou o Windows-1252 do Excel). Nenhum reconhece: "Ensinar este formato" abre o `AssistenteModelo` já com o
+// arquivo, e o modelo salvo lê o mesmo arquivo na hora.
 export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial = null }) {
   const toast = useToast();
   const inputRef = useRef(null);
@@ -31,31 +38,32 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
   const [gravando, setGravando] = useState(false);
   const [andamento, setAndamento] = useState('');
   const [erro, setErro] = useState('');
+  const [modelos, setModelos] = useState([]);
+  const [desconhecido, setDesconhecido] = useState(null); // o File que nenhum modelo reconheceu
+  const [ensinando, setEnsinando] = useState(false);
 
   useEffect(() => {
     listarRegrasParaClassificar().then(setRegras).catch((err) => toast.error(err.message));
+    listarModelos().then((m) => setModelos(m ?? [])).catch(() => {});
   }, [toast]);
 
   const ativos = cartoes.filter((c) => c.ativo);
   const cartao = cartoes.find((c) => c.id === cartaoId);
 
-  const escolher = async (arquivo) => {
+  const escolher = async (arquivo, comModelos = modelos) => {
     if (!arquivo) return;
     setErro('');
+    setDesconhecido(null);
     try {
-      const texto = await arquivo.text();
-      const r = lerFatura(texto);
-      const pista = pistaDoArquivo(arquivo.name);
-      // Cartão: pelo nome do arquivo; senão o único cartão com esse formato de importação.
-      const porFormato = ativos.filter((c) => c.formato === (r.formato === 'nubank' ? 'nubank' : 'xp'));
-      const daCelula = inicial && !pista.cartao ? ativos.find((x) => x.id === inicial.cartaoId) : null;
-      const c = ativos.find((x) => x.formato === pista.cartao) ?? daCelula ?? (porFormato.length === 1 ? porFormato[0] : null);
-      setCartaoId(c?.id ?? '');
-      setVencimento(pista.vencimento ?? (daCelula ? inicial.vencimento : null) ?? vencimentoProvavel(r.linhas, c?.dia_vencimento) ?? '');
-      setLido({ arquivo: arquivo.name, texto, ...r, hash: await hashDoTexto(texto) });
+      const texto = decodificar(new Uint8Array(await arquivo.arrayBuffer()));
+      const r = lerFaturaComModelos(texto, arquivo.name, { modelos: comModelos, cartoes, inicial });
+      setCartaoId(r.cartao?.id ?? '');
+      setVencimento(r.vencimento ?? '');
+      setLido({ arquivo: arquivo.name, texto, formato: r.formato, modelo: r.modelo, linhas: r.linhas, ignoradas: r.ignoradas, hash: await hashDoTexto(texto) });
     } catch (err) {
       setLido(null);
       setErro(err.message);
+      if (err.naoReconhecido) setDesconhecido(arquivo);
     } finally {
       if (inputRef.current) inputRef.current.value = '';
     }
@@ -103,20 +111,33 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
         {!lido ? (
           <div>
             <p>
-              Escolha o CSV da fatura <strong>como o banco exporta</strong>: Nubank (<code>date,title,amount</code>) ou XP
-              (<code>Data;Estabelecimento;Portador;Valor;Parcela</code>). Não abra no Excel antes: ele estraga as parcelas.
+              Escolha o CSV da fatura <strong>como o banco exporta</strong>: Nubank (<code>date,title,amount</code>), XP
+              (<code>Data;Estabelecimento;Portador;Valor;Parcela</code>){modelos.length ? ` ou um dos formatos que você ensinou (${modelos.map((m) => m.nome).join(', ')})` : ''}.
+              Não abra no Excel antes: ele estraga as parcelas.
             </p>
             <div className="mt-4">
               <AreaArrastar onArquivos={(fs) => escolher(fs[0])} desabilitada={!regras}
                 titulo={regras ? 'Arraste a fatura aqui ou' : 'Carregando as regras…'}
-                formatos=".csv como o banco exporta — Nubank (date,title,amount) ou XP (Data;Estabelecimento;…)" />
+                formatos=".csv como o banco exporta — Nubank, XP ou um formato ensinado" />
             </div>
-            {erro && <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">{erro}</p>}
+            {erro && (
+              <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700">
+                {erro}
+                {desconhecido && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-gray-700">
+                    <span>É de outro banco?</span>
+                    <button type="button" className="btn-secondary !py-1 !text-[12.5px]" onClick={() => setEnsinando(true)}>Ensinar este formato</button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <>
             <div className="flex items-baseline justify-between gap-2">
-              <span className="truncate font-medium text-gray-800">{lido.arquivo}</span>
+              <span className="min-w-0 truncate font-medium text-gray-800">{lido.arquivo}
+                {lido.modelo && !lido.modelo.pronto && <span className="ml-2 text-xs font-normal text-gray-500">lido pelo modelo {lido.modelo.nome}</span>}
+              </span>
               <button type="button" className="shrink-0 text-xs font-medium text-gray-500 hover:text-gray-800" onClick={() => inputRef.current?.click()}>Trocar arquivo</button>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -164,6 +185,11 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
         )}
       </div>
       <input ref={inputRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => escolher(e.target.files?.[0])} />
+      {ensinando && desconhecido && (
+        <AssistenteModelo arquivoInicial={desconhecido} cartao={cartoes.find((c) => c.id === inicial?.cartaoId) ?? null}
+          onFechar={() => setEnsinando(false)}
+          onSalvo={(m) => { const ms = [...modelos, m]; setModelos(ms); setEnsinando(false); escolher(desconhecido, ms); }} />
+      )}
     </Modal>
   );
 }

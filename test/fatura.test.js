@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lerFatura, pistaDoArquivo, vencimentoProvavel } from '../src/lib/lerFatura.js';
+import { lerFatura, lerFaturaComModelos, pistaDoArquivo, vencimentoProvavel } from '../src/lib/lerFatura.js';
 import { criarClassificador, regraPega } from '../src/lib/classificar.js';
 
 // Dados FICTÍCIOS (o repositório é público): mesmo formato dos arquivos reais.
@@ -42,6 +42,28 @@ test('padrão (XP): BOM, CRLF, data BR, "R$", parcela "1 de 10", portador', () =
 test('formato desconhecido e linha quebrada dão erro claro', () => {
   assert.throws(() => lerFatura('a;b;c\n1;2;3'), /não reconhecido/);
   assert.throws(() => lerFatura('date,title,amount\nontem,Loja,"1,00"'), /Linha 2 ilegível/);
+});
+
+test('lerFaturaComModelos: o modelo (os do usuário antes), o cartão e o vencimento de cada arquivo', () => {
+  const cartoes = [
+    { id: 'nu', nome: 'Nubank', formato: 'nubank', dia_vencimento: 13, ativo: true },
+    { id: 'in', nome: 'Inter', formato: 'modelo', modelo_id: 'mi', dia_vencimento: 15, ativo: true },
+  ];
+  const inter = {
+    id: 'mi', nome: 'Inter · fatura', tipo: 'fatura', cabecalho: 'datalancamento;descricao;valor',
+    config: { separador: ';', linhaCabecalho: 1, ignorarNoFim: 0, colunas: { data: 0, estabelecimento: 1, valor: 2 }, data: 'dd/mm/aaaa', gasto: 'positivo', parcela: 'texto', vencimento: 'dia' },
+  };
+  const CSV_INTER = 'Data Lançamento;Descrição;Valor\n02/10/2026;POSTO;"R$ 210,45"\n05/10/2026;LOJA (Parcela 3 de 10);"R$ 189,90"';
+  // o do usuário: o cartão ligado a ele e o dia de vencimento dele
+  const r = lerFaturaComModelos(CSV_INTER, 'fatura.csv', { modelos: [inter], cartoes });
+  assert.deepEqual([r.modelo.id, r.formato, r.cartao?.id, r.vencimento, r.linhas.length, r.linhas[1].parcela_total], ['mi', 'modelo', 'in', '2026-10-15', 2, 10]);
+  // aberto pela célula de outro mês: o vencimento da célula vale sobre o palpite do dia
+  assert.equal(lerFaturaComModelos(CSV_INTER, 'fatura.csv', { modelos: [inter], cartoes, inicial: { cartaoId: 'in', vencimento: '2026-11-15' } }).vencimento, '2026-11-15');
+  // os prontos continuam como antes (o cartão pelo nome do arquivo)
+  const nu = lerFaturaComModelos(NUBANK, 'Nubank_2026-08-13.csv', { modelos: [inter], cartoes });
+  assert.deepEqual([nu.modelo.id, nu.formato, nu.cartao?.id, nu.vencimento, nu.linhas.length], ['nubank', 'nubank', 'nu', '2026-08-13', 3]);
+  // ninguém reconhece: o erro diz, e marca para a tela oferecer "Ensinar este formato"
+  assert.throws(() => lerFaturaComModelos('a;b;c\n1;2;3', 'x.csv', { modelos: [inter], cartoes }), (e) => e.naoReconhecido === true && /não reconhecido/.test(e.message));
 });
 
 test('pista pelo nome do arquivo', () => {
