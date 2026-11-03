@@ -18,7 +18,7 @@ import BlocoGrupoMes from '../components/graficos/TabelaGrupoMes.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { contarPendencias, listarParcelasFuturas, listarResumoMensal } from '../api/resumo.js';
-import { listarCategorias } from '../api/cadastros.js';
+import { listarCartoes, listarCategorias } from '../api/cadastros.js';
 import { lancarFixo, listarLancamentosDeFixos, listarPulados, listarRecorrencias } from '../api/fixos.js';
 import { comprometidoPorMes } from '../lib/resumo.js';
 import { matrizDoAno, pendentesPorMes } from '../lib/fixos.js';
@@ -183,6 +183,7 @@ export default function VisaoGeral() {
   const [carregando, setCarregando] = useState(false);
   const [categorias, setCategorias] = useState([]);
   const [parcelas, setParcelas] = useState([]);
+  const [cartoes, setCartoes] = useState([]); // os nomes da fatia de cada cartão no "Gastos por origem"
   const [pendencias, setPendencias] = useState(0);
   const [fixos, setFixos] = useState({ recs: [], lancs: [], pulados: [] });
   const [anos, setAnos] = useState([anoAtual]);
@@ -202,10 +203,11 @@ export default function VisaoGeral() {
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
-      const [r, c, p, n, rec, lf, pul] = await Promise.all([
+      const [r, c, p, n, rec, lf, pul, cts] = await Promise.all([
         listarResumoMensal(), listarCategorias(), listarParcelasFuturas(), contarPendencias(), listarRecorrencias(), listarLancamentosDeFixos(), listarPulados(),
+        listarCartoes().catch(() => []),
       ]);
-      setLinhas(r); setCategorias(c); setParcelas(p); setPendencias(n); setFixos({ recs: rec, lancs: lf, pulados: pul ?? [] });
+      setLinhas(r); setCategorias(c); setParcelas(p); setPendencias(n); setFixos({ recs: rec, lancs: lf, pulados: pul ?? [] }); setCartoes(cts);
     } catch (err) { toast.error(err.message); setLinhas((l) => l ?? []); } finally { setCarregando(false); }
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -401,7 +403,13 @@ export default function VisaoGeral() {
             <div className="px-4 pt-4"><Titulo>Gastos por origem</Titulo></div>
             {/* A rosca mede esta caixa e escolhe o arranjo que cabe; só rola num bloco menor que o mínimo. */}
             <div className="min-h-0 flex-1 overflow-auto px-4 pb-3 pt-2">
-              <RoscaOrigem itens={ORIGENS.map(([key, rotulo]) => ({ key, rotulo, valor: r.porOrigem[key], antes: rAnt?.porOrigem[key] }))} marcadas={origens} onClicar={alternarOrigem} />
+              {/* Dentro de "Cartão (faturas)", a fatia de cada cartão (com a migration 010), do maior ao menor. */}
+              <RoscaOrigem itens={ORIGENS.map(([key, rotulo]) => ({
+                key, rotulo, valor: r.porOrigem[key], antes: rAnt?.porOrigem[key],
+                partes: key === 'cartao' ? Object.entries(r.porCartao).filter(([, v]) => v > 0)
+                  .map(([id, v]) => ({ key: id, rotulo: cartoes.find((c) => c.id === id)?.nome ?? 'Outro cartão', valor: v }))
+                  .sort((a, b) => b.valor - a.valor) : undefined,
+              }))} marcadas={origens} onClicar={alternarOrigem} />
             </div>
           </section>
         );

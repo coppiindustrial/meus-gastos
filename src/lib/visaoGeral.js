@@ -25,7 +25,9 @@ export function filtrar(linhas, { tipo = '', origens = [], cats = [] } = {}) {
 export function resumoPeriodo(linhas, comps) {
   const dentro = new Set(comps);
   const mes = Object.fromEntries(comps.map((c) => [c, { competencia: c, entradas: 0, gastos: 0, cartao: 0, fixo: 0, manual: 0, qtd: 0, temDado: false }]));
-  const t = { entradas: 0, gastos: 0, qtd: 0, porOrigem: { cartao: 0, fixo: 0, manual: 0 } };
+  // `porCartao`: a fatia de cada cartão dentro dos gastos de cartão (as linhas trazem `cartao_id` desde a migration 010;
+  // antes dela, fica vazio e a rosca não divide).
+  const t = { entradas: 0, gastos: 0, qtd: 0, porOrigem: { cartao: 0, fixo: 0, manual: 0 }, porCartao: {} };
   linhas.forEach((l) => {
     if (!dentro.has(l.competencia)) return;
     const v = Number(l.total_centavos);
@@ -37,6 +39,7 @@ export function resumoPeriodo(linhas, comps) {
     else {
       m.gastos += v; t.gastos += v;
       if (t.porOrigem[l.origem] !== undefined) { t.porOrigem[l.origem] += v; m[l.origem] += v; }
+      if (l.origem === 'cartao' && l.cartao_id) t.porCartao[l.cartao_id] = (t.porCartao[l.cartao_id] ?? 0) + v;
     }
   });
   const porMes = comps.map((c) => ({ ...mes[c], saldo: mes[c].entradas - mes[c].gastos }));

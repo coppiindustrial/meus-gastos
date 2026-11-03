@@ -290,7 +290,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - Gastos por origem = rosca com UMA COR POR ORIGEM (`--origem-cartao/-fixo/-manual` no index.css — azul, laranja e,
   desde 02/11/2026, CINZA nos avulsos: o violeta se confundia com o "Sobrou" do Saldo do mês ao lado — validadas nos
   dois temas) e o centro que conta a fatia sob o cursor. Ela MEDE a caixa e escolhe o arranjo que cabe (rosca ao
-  lado ou em cima; legenda completa ou de uma linha — `arranjoRosca`): o bloco não rola. Gastos por grupo = barras na cor do grupo + curva dos meses
+  lado ou em cima; legenda completa ou de uma linha — `arranjoRosca`): o bloco não rola. DENTRO DE "CARTÃO (FATURAS)"
+  (03/11/2026, a pedido) a fatia de cada cartão: o arco em tons da cor do cartão e uma linha por cartão na legenda
+  ("65%" = do cartão; o centro dá o % do total) — `partes` do item, de `porCartao` (`resumoPeriodo`), que sai do
+  `cartao_id` da `resumo_mensal` (migration 010; sem ela a leitura cai para a antiga e a rosca não divide). Gastos por grupo = barras na cor do grupo + curva dos meses
   + variação contra o ano anterior (só aparece com dado no mesmo período do ano anterior). As duas são a opção A dos
   mockups; a pílula de variação mora em `components/graficos/Variacao.jsx`. O AMPLIADO do Gastos por grupo
   (29/10/2026, opção A) é o painel do Entradas × gastos (1280px/90vh, tela cheia, CSV): `AmpliadoGrupos.jsx`, nome
@@ -329,9 +332,20 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 
 ## Faturas de cartão (fase 3)
 
+- O IMPORTADOR CONFIGURÁVEL (fase 7 do `PLANO.md`; 7.1 pronta em 03/11/2026): o formato de um CSV é um MODELO
+  (dado, não código) — `lib/modeloCsv.js` (testada): `lerComModelo(texto, config)` devolve o mesmo { linhas,
+  ignoradas } dos leitores de antes; `config` = separador, linha do cabeçalho, linhas do fim a ignorar, o índice de
+  cada coluna (data, estabelecimento, valor, parcela, portador), o formato da data, o sinal do GASTO (o outro sinal
+  fica de fora), a parcela ('nenhuma' | 'coluna' | 'texto': "- Parcela 9/12", "(Parcela 3 de 10)") e o vencimento.
+  `reconhecerModelo` pela ASSINATURA do cabeçalho (minúsculo, sem acento, espaço nem aspas). Nubank e XP são
+  `MODELOS_PRONTOS` (no código); os do usuário, a tabela `modelos_importacao` (migration 011, que também abre o
+  formato 'modelo' + `modelo_id` do cartão; `api/modelos.js`, `listarModelos` devolve null sem a tabela). Para o
+  assistente (7.2): `detectarFormato` e `sugerirColunas` (pelo nome do cabeçalho e pelo conteúdo) e `decodificar`
+  (UTF-8, ou Windows-1252 quando o UTF-8 não lê limpo).
 - `lib/lerFatura.js`: reconhece o formato pelo CABEÇALHO — Nubank original (`date,title,amount`, parcela no fim do
   título: "Loja - Parcela 9/12") e o da XP (`Data;Estabelecimento;Portador;Valor;Parcela`, também o das faturas do
-  Nubank que o usuário converteu). Valor negativo (pagamento, estorno) fica de fora, como na planilha.
+  Nubank que o usuário converteu). Valor negativo (pagamento, estorno) fica de fora, como na planilha. Desde 03/11/2026
+  lê pelos `MODELOS_PRONTOS` de `lib/modeloCsv.js` (a mesma leitura dos modelos do usuário); a API dele não mudou.
 - Cartão e vencimento pelo nome do arquivo (`Nubank_AAAA-MM-DD…`, `FaturaAAAA-MM-DD…`); sem pista, o vencimento é o
   próximo dia de vencimento do cartão depois da última compra. Competência = mês do vencimento.
 - `lib/classificar.js` reproduz o `PROCURAR` do Excel da planilha: primeira regra por prioridade, substring sem

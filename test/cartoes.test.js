@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { diasAte, diferencaCartao, proximoVencimento, resumoDosCartoes, validarCartoes } from '../src/lib/cartoes.js';
+import {
+  diasAte, diferencaCartao, formatoDoValor, opcoesFormato, proximoVencimento, resumoDosCartoes, rotuloFormato, validarCartoes, valorDoFormato,
+} from '../src/lib/cartoes.js';
 
 // Dados FICTÍCIOS.
 const cartoes = [{ id: 'nu', nome: 'Nubank', dia_vencimento: 13, formato: 'nubank', ativo: true }, { id: 'in', nome: 'Inter', dia_vencimento: 5, formato: 'manual', ativo: false }];
@@ -53,6 +55,21 @@ test('grafico (opção D): as faturas até a mais recente e depois as parcelas q
   // sem parcelas: as 12 de sempre, até o mês de hoje
   const g3 = resumoDosCartoes({ cartoes, faturas, parcelas: [], hoje: '2026-11-03' }).nu.grafico;
   assert.deepEqual([g3.length, g3[11].comp, g3.every((x) => x.tipo === 'fatura')], [12, '2026-11', true]);
+});
+
+test('formato pelo MODELO (migration 011): as opções, a ida e volta, e a diferença que o cadastro grava', () => {
+  const modelos = [{ id: 'm1', nome: 'Inter · fatura', tipo: 'fatura' }, { id: 'm2', nome: 'Inter · extrato', tipo: 'extrato' }];
+  assert.deepEqual(opcoesFormato(modelos).map((o) => o.value), ['nubank', 'xp', 'modelo:m1', 'manual']); // o de extrato não serve a cartão
+  assert.equal(rotuloFormato('modelo', modelos[0]), 'Importa pelo modelo Inter · fatura');
+  assert.deepEqual(formatoDoValor('modelo:m1'), { formato: 'modelo', modelo_id: 'm1' });
+  assert.deepEqual(formatoDoValor('xp'), { formato: 'xp', modelo_id: null });
+  assert.equal(valorDoFormato({ formato: 'modelo', modelo_id: 'm1' }), 'modelo:m1');
+  assert.equal(valorDoFormato({ formato: 'modelo', modelo_id: null }), 'manual'); // o modelo foi excluído
+  const orig = { ...cartoes[0], modelo_id: null };
+  assert.deepEqual(diferencaCartao({ ...orig, orig, formato: 'modelo', modelo_id: 'm1' }), { formato: 'modelo', modelo_id: 'm1' });
+  // num formato pronto, um modelo antigo no banco não conta como alteração
+  const antigo = { ...cartoes[0], modelo_id: 'm1' };
+  assert.deepEqual(diferencaCartao({ ...antigo, orig: antigo, modelo_id: null }), {});
 });
 
 test('diferencaCartao e validarCartoes', () => {

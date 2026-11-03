@@ -18,7 +18,8 @@ import { contarUsoCartao, criarCartoesSugeridos, listarCartoes, salvarCartao } f
 import { listarFaturas } from '../api/faturas.js';
 import { listarParcelasFuturas } from '../api/resumo.js';
 import { CARTOES_SUGERIDOS } from '../lib/sugestoes.js';
-import { FORMATOS, resumoDosCartoes, rotuloFormato } from '../lib/cartoes.js';
+import { formatoDoValor, opcoesFormato, resumoDosCartoes, rotuloFormato, valorDoFormato } from '../lib/cartoes.js';
+import { listarModelos } from '../api/modelos.js';
 import { formatBRL, numeroK } from '../lib/dinheiro.js';
 import { competenciaCurta, formatDate, nomeCompetencia, todayISO } from '../lib/format.js';
 import { lsSet } from '../lib/storage.js';
@@ -44,7 +45,8 @@ const IcoCartao = ({ className }) => (
   </svg>
 );
 
-function ModalCartao({ cartao, onFechar, onSalvo }) {
+// `modelos`: os modelos de importação do usuário (migration 011) — entram no "Como a fatura entra".
+function ModalCartao({ cartao, modelos, onFechar, onSalvo }) {
   const toast = useToast();
   const [form, setForm] = useState(() => cartao ?? { nome: '', dia_vencimento: 10, formato: 'manual', ativo: true });
   const [erros, setErros] = useState({});
@@ -78,7 +80,7 @@ function ModalCartao({ cartao, onFechar, onSalvo }) {
             onChange={(e) => setForm({ ...form, dia_vencimento: e.target.value.replace(/\D/g, '').slice(0, 2) })} />
         </Campo>
         <Campo rotulo="Como a fatura entra">
-          <SelectSimples value={form.formato} onChange={(formato) => setForm({ ...form, formato })} opcoes={FORMATOS} />
+          <SelectSimples value={valorDoFormato(form)} onChange={(v) => setForm({ ...form, ...formatoDoValor(v) })} opcoes={opcoesFormato(modelos)} />
         </Campo>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
           <Toggle compacto checked={form.ativo} onChange={(ativo) => setForm({ ...form, ativo })} rotulo="Ativo" /> Ativo (aparece na hora de lançar e de importar)
@@ -104,7 +106,7 @@ const IcoAmpliar = (p) => (
   </svg>
 );
 
-function BlocoCartao({ cartao: c, r, uso, onEditar, onImportar, onVer, onVerMes, onHistorico }) {
+function BlocoCartao({ cartao: c, r, uso, modelo, onEditar, onImportar, onVer, onVerMes, onHistorico }) {
   // O GRÁFICO É A OPÇÃO D (03/11/2026): cada coluna com o número curto ("13,4k") e o mês embaixo; depois da linha
   // tracejada, as parcelas já compradas que vêm, hachuradas (`r.grafico`, de `lib/cartoes.js`).
   const maior = Math.max(1, ...r.grafico.map((s) => s.total));
@@ -144,7 +146,7 @@ function BlocoCartao({ cartao: c, r, uso, onEditar, onImportar, onVer, onVerMes,
             <span className="truncate text-[15px] font-semibold text-gray-900">{c.nome}</span>
             {!c.ativo && <Etiqueta>Inativo</Etiqueta>}
           </span>
-          <span className="block truncate text-[11.5px] text-gray-500">vence dia {c.dia_vencimento} · {minuscula(rotuloFormato(c.formato))}</span>
+          <span className="block truncate text-[11.5px] text-gray-500">vence dia {c.dia_vencimento} · {minuscula(rotuloFormato(c.formato, modelo))}</span>
         </button>
         <span className="flex shrink-0 gap-1">
           {r.proxima && c.formato !== 'manual' && (
@@ -260,16 +262,17 @@ export default function Cartoes() {
 
   const carregar = useCallback(async () => {
     try {
-      const [cartoes, faturas, parcelas] = await Promise.all([listarCartoes(), listarFaturas(), listarParcelasFuturas()]);
-      setDados({ cartoes, faturas, parcelas });
+      const [cartoes, faturas, parcelas, modelos] = await Promise.all([listarCartoes(), listarFaturas(), listarParcelasFuturas(), listarModelos().catch(() => null)]);
+      setDados({ cartoes, faturas, parcelas, modelos: modelos ?? [] });
       const inativos = cartoes.filter((c) => !c.ativo);
       Promise.all(inativos.map((c) => contarUsoCartao(c.id).then((n) => [c.id, n]))).then((ps) => setUso((u) => ({ ...u, ...Object.fromEntries(ps) }))).catch(() => {});
-    } catch (err) { toast.error(err.message); setDados({ cartoes: [], faturas: [], parcelas: [] }); }
+    } catch (err) { toast.error(err.message); setDados({ cartoes: [], faturas: [], parcelas: [], modelos: [] }); }
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
 
   const cartoes = dados?.cartoes ?? null;
   const resumo = useMemo(() => (dados ? resumoDosCartoes({ ...dados, hoje }) : {}), [dados, hoje]);
+  const modeloDe = (c) => (c.formato === 'modelo' ? dados?.modelos.find((m) => m.id === c.modelo_id) ?? null : null);
   const ordenados = useMemo(() => (cartoes ? [...cartoes].sort((a, b) => Number(b.ativo) - Number(a.ativo) || a.nome.localeCompare(b.nome, 'pt-BR')) : []), [cartoes]);
 
   const abrirCadastro = async () => {
@@ -287,7 +290,7 @@ export default function Cartoes() {
   const exportar = () => exportCsv('cartoes', ordenados, [
     { key: 'nome', label: 'Cartão' },
     { key: 'dia_vencimento', label: 'Vence dia' },
-    { key: 'formato', label: 'Como a fatura entra', map: (c) => rotuloFormato(c.formato) },
+    { key: 'formato', label: 'Como a fatura entra', map: (c) => rotuloFormato(c.formato, modeloDe(c)) },
     { key: 'ativo', label: 'Ativo', map: (c) => (c.ativo ? 'sim' : 'não') },
     { key: 'ultima', label: 'Última fatura', tipo: 'dinheiro', map: (c) => (resumo[c.id]?.ultima ? resumo[c.id].ultima.total / 100 : null) },
     { key: 'parcelas', label: 'Parcelas que vêm', tipo: 'dinheiro', map: (c) => (resumo[c.id]?.parcelas ? resumo[c.id].parcelas.total / 100 : null) },
@@ -343,7 +346,7 @@ export default function Cartoes() {
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {ordenados.map((c) => (
-            <BlocoCartao key={c.id} cartao={c} r={resumo[c.id]} uso={uso[c.id]}
+            <BlocoCartao key={c.id} cartao={c} r={resumo[c.id]} uso={uso[c.id]} modelo={modeloDe(c)}
               onEditar={() => setModal({ item: c })}
               onImportar={() => setImportar({ cartaoId: c.id, vencimento: resumo[c.id].proxima.vencimento })}
               onVer={() => verLancamentos(resumo[c.id].ultima.competencia)} onVerMes={verLancamentos} onHistorico={() => setHistorico(c.id)} />
@@ -355,8 +358,8 @@ export default function Cartoes() {
         <AmpliadoCartao cartoes={dados.cartoes} cartaoId={historico} faturas={dados.faturas} parcelas={dados.parcelas} hoje={hoje}
           onClose={() => setHistorico(null)} onVerMes={verLancamentos} />
       )}
-      {modal && <ModalCartao cartao={modal.item} onFechar={() => setModal(null)} onSalvo={() => { setModal(null); carregar(); }} />}
-      {cadastro && <ModalCadastroCartoes cartoes={ordenados} uso={uso} onFechar={() => setCadastro(false)} onSalvo={() => { setCadastro(false); carregar(); }} />}
+      {modal && <ModalCartao cartao={modal.item} modelos={dados?.modelos} onFechar={() => setModal(null)} onSalvo={() => { setModal(null); carregar(); }} />}
+      {cadastro && <ModalCadastroCartoes cartoes={ordenados} modelos={dados?.modelos} uso={uso} onFechar={() => setCadastro(false)} onSalvo={() => { setCadastro(false); carregar(); }} />}
       {importar && <ImportarFatura cartoes={cartoes} inicial={importar} onFechar={() => setImportar(null)} onImportada={() => { setImportar(null); carregar(); }} />}
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
     </div>

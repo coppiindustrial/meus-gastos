@@ -91,8 +91,11 @@ export function listarCartoes() {
   return exigir(supabase.from('cartoes').select('*').order('ativo', { ascending: false }).order('nome'));
 }
 
-export function salvarCartao({ id, nome, dia_vencimento, formato, ativo }) {
+// `modelo_id` (migration 011): o modelo de importação do cartão com formato 'modelo'. Só vai nesse formato — antes da
+// migration a coluna não existe. Num formato pronto um `modelo_id` antigo pode ficar no banco: quem decide é o formato.
+export function salvarCartao({ id, nome, dia_vencimento, formato, ativo, modelo_id }) {
   const dados = { nome: nome.trim(), dia_vencimento: Number(dia_vencimento), formato, ativo };
+  if (formato === 'modelo') dados.modelo_id = modelo_id;
   return exigir(id
     ? supabase.from('cartoes').update(dados).eq('id', id).select().single()
     : supabase.from('cartoes').insert(dados).select().single());

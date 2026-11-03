@@ -5,7 +5,7 @@ import Toggle from './Toggle.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { excluirCartao, salvarCartao } from '../api/cadastros.js';
-import { diferencaCartao, FORMATOS, validarCartoes } from '../lib/cartoes.js';
+import { diferencaCartao, formatoDoValor, opcoesFormato, validarCartoes, valorDoFormato } from '../lib/cartoes.js';
 
 // O CADASTRO DOS CARTÕES EM POP-UP (30/10/2026, opção A do mockup "Cartões · overhaul"): a tabela de formulário do
 // cadastro dos fixos e do das categorias — cada célula é um campo, "+ cartão" acrescenta, a lixeira marca para sair,
@@ -14,9 +14,10 @@ import { diferencaCartao, FORMATOS, validarCartoes } from '../lib/cartoes.js';
 
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 let seq = 0;
-const daLinha = (c) => ({ id: c.id, novo: false, excluir: false, orig: c, nome: c.nome, dia_vencimento: String(c.dia_vencimento), formato: c.formato, ativo: c.ativo });
+const daLinha = (c) => ({ id: c.id, novo: false, excluir: false, orig: c, nome: c.nome, dia_vencimento: String(c.dia_vencimento), formato: c.formato, modelo_id: c.modelo_id ?? null, ativo: c.ativo });
 
-export default function ModalCadastroCartoes({ cartoes, uso = {}, onFechar, onSalvo }) {
+// `modelos`: os modelos de importação do usuário (migration 011), opções do "Como a fatura entra".
+export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   const [linhas, setLinhas] = useState(() => cartoes.map(daLinha));
@@ -49,7 +50,7 @@ export default function ModalCadastroCartoes({ cartoes, uso = {}, onFechar, onSa
     try {
       for (const l of sai) await excluirCartao(l.id);
       for (const l of mudadas.filter((x) => !x.excluir)) {
-        await salvarCartao({ ...(l.novo ? {} : { id: l.id }), nome: l.nome, dia_vencimento: l.dia_vencimento, formato: l.formato, ativo: l.ativo });
+        await salvarCartao({ ...(l.novo ? {} : { id: l.id }), nome: l.nome, dia_vencimento: l.dia_vencimento, formato: l.formato, modelo_id: l.modelo_id, ativo: l.ativo });
       }
       toast.success(nAlt === 1 ? 'Alteração salva.' : `${nAlt} alterações salvas.`);
     } catch (err) {
@@ -90,7 +91,7 @@ export default function ModalCadastroCartoes({ cartoes, uso = {}, onFechar, onSa
                     <input className={`input !h-8 text-right text-[12.5px] tabular-nums ${borda(l.id, 'dia')}`} inputMode="numeric" disabled={l.excluir}
                       value={l.dia_vencimento} onChange={(e) => muda(l.id, 'dia_vencimento', e.target.value.replace(/\D/g, '').slice(0, 2))} />
                   </td>
-                  <td className={td}><SelectSimples value={l.formato} onChange={(v) => muda(l.id, 'formato', v)} opcoes={FORMATOS} disabled={l.excluir} compacto /></td>
+                  <td className={td}><SelectSimples value={valorDoFormato(l)} onChange={(v) => { const f = formatoDoValor(v); muda(l.id, 'formato', f.formato); muda(l.id, 'modelo_id', f.modelo_id); }} opcoes={opcoesFormato(modelos)} disabled={l.excluir} compacto /></td>
                   <td className={td}><Toggle compacto checked={l.ativo} disabled={l.excluir} onChange={(v) => muda(l.id, 'ativo', v)} rotulo={`${l.nome || 'Cartão'} ativo`} /></td>
                   <td className={`${td} text-right tabular-nums text-gray-500`}>{l.novo ? '—' : n || <span className="text-gray-300">0</span>}</td>
                   <td className={`${td} text-right`}>

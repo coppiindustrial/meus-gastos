@@ -46,6 +46,20 @@ test('resumoPeriodo: totais, por origem, média pelos meses com dado e mês mais
   assert.equal(r.porMes[0].saldo, 950000);
   // cada mês também abre o gasto por origem (as colunas da ampliação)
   assert.deepEqual([r.porMes[1].cartao, r.porMes[1].fixo, r.porMes[1].manual], [40000, 0, 5000]);
+  // sem o `cartao_id` (antes da migration 010), a fatia por cartão fica vazia
+  assert.deepEqual(r.porCartao, {});
+});
+
+test('resumoPeriodo: a fatia de cada cartão dentro do "Cartão (faturas)" (migration 010)', () => {
+  const comCartao = [
+    { ...L('2026-07', 'saida', 'cartao', 'merc', 30000), cartao_id: 'xp' },
+    { ...L('2026-07', 'saida', 'cartao', 'merc', 12000), cartao_id: 'nu' },
+    { ...L('2026-08', 'saida', 'cartao', 'merc', 8000), cartao_id: 'xp' },
+    { ...L('2026-08', 'saida', 'fixo', 'luz', 20000), cartao_id: null },
+  ];
+  const r = resumoPeriodo(comCartao, periodo([2026], [7, 8]));
+  assert.deepEqual(r.porCartao, { xp: 38000, nu: 12000 });
+  assert.equal(r.porOrigem.cartao, 50000);
 });
 
 test('compsDoHistorico: do primeiro ao último mês com dado, sem buracos', () => {

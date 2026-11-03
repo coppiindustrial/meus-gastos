@@ -20,6 +20,12 @@
 > **Extrato da conta (2026-10-27)**: CSV do extrato do Nubank; entradas continuam à mão; fatura, investimentos e
 > transferências entre contas próprias (regra de ignorar) ficam de fora; pagamento de fixo vira o fixo do mês com o
 > valor real; o resto entra como avulso (sem regra → Revisar pendências). Migration 005.
+> **Fase 7 · importador configurável (aprovado em 2026-11-03, mockup "Importador configurável de CSV")**: ensinar o
+> formato do CSV de um banco novo sem programar. **Fase 7.1 pronta (2026-11-03)**: o MODELO de importação como dado
+> (tabela `modelos_importacao` e o formato 'modelo' do cartão, migration 011), a leitura pelo modelo
+> (`lib/modeloCsv.js`, testada; Nubank e XP viraram modelos prontos e o `lerFatura` lê por eles) e o que o assistente
+> vai sugerir (separador, cabeçalho, colunas, data, sinal, parcela). Falta 7.2 (o assistente) e 7.3 (os importadores
+> reconhecerem os modelos pelo cabeçalho + a lista de modelos em Cadastros); depois, modelos de extrato.
 > No ar em https://coppiindustrial.github.io/meus-gastos/ (repo `coppiindustrial/meus-gastos`, Supabase `abofajutoxukbvrfisem`).
 > Substitui a planilha `OneDrive\CONTAS\Gastos\Gastos total.xlsx`.
 
@@ -146,6 +152,7 @@ Nomes, comentários e UI em português, como no Gestor.
 | **4. Resumo do mês** | Dashboard completo, parcelas futuras, evolução mensal, exportar CSV | Substitui o Dashboard da planilha |
 | **5. Gastos fixos** | Recorrências + sugestão mensal | Fixos do mês lançados com 1 clique cada |
 | **6. Patrimônio** | Contas, saldos, gráfico de evolução | Você vê seu patrimônio mês a mês |
+| **7. Importador configurável** | 7.1 modelo de importação + leitura pelo modelo (feito) · 7.2 assistente (arquivo → colunas → conferir e salvar) · 7.3 importadores reconhecem os modelos; modelos em Cadastros · depois, modelos de extrato | Um cartão de banco novo entra sem programar: ensina o formato uma vez e os próximos CSVs entram sozinhos |
 | **Futuro** | Importar extrato da conta corrente (OFX/CSV) | — |
 
 **Dependência:** a fase 3 precisa de **um CSV original, sem converter, de cada banco** (Nubank e XP).

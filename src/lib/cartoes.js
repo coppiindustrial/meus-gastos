@@ -10,7 +10,20 @@ export const FORMATOS = [
   { value: 'xp', label: 'Importa o CSV da XP' },
   { value: 'manual', label: 'Lançamento manual' },
 ];
-export const rotuloFormato = (f) => FORMATOS.find((x) => x.value === f)?.label ?? f;
+export const rotuloFormato = (f, modelo = null) => (f === 'modelo' ? `Importa pelo modelo ${modelo?.nome ?? '(excluído)'}` : FORMATOS.find((x) => x.value === f)?.label ?? f);
+
+// OS MODELOS DO USUÁRIO no "Como a fatura entra" (migration 011): cada um vira a opção 'modelo:<id>', entre os prontos
+// e o manual. `valorDoFormato`/`formatoDoValor` vão e voltam entre o cartão ({ formato, modelo_id }) e a opção.
+export function opcoesFormato(modelos = []) {
+  const deFatura = (modelos ?? []).filter((m) => m.tipo === 'fatura' && !m.pronto);
+  return [
+    ...FORMATOS.filter((f) => f.value !== 'manual'),
+    ...deFatura.map((m) => ({ value: `modelo:${m.id}`, label: `Importa pelo modelo ${m.nome}` })),
+    FORMATOS.find((f) => f.value === 'manual'),
+  ];
+}
+export const valorDoFormato = (c) => (c.formato === 'modelo' && c.modelo_id ? `modelo:${c.modelo_id}` : c.formato === 'modelo' ? 'manual' : c.formato);
+export const formatoDoValor = (v) => (String(v).startsWith('modelo:') ? { formato: 'modelo', modelo_id: v.slice(7) } : { formato: v, modelo_id: null });
 
 const dia = (iso) => { const [y, m, d] = iso.slice(0, 10).split('-').map(Number); return Date.UTC(y, m - 1, d) / 86400000; };
 export const diasAte = (de, ate) => Math.round(dia(ate) - dia(de));
@@ -90,11 +103,13 @@ function graficoDoCartao(fs, ps, compHoje) {
 }
 
 // O CADASTRO EM POP-UP (como o dos fixos e o das categorias): só o que mudou em cada cartão.
-const CAMPOS = ['nome', 'dia_vencimento', 'formato', 'ativo'];
+const CAMPOS = ['nome', 'dia_vencimento', 'formato', 'ativo', 'modelo_id'];
 export function diferencaCartao(l) {
-  const campos = { nome: l.nome.trim(), dia_vencimento: Number(l.dia_vencimento), formato: l.formato, ativo: l.ativo };
+  const campos = { nome: l.nome.trim(), dia_vencimento: Number(l.dia_vencimento), formato: l.formato, ativo: l.ativo, modelo_id: l.formato === 'modelo' ? l.modelo_id ?? null : null };
   if (l.novo) return campos;
-  return Object.fromEntries(CAMPOS.filter((k) => campos[k] !== l.orig[k]).map((k) => [k, campos[k]]));
+  // o modelo só conta no formato 'modelo' (num formato pronto, um `modelo_id` antigo no banco não importa)
+  const conta = (k) => k !== 'modelo_id' || l.formato === 'modelo';
+  return Object.fromEntries(CAMPOS.filter((k) => conta(k) && campos[k] !== (l.orig[k] ?? (k === 'modelo_id' ? null : undefined))).map((k) => [k, campos[k]]));
 }
 
 // O primeiro problema que impede salvar, ou null.

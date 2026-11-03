@@ -453,18 +453,28 @@ function useCaixaDoPai(ref) {
   return t;
 }
 
+// AS FATIAS DE DENTRO (03/11/2026, a pedido): um item pode trazer `partes` ([{ key, rotulo, valor }] — os cartões
+// dentro de "Cartão (faturas)"). O arco dele se divide em TONS da mesma cor (um por parte, do maior ao menor) e a
+// legenda completa ganha uma linha por parte, com o valor e quanto ela é DO ITEM ("65% do cartão"); o cursor numa
+// parte faz o centro contá-la (o % ali é do total, como o das origens).
+const TONS_PARTE = [1, 0.62, 0.4, 0.26];
+const ALT_PARTE = 21; // a linha de uma parte na legenda completa (para o arranjo)
 export function RoscaOrigem({ itens, marcadas = [], onClicar }) {
   const [ativo, setAtivo] = useState(null);
+  const [parteAtiva, setParteAtiva] = useState(null);
   const raizRef = useRef(null);
   const caixa = useCaixaDoPai(raizRef);
-  const { lado, D, compacta } = arranjoRosca(caixa.w, caixa.h, itens.length);
+  const nPartes = itens.reduce((s, it) => s + (it.partes?.length ?? 0), 0);
+  const { lado, D, compacta } = arranjoRosca(caixa.w, caixa.h, itens.length + (nPartes * ALT_PARTE) / LEG.completa.alt);
   const total = itens.reduce((s, it) => s + it.valor, 0);
   const R = 66;
   const C = 2 * Math.PI * R;
   const comValor = itens.filter((x) => x.valor > 0).length;
   const pctDe = (v) => (total ? Math.round((v / total) * 100) : 0);
-  const sel = itens.find((it) => it.key === ativo);
+  const parte = parteAtiva && itens.flatMap((it) => (it.partes ?? []).map((p, i) => ({ ...p, item: it, i }))).find((p) => p.key === parteAtiva);
+  const sel = parte ? { rotulo: parte.rotulo, valor: parte.valor } : itens.find((it) => it.key === ativo);
   const apagado = (k) => (ativo !== null && ativo !== k) || (ativo === null && marcadas.length > 0 && !marcadas.includes(k));
+  const entrar = (k, p = null) => { setAtivo(k); setParteAtiva(p); };
   // Rosca pequena: o texto do centro cresce no desenho (viewBox) para continuar legível na tela.
   const esc = Math.max(1, (ROSCA_MAX / D) * 0.8);
   const y = (d) => 88 + d * esc;
@@ -473,20 +483,29 @@ export function RoscaOrigem({ itens, marcadas = [], onClicar }) {
   let acumulado = 0;
   return (
     <div ref={raizRef} className={`flex min-h-full items-center ${lado ? 'flex-row' : 'flex-col justify-center'}`} style={{ gap: lado ? VAO_LADO : VAO_CIMA }}
-      onMouseLeave={() => setAtivo(null)}>
+      onMouseLeave={() => entrar(null)}>
       <svg width={D} height={D} viewBox="0 0 176 176" className="shrink-0 overflow-visible" role="img" aria-label="Gastos por origem">
         {total > 0 && itens.map((it) => {
           const frac = it.valor / total;
-          const len = Math.max(0, frac * C - (comValor > 1 ? 3 : 0));
-          const desloc = -acumulado * C;
+          const inicio = acumulado;
           acumulado += frac;
           if (!it.valor) return null;
-          return (
-            <circle key={it.key} r={R} cx="88" cy="88" fill="none" stroke={corOrigem(it.key)} strokeWidth={ativo === it.key ? 27 : 21}
-              strokeDasharray={`${len} ${C - len}`} strokeDashoffset={desloc} transform="rotate(-90 88 88)"
-              className="cursor-pointer transition-[opacity,stroke-width] duration-200 ease-out" style={{ opacity: apagado(it.key) ? 0.3 : 1 }}
-              onMouseEnter={() => setAtivo(it.key)} onClick={() => onClicar?.(it.key)} />
-          );
+          const fim = (comValor > 1 ? 3 : 0);
+          // com partes, o arco do item vira um arco por parte (o mesmo tom de cor, cada vez mais claro)
+          const pedacos = it.partes?.length > 1
+            ? (() => { let a = inicio; return it.partes.map((p, i) => { const f = p.valor / total; const s = { key: p.key, ini: a, frac: f, tom: TONS_PARTE[Math.min(i, TONS_PARTE.length - 1)], ultimo: i === it.partes.length - 1 }; a += f; return s; }); })()
+            : [{ key: null, ini: inicio, frac, tom: 1, ultimo: true }];
+          return pedacos.map((s) => {
+            const len = Math.max(0, s.frac * C - (s.ultimo ? fim : 1.5));
+            const forte = ativo === it.key && (!parteAtiva || parteAtiva === s.key || !s.key);
+            return (
+              <circle key={`${it.key}:${s.key ?? ''}`} r={R} cx="88" cy="88" fill="none" stroke={corOrigem(it.key)} strokeWidth={forte ? 27 : 21}
+                strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-s.ini * C} transform="rotate(-90 88 88)"
+                className="cursor-pointer transition-[opacity,stroke-width] duration-200 ease-out"
+                style={{ opacity: (apagado(it.key) || (parteAtiva && s.key && parteAtiva !== s.key) ? 0.3 : 1) * s.tom }}
+                onMouseEnter={() => entrar(it.key, s.key)} onClick={() => onClicar?.(it.key)} />
+            );
+          });
         })}
         {total === 0 && <circle r={R} cx="88" cy="88" fill="none" stroke={varCor('#f3f4f6', 'fundo')} strokeWidth="21" />}
         {/* O CENTRO CONTA a fatia sob o cursor; sem cursor, o total. */}
@@ -507,7 +526,7 @@ export function RoscaOrigem({ itens, marcadas = [], onClicar }) {
           if (compacta) {
             return (
               <li key={it.key}>
-                <button type="button" onClick={() => onClicar?.(it.key)} onMouseEnter={() => setAtivo(it.key)} onFocus={() => setAtivo(it.key)}
+                <button type="button" onClick={() => onClicar?.(it.key)} onMouseEnter={() => entrar(it.key)} onFocus={() => entrar(it.key)}
                   title={`${it.rotulo}: ${formatBRL(it.valor)} · clique para filtrar a tela por esta origem`}
                   className={`flex h-[26px] w-full items-center gap-2 rounded-[6px] px-2 text-left transition-[background-color,opacity] duration-150 ${
                     ativo === it.key ? 'bg-gray-100' : 'hover:bg-gray-50'} ${apagado(it.key) ? 'opacity-50' : ''} ${marcadas.includes(it.key) ? 'ring-1 ring-inset ring-gray-300' : ''}`}>
@@ -521,7 +540,7 @@ export function RoscaOrigem({ itens, marcadas = [], onClicar }) {
           }
           return (
             <li key={it.key}>
-              <button type="button" onClick={() => onClicar?.(it.key)} onMouseEnter={() => setAtivo(it.key)} onFocus={() => setAtivo(it.key)}
+              <button type="button" onClick={() => onClicar?.(it.key)} onMouseEnter={() => entrar(it.key)} onFocus={() => entrar(it.key)}
                 title="Clique para filtrar a tela por esta origem"
                 className={`grid w-full grid-cols-[4px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-[8px] px-2.5 py-[7px] text-left transition-[background-color,opacity] duration-150 ${
                   ativo === it.key ? 'bg-gray-100' : 'hover:bg-gray-50'} ${apagado(it.key) ? 'opacity-50' : ''} ${marcadas.includes(it.key) ? 'ring-1 ring-inset ring-gray-300' : ''}`}>
@@ -535,6 +554,23 @@ export function RoscaOrigem({ itens, marcadas = [], onClicar }) {
                   <Variacao v={v} sobeBom={false} titulo="Contra o mesmo período do ano anterior" />
                 </span>
               </button>
+              {it.partes?.length > 1 && (
+                <ul className="mb-0.5 ml-[18px] mt-px">
+                  {it.partes.map((p, i) => (
+                    <li key={p.key}>
+                      <button type="button" onClick={() => onClicar?.(it.key)} onMouseEnter={() => entrar(it.key, p.key)} onFocus={() => entrar(it.key, p.key)}
+                        title={`${p.rotulo}: ${formatBRL(p.valor)} · ${pctDe(p.valor)}% de todos os gastos`}
+                        className={`grid h-[21px] w-full grid-cols-[8px_minmax(0,1fr)_auto_38px] items-center gap-2 rounded-[6px] px-2 text-left text-[11.5px] transition-[background-color,opacity] duration-150 ${
+                          parteAtiva === p.key ? 'bg-gray-100' : 'hover:bg-gray-50'} ${apagado(it.key) || (parteAtiva && parteAtiva !== p.key) ? 'opacity-50' : ''}`}>
+                        <span className="h-2 w-2 rounded-[2px]" style={{ background: corOrigem(it.key), opacity: TONS_PARTE[Math.min(i, TONS_PARTE.length - 1)] }} />
+                        <span className="truncate text-gray-700">{p.rotulo}</span>
+                        <span className="tabular-nums text-gray-500">{larguraLegenda >= 250 ? formatBRL(p.valor) : brlCurto(p.valor)}</span>
+                        <span className="text-right tabular-nums text-gray-600" title="a parte dele nos gastos de cartão">{it.valor ? Math.round((p.valor / it.valor) * 100) : 0}%</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           );
         })}
