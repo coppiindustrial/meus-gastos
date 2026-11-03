@@ -29,7 +29,11 @@
 > novo…" do cartão (formulário e cadastro); o modelo salvo já fica no cartão. **Fase 7.3 pronta (2026-11-03)**: o
 > importador de fatura e o "Importar arquivos" leem pelos modelos (os ensinados antes dos prontos —
 > `lerFaturaComModelos`), o arquivo desconhecido oferece "Ensinar este formato" (o assistente já com ele) e a tela
-> Cadastros › Modelos de importação lista, renomeia, ensina de novo e exclui. Falta: modelos de EXTRATO de outra conta.
+> Cadastros › Modelos de importação lista, renomeia, ensina de novo e exclui. O caminho inteiro de um banco novo (assistente
+> → modelo salvo → a fatura do mês seguinte) está em `test/importadorModelo.test.js` e foi conferido no preview com as
+> gravações interceptadas; ele achou e corrigiu o modelo SEM "reconhecer pelo cabeçalho", que nunca era usado (agora: o
+> do cartão da célula ou "Ler com o modelo…"). A primeira fatura por um modelo num cartão de lançamento manual liga o
+> cartão a ele (o "Importar arquivos" passa a achar o cartão). Falta: modelos de EXTRATO de outra conta.
 > No ar em https://coppiindustrial.github.io/meus-gastos/ (repo `coppiindustrial/meus-gastos`, Supabase `abofajutoxukbvrfisem`).
 > Substitui a planilha `OneDrive\CONTAS\Gastos\Gastos total.xlsx`.
 

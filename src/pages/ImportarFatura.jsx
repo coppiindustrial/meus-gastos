@@ -12,7 +12,8 @@ import {
 import { registrarImportacao } from '../api/importacoes.js';
 import { lerFaturaComModelos } from '../lib/lerFatura.js';
 import { decodificar } from '../lib/modeloCsv.js';
-import { listarModelos } from '../api/modelos.js';
+import { ligarCartaoAoModelo, listarModelos } from '../api/modelos.js';
+import { modeloParaLigar } from '../lib/cartoes.js';
 import AssistenteModelo from '../components/AssistenteModelo.jsx';
 import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaDe, formatDate, formatDateTime, nomeCompetencia } from '../lib/format.js';
@@ -26,7 +27,10 @@ import { competenciaDe, formatDate, formatDateTime, nomeCompetencia } from '../l
 // OS MODELOS (03/11/2026, fase 7.3 do importador configurável): o arquivo é lido pelo primeiro modelo que reconhece o
 // cabeçalho — os que você ensinou, depois Nubank e XP (`lerFaturaComModelos`, testada), e o texto sai dos BYTES
 // (UTF-8 ou o Windows-1252 do Excel). Nenhum reconhece: "Ensinar este formato" abre o `AssistenteModelo` já com o
-// arquivo, e o modelo salvo lê o mesmo arquivo na hora.
+// arquivo, e o modelo salvo lê o mesmo arquivo na hora; ou "Ler com o modelo…" escolhe um dos ensinados (o que não
+// reconhece pelo cabeçalho só entra assim, ou pela célula do cartão dele). A fatura que entra por um modelo seu num
+// cartão de LANÇAMENTO MANUAL liga o cartão ao modelo (`modeloParaLigar`; a prévia avisa): os próximos arquivos, também
+// no "Importar arquivos", já acham o cartão.
 export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial = null }) {
   const toast = useToast();
   const inputRef = useRef(null);
@@ -50,13 +54,13 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
   const ativos = cartoes.filter((c) => c.ativo);
   const cartao = cartoes.find((c) => c.id === cartaoId);
 
-  const escolher = async (arquivo, comModelos = modelos) => {
+  const escolher = async (arquivo, comModelos = modelos, modeloId = null) => {
     if (!arquivo) return;
     setErro('');
     setDesconhecido(null);
     try {
       const texto = decodificar(new Uint8Array(await arquivo.arrayBuffer()));
-      const r = lerFaturaComModelos(texto, arquivo.name, { modelos: comModelos, cartoes, inicial });
+      const r = lerFaturaComModelos(texto, arquivo.name, { modelos: comModelos, cartoes, inicial, modeloId });
       setCartaoId(r.cartao?.id ?? '');
       setVencimento(r.vencimento ?? '');
       setLido({ arquivo: arquivo.name, texto, formato: r.formato, modelo: r.modelo, linhas: r.linhas, ignoradas: r.ignoradas, hash: await hashDoTexto(texto) });
@@ -85,6 +89,7 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
   const semCategoria = classificadas?.filter((l) => !l.categoria_id).length ?? 0;
   const total = classificadas?.reduce((s, l) => s + l.valor_centavos, 0) ?? 0;
   const pronto = lido && classificadas && cartaoId && /^\d{4}-\d{2}-\d{2}$/.test(vencimento);
+  const ligar = lido ? modeloParaLigar(cartao, lido.modelo) : null;
 
   const gravar = async () => {
     setGravando(true);
@@ -97,7 +102,13 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
         linhas: classificadas.length, total_centavos: total,
         resumo: [`${classificadas.length} compras`, semCategoria && `${semCategoria} sem regra`, existente && 'substituiu a anterior'].filter(Boolean).join(' · '),
       });
-      toast.success(`Fatura importada: ${classificadas.length} lançamentos${semCategoria ? `, ${semCategoria} para revisar` : ''}.`);
+      let ligou = false;
+      if (ligar) {
+        try { await ligarCartaoAoModelo(cartaoId, ligar); ligou = true; } catch (err) {
+          toast.error(`A fatura entrou, mas o ${cartao.nome} não ficou ligado ao modelo: ${err.message}`);
+        }
+      }
+      toast.success(`Fatura importada: ${classificadas.length} lançamentos${semCategoria ? `, ${semCategoria} para revisar` : ''}.${ligou ? ` O ${cartao.nome} passa a ler pelo modelo ${lido.modelo.nome}.` : ''}`);
       onImportada({ revisar: semCategoria });
     } catch (err) {
       toast.error(err.message);
@@ -127,6 +138,13 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-gray-700">
                     <span>É de outro banco?</span>
                     <button type="button" className="btn-secondary !py-1 !text-[12.5px]" onClick={() => setEnsinando(true)}>Ensinar este formato</button>
+                    {modelos.length > 0 && (
+                      <>
+                        <span>ou</span>
+                        <SelectSimples compacto className="w-56" value="" placeholder="Ler com o modelo…" onChange={(id) => escolher(desconhecido, modelos, id)}
+                          opcoes={modelos.map((m) => ({ value: m.id, label: m.nome }))} />
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -166,6 +184,12 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
               )}
             </ul>
 
+            {ligar && (
+              <p className="-mt-1 text-xs text-gray-600">
+                Ao importar, o <strong>{cartao.nome}</strong> passa a ler a fatura pelo modelo <strong>{lido.modelo.nome}</strong>: os
+                próximos arquivos dele entram sozinhos (troca-se no cadastro do cartão).
+              </p>
+            )}
             {existente && (
               <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 text-amber-800">
                 Já existe a fatura do {cartao?.nome} com vencimento {formatDate(vencimento)}: {existente.qtd} lançamentos,{' '}
@@ -188,7 +212,7 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
       {ensinando && desconhecido && (
         <AssistenteModelo arquivoInicial={desconhecido} cartao={cartoes.find((c) => c.id === inicial?.cartaoId) ?? null}
           onFechar={() => setEnsinando(false)}
-          onSalvo={(m) => { const ms = [...modelos, m]; setModelos(ms); setEnsinando(false); escolher(desconhecido, ms); }} />
+          onSalvo={(m) => { const ms = [...modelos, m]; setModelos(ms); setEnsinando(false); escolher(desconhecido, ms, m.id); }} />
       )}
     </Modal>
   );

@@ -5,11 +5,12 @@ import Toggle from './Toggle.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { excluirCartao, salvarCartao } from '../api/cadastros.js';
-import { ENSINAR, diferencaCartao, formatoDoValor, opcoesFormato, validarCartoes, valorDoFormato } from '../lib/cartoes.js';
+import { ENSINAR_FORMATO, diferencaCartao, formatoDoValor, opcoesFormato, validarCartoes, valorDoFormato } from '../lib/cartoes.js';
 import AssistenteModelo from './AssistenteModelo.jsx';
 
 // O CADASTRO DOS CARTÕES EM POP-UP (30/10/2026, opção A do mockup "Cartões · overhaul"): a tabela de formulário do
-// cadastro dos fixos e do das categorias — cada célula é um campo, "+ cartão" acrescenta, a lixeira marca para sair,
+// cadastro dos fixos e do das categorias — cada célula é um campo, "Adicionar cartão" (a última linha da tabela, como no dos fixos — opção A do mockup,
+// 03/11/2026) acrescenta, a lixeira marca para sair,
 // e "Salvar alterações (N)" grava só a diferença (`diferencaCartao`). Cartão com lançamentos não se exclui: desativa.
 // `uso`: { cartaoId: nº de lançamentos }.
 
@@ -96,7 +97,8 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
                     <input className={`input !h-8 text-right text-[12.5px] tabular-nums ${borda(l.id, 'dia')}`} inputMode="numeric" disabled={l.excluir}
                       value={l.dia_vencimento} onChange={(e) => muda(l.id, 'dia_vencimento', e.target.value.replace(/\D/g, '').slice(0, 2))} />
                   </td>
-                  <td className={td}><SelectSimples value={valorDoFormato(l)} onChange={(v) => { if (v === ENSINAR) { setEnsinando(l); return; } const f = formatoDoValor(v); muda(l.id, 'formato', f.formato); muda(l.id, 'modelo_id', f.modelo_id); }} opcoes={opcoesFormato(todos, { ensinar: true })} disabled={l.excluir} compacto /></td>
+                  <td className={td}><SelectSimples value={valorDoFormato(l)} onChange={(v) => { const f = formatoDoValor(v); muda(l.id, 'formato', f.formato); muda(l.id, 'modelo_id', f.modelo_id); }} opcoes={opcoesFormato(todos)} disabled={l.excluir} compacto
+                    acao={{ rotulo: () => ENSINAR_FORMATO, onClick: () => setEnsinando(l) }} /></td>
                   <td className={td}><Toggle compacto checked={l.ativo} disabled={l.excluir} onChange={(v) => muda(l.id, 'ativo', v)} rotulo={`${l.nome || 'Cartão'} ativo`} /></td>
                   <td className={`${td} text-right tabular-nums text-gray-500`}>{l.novo ? '—' : n || <span className="text-gray-300">0</span>}</td>
                   <td className={`${td} text-right`}>
@@ -113,11 +115,17 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
                 </tr>
               );
             })}
+            <tr>
+              <td colSpan={6} className="px-2 py-1.5">
+                <button type="button" onClick={novo}
+                  className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-400 text-[11px] leading-none">+</span>
+                  Adicionar cartão
+                </button>
+              </td>
+            </tr>
           </tbody>
         </table>
-      </div>
-      <div className="px-4 py-2.5">
-        <button type="button" onClick={novo} className="text-[12.5px] font-medium text-gray-600 hover:text-gray-900">+ cartão</button>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-200 bg-hx-f9fafb px-4 py-3">
         <span className="text-[12px] text-gray-500">

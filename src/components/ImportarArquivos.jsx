@@ -31,10 +31,10 @@ const TOM_AVISO = { background: varCor('#fdf3d9', 'fundo'), color: varCor('#9a6f
 const TOM_ERRO = { background: varCor('#fdeaea', 'fundo'), color: varCor('#c0393d', 'texto') };
 const CHIP = 'inline-flex items-center rounded-[4px] px-1.5 py-0.5 text-[11.5px] font-semibold whitespace-nowrap';
 
-async function reconhecer(arquivo, cartoes, regras, modelos) {
+async function reconhecer(arquivo, cartoes, regras, modelos, modeloId = null) {
   const texto = decodificar(new Uint8Array(await arquivo.arrayBuffer()));
   try {
-    const r = lerFaturaComModelos(texto, arquivo.name, { modelos, cartoes });
+    const r = lerFaturaComModelos(texto, arquivo.name, { modelos, cartoes, modeloId });
     const { cartao, vencimento } = r;
     const linhas = classificarLinhas(r.linhas, regras).filter((l) => !l.ignorar);
     const existente = cartao && vencimento ? await faturaExistente(cartao.id, vencimento) : null;
@@ -69,9 +69,10 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
     listarModelos().then((m) => setModelos(m ?? [])).catch(() => {});
   }, [toast]);
 
-  // Ensinado o formato: a linha do arquivo se refaz com o modelo novo (no mesmo lugar da lista).
-  const reler = async (item, ms) => {
-    const novo = await reconhecer(item.arquivo, cartoes, regras, ms);
+  // Ensinado o formato: a linha do arquivo se refaz COM o modelo novo (no mesmo lugar da lista; também o que não
+  // reconhece pelo cabeçalho).
+  const reler = async (item, ms, modeloId) => {
+    const novo = await reconhecer(item.arquivo, cartoes, regras, ms, modeloId);
     setItens((xs) => xs.map((i) => (i.nome === item.nome ? novo : i)));
   };
 
@@ -218,7 +219,7 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
       </div>
       {ensinando && (
         <AssistenteModelo arquivoInicial={ensinando.arquivo} cartao={null} onFechar={() => setEnsinando(null)}
-          onSalvo={(m) => { const ms = [...modelos, m]; setModelos(ms); const item = ensinando; setEnsinando(null); reler(item, ms).catch((err) => toast.error(err.message)); }} />
+          onSalvo={(m) => { const ms = [...modelos, m]; setModelos(ms); const item = ensinando; setEnsinando(null); reler(item, ms, m.id).catch((err) => toast.error(err.message)); }} />
       )}
     </Modal>
   );

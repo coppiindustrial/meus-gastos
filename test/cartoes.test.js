@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  diasAte, diferencaCartao, formatoDoValor, opcoesFormato, proximoVencimento, resumoDosCartoes, rotuloFormato, validarCartoes, valorDoFormato,
+  diasAte, diferencaCartao, formatoDoValor, modeloParaLigar, opcoesFormato, proximoVencimento, resumoDosCartoes, rotuloFormato, validarCartoes,
+  valorDoFormato,
 } from '../src/lib/cartoes.js';
 
 // Dados FICTÍCIOS.
@@ -60,7 +61,6 @@ test('grafico (opção D): as faturas até a mais recente e depois as parcelas q
 test('formato pelo MODELO (migration 011): as opções, a ida e volta, e a diferença que o cadastro grava', () => {
   const modelos = [{ id: 'm1', nome: 'Inter · fatura', tipo: 'fatura' }, { id: 'm2', nome: 'Inter · extrato', tipo: 'extrato' }];
   assert.deepEqual(opcoesFormato(modelos).map((o) => o.value), ['nubank', 'xp', 'modelo:m1', 'manual']); // o de extrato não serve a cartão
-  assert.deepEqual(opcoesFormato([], { ensinar: true }).map((o) => o.value), ['nubank', 'xp', 'ensinar', 'manual']);
   assert.equal(rotuloFormato('modelo', modelos[0]), 'Importa pelo modelo Inter · fatura');
   assert.deepEqual(formatoDoValor('modelo:m1'), { formato: 'modelo', modelo_id: 'm1' });
   assert.deepEqual(formatoDoValor('xp'), { formato: 'xp', modelo_id: null });
@@ -71,6 +71,17 @@ test('formato pelo MODELO (migration 011): as opções, a ida e volta, e a difer
   // num formato pronto, um modelo antigo no banco não conta como alteração
   const antigo = { ...cartoes[0], modelo_id: 'm1' };
   assert.deepEqual(diferencaCartao({ ...antigo, orig: antigo, modelo_id: null }), {});
+});
+
+test('modeloParaLigar: só o cartão manual passa a ler pelo modelo seu que trouxe a fatura', () => {
+  const c6 = { id: 'c6', nome: 'C6 · fatura' };
+  assert.equal(modeloParaLigar({ formato: 'manual' }, c6), 'c6');
+  assert.equal(modeloParaLigar({ formato: 'modelo', modelo_id: null }, c6), 'c6'); // o modelo dele foi excluído: é manual
+  assert.equal(modeloParaLigar({ formato: 'modelo', modelo_id: 'outro' }, c6), null); // já ligado a outro
+  assert.equal(modeloParaLigar({ formato: 'modelo', modelo_id: 'c6' }, c6), null); // já é este
+  assert.equal(modeloParaLigar({ formato: 'xp' }, c6), null); // pronto: não muda
+  assert.equal(modeloParaLigar({ formato: 'manual' }, { id: 'nubank', pronto: true }), null); // lido por um pronto
+  assert.equal(modeloParaLigar(null, c6), null);
 });
 
 test('diferencaCartao e validarCartoes', () => {

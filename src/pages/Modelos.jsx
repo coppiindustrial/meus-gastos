@@ -112,7 +112,7 @@ export default function Modelos() {
                       <td className={td}>
                         {m.cabecalho
                           ? <code className="block max-w-[240px] truncate rounded bg-hx-f6f7f8 px-1.5 py-0.5 text-[11px] text-gray-600" title={m.cabecalho}>{m.cabecalho}</code>
-                          : <span className="text-[12px] text-gray-400">não — escolha ao importar</span>}
+                          : <span className="text-[12px] text-gray-400">não — pela célula do cartão ou “Ler com o modelo…”</span>}
                       </td>
                       <td className={`${td} text-[12.5px] text-gray-700`}>{cs.length ? cs.map((c) => c.nome).join(', ') : <span className="text-gray-400">nenhum cartão</span>}</td>
                       <td className={`${td} whitespace-nowrap text-right`}>

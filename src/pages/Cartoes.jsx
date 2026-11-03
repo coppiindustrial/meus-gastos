@@ -18,7 +18,7 @@ import { contarUsoCartao, criarCartoesSugeridos, listarCartoes, salvarCartao } f
 import { listarFaturas } from '../api/faturas.js';
 import { listarParcelasFuturas } from '../api/resumo.js';
 import { CARTOES_SUGERIDOS } from '../lib/sugestoes.js';
-import { ENSINAR, formatoDoValor, opcoesFormato, resumoDosCartoes, rotuloFormato, valorDoFormato } from '../lib/cartoes.js';
+import { ENSINAR_FORMATO, formatoDoValor, opcoesFormato, resumoDosCartoes, rotuloFormato, valorDoFormato } from '../lib/cartoes.js';
 import AssistenteModelo from '../components/AssistenteModelo.jsx';
 import { listarModelos } from '../api/modelos.js';
 import { formatBRL, numeroK } from '../lib/dinheiro.js';
@@ -85,8 +85,8 @@ function ModalCartao({ cartao, modelos, onFechar, onSalvo }) {
             onChange={(e) => setForm({ ...form, dia_vencimento: e.target.value.replace(/\D/g, '').slice(0, 2) })} />
         </Campo>
         <Campo rotulo="Como a fatura entra">
-          <SelectSimples value={valorDoFormato(form)} onChange={(v) => (v === ENSINAR ? setEnsinando(true) : setForm({ ...form, ...formatoDoValor(v) }))}
-            opcoes={opcoesFormato(todos, { ensinar: true })} />
+          <SelectSimples value={valorDoFormato(form)} onChange={(v) => setForm({ ...form, ...formatoDoValor(v) })}
+            opcoes={opcoesFormato(todos)} acao={{ rotulo: () => ENSINAR_FORMATO, onClick: () => setEnsinando(true) }} />
         </Campo>
         {ensinando && (
           <AssistenteModelo cartao={form} onFechar={() => setEnsinando(false)}

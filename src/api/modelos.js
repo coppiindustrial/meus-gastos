@@ -36,6 +36,13 @@ export async function excluirModelo(id) {
   return exigir(supabase.from('modelos_importacao').delete().eq('id', id));
 }
 
+// Deixa o cartão no modelo (a fatura entrou por ele num cartão de lançamento manual — `modeloParaLigar`). O filtro é a
+// garantia no banco: o cartão que deixou de ser manual (um formato pronto, outro modelo) não muda.
+export function ligarCartaoAoModelo(cartaoId, modeloId) {
+  return exigir(supabase.from('cartoes').update({ formato: 'modelo', modelo_id: modeloId }).eq('id', cartaoId)
+    .or('formato.eq.manual,and(formato.eq.modelo,modelo_id.is.null)'));
+}
+
 export function renomearModelo(id, nome) {
   return exigir(supabase.from('modelos_importacao').update({ nome: nome.trim() }).eq('id', id).select().single());
 }

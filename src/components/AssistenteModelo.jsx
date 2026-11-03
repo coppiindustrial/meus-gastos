@@ -330,7 +330,7 @@ export default function AssistenteModelo({ cartao, arquivoInicial = null, modelo
           <Rotulo>Reconhecer sozinho</Rotulo>
           <label className="flex cursor-pointer items-start gap-2 text-[12.5px] text-gray-800">
             <Checkbox size="sm" checked={reconhecer} onChange={() => setReconhecer(!reconhecer)} title="Reconhecer pelo cabeçalho" />
-            <span>Pelo cabeçalho, no "Importar arquivos"</span>
+            <span>Pelo cabeçalho (desligado, só pela célula do cartão ou escolhendo o modelo ao importar)</span>
           </label>
           <code className="mt-1.5 block truncate rounded bg-hx-f6f7f8 px-2 py-1.5 text-[11px] text-gray-600" title={cabecalho}>{cabecalho}</code>
         </div>

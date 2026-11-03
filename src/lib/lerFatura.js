@@ -62,15 +62,20 @@ export function vencimentoDoArquivo(config, nomeArquivo, linhas, diaVencimento) 
 // único cartão daquele formato; num modelo do usuário, a célula, senão o único cartão ligado a ele. O VENCIMENTO: num
 // pronto, o do nome ou o da célula ou o dia do cartão; num do usuário, o que o modelo diz (`vencimentoDoArquivo`),
 // com o da célula valendo sobre o palpite do dia. Nenhum modelo reconhece: erro com `naoReconhecido` (a tela oferece
-// "Ensinar este formato"). Devolve { modelo, formato, linhas, ignoradas, cartao, vencimento }.
+// "Ensinar este formato"). O MODELO SEM CABEÇALHO (o "reconhecer sozinho" desligado) não se acha pelo arquivo: vale o
+// escolhido na hora (`modeloId`, o "Ler com o modelo…" do importador) ou o do cartão da célula que abriu o importador.
+// Devolve { modelo, formato, linhas, ignoradas, cartao, vencimento }.
 export const NAO_RECONHECIDO = 'Formato de CSV não reconhecido: não é o do Nubank, nem o da XP, nem um dos formatos que você ensinou.';
-export function lerFaturaComModelos(texto, nomeArquivo, { modelos = [], cartoes = [], inicial = null } = {}) {
+export function lerFaturaComModelos(texto, nomeArquivo, { modelos = [], cartoes = [], inicial = null, modeloId = null } = {}) {
   if (!linhasDoTexto(texto).length) throw new Error('O arquivo está vazio.');
-  const modelo = reconhecerModelo(texto, [...modelos.filter((m) => m.tipo !== 'extrato' && !m.pronto), ...MODELOS_PRONTOS]);
-  if (!modelo) throw Object.assign(new Error(NAO_RECONHECIDO), { naoReconhecido: true });
-  const r = lerComModelo(texto, modelo.config);
+  const meus = modelos.filter((m) => m.tipo !== 'extrato' && !m.pronto);
   const ativos = cartoes.filter((c) => c.ativo);
   const daCelula = inicial?.cartaoId ? ativos.find((x) => x.id === inicial.cartaoId) ?? null : null;
+  const doCartao = daCelula?.formato === 'modelo' ? meus.find((m) => m.id === daCelula.modelo_id) ?? null : null;
+  const modelo = (modeloId ? [...meus, ...MODELOS_PRONTOS].find((m) => m.id === modeloId) : null)
+    ?? reconhecerModelo(texto, [...meus, ...MODELOS_PRONTOS]) ?? doCartao;
+  if (!modelo) throw Object.assign(new Error(NAO_RECONHECIDO), { naoReconhecido: true });
+  const r = lerComModelo(texto, modelo.config);
   let cartao;
   let vencimento;
   if (modelo.pronto) {

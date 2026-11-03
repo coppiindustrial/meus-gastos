@@ -168,8 +168,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   compra) e o IOF da compra internacional (linha do mesmo dia com 2,5–7% de outra) entra no valor dela. O "N
   lançamentos" das faturas continua contando linhas.
   Contas em `lib/cartoes.js` (testada). Cabeçalho do DRE: ✎ `ModalCadastroCartoes` (tabela de formulário, "Salvar
-  alterações (N)"; cartão com lançamentos não se exclui) · ▾ Exportar CSV / Importar; "+ Novo cartão" = o formulário
-  de um (clicar no nome do bloco também o abre).
+  alterações (N)"; cartão com lançamentos não se exclui; acrescenta pela última linha, "Adicionar cartão", a do
+  cadastro dos fixos — 03/11/2026) · ▾ Exportar CSV / Importar; "+ Novo cartão" = o formulário de um (clicar no nome
+  do bloco também o abre).
 - REGRAS (`pages/Regras.jsx`): a TABELA DE FORMULÁRIO dos cadastros — a ordem é a alça ⠿ (a primeira que pega
   decide), palavra e categoria (ou "Ignorar") são campos, marcar várias muda a categoria ou exclui, "Salvar
   alterações (N)" grava a diferença. A prioridade só conta como alteração se a ORDEM mudou (aí renumera 1, 2, 3…; a
@@ -347,13 +348,23 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   COLUNAS (o seletor em cima de cada uma — `comPapel`/`papelDaColuna`; data, sinal do gasto, parcela; o rodapé diz o
   que falta — `problemaDoModelo`; linhas do outro sinal em vermelho) e CONFERIR E SALVAR (como entra, com a categoria
   das regras; o vencimento — `vencimentoDoArquivo` em `lib/lerFatura.js`; "reconhecer pelo cabeçalho"; o nome).
-  Abre pelo "+ Ensinar um formato novo…" (`ENSINAR` em `opcoesFormato`) no formulário e no cadastro do cartão; o
-  modelo salvo já fica escolhido. Sem a migration 011, salvar explica que ela falta.
+  Abre pelo "Ensinar um formato novo…" no formulário e no cadastro do cartão — a AÇÃO no pé da lista do "Como a
+  fatura entra", depois de uma linha (`acao` do `SelectSimples`, como o "+ Criar categoria"; `ENSINAR_FORMATO`), não
+  uma opção; o modelo salvo já fica escolhido. Sem a migration 011, salvar explica que ela falta.
   OS IMPORTADORES (7.3, 03/11/2026): `ImportarFatura` e `ImportarArquivos` leem o texto dos BYTES (`decodificar`) e a
   fatura por `lerFaturaComModelos` (`lib/lerFatura.js`, testada): o primeiro modelo que reconhece o cabeçalho (os do
   usuário antes dos prontos), o cartão (pronto: nome do arquivo / célula / único do formato; do usuário: célula /
   único ligado ao modelo) e o vencimento (o do modelo; o da célula vale sobre o palpite do dia). Nenhum reconhece →
-  `naoReconhecido` e o botão "Ensinar este formato" (o assistente com `arquivoInicial`; salvo, o arquivo é relido).
+  `naoReconhecido` e o botão "Ensinar este formato" (o assistente com `arquivoInicial`; salvo, o arquivo é relido
+  COM o modelo novo — `modeloId`). O MODELO SEM CABEÇALHO ("reconhecer sozinho" desligado) entra pelo do cartão da
+  célula que abriu o importador ou pelo "Ler com o modelo…" do erro (`modeloId`; só no importador de uma fatura).
+  O CAMINHO INTEIRO de um banco novo (bytes Windows-1252 → assistente → o modelo como a tabela devolve → a fatura do
+  mês seguinte) é o `test/importadorModelo.test.js`. O CARTÃO SE LIGA AO MODELO na primeira fatura que entra por
+  um modelo do usuário num cartão de LANÇAMENTO MANUAL (`modeloParaLigar` em `lib/cartoes.js`, testada;
+  `ligarCartaoAoModelo` com o filtro do formato no banco): a prévia avisa e o toast confirma. Sem isso, o modelo
+  ensinado pelo importador ficava solto e o "Importar arquivos" não achava o cartão. Pronto (Nubank, XP) ou já
+  ligado a outro modelo não muda. Cartão novo, sem fatura, não tem coluna na tela Importar: a primeira entra pelo
+  bloco dele em Cartões ou pelo "Importar arquivos".
   A TELA `pages/Modelos.jsx` (/cadastros/modelos, em Cadastros): os prontos (só leitura) e os do usuário — clicar no
   nome renomeia, "Ensinar de novo" (o assistente com `modelo`: com o mesmo cabeçalho, as colunas dele) e "Excluir"
   (`excluirModelo` devolve os cartões dele ao lançamento manual antes).

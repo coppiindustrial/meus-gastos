@@ -14,19 +14,24 @@ export const rotuloFormato = (f, modelo = null) => (f === 'modelo' ? `Importa pe
 
 // OS MODELOS DO USUÁRIO no "Como a fatura entra" (migration 011): cada um vira a opção 'modelo:<id>', entre os prontos
 // e o manual. `valorDoFormato`/`formatoDoValor` vão e voltam entre o cartão ({ formato, modelo_id }) e a opção.
-// `ensinar` (fase 7.2): a opção que abre o assistente (`AssistenteModelo`) — o valor 'ensinar' não vai para o cartão.
-export const ENSINAR = 'ensinar';
-export function opcoesFormato(modelos = [], { ensinar = false } = {}) {
+// O "Ensinar um formato novo…" (o que abre o `AssistenteModelo`) não é uma opção: é a AÇÃO no pé da lista
+// (`ENSINAR_FORMATO`, o `acao` do `SelectSimples`), depois de uma linha — como o "+ Criar categoria" (03/11/2026).
+export const ENSINAR_FORMATO = 'Ensinar um formato novo…';
+export function opcoesFormato(modelos = []) {
   const deFatura = (modelos ?? []).filter((m) => m.tipo === 'fatura' && !m.pronto);
   return [
     ...FORMATOS.filter((f) => f.value !== 'manual'),
     ...deFatura.map((m) => ({ value: `modelo:${m.id}`, label: `Importa pelo modelo ${m.nome}` })),
-    ...(ensinar ? [{ value: ENSINAR, label: '+ Ensinar um formato novo…' }] : []),
     FORMATOS.find((f) => f.value === 'manual'),
   ];
 }
 export const valorDoFormato = (c) => (c.formato === 'modelo' && c.modelo_id ? `modelo:${c.modelo_id}` : c.formato === 'modelo' ? 'manual' : c.formato);
 export const formatoDoValor = (v) => (String(v).startsWith('modelo:') ? { formato: 'modelo', modelo_id: v.slice(7) } : { formato: v, modelo_id: null });
+
+// LIGAR O CARTÃO AO MODELO (03/11/2026): a fatura que entra por um modelo SEU num cartão de "lançamento manual" deixa o
+// cartão nesse modelo (o formato ensinado no próprio importador saía solto, e o "Importar arquivos" não achava o
+// cartão). Cartão de formato pronto (Nubank, XP) ou já ligado a um modelo não muda. Devolve o id do modelo, ou null.
+export const modeloParaLigar = (cartao, modelo) => (cartao && modelo?.id && !modelo.pronto && valorDoFormato(cartao) === 'manual' ? modelo.id : null);
 
 const dia = (iso) => { const [y, m, d] = iso.slice(0, 10).split('-').map(Number); return Date.UTC(y, m - 1, d) / 86400000; };
 export const diasAte = (de, ate) => Math.round(dia(ate) - dia(de));
