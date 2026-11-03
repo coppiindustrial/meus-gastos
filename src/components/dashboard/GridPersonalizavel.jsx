@@ -63,13 +63,26 @@ const aoTopo = (id) => (itens) => {
 // `visao_v4` (29/10/2026): o bloco "Saldo do mês" (`vg_saldo`) nasceu — na disposição de quem já tinha uma,
 // ele entra LOGO ABAIXO do "Entradas × gastos" e da mesma largura (o resto desce), e na lista dos blocos ligados
 // logo depois dele. Sem isso ele iria para o fim da página (e, com a lista salva, nem apareceria).
-const abaixoDe = (ref, novo) => (itens) => {
+// `cheio`: na largura toda (x 0, w 12), em vez da do bloco de referência.
+const abaixoDe = (ref, novo, cheio = false) => (itens) => {
   if (!itens || itens.some((i) => i.widget_id === novo.widget_id)) return itens;
   const alvo = itens.find((i) => i.widget_id === ref);
   if (!alvo) return itens;
   const y = alvo.y + (alvo.colapsado ? (alvo.h ?? 0) : alvo.h);
-  return [...itens.map((i) => (i.y >= y ? { ...i, y: i.y + novo.h } : i)), { ...novo, x: alvo.x, y, w: alvo.w, colapsado: false }];
+  return [...itens.map((i) => (i.y >= y ? { ...i, y: i.y + novo.h } : i)), { ...novo, x: cheio ? 0 : alvo.x, y, w: cheio ? 12 : alvo.w, colapsado: false }];
 };
+// `visao_v5` (03/11/2026): três blocos novos — o "Gastos por origem, mês a mês" logo abaixo do "Saldo do mês" (da
+// mesma largura: os meses alinhados), o "Já comprometido" AO LADO dele (sem vaga, embaixo) e o "Fora do normal" embaixo
+// dos dois, na largura toda; na lista dos ligados, um depois do outro.
+const aoLadoDe = (ref, novo) => (itens) => {
+  if (!itens || itens.some((i) => i.widget_id === novo.widget_id)) return itens;
+  const alvo = itens.find((i) => i.widget_id === ref);
+  if (!alvo) return itens;
+  const x = alvo.x + alvo.w;
+  if (x + novo.w > 12) return abaixoDe(ref, novo)(itens);
+  return [...itens, { ...novo, x, y: alvo.y, h: alvo.h, colapsado: false }];
+};
+const emSeguida = (...fs) => (v) => fs.reduce((x, f) => f(x), v);
 const ligarDepoisDe = (ref, id) => (cfg) => {
   if (!cfg || !Array.isArray(cfg.widgets) || cfg.widgets.includes(id)) return cfg;
   const k = cfg.widgets.indexOf(ref);
@@ -81,6 +94,15 @@ const ESCOPO_ANTIGO = {
   visao_v2: { de: 'visao', converter: dobrar },
   visao_v3: { de: 'visao_v2', converter: aoTopo('vg_agora') },
   visao_v4: { de: 'visao_v3', converter: abaixoDe('vg_meses', { widget_id: 'vg_saldo', h: 9 }), configurar: ligarDepoisDe('vg_meses', 'vg_saldo') },
+  visao_v5: {
+    de: 'visao_v4',
+    converter: emSeguida(
+      abaixoDe('vg_saldo', { widget_id: 'vg_origem_mes', h: 10 }),
+      aoLadoDe('vg_origem_mes', { widget_id: 'vg_comprometido', w: 4, h: 10 }),
+      abaixoDe('vg_origem_mes', { widget_id: 'vg_fora', h: 8 }, true),
+    ),
+    configurar: emSeguida(ligarDepoisDe('vg_saldo', 'vg_origem_mes'), ligarDepoisDe('vg_origem_mes', 'vg_comprometido'), ligarDepoisDe('vg_comprometido', 'vg_fora')),
+  },
 };
 const api = {
   get: async (rota) => {

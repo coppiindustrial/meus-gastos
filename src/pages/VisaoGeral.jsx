@@ -9,7 +9,8 @@ import { SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import { CartaoKpi, CORES_KPI, variacaoSaldo } from '../components/graficos/CartoesResumo.jsx';
 import { COR_ENTRADAS, COR_GASTOS } from '../components/graficos/Graficos.jsx';
 import {
-  BarrasGrupos, COR_ANTERIOR, COR_FALTOU, COR_SALDO, COR_SOBROU, ColunasEntradasGastos, LinhasEntradasGastos, RoscaOrigem, SaldoDoMes,
+  BarrasGrupos, COR_ANTERIOR, COR_FALTOU, COR_SALDO, COR_SOBROU, CORES_ORIGEM, ColunasEntradasGastos, ForaDoNormal, HACHURA_PARCELAS, JaComprometido,
+  LinhasEntradasGastos, ORIGENS_MES, OrigemPorMes, RoscaOrigem, SaldoDoMes,
 } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
 import AmpliadoEntradasGastos from '../components/graficos/AmpliadoEntradasGastos.jsx';
@@ -22,7 +23,9 @@ import { listarCartoes, listarCategorias } from '../api/cadastros.js';
 import { lancarFixo, listarLancamentosDeFixos, listarPulados, listarRecorrencias } from '../api/fixos.js';
 import { comprometidoPorMes } from '../lib/resumo.js';
 import { matrizDoAno, pendentesPorMes } from '../lib/fixos.js';
-import { anoAnterior, filtrar, gruposPorMes, mediaPorMes, periodo, resumoPeriodo, variacao } from '../lib/visaoGeral.js';
+import {
+  anoAnterior, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaPorMes, periodo, resumoPeriodo, variacao,
+} from '../lib/visaoGeral.js';
 import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
 import { exportCsv } from '../lib/exportCsv.js';
@@ -161,8 +164,13 @@ const CATALOGO = [
   { id: 'vg_meses', titulo: 'Entradas × gastos por mês', area: 'vg_graficos', x: 0, y: 6, w: 8, h: 10, minH: 7, minPx: 420 },
   { id: 'vg_origem', titulo: 'Gastos por origem', area: 'vg_graficos', x: 8, y: 6, w: 4, h: 19, minH: 6, minPx: 300 },
   { id: 'vg_saldo', titulo: 'Saldo do mês', area: 'vg_graficos', x: 0, y: 16, w: 8, h: 9, minH: 6, minPx: 420 },
-  { id: 'vg_grupos', titulo: 'Gastos por grupo', area: 'vg_graficos', x: 0, y: 25, w: 12, h: 12, minH: 5, minPx: 360 },
-  { id: 'vg_tabela', titulo: 'Grupo × mês', area: 'vg_tabelas', x: 0, y: 37, w: 12, h: 14, minH: 6, minPx: 520 },
+  // OS TRÊS DE 03/11/2026 (mockup "Visão geral · novos gráficos", opções A, C e D): a origem mês a mês logo abaixo do
+  // saldo (os meses alinhados), o já comprometido ao lado e o fora do normal embaixo, na largura toda.
+  { id: 'vg_origem_mes', titulo: 'Gastos por origem, mês a mês', area: 'vg_graficos', x: 0, y: 25, w: 8, h: 10, minH: 6, minPx: 420 },
+  { id: 'vg_comprometido', titulo: 'Já comprometido', area: 'vg_graficos', x: 8, y: 25, w: 4, h: 10, minH: 6, minPx: 300 },
+  { id: 'vg_fora', titulo: 'Fora do normal', area: 'vg_graficos', x: 0, y: 35, w: 12, h: 8, minH: 5, minPx: 320 },
+  { id: 'vg_grupos', titulo: 'Gastos por grupo', area: 'vg_graficos', x: 0, y: 43, w: 12, h: 12, minH: 5, minPx: 360 },
+  { id: 'vg_tabela', titulo: 'Grupo × mês', area: 'vg_tabelas', x: 0, y: 55, w: 12, h: 14, minH: 6, minPx: 520 },
 ];
 
 // AS FORMAS DO "ENTRADAS × GASTOS": a escolha fica no próprio bloco (e lembrada no navegador).
@@ -199,6 +207,8 @@ export default function VisaoGeral() {
   const [gruposAmpliado, setGruposAmpliado] = useState(false);
   const ctrl = useDestaqueSeries();
   const ctrlSaldo = useDestaqueSeries();
+  const ctrlOrigemMes = useDestaqueSeries();
+  const ctrlComprometido = useDestaqueSeries();
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -218,6 +228,7 @@ export default function VisaoGeral() {
   const compsAnt = useMemo(() => anoAnterior(comps), [comps]);
   const rAnt = useMemo(() => (comparar === 'anterior' ? resumoPeriodo(filtradas, compsAnt) : null), [filtradas, compsAnt, comparar]);
   const grupos = useMemo(() => gruposPorMes(filtradas, comps, categorias, competenciaAtual()), [filtradas, comps, categorias]);
+  const fora = useMemo(() => foraDoNormal(filtradas, comps, categorias, competenciaAtual()), [filtradas, comps, categorias]);
   // O total de cada grupo e categoria no mesmo período um ano antes (a variação das barras por grupo).
   const gruposAnt = useMemo(() => {
     if (comparar !== 'anterior') return null;
@@ -258,6 +269,13 @@ export default function VisaoGeral() {
     } catch (err) { toast.error(/duplicate|unique/i.test(err.message) ? 'Este fixo já foi lançado neste mês.' : err.message); carregar(); }
   };
   const parcelasProx = useMemo(() => comprometidoPorMes(parcelas, hoje).find((c) => c.competencia === addMeses(hoje, 1)), [parcelas, hoje]);
+  // JÁ COMPROMETIDO: como o "Agora", do mês atual em diante e sem os filtros; o NORMAL é a média dos gastos dos 12 meses
+  // fechados antes dele (os da tela mudariam com os filtros).
+  const comprometido = useMemo(() => jaComprometido({ parcelas, recorrencias: fixos.recs, lancamentos: fixos.lancs, pulados: fixos.pulados, hoje }), [parcelas, fixos, hoje]);
+  const mediaNormal = useMemo(() => {
+    const doze = Array.from({ length: 12 }, (_, i) => addMeses(hoje, i - 12));
+    return mediaPorMes(resumoPeriodo(linhas ?? [], doze).porMes, 'gastos').media;
+  }, [linhas, hoje]);
 
   const filtrando = Boolean(!(anos.length === 1 && anos[0] === anoAtual) || meses.length || tipo || origens.length || cats.length);
   const limpar = () => { setAnos([anoAtual]); setMeses([]); setTipo(''); setOrigens([]); setCats([]); };
@@ -397,6 +415,45 @@ export default function VisaoGeral() {
           </section>
         );
       }
+      case 'vg_origem_mes':
+        // GASTOS POR ORIGEM, MÊS A MÊS (opção A): o chrome do "Saldo do mês", logo abaixo dele; a legenda isola a origem.
+        return (
+          <section className="card flex flex-col overflow-hidden p-5">
+            <div className="mb-1 flex items-baseline gap-3">
+              <span className="text-[13px] font-semibold text-gray-800">Gastos por origem, mês a mês</span>
+              <span className="text-[11px] text-gray-400">{textoPer}{ctrlOrigemMes.fixas.length ? ' · na escala do que está marcado' : ''}</span>
+            </div>
+            <div className="min-h-0 flex-1"><OrigemPorMes meses={r.porMes} ctrl={ctrlOrigemMes} onMes={abrirMes} /></div>
+            <LegendaSeries ctrl={ctrlOrigemMes} series={ORIGENS_MES.map(([key, rotulo]) => ({ key, rotulo, cor: CORES_ORIGEM[key] }))} />
+          </section>
+        );
+      case 'vg_comprometido':
+        // JÁ COMPROMETIDO (opção C, em barras deitadas): as parcelas que vêm e os fixos de cada mês daqui para a frente.
+        return (
+          <section className="card flex flex-col overflow-hidden p-5">
+            <div className="mb-1 flex flex-wrap items-baseline gap-x-3">
+              <span className="text-[13px] font-semibold text-gray-800">Já comprometido</span>
+              <span className="text-[11px] text-gray-400">parcelas que vêm + gastos fixos</span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto"><JaComprometido meses={comprometido} media={mediaNormal} ctrl={ctrlComprometido} /></div>
+            <LegendaSeries ctrl={ctrlComprometido} series={[
+              { key: 'fixos', rotulo: 'Gastos fixos', cor: CORES_ORIGEM.fixo },
+              { key: 'parcelas', rotulo: 'Parcelas que vêm', cor: HACHURA_PARCELAS },
+              { key: 'media', rotulo: 'Média dos gastos', cor: COR_ANTERIOR, forma: 'tracejado' },
+            ]} />
+          </section>
+        );
+      case 'vg_fora':
+        // FORA DO NORMAL (opção D): o último mês fechado do período contra a média de cada categoria.
+        return (
+          <section className="card flex flex-col overflow-hidden p-5">
+            <div className="mb-2 flex flex-wrap items-baseline gap-x-3">
+              <span className="text-[13px] font-semibold text-gray-800">Fora do normal</span>
+              {fora?.base.length > 0 && <span className="text-[11px] text-gray-400">{nomeCompetencia(fora.mes).toLowerCase()} contra a média de cada categoria nos {fora.base.length} {fora.base.length === 1 ? 'mês' : 'meses'} antes</span>}
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto"><ForaDoNormal dados={fora} onMes={abrirMes} /></div>
+          </section>
+        );
       case 'vg_origem':
         return (
           <section className="card flex flex-col overflow-hidden">
@@ -455,7 +512,7 @@ export default function VisaoGeral() {
 
   return (
     <>
-      <GridPersonalizavel escopo="visao_v4" titulo="Visão geral"
+      <GridPersonalizavel escopo="visao_v5" titulo="Visão geral"
         acessorio={linhas && <span className="hidden text-sm text-gray-500 sm:inline">{textoPer.replace(/^./, (c) => c.toUpperCase())} · {r.meses} {r.meses === 1 ? 'mês' : 'meses'} com lançamentos</span>}
         catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={renderWidget} abaixo={filtros}
         pronto={!!linhas} onAtualizar={carregar} atualizando={carregando} />

@@ -275,6 +275,17 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   expandir/recolher tudo, ⬇ CSV, ⤢ o AMPLIADO (o painel de 1280px/90vh, tela cheia, busca e "Valores | % do mês").
   `gruposPorMes` também dá `qtdMeses` (os lançamentos de cada mês, para o balão).
 - O "SOBROU" do Saldo do mês tem cor própria, violeta (`--serie-sobrou`, 02/11/2026): era o verde das entradas.
+- TRÊS BLOCOS NOVOS (03/11/2026, opções A, C e D do mockup "Visão geral · novos gráficos"; escopo do grid `visao_v5`:
+  quem tinha a disposição salva os ganha no lugar e ligados — `abaixoDe`/`aoLadoDe`/`emSeguida` no `ESCOPO_ANTIGO`):
+  · GASTOS POR ORIGEM, MÊS A MÊS (`vg_origem_mes`, `OrigemPorMes`): colunas empilhadas cartão / fixos / avulsos (as cores
+    da rosca, 2px entre as partes), o total em cima, logo abaixo do Saldo e com a mesma calha (cada mês embaixo do
+    seu). FIXAR uma origem na legenda desenha só as fixadas NA ESCALA DELAS (os fixos somem perto do cartão).
+  · JÁ COMPROMETIDO (`vg_comprometido`, `JaComprometido`, em BARRAS DEITADAS a pedido; contas em `jaComprometido`,
+    testada): do mês atual até a última parcela (6 a 12 meses), fixos (o lançado, senão o sugerido; "não teve" fora) +
+    parcelas que vêm (hachuradas); a tracejada é a média dos gastos dos 12 meses fechados (sem os filtros, como o Agora).
+  · FORA DO NORMAL (`vg_fora`, `ForaDoNormal`; `foraDoNormal`, testada): o último mês fechado do período contra a média
+    de cada categoria nos 12 meses antes (a regra do `mediaDaCategoria`), em duas colunas, acima e abaixo; só a
+    diferença de R$ 100 e 20% ou mais.
 - A TELA É UM GRID PERSONALIZÁVEL copiado do Dashboard Comercial do Gestor (`components/dashboard/GridPersonalizavel.jsx`,
   react-grid-layout 2.2.3 exato): arrastar, redimensionar, minimizar, ligar/desligar blocos, separadores, disposição
   compacta. Diferenças da cópia: grava no NAVEGADOR (um `api` falso sobre `lsGet`/`lsSet` com as rotas de lá como

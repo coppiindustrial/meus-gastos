@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { anoAnterior, compsDoHistorico, filtrar, gruposPorMes, mediaPorMes, periodo, resumoPeriodo, variacao } from '../src/lib/visaoGeral.js';
+import {
+  anoAnterior, compsDoHistorico, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaPorMes, periodo, resumoPeriodo, variacao,
+} from '../src/lib/visaoGeral.js';
 
 // Linhas no formato da view resumo_mensal (valores fictícios).
 const L = (competencia, tipo, origem, categoria_id, total_centavos, qtd = 1) => ({ competencia, tipo, origem, categoria_id, total_centavos, qtd });
@@ -122,4 +124,42 @@ test('gruposPorMes: a média do grupo não conta o mês em andamento', () => {
   const g = gruposPorMes(linhas, periodo([2026], [7, 8]), categorias, '2026-08');
   assert.equal(g[0].media, 30000); // Mercado: só julho (agosto em andamento)
   assert.equal(g[0].total, 70000);  // o total continua com os dois meses
+});
+
+test('foraDoNormal: o último mês fechado contra a média dos 12 antes; só o que mudou de verdade', () => {
+  const cats = [
+    { id: 'ele', nome: 'Eletrônicos', grupo: { id: 'g1', nome: 'Compras', cor: '#f00' } },
+    { id: 'mer', nome: 'Mercado', grupo: { id: 'g2', nome: 'Alimentação', cor: '#0f0' } },
+    { id: 'iptu', nome: 'IPTU', grupo: { id: 'g3', nome: 'Casa', cor: '#00f' } },
+    { id: 'vin', nome: 'Vinícola', grupo: { id: 'g2', nome: 'Alimentação', cor: '#0f0' } },
+  ];
+  const ls = [];
+  ['2026-07', '2026-08', '2026-09'].forEach((c) => { ls.push(L(c, 'saida', 'cartao', 'ele', 100000), L(c, 'saida', 'cartao', 'mer', 200000)); });
+  ls.push(L('2026-08', 'saida', 'manual', 'iptu', 300000)); // um mês só: o normal é 300000 / 3
+  ls.push(L('2026-10', 'saida', 'cartao', 'ele', 650000), L('2026-10', 'saida', 'cartao', 'mer', 205000), L('2026-10', 'saida', 'cartao', 'vin', 130000));
+  ls.push(L('2026-11', 'saida', 'fixo', 'mer', 999999)); // o mês em andamento fica de fora
+  const r = foraDoNormal(ls, periodo([2026]), cats, '2026-11');
+  assert.equal(r.mes, '2026-10');
+  assert.deepEqual(r.base, ['2026-07', '2026-08', '2026-09']);
+  assert.deepEqual(r.acima.map((x) => [x.nome, x.dif, x.nova]), [['Eletrônicos', 550000, false], ['Vinícola', 130000, true]]);
+  assert.deepEqual(r.abaixo.map((x) => [x.nome, x.valor, x.normal, x.sumiu]), [['IPTU', 0, 100000, true]]);
+  // o Mercado mudou 5000 (menos de R$ 100): fica de fora; sem meses antes, nada a comparar
+  assert.deepEqual(foraDoNormal(ls, ['2026-07'], cats, '2026-11'), { mes: '2026-07', base: [], acima: [], abaixo: [] });
+  assert.equal(foraDoNormal([], periodo([2026]), cats, '2026-11'), null);
+});
+
+test('jaComprometido: as parcelas que vêm e os fixos de cada mês, do atual até a última parcela', () => {
+  const parcelas = [
+    { competencia: '2026-11', valor_centavos: 760000, lancamento_id: 'a' }, { competencia: '2026-11', valor_centavos: 1000, lancamento_id: 'b' },
+    { competencia: '2027-01', valor_centavos: 540000, lancamento_id: 'a' }, { competencia: '2026-09', valor_centavos: 5, lancamento_id: 'c' },
+  ];
+  const recorrencias = [{ id: 'luz', descricao: 'Luz', dia_do_mes: 5, ativa: true, inicio: '2026-01', fim: null, valor_padrao_centavos: 20000 }];
+  const lancamentos = [{ recorrencia_id: 'luz', competencia: '2026-10', valor_centavos: 22000 }];
+  const r = jaComprometido({ parcelas, recorrencias, lancamentos, pulados: [{ recorrencia_id: 'luz', competencia: '2026-12' }], hoje: '2026-11', minMeses: 3 });
+  assert.deepEqual(r.map((m) => [m.competencia, m.parcelas, m.compras, m.fixos, m.total]), [
+    ['2026-11', 761000, 2, 22000, 783000], // o fixo pelo último lançado
+    ['2026-12', 0, 0, 0, 0], // "não teve"
+    ['2027-01', 540000, 1, 22000, 562000],
+  ]);
+  assert.equal(jaComprometido({ hoje: '2026-11' }).length, 6); // sem nada: o mínimo de meses
 });

@@ -1,4 +1,5 @@
 import { addMeses } from './format.js';
+import { matrizDoAno } from './fixos.js';
 
 // AS CONTAS DA VISÃO GERAL (a tela inicial, o "Dashboard" da planilha refeito): tudo sobre as linhas
 // da view `resumo_mensal` (mês × tipo × origem × categoria, já somadas no banco), recortadas pelos
@@ -144,6 +145,75 @@ export function gruposPorMes(linhas, comps, categorias, emAndamento) {
       return { ...g, media: cats.reduce((s, k) => s + k.media, 0), desde: cats.some((k) => k.desde) ? 'parcial' : null, categorias: cats };
     })
     .sort((a, b) => b.total - a.total);
+}
+
+// FORA DO NORMAL (03/11/2026, opção D do mockup "Visão geral · novos gráficos"): as categorias que mais fugiram do
+// normal num mês. O MÊS é o último do período com lançamento (sem o em andamento quando há outro); o NORMAL de cada
+// categoria é a média dela nos 12 meses ANTES dele, pela regra de toda média do app (`gruposPorMes`: o fixo desde que
+// começou, o eventual dividido por todos os meses com dado — o IPTU de um mês não vira "normal" alto). Só fica o que
+// mudou de verdade: a diferença de `minimo` (R$ 100) ou mais E de 20% do normal ou mais. Devolve null (nenhum mês) ou
+// { mes, base: [comps], acima, abaixo } — os `limite` maiores de cada lado: [{ id, nome, grupo, cor, valor, normal,
+// dif, nova, sumiu }] (`nova`: sem normal; `sumiu`: nada no mês).
+export function foraDoNormal(linhas, comps, categorias, emAndamento, { minimo = 10000, limite = 6 } = {}) {
+  const comDado = new Set(linhas.map((l) => l.competencia));
+  let candidatos = comps.filter((c) => comDado.has(c));
+  if (candidatos.length > 1) candidatos = candidatos.filter((c) => c !== emAndamento);
+  const mes = candidatos[candidatos.length - 1];
+  if (!mes) return null;
+  const base = Array.from({ length: 12 }, (_, i) => addMeses(mes, -(12 - i))).filter((c) => comDado.has(c));
+  const chave = (g, c) => `${g.id}|${c.id}`;
+  const normais = new Map();
+  gruposPorMes(linhas, base, categorias, null).forEach((g) => g.categorias.forEach((c) => normais.set(chave(g, c), { g, c })));
+  const doMes = new Map();
+  gruposPorMes(linhas, [mes], categorias, null).forEach((g) => g.categorias.forEach((c) => doMes.set(chave(g, c), { g, c })));
+  const itens = [...new Set([...normais.keys(), ...doMes.keys()])].map((k) => {
+    const { g, c } = doMes.get(k) ?? normais.get(k);
+    const valor = doMes.get(k)?.c.total ?? 0;
+    const normal = normais.get(k)?.c.media ?? 0;
+    return { id: c.id, nome: c.nome, grupo: g.nome, cor: g.cor, valor, normal, dif: valor - normal, nova: !normal, sumiu: !valor };
+  }).filter((x) => base.length && Math.abs(x.dif) >= minimo && (x.nova || Math.abs(x.dif) >= x.normal * 0.2));
+  return {
+    mes, base,
+    acima: itens.filter((x) => x.dif > 0).sort((a, b) => b.dif - a.dif).slice(0, limite),
+    abaixo: itens.filter((x) => x.dif < 0).sort((a, b) => a.dif - b.dif).slice(0, limite),
+  };
+}
+
+// JÁ COMPROMETIDO (03/11/2026, opção C do mockup, em barras deitadas): o que cada mês daqui para a frente já tem para
+// pagar antes de começar — as PARCELAS que vêm (a view `parcelas_futuras`: das faturas mais recentes de cada cartão) e
+// os GASTOS FIXOS do mês (o lançado, senão o sugerido, como na grade dos fixos; "não teve" e fora da vigência não
+// contam). Do mês atual até o da última parcela, com `minMeses` e `maxMeses`. Sempre do mês atual, sem os filtros.
+// Devolve [{ competencia, parcelas, compras, fixos, total }].
+const mesesEntre = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
+export function jaComprometido({ parcelas = [], recorrencias = [], lancamentos = [], pulados = [], hoje, minMeses = 6, maxMeses = 12 }) {
+  const porComp = new Map();
+  parcelas.forEach((p) => {
+    if (p.competencia < hoje) return;
+    const x = porComp.get(p.competencia) ?? { valor: 0, compras: new Set() };
+    x.valor += Number(p.valor_centavos);
+    x.compras.add(p.lancamento_id);
+    porComp.set(p.competencia, x);
+  });
+  const ultima = [...porComp.keys()].sort().pop();
+  const n = Math.min(maxMeses, Math.max(minMeses, ultima ? mesesEntre(hoje, ultima) + 1 : 0));
+  const matrizes = new Map();
+  const fixosDe = (comp) => {
+    const ano = Number(comp.slice(0, 4));
+    if (!matrizes.has(ano)) matrizes.set(ano, matrizDoAno(recorrencias, lancamentos, ano, hoje, pulados));
+    const mz = matrizes.get(ano);
+    const j = mz.comps.indexOf(comp);
+    return mz.linhas.reduce((s, l) => {
+      const c = l.celulas[j];
+      if (c.estado === 'lancado') return s + c.valor;
+      return c.estado === 'pendente' || c.estado === 'futuro' ? s + Number(c.sugerido ?? 0) : s;
+    }, 0);
+  };
+  return Array.from({ length: n }, (_, i) => {
+    const competencia = addMeses(hoje, i);
+    const p = porComp.get(competencia);
+    const fixos = fixosDe(competencia);
+    return { competencia, parcelas: p?.valor ?? 0, compras: p?.compras.size ?? 0, fixos, total: (p?.valor ?? 0) + fixos };
+  });
 }
 
 // A variação em % (arredondada), ou null sem base para comparar.

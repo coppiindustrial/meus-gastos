@@ -798,3 +798,196 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
     </div>
   );
 }
+
+// ------------------------------------------------------------ gastos por origem, mês a mês
+
+// GASTOS POR ORIGEM, MÊS A MÊS (03/11/2026, opção A do mockup "Visão geral · novos gráficos"): colunas EMPILHADAS — o
+// cartão embaixo, os fixos e os avulsos em cima, com 2px entre as partes — e o total no topo. A calha, as vagas e a
+// régua são as do "Saldo do mês" (o bloco fica logo abaixo dele): cada mês embaixo do seu. A LEGENDA ISOLA: fixar uma
+// origem (o clique do `LegendaSeries`) desenha só as fixadas, NA ESCALA DELAS — os R$ 2 mil dos fixos sumiam perto dos
+// R$ 15 mil do cartão. `meses`: o `porMes` do `resumoPeriodo` (cartao, fixo, manual). `ctrl`: o `useDestaqueSeries` do bloco.
+export const ORIGENS_MES = [['cartao', 'Cartão (faturas)'], ['fixo', 'Gastos fixos'], ['manual', 'Avulsos']];
+export function OrigemPorMes({ meses, ctrl, onMes, rotulosAte = 12 }) {
+  const balao = useBalao(250, 150);
+  const n = meses.length;
+  const vis = ORIGENS_MES.filter(([k]) => !ctrl.fixas.length || ctrl.fixas.includes(k));
+  const soma = (m) => vis.reduce((s, [k]) => s + (m[k] ?? 0), 0);
+  const esc = escalaLinear(Math.max(1, ...meses.map(soma)) / 100);
+  const fr = (c) => esc.fracao(c / 100);
+  const rot = formatoRotulo(esc.teto);
+  const comRotulo = n <= rotulosAte;
+  const i = balao.ativo;
+  const m = i !== null ? meses[i] : null;
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="min-h-0 flex-1 pb-1 pt-4">
+        <GradeEsq esc={esc}>
+          <div className="pointer-events-none absolute inset-0 flex gap-1.5">
+            {meses.map((mm, k) => {
+              let topo = 0;
+              const partes = vis.map(([key]) => {
+                const h = fr(mm[key] ?? 0) * 100;
+                const p = { key, h, base: topo };
+                topo += h;
+                return p;
+              }).filter((p) => p.h > 0);
+              const total = soma(mm);
+              return (
+                <div key={mm.competencia} className="h-full min-w-0 flex-1 transition-opacity duration-100" style={{ opacity: balao.esmaecido(k) ? 0.4 : 1 }}>
+                  <div className="relative mx-auto h-full w-full" style={{ maxWidth: LARG_VAGA }}>
+                    {partes.map((p, j) => (
+                      <div key={p.key} className={`absolute left-[19%] right-[19%] transition-opacity duration-150 ${j === partes.length - 1 ? 'rounded-t-[2px]' : ''}`}
+                        style={{ bottom: j ? `calc(${p.base}% + 2px)` : 0, height: j ? `max(0px, calc(${p.h}% - 2px))` : `${p.h}%`, background: CORES_ORIGEM[p.key], opacity: ctrl.opSerie(p.key) }} />
+                    ))}
+                    {comRotulo && total > 0 && (
+                      <span className="absolute inset-x-[-8px] hidden text-center text-[9px] font-semibold tabular-nums sm:block"
+                        style={{ bottom: `calc(${topo}% + 3px)`, color: COR_ROTULO }}>{rot(total)}</span>
+                    )}
+                    {!mm.temDado && <span className="absolute inset-x-[-12px] bottom-1 hidden text-center text-[9.5px] text-gray-300 sm:block">sem dados</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {m && <div className={CLASSE_GUIA} style={{ left: `${((i + 0.5) / n) * 100}%` }} />}
+          <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
+            {meses.map((mm, k) => (
+              <button key={mm.competencia} type="button" onMouseMove={balao.aoMover(k)} onClick={() => mm.temDado && onMes?.(mm.competencia)}
+                aria-label={`${nomeCompetencia(mm.competencia)}: ${ORIGENS_MES.map(([key, r]) => `${r} ${formatBRL(mm[key] ?? 0)}`).join(', ')}`}
+                className={`h-full min-w-0 flex-1 ${mm.temDado && onMes ? 'cursor-pointer' : 'cursor-default'}`} />
+            ))}
+          </div>
+        </GradeEsq>
+      </div>
+      <ReguaMeses meses={meses} />
+      {m && (
+        <BalaoGrafico pos={balao.pos} largura={250} titulo={nomeCompetencia(m.competencia)}
+          itens={m.temDado ? [
+            ...ORIGENS_MES.map(([k, r]) => ({ rotulo: r, valor: formatBRL(m[k] ?? 0), cor: CORES_ORIGEM[k] })),
+            { rotulo: 'Total dos gastos', valor: formatBRL(ORIGENS_MES.reduce((s, [k]) => s + (m[k] ?? 0), 0)) },
+          ] : []}
+          nota={m.temDado ? [m.gastos ? `${Math.round(((m.cartao ?? 0) / m.gastos) * 100)}% no cartão` : null, onMes && 'Clique para ver os lançamentos do mês'].filter(Boolean).join('. ') : 'Nenhum lançamento neste mês.'} />
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------ já comprometido
+
+// JÁ COMPROMETIDO (03/11/2026, opção C do mockup, em BARRAS DEITADAS a pedido): uma linha por mês daqui para a frente
+// (`jaComprometido`). A barra = os gastos FIXOS (cheio, a cor dos fixos) + as PARCELAS que vêm (hachuradas, como nos
+// Cartões), e no fim o total e quanto ele é da média; a linha tracejada de cima a baixo é a MÉDIA DOS GASTOS por mês
+// (o normal, `media`) — o que falta até ela é a folga que o mês ainda tem. `ctrl`: 'fixos', 'parcelas', 'media'.
+export const HACHURA_PARCELAS = 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--serie-gastos) 38%, transparent) 0 3px, transparent 3px 6px)';
+const ROT_MES = 46;
+const VALOR_MES = 104;
+export function JaComprometido({ meses, media, ctrl }) {
+  const balao = useBalao(250, 150);
+  const max = Math.max(1, media ?? 0, ...meses.map((m) => m.total)) * 1.04;
+  const fr = (c) => c / max;
+  // a coluna das barras: entre o rótulo do mês e o valor (os dois com `gap-2`)
+  const naBarra = (f) => `calc(${ROT_MES + 8}px + (100% - ${ROT_MES + VALOR_MES + 16}px) * ${f})`;
+  const i = balao.ativo;
+  const m = i !== null ? meses[i] : null;
+  const pctMedia = (c) => (media ? `${Math.round((c / media) * 100)}%` : '');
+  return (
+    // o rótulo da média vai NUMA FAIXA ACIMA das linhas (`pt-5`), à esquerda da tracejada: ao lado dela, ele caía em
+    // cima do valor da primeira linha
+    <div className="relative flex h-full min-h-0 flex-col gap-1 pt-5" onMouseLeave={balao.aoSair}>
+      {media > 0 && (
+        <div className="pointer-events-none absolute bottom-0 top-0 border-l-[1.5px] border-dashed transition-opacity duration-150"
+          style={{ left: naBarra(fr(media)), borderColor: COR_ANTERIOR, opacity: ctrl.opSerie('media') }}>
+          <span className="absolute right-full top-0 mr-1.5 whitespace-nowrap text-[10px]" style={{ color: ROTULO_EIXO }}>média dos gastos {brlCurto(media)}</span>
+        </div>
+      )}
+      {meses.map((mm, k) => (
+        <div key={mm.competencia} onMouseMove={balao.aoMover(k)}
+          className="grid min-h-[20px] flex-1 cursor-default items-center gap-2 transition-opacity duration-100"
+          style={{ gridTemplateColumns: `${ROT_MES}px minmax(0,1fr) ${VALOR_MES}px`, maxHeight: 34, opacity: balao.esmaecido(k) ? 0.4 : 1 }}>
+          <span className={`truncate text-[11px] tabular-nums ${k === 0 ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>{competenciaCurta(mm.competencia)}</span>
+          <div className="relative h-[60%] max-h-[16px] min-h-[8px]">
+            {mm.fixos > 0 && (
+              <div className={`absolute inset-y-0 left-0 transition-opacity duration-150 ${mm.parcelas ? '' : 'rounded-r-[2px]'}`}
+                style={{ width: pct(fr(mm.fixos)), background: CORES_ORIGEM.fixo, opacity: ctrl.opSerie('fixos') }} />
+            )}
+            {mm.parcelas > 0 && (
+              <div className="barra-parcelas absolute inset-y-0 rounded-r-[2px] transition-opacity duration-150"
+                style={{ left: mm.fixos ? `calc(${pct(fr(mm.fixos))} + 2px)` : 0, width: pct(fr(mm.parcelas)), opacity: ctrl.opSerie('parcelas') }} />
+            )}
+          </div>
+          <span className="truncate text-right text-[11px] tabular-nums">
+            <span className="font-semibold text-gray-800">{mm.total ? brlCurto(mm.total) : '—'}</span>
+            {mm.total > 0 && media > 0 && <span className="text-gray-400"> · {pctMedia(mm.total)}</span>}
+          </span>
+        </div>
+      ))}
+      {m && (
+        <BalaoGrafico pos={balao.pos} largura={250} titulo={`${nomeCompetencia(m.competencia)}${i === 0 ? ' · este mês' : ''}`}
+          itens={[
+            { rotulo: 'Gastos fixos', valor: formatBRL(m.fixos), cor: CORES_ORIGEM.fixo },
+            { rotulo: `Parcelas que vêm${m.compras ? ` (${m.compras} ${m.compras === 1 ? 'compra' : 'compras'})` : ''}`, valor: formatBRL(m.parcelas), cor: COR_GASTOS },
+            { rotulo: 'Já comprometido', valor: formatBRL(m.total) },
+          ]}
+          nota={media ? `${pctMedia(m.total)} da média dos gastos (${formatBRL(media)}/mês): sobram ${formatBRL(Math.max(0, media - m.total))} até ela.` : undefined} />
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------ fora do normal
+
+// FORA DO NORMAL (03/11/2026, opção D do mockup): as categorias do mês que mais fugiram da média delas
+// (`foraDoNormal`), em DUAS colunas — "Acima do normal" (gastou mais: vermelho) e "Abaixo do normal" (gastou menos:
+// verde) —, cada barra do tamanho da diferença, na MESMA escala nas duas. O hover dá o mês, o normal e a conta;
+// clicar abre os lançamentos do mês.
+const COR_ABAIXO = varCor('#16a34a', 'fundo');
+export function ForaDoNormal({ dados, onMes }) {
+  const balao = useBalao(260, 140);
+  if (!dados) return <p className="py-6 text-center text-sm text-gray-400">Nenhum gasto no período.</p>;
+  const { mes, base, acima, abaixo } = dados;
+  if (!base.length) return <p className="py-6 text-center text-sm text-gray-400">Não há meses antes de {competenciaCurta(mes)} para comparar.</p>;
+  const todos = [...acima, ...abaixo];
+  const max = Math.max(1, ...todos.map((x) => Math.abs(x.dif)));
+  const ativo = balao.ativo !== null ? todos.find((x) => x.id === balao.ativo) : null;
+  const linha = (x, cor) => (
+    <button key={x.id} type="button" onMouseMove={balao.aoMover(x.id)} onClick={() => onMes?.(mes)}
+      className="grid w-full items-center gap-2.5 rounded-[3px] px-1.5 py-1 text-left transition-colors hover:bg-gray-50"
+      style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(56px,30%) 84px', opacity: balao.esmaecido(x.id) ? 0.55 : 1 }}>
+      <span className="min-w-0">
+        <span className="flex items-center gap-1.5 text-[12.5px] text-gray-800">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: x.cor }} /><span className="truncate">{x.nome}</span>
+        </span>
+        <span className="block truncate pl-3.5 text-[11px] text-gray-500">
+          {x.nova ? `${brlCurto(x.valor)} · nova no mês` : x.sumiu ? `não teve no mês · normal ${brlCurto(x.normal)}` : `${brlCurto(x.valor)} contra ${brlCurto(x.normal)}`}
+        </span>
+      </span>
+      <span className="relative h-2.5">
+        <span className="absolute inset-y-0 left-0 rounded-r-[2px]" style={{ width: pct(Math.abs(x.dif) / max), background: cor }} />
+      </span>
+      <span className="text-right text-[12px] font-semibold tabular-nums text-gray-800">{x.dif > 0 ? '+' : '−'}{brlCurto(Math.abs(x.dif))}</span>
+    </button>
+  );
+  const coluna = (titulo, itens, cor, vazio) => (
+    <div className="min-w-0">
+      <div className="mb-1 flex items-center gap-1.5 px-1.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500">
+        <span className="h-2 w-2 rounded-[2px]" style={{ background: cor }} />{titulo}
+      </div>
+      {itens.length ? itens.map((x) => linha(x, cor)) : <p className="px-1.5 py-2 text-[12px] text-gray-400">{vazio}</p>}
+    </div>
+  );
+  return (
+    <div className="grid gap-x-8 gap-y-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }} onMouseLeave={balao.aoSair}>
+      {coluna('Acima do normal', acima, COR_FALTOU, 'Nenhuma categoria gastou bem mais que o normal.')}
+      {coluna('Abaixo do normal', abaixo, COR_ABAIXO, 'Nenhuma categoria gastou bem menos que o normal.')}
+      {ativo && (
+        <BalaoGrafico pos={balao.pos} largura={260} titulo={`${ativo.nome} · ${nomeCompetencia(mes)}`}
+          itens={[
+            { rotulo: 'No mês', valor: formatBRL(ativo.valor) },
+            { rotulo: `O normal (média de ${base.length} ${base.length === 1 ? 'mês' : 'meses'})`, valor: formatBRL(ativo.normal) },
+            { rotulo: 'Diferença', valor: `${ativo.dif > 0 ? '+' : '−'}${formatBRL(Math.abs(ativo.dif))}${ativo.normal ? ` (${sinal(variacao(ativo.valor, ativo.normal))})` : ''}`, cor: ativo.dif > 0 ? COR_FALTOU : COR_ABAIXO },
+          ]}
+          nota={`${ativo.grupo}. Clique para ver os lançamentos do mês.`} />
+      )}
+    </div>
+  );
+}
