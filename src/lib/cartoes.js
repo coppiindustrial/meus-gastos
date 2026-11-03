@@ -51,10 +51,42 @@ export function resumoDosCartoes({ cartoes, faturas, parcelas, hoje }) {
         const doMes = fs.filter((f) => f.competencia === comp);
         return { comp, total: doMes.reduce((s, f) => s + Number(f.total_centavos ?? 0), 0), qtd: doMes.reduce((s, f) => s + (f.qtd ?? 0), 0), vencimento: doMes[0]?.vencimento.slice(0, 10) ?? null };
       }),
+      grafico: graficoDoCartao(fs, ps, compHoje),
       faturas: fs.length,
     };
   });
   return out;
+}
+
+// O GRÁFICO DO BLOCO (03/11/2026, opção D do mockup "Cartões · gráfico das faturas"): as faturas e, depois da mais
+// recente (a que a view `parcelas_futuras` usa), as PARCELAS JÁ COMPRADAS que vêm, mês a mês, até 6 meses. São 12
+// colunas (com o número "13,4k" em cada uma, mais não cabe num bloco): as faturas são as 12 − futuras mais recentes;
+// sem parcelas, as 12 de sempre, até hoje.
+// Coluna: { comp, tipo: 'fatura' | 'parcelas', total, qtd (compras), vencimento }.
+const mesesEntre = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
+const MAX_FUTURAS = 6;
+const COLUNAS_GRAFICO = 12;
+function graficoDoCartao(fs, ps, compHoje) {
+  const porMes = new Map();
+  ps.forEach((p) => {
+    const x = porMes.get(p.competencia) ?? { total: 0, compras: new Set() };
+    x.total += Number(p.valor_centavos);
+    x.compras.add(p.lancamento_id);
+    porMes.set(p.competencia, x);
+  });
+  const fim = ps.length && fs.length ? fs[0].competencia : compHoje;
+  const ultimaParcela = [...porMes.keys()].filter((k) => k > fim).sort().pop();
+  const nFut = ultimaParcela ? Math.min(MAX_FUTURAS, mesesEntre(fim, ultimaParcela)) : 0;
+  const nPass = COLUNAS_GRAFICO - nFut;
+  const fatura = (comp) => {
+    const doMes = fs.filter((f) => f.competencia === comp);
+    return { comp, tipo: 'fatura', total: doMes.reduce((s, f) => s + Number(f.total_centavos ?? 0), 0), qtd: doMes.reduce((s, f) => s + (f.qtd ?? 0), 0), vencimento: doMes[0]?.vencimento.slice(0, 10) ?? null };
+  };
+  const parcelas = (comp) => ({ comp, tipo: 'parcelas', total: porMes.get(comp)?.total ?? 0, qtd: porMes.get(comp)?.compras.size ?? 0, vencimento: null });
+  return [
+    ...Array.from({ length: nPass }, (_, i) => fatura(addMeses(fim, i - (nPass - 1)))),
+    ...Array.from({ length: nFut }, (_, i) => parcelas(addMeses(fim, i + 1))),
+  ];
 }
 
 // O CADASTRO EM POP-UP (como o dos fixos e o das categorias): só o que mudou em cada cartão.

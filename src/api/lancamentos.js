@@ -1,4 +1,4 @@
-import { exigir, supabase } from './supabase.js';
+import { buscarTudo, exigir, supabase } from './supabase.js';
 import { competenciaParaBanco } from '../lib/format.js';
 
 // Lançamentos (a tabela central). Valores em centavos, competência como 'AAAA-MM' no front.
@@ -72,6 +72,16 @@ export async function criarLancamentos(lista) {
 }
 
 // As linhas inteiras (para guardar no desfazer antes de excluir).
+// O "POR CATEGORIA" do histórico do cartão (o ampliado dos Cartões): as compras do cartão desde `desde` ('AAAA-MM';
+// null = todas), só o que a conta usa. Paginado: um cartão passa de mil compras em poucos meses.
+export function listarDoCartao(cartaoId, desde) {
+  return buscarTudo(() => {
+    let q = supabase.from('lancamentos').select('id, categoria_id, estabelecimento, descricao, valor_centavos, competencia').eq('cartao_id', cartaoId);
+    if (desde) q = q.gte('competencia', competenciaParaBanco(desde));
+    return q.order('id');
+  });
+}
+
 export async function buscarPorIds(ids) {
   return (await exigir(supabase.from('lancamentos').select('*').in('id', ids))).map(doBanco);
 }

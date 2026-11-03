@@ -24,6 +24,14 @@ export function brlCurto(centavos) {
   return `${sinal}R$ ${Math.round(abs).toLocaleString('pt-BR')}`;
 }
 
+// O número dos rótulos de gráfico, sem a unidade: "13,4k", "850" (centavos → reais; 03/11/2026, as barras dos Cartões).
+export function numeroK(centavos) {
+  const reais = Math.abs(Number(centavos) || 0) / 100;
+  if (reais >= 1e6) return `${(reais / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}mi`;
+  if (reais >= 1e3) return `${(reais / 1e3).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}k`;
+  return Math.round(reais).toLocaleString('pt-BR');
+}
+
 // Lê um valor digitado ou vindo de CSV e devolve centavos (ou null se não for número).
 // Aceita "1.234,56", "1234,56", "1234.56", "R$ 59,90", "-2.998,73", "1,234.56".
 export function parseValor(texto) {

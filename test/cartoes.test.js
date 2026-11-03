@@ -32,6 +32,29 @@ test('resumoDosCartoes: última, próxima (importada?), parcelas, média e a sé
   assert.equal(r.in.ultima, null);
 });
 
+test('grafico (opção D): as faturas até a mais recente e depois as parcelas que vêm, em 12 colunas', () => {
+  const faturas = [F('nu', '2026-10-13', 369822, 30), F('nu', '2026-09-13', 330000)];
+  const parcelas = [
+    { cartao_id: 'nu', competencia: '2026-11', valor_centavos: 10000, lancamento_id: 'a' },
+    { cartao_id: 'nu', competencia: '2026-11', valor_centavos: 4000, lancamento_id: 'b' },
+    { cartao_id: 'nu', competencia: '2026-12', valor_centavos: 10000, lancamento_id: 'a' },
+    { cartao_id: 'nu', competencia: '2027-02', valor_centavos: 5000, lancamento_id: 'c' }, // jan/27 sem parcela: coluna vazia
+  ];
+  const g = resumoDosCartoes({ cartoes, faturas, parcelas, hoje: '2026-11-03' }).nu.grafico;
+  assert.equal(g.length, 12);
+  assert.deepEqual(g.slice(-4).map((x) => [x.comp, x.tipo, x.total, x.qtd]),
+    [['2026-11', 'parcelas', 14000, 2], ['2026-12', 'parcelas', 10000, 1], ['2027-01', 'parcelas', 0, 0], ['2027-02', 'parcelas', 5000, 1]]);
+  assert.deepEqual([g[0].comp, g[7].comp, g[7].tipo, g[7].total], ['2026-03', '2026-10', 'fatura', 369822]);
+  // muitas parcelas: no máximo 6 meses à frente, e as faturas que sobram (6)
+  const longe = [...parcelas, { cartao_id: 'nu', competencia: '2027-12', valor_centavos: 100, lancamento_id: 'd' }];
+  const g2 = resumoDosCartoes({ cartoes, faturas, parcelas: longe, hoje: '2026-11-03' }).nu.grafico;
+  assert.equal(g2.filter((x) => x.tipo === 'parcelas').length, 6);
+  assert.equal(g2.filter((x) => x.tipo === 'fatura').length, 6);
+  // sem parcelas: as 12 de sempre, até o mês de hoje
+  const g3 = resumoDosCartoes({ cartoes, faturas, parcelas: [], hoje: '2026-11-03' }).nu.grafico;
+  assert.deepEqual([g3.length, g3[11].comp, g3.every((x) => x.tipo === 'fatura')], [12, '2026-11', true]);
+});
+
 test('diferencaCartao e validarCartoes', () => {
   const orig = cartoes[0];
   assert.deepEqual(diferencaCartao({ ...orig, orig, dia_vencimento: '12' }), { dia_vencimento: 12 });

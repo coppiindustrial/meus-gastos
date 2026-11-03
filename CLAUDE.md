@@ -56,6 +56,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   caixa (ou fora dela) rola a grade — mais rápido quanto mais longe, e parado na borda segue rolando — e a faixa segue
   a célula sob o cursor (`elementFromPoint` preso à área útil; a caixa pode passar do fim da janela).
   No celular continua a lista (só leitura + formulário).
+  AMPLIAR A TABELA (03/11/2026, opção A do mockup): o ⤢ no grupo do cabeçalho esconde os cartões do resumo e a grade
+  ganha a altura até o fim da janela (`ateOFim`, medida de onde a caixa começa; refeita no resize); ⤡ volta.
+  Lembrado em `lancamentos_ampliada`.
   NA LINHA NOVA A CATEGORIA DECIDE O TIPO (30/10/2026): a lista mostra as de gasto e as de entrada, e escolher uma
   de renda faz dela uma entrada (o "+" do valor manda mais). ENTRADA: escolher a categoria preenche a descrição VAZIA
   com o nome dela (`descricaoDaEntrada`, também no formulário; o que foi escrito não muda). CONTA NO VALOR, como no
@@ -144,6 +147,18 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   `parcelas_futuras`), média por fatura (12 meses) e as 12 faturas em colunas (a última na cor `--serie-gastos`;
   hover = a coluna cheia, as outras a 40% e o `BalaoGrafico` com total, compras e a diferença para a média; clicar
   abre os lançamentos do mês). O bloco ganha borda e sombra no hover.
+  O GRÁFICO DO BLOCO (03/11/2026, opção D do mockup "Cartões · gráfico das faturas"): 12 colunas com o número curto
+  em cada uma (`numeroK`: "13,4k") e o mês embaixo; depois de uma linha tracejada, até 6 meses de PARCELAS JÁ
+  COMPRADAS que vêm, hachuradas (`.barra-parcelas`; balão "Parcelas de …", sem clique) — `grafico` de
+  `resumoDosCartoes` (testada). Coluna estreita (< 27px, medida): só os marcos (última, maior, 1ª parcela) e a inicial
+  do mês.
+  O HISTÓRICO DO CARTÃO (03/11/2026, mockup "Cartões · o ampliado do cartão"): o ⤢ do bloco (só no computador) abre
+  `components/AmpliadoCartao.jsx`, o painel dos ampliados (1280px/90vh, tela cheia, CSV da aba), com a troca de cartão,
+  o período (12 / 24 meses / todo o histórico) e quatro abas — LINHA DO TEMPO (todas as faturas do período, o número em
+  cada coluna, a média tracejada, o ano embaixo, depois as parcelas hachuradas), ANO × ANO (dois anos lado a lado; a
+  variação no mesmo período), POR CATEGORIA (lê os lançamentos do cartão: `listarDoCartao`; categorias e as lojas que
+  mais pesaram) e TABELA (fatura a fatura, contra a média, e as parcelas que vêm). Contas em `lib/historicoCartao.js`
+  (testada). Clicar num mês abre os Lançamentos dele.
   Contas em `lib/cartoes.js` (testada). Cabeçalho do DRE: ✎ `ModalCadastroCartoes` (tabela de formulário, "Salvar
   alterações (N)"; cartão com lançamentos não se exclui) · ▾ Exportar CSV / Importar; "+ Novo cartão" = o formulário
   de um (clicar no nome do bloco também o abre).

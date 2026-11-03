@@ -669,6 +669,12 @@ html[data-tema='escuro'] {
    colagem (o motivo aparece no hover). */
 :root { --grade-sel: #2563eb; }
 html[data-tema='escuro'] { --grade-sel: #5b8def; }
+/* As PARCELAS QUE VÊM no gráfico dos Cartões (03/11/2026): a cor dos gastos, hachurada e com contorno — o que já foi
+   comprado e ainda vai cair na fatura (a coluna cheia é a fatura que entrou). */
+.barra-parcelas {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--serie-gastos) 38%, transparent) 0 3px, transparent 3px 6px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--serie-gastos) 65%, transparent);
+}
 .grade-hachura {
   background: repeating-linear-gradient(135deg, transparent 0 4px, rgb(156 163 175 / 0.22) 4px 8px);
 }

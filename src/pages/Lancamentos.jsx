@@ -28,6 +28,14 @@ const OPCOES_ORIGEM = Object.entries(ORIGENS).map(([value, label]) => ({ value, 
 const OPCOES_REVISAR = [{ value: '', label: 'Todos' }, { value: 'sim', label: 'Só os a revisar', chip: 'A revisar' }];
 const LS_MES = 'lancamentos_mes';
 const LS_ORDEM = 'lancamentos_ordem';
+// AMPLIAR A TABELA (03/11/2026, opção A do mockup "Lançamentos · ampliar a tabela"): o ⤢ do grupo do cabeçalho
+// esconde os cartões do resumo e a grade desce até o fim da janela; o ⤡ volta. Lembrado no navegador.
+const LS_AMPLIADA = 'lancamentos_ampliada';
+const IcoAmpliar = ({ reduzir }) => (
+  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <path d={reduzir ? 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7' : 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7'} />
+  </svg>
+);
 const lerOrdem = () => { try { return JSON.parse(lsGet(LS_ORDEM)) || null; } catch { return null; } };
 
 // A ORDEM DA GRADE: a escolhida no cabeçalho (a seta de cada coluna; `ordenarLinhas`) ou a padrão — a data mais
@@ -44,6 +52,8 @@ export default function Lancamentos() {
   const toast = useToast();
   const [comp, setCompEstado] = useState(() => lsGet(LS_MES) || competenciaAtual());
   const setComp = (c) => { setCompEstado(c); lsSet(LS_MES, c); };
+  const [ampliada, setAmpliadaEstado] = useState(() => lsGet(LS_AMPLIADA) === 'sim');
+  const setAmpliada = (v) => { setAmpliadaEstado(v); lsSet(LS_AMPLIADA, v ? 'sim' : ''); };
   const [todas, setTodas] = useState(null); // as do mês (e os rascunhos da grade), na ordem da tela
   const [categorias, setCategorias] = useState([]);
   const [cartoes, setCartoes] = useState([]);
@@ -150,6 +160,12 @@ export default function Lancamentos() {
             {/* O GRUPO DO DRE (o mesmo dos Gastos fixos e do Importar): a caixa com o ▾ "Mais ações" (o exportar).
                 Abre e fecha no mesmo botão: o mousedown anota se o menu estava aberto (ver Fixos.jsx). */}
             <div className="hidden overflow-hidden rounded-md border border-gray-300 bg-white md:inline-flex">
+              <Tooltip label={ampliada ? 'Voltar ao resumo' : 'Ampliar a tabela'}>
+                <button type="button" aria-label={ampliada ? 'Voltar ao resumo' : 'Ampliar a tabela'} aria-pressed={ampliada} onClick={() => setAmpliada(!ampliada)}
+                  className={`flex h-9 w-[34px] items-center justify-center border-r border-gray-300 transition-colors hover:bg-gray-50 active:bg-gray-200 ${ampliada ? 'bg-gray-100 text-gray-900' : 'text-gray-600'}`}>
+                  <IcoAmpliar reduzir={ampliada} />
+                </button>
+              </Tooltip>
               <Tooltip label="Mais ações">
                 <button type="button" aria-label="Mais ações" aria-haspopup="menu" aria-expanded={!!mais}
                   onMouseDown={() => { maisAbertoNoClique.current = !!mais; }}
@@ -167,7 +183,8 @@ export default function Lancamentos() {
         )}
       />
 
-      <div className="mt-4 sm:mt-6">
+      {/* ampliada, os cartões saem só no computador (no celular não há o botão nem a grade) */}
+      <div className={`mt-4 sm:mt-6 ${ampliada ? 'md:hidden' : ''}`}>
         <CartoesResumo serie={serie} tipo={tipo} onTipo={setTipo} onMes={setComp} />
       </div>
 
@@ -195,7 +212,7 @@ export default function Lancamentos() {
           <>
             {/* Computador: a grade de planilha (com a linha em branco no fim, mesmo sem lançamentos). */}
             <div className="hidden md:block">
-              <GradeLancamentos linhas={visiveis} todas={todas} setTodas={setTodas} categorias={categorias} comp={comp} ordem={ordem} onOrdenar={ordenarPor}
+              <GradeLancamentos linhas={visiveis} todas={todas} setTodas={setTodas} categorias={categorias} comp={comp} ordem={ordem} onOrdenar={ordenarPor} ateOFim={ampliada}
                 onAbrir={(l) => setModal({ item: l })} onRecarregar={carregar}
                 onCategoriaCriada={(cat) => setCategorias((c) => (c.some((x) => x.id === cat.id) ? c : [...c, cat]))} />
               <p className="mt-2 text-right text-xs text-gray-500">

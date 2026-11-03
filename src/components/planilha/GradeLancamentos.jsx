@@ -74,12 +74,28 @@ function textoEdicao(l, c) {
 
 // `linhas`: as da tela (filtradas, na ordem mostrada, com os rascunhos). `todas`/`setTodas`: a lista
 // inteira do mês, que é da página (os indicadores e os filtros saem dela).
-export default function GradeLancamentos({ linhas, todas, setTodas, categorias, comp, onAbrir, onRecarregar, onCategoriaCriada, ordem = null, onOrdenar }) {
+// `ateOFim`: a tabela ampliada (o ⤢ dos Lançamentos) — a caixa vai até o fim da janela, medida de onde ela começa.
+export default function GradeLancamentos({ linhas, todas, setTodas, categorias, comp, onAbrir, onRecarregar, onCategoriaCriada, ordem = null, onOrdenar, ateOFim = false }) {
   const toast = useToast();
   const todasRef = useRef(todas);
   todasRef.current = todas;
   const confirmar = useConfirmacao();
   const caixaRef = useRef(null);
+  // Ampliada: a altura = da borda de cima da caixa (na página, sem a rolagem) até o fim da janela, menos o que vem
+  // embaixo dela (a barra de status, a contagem e o respiro do Layout).
+  const [alturaCheia, setAlturaCheia] = useState(null);
+  useLayoutEffect(() => {
+    if (!ateOFim) { setAlturaCheia(null); return undefined; }
+    const medir = () => {
+      const el = caixaRef.current;
+      if (!el) return;
+      const topo = el.getBoundingClientRect().top + window.scrollY;
+      setAlturaCheia(Math.max(260, window.innerHeight - topo - 80));
+    };
+    medir();
+    window.addEventListener('resize', medir);
+    return () => window.removeEventListener('resize', medir);
+  }, [ateOFim]);
   const [sel, setSel] = useState({ r: 0, c: 0 });
   const [ext, setExt] = useState(null);
   // Esc TIRA A SELEÇÃO (como na grade do DRE): nada aceso, sem a barra da soma. A célula de antes fica guardada
@@ -811,8 +827,8 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
           e.preventDefault();
           colarTexto(e.clipboardData?.getData('text/plain') ?? '');
         }}
-        className="grade-lancamentos max-h-[calc(100vh-300px)] min-h-[260px] overflow-auto rounded-t-lg border border-gray-300 bg-white outline-none focus-visible:ring-0"
-        style={{ scrollPaddingTop: 34, scrollPaddingLeft: 44 }}>
+        className={`grade-lancamentos ${alturaCheia ? '' : 'max-h-[calc(100vh-300px)]'} min-h-[260px] overflow-auto rounded-t-lg border border-gray-300 bg-white outline-none focus-visible:ring-0`}
+        style={{ scrollPaddingTop: 34, scrollPaddingLeft: 44, ...(alturaCheia ? { height: alturaCheia } : null) }}>
         <table className="table-fixed border-separate border-spacing-0" style={{ width: '100%', minWidth: larguraTotal }}>
           <colgroup>
             <col style={{ width: 44 }} />

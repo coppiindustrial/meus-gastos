@@ -11,6 +11,7 @@ import { PageLoading } from '../components/Spinner.jsx';
 import { Campo, Etiqueta, RodapeForm } from '../components/Comuns.jsx';
 import { IconAbrir, IconLapis, IconMais, IconSeta } from '../components/icons.jsx';
 import BalaoGrafico, { useBalao } from '../components/graficos/BalaoGrafico.jsx';
+import AmpliadoCartao from '../components/AmpliadoCartao.jsx';
 import ImportarFatura from './ImportarFatura.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { contarUsoCartao, criarCartoesSugeridos, listarCartoes, salvarCartao } from '../api/cadastros.js';
@@ -18,7 +19,7 @@ import { listarFaturas } from '../api/faturas.js';
 import { listarParcelasFuturas } from '../api/resumo.js';
 import { CARTOES_SUGERIDOS } from '../lib/sugestoes.js';
 import { FORMATOS, resumoDosCartoes, rotuloFormato } from '../lib/cartoes.js';
-import { formatBRL } from '../lib/dinheiro.js';
+import { formatBRL, numeroK } from '../lib/dinheiro.js';
 import { competenciaCurta, formatDate, nomeCompetencia, todayISO } from '../lib/format.js';
 import { lsSet } from '../lib/storage.js';
 import { exportCsv } from '../lib/exportCsv.js';
@@ -97,12 +98,37 @@ const Numero = ({ rotulo, valor, sub }) => (
   </div>
 );
 
-function BlocoCartao({ cartao: c, r, uso, onEditar, onImportar, onVer, onVerMes }) {
-  const maior = Math.max(1, ...r.serie.map((s) => s.total));
+const IcoAmpliar = (p) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" {...p}>
+    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+  </svg>
+);
+
+function BlocoCartao({ cartao: c, r, uso, onEditar, onImportar, onVer, onVerMes, onHistorico }) {
+  // O GRÁFICO É A OPÇÃO D (03/11/2026): cada coluna com o número curto ("13,4k") e o mês embaixo; depois da linha
+  // tracejada, as parcelas já compradas que vêm, hachuradas (`r.grafico`, de `lib/cartoes.js`).
+  const maior = Math.max(1, ...r.grafico.map((s) => s.total));
+  // ESTREITO (três blocos por linha): o número cheio não cabe na coluna — ficam só os MARCOS (a última fatura, a maior
+  // e a primeira parcela que vem) e o mês vira a inicial. A largura é medida (o bloco muda com a janela).
+  const graficoRef = useRef(null);
+  const [colLarg, setColLarg] = useState(30);
+  useEffect(() => {
+    const el = graficoRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(() => setColLarg(el.clientWidth / Math.max(1, r.grafico.length)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [r.grafico.length]);
+  const estreito = colLarg < 27; // a coluna (menos o vão de 3px) precisa dos ~24px de "14,8k"
+  const marcos = useMemo(() => {
+    const fats = r.grafico.filter((s) => s.tipo === 'fatura' && s.total);
+    const maiorFat = fats.reduce((m, s) => (!m || s.total > m.total ? s : m), null);
+    return new Set([r.ultima?.competencia, maiorFat?.comp, r.grafico.find((s) => s.tipo === 'parcelas' && s.total)?.comp].filter(Boolean));
+  }, [r.grafico, r.ultima]);
   // O HOVER DAS COLUNAS (30/10/2026, a pedido): a do mês fica cheia e as outras recuam (o `esmaecido` dos gráficos),
   // e o balão diz o mês, o total, as compras e a diferença para a média; clicar abre os lançamentos do mês.
   const balao = useBalao(230, 120);
-  const ativo = balao.ativo !== null ? r.serie[balao.ativo] : null;
+  const ativo = balao.ativo !== null ? r.grafico[balao.ativo] : null;
   const icone = 'inline-flex h-7 w-7 items-center justify-center rounded-[6px] border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50';
   return (
     <div className={`card flex flex-col gap-4 p-4 transition-[border-color,box-shadow] duration-150 hover:border-gray-300 hover:shadow-md ${c.ativo ? '' : 'opacity-60'}`}>
@@ -120,6 +146,14 @@ function BlocoCartao({ cartao: c, r, uso, onEditar, onImportar, onVer, onVerMes 
             <Tooltip label={r.proxima.importada ? `A fatura de ${ddmm(r.proxima.vencimento)} já entrou — importar de novo` : `Importar a fatura de ${ddmm(r.proxima.vencimento)}`}>
               <button type="button" aria-label="Importar a fatura" onClick={onImportar} className={icone}><IcoImportar className="h-3.5 w-3.5" /></button>
             </Tooltip>
+          )}
+          {r.faturas > 0 && (
+            // só no computador: o painel é largo (no celular, como a grade dos Lançamentos, não há)
+            <span className="hidden md:inline-flex">
+              <Tooltip label="O histórico do cartão (linha do tempo, ano × ano, por categoria)">
+                <button type="button" aria-label="Ver o histórico do cartão" onClick={onHistorico} className={icone}><IcoAmpliar className="h-3.5 w-3.5" /></button>
+              </Tooltip>
+            </span>
           )}
           {r.ultima && (
             <Tooltip label={`Ver os lançamentos de ${competenciaCurta(r.ultima.competencia)}`}>
@@ -147,27 +181,52 @@ function BlocoCartao({ cartao: c, r, uso, onEditar, onImportar, onVer, onVerMes 
 
       {c.ativo && (
         <div>
-          <div className="flex h-12 items-end gap-[3px] border-b border-gray-200" aria-label="Faturas dos últimos 12 meses" onMouseLeave={balao.aoSair}>
-            {r.serie.map((s, i) => {
-              const ultima = s.comp === r.ultima?.competencia;
+          <div ref={graficoRef} className="flex h-[84px] items-end gap-[3px] border-b border-gray-200" aria-label="Faturas e parcelas que vêm" onMouseLeave={balao.aoSair}>
+            {r.grafico.map((s, i) => {
+              const ultima = s.tipo === 'fatura' && s.comp === r.ultima?.competencia;
+              const futura = s.tipo === 'parcelas';
+              const hoje = futura && r.grafico[i - 1]?.tipo === 'fatura';
               const sob = balao.ativo === i;
               return (
                 // A área de cada mês é a coluna INTEIRA (não só a barra): a de um mês baixo também se aponta.
-                <button key={s.comp} type="button" aria-label={`${nomeCompetencia(s.comp)}: ${s.total ? formatBRL(s.total) : 'sem fatura'}`}
-                  onMouseMove={balao.aoMover(i)} onClick={() => s.total && onVerMes(s.comp)}
-                  className={`flex h-full flex-1 items-end ${s.total ? 'cursor-pointer' : 'cursor-default'}`}>
-                  <span className={`block w-full rounded-t-[2px] transition-[opacity,background-color] duration-150 ${ultima ? '' : sob ? 'bg-gray-500' : s.total ? 'bg-gray-300' : 'bg-gray-100'} ${balao.esmaecido(i) ? 'opacity-40' : ''}`}
-                    style={{ height: `${Math.max(4, (s.total / maior) * 100)}%`, ...(ultima ? { background: 'var(--serie-gastos)' } : {}) }} />
+                <button key={s.comp} type="button" aria-label={`${nomeCompetencia(s.comp)}: ${s.total ? formatBRL(s.total) : futura ? 'sem parcelas' : 'sem fatura'}${futura ? ' em parcelas já compradas' : ''}`}
+                  onMouseMove={balao.aoMover(i)} onClick={() => !futura && s.total && onVerMes(s.comp)}
+                  className={`flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-[3px] ${hoje ? 'ml-[3px] border-l border-dashed border-gray-300 pl-[3px]' : ''} ${!futura && s.total ? 'cursor-pointer' : 'cursor-default'} ${balao.esmaecido(i) ? 'opacity-40' : ''} transition-opacity duration-150`}>
+                  <span className={`whitespace-nowrap text-[10px] leading-none tabular-nums ${ultima ? 'font-semibold text-gray-800' : futura ? '' : 'text-gray-500'}`}
+                    style={futura ? { color: 'var(--serie-gastos)' } : undefined}>
+                    {s.total && (!estreito || marcos.has(s.comp)) ? numeroK(s.total) : ''}
+                  </span>
+                  <span className={`block w-full rounded-t-[2px] transition-colors duration-150 ${futura ? 'barra-parcelas' : ultima ? '' : sob ? 'bg-gray-500' : s.total ? 'bg-gray-300' : 'bg-gray-100'}`}
+                    style={{ height: `${Math.max(s.total ? 3 : 2, Math.round((s.total / maior) * 62))}px`, ...(ultima ? { background: 'var(--serie-gastos)' } : {}) }} />
                 </button>
               );
             })}
           </div>
-          <div className="mt-1 flex justify-between text-[10.5px] text-gray-400">
-            <span>{competenciaCurta(r.serie[0].comp)}</span><span>{competenciaCurta(r.serie[r.serie.length - 1].comp)}</span>
+          <div className="mt-1 flex gap-[3px] text-[10px] text-gray-400">
+            {r.grafico.map((s, i) => (
+              <span key={s.comp} className={`min-w-0 flex-1 text-center ${s.tipo === 'parcelas' && r.grafico[i - 1]?.tipo === 'fatura' ? 'ml-[3px] pl-[4px]' : ''} ${s.comp === r.ultima?.competencia ? 'font-semibold text-gray-700' : ''}`}>
+                {estreito ? competenciaCurta(s.comp).slice(0, 1).toUpperCase() : competenciaCurta(s.comp).slice(0, 3)}
+              </span>
+            ))}
           </div>
+          {r.grafico.some((s) => s.tipo === 'parcelas') && (
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-gray-500">
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px] bg-gray-300" />faturas</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ background: 'var(--serie-gastos)' }} />última</span>
+              <span className="inline-flex items-center gap-1.5"><span className="barra-parcelas h-2 w-2 rounded-[2px]" />parcelas já compradas que vêm</span>
+            </div>
+          )}
         </div>
       )}
-      {ativo && (
+      {ativo && ativo.tipo === 'parcelas' && (
+        <BalaoGrafico pos={balao.pos} largura={230} titulo={`Parcelas de ${nomeCompetencia(ativo.comp).toLowerCase()}`}
+          itens={ativo.total ? [
+            { rotulo: 'Já comprado', valor: formatBRL(ativo.total), cor: 'var(--serie-gastos)' },
+            { rotulo: 'Compras', valor: String(ativo.qtd) },
+          ] : [{ rotulo: 'Sem parcelas', valor: '—' }]}
+          nota="Parcelas de compras que já estão nas faturas; a fatura do mês ainda terá as compras novas." />
+      )}
+      {ativo && ativo.tipo === 'fatura' && (
         <BalaoGrafico pos={balao.pos} largura={230} titulo={`Fatura de ${nomeCompetencia(ativo.comp).toLowerCase()}`}
           itens={ativo.total ? [
             { rotulo: 'Total', valor: formatBRL(ativo.total), cor: ativo.comp === r.ultima?.competencia ? 'var(--serie-gastos)' : undefined },
@@ -188,6 +247,7 @@ export default function Cartoes() {
   const [modal, setModal] = useState(null); // { item } ou {} para novo
   const [cadastro, setCadastro] = useState(false);
   const [importar, setImportar] = useState(null); // { cartaoId, vencimento }
+  const [historico, setHistorico] = useState(null); // o cartão do `AmpliadoCartao` aberto
   const [criando, setCriando] = useState(false);
   const [mais, setMais] = useState(null);
   const maisAbertoNoClique = useRef(false);
@@ -281,11 +341,15 @@ export default function Cartoes() {
             <BlocoCartao key={c.id} cartao={c} r={resumo[c.id]} uso={uso[c.id]}
               onEditar={() => setModal({ item: c })}
               onImportar={() => setImportar({ cartaoId: c.id, vencimento: resumo[c.id].proxima.vencimento })}
-              onVer={() => verLancamentos(resumo[c.id].ultima.competencia)} onVerMes={verLancamentos} />
+              onVer={() => verLancamentos(resumo[c.id].ultima.competencia)} onVerMes={verLancamentos} onHistorico={() => setHistorico(c.id)} />
           ))}
         </div>
       )}
 
+      {historico && dados && (
+        <AmpliadoCartao cartoes={dados.cartoes} cartaoId={historico} faturas={dados.faturas} parcelas={dados.parcelas} hoje={hoje}
+          onClose={() => setHistorico(null)} onVerMes={verLancamentos} />
+      )}
       {modal && <ModalCartao cartao={modal.item} onFechar={() => setModal(null)} onSalvo={() => { setModal(null); carregar(); }} />}
       {cadastro && <ModalCadastroCartoes cartoes={ordenados} uso={uso} onFechar={() => setCadastro(false)} onSalvo={() => { setCadastro(false); carregar(); }} />}
       {importar && <ImportarFatura cartoes={cartoes} inicial={importar} onFechar={() => setImportar(null)} onImportada={() => { setImportar(null); carregar(); }} />}
