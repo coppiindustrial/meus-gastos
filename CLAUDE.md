@@ -165,11 +165,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   período) e o clique filtra as lojas. "Onde mais comprou" mostra todas, com busca e ordem, categoria, COMPRAS, ticket
   médio e a última; clicar abre as compras. COMPRA ≠ LINHA DA FATURA (`comprasDaLoja`, testada): as parcelas da mesma
   compra contam uma vez (pela COMPETÊNCIA menos as parcelas pagas — o Nubank anda a data por parcela, a XP repete a da
-  compra) e o IOF da compra internacional (linha do mesmo dia com 2,5–7% de outra) entra no valor dela. O "N
+  compra; o valor com a folga do ARREDONDAMENTO, até 1 centavo por parcela: a 1ª da Brooksfield veio R$ 644,40 e as
+  outras R$ 644,37, e a compra virava duas) e o IOF da compra internacional (linha do mesmo dia com 2,5–7% de outra) entra no valor dela. O "N
   lançamentos" das faturas continua contando linhas.
   Contas em `lib/cartoes.js` (testada). Cabeçalho do DRE: ✎ `ModalCadastroCartoes` (tabela de formulário, "Salvar
   alterações (N)"; cartão com lançamentos não se exclui; acrescenta pela última linha, "Adicionar cartão", a do
-  cadastro dos fixos — 03/11/2026) · ▾ Exportar CSV / Importar; "+ Novo cartão" = o formulário de um (clicar no nome
+  cadastro dos fixos — 03/11/2026; o + do círculo tracejado é o `IconMais`, nunca o caractere "+", que não centra)
+  · ▾ Exportar CSV / Importar; "+ Novo cartão" = o formulário de um (clicar no nome
   do bloco também o abre).
 - REGRAS (`pages/Regras.jsx`): a TABELA DE FORMULÁRIO dos cadastros — a ordem é a alça ⠿ (a primeira que pega
   decide), palavra e categoria (ou "Ignorar") são campos, marcar várias muda a categoria ou exclui, "Salvar
@@ -348,7 +350,7 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   COLUNAS (o seletor em cima de cada uma — `comPapel`/`papelDaColuna`; data, sinal do gasto, parcela; o rodapé diz o
   que falta — `problemaDoModelo`; linhas do outro sinal em vermelho) e CONFERIR E SALVAR (como entra, com a categoria
   das regras; o vencimento — `vencimentoDoArquivo` em `lib/lerFatura.js`; "reconhecer pelo cabeçalho"; o nome).
-  Abre pelo "Ensinar um formato novo…" no formulário e no cadastro do cartão — a AÇÃO no pé da lista do "Como a
+  Abre pelo "Ensinar um formato novo" no formulário e no cadastro do cartão — a AÇÃO no pé da lista do "Como a
   fatura entra", depois de uma linha (`acao` do `SelectSimples`, como o "+ Criar categoria"; `ENSINAR_FORMATO`), não
   uma opção; o modelo salvo já fica escolhido. Sem a migration 011, salvar explica que ela falta.
   OS IMPORTADORES (7.3, 03/11/2026): `ImportarFatura` e `ImportarArquivos` leem o texto dos BYTES (`decodificar`) e a

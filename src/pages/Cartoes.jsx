@@ -46,8 +46,8 @@ const IcoCartao = ({ className }) => (
   </svg>
 );
 
-// `modelos`: os modelos de importação do usuário (migration 011) — entram no "Como a fatura entra", com o "+ Ensinar
-// um formato novo…" que abre o `AssistenteModelo`; o modelo salvo já fica escolhido (e na lista, até a tela recarregar).
+// `modelos`: os modelos de importação do usuário (migration 011) — entram no "Como a fatura entra", com o "Ensinar
+// um formato novo" (a ação no pé da lista) que abre o `AssistenteModelo`; o modelo salvo já fica escolhido (e na lista, até a tela recarregar).
 function ModalCartao({ cartao, modelos, onFechar, onSalvo }) {
   const toast = useToast();
   const [form, setForm] = useState(() => cartao ?? { nome: '', dia_vencimento: 10, formato: 'manual', ativo: true });

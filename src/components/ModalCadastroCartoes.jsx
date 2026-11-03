@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Modal from './Modal.jsx';
 import SelectSimples from './SelectSimples.jsx';
+import { IconMais } from './icons.jsx';
 import Toggle from './Toggle.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
@@ -25,7 +26,7 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
   const [linhas, setLinhas] = useState(() => cartoes.map(daLinha));
   const [erro, setErro] = useState(null);
   const [salvando, setSalvando] = useState(false);
-  // "+ Ensinar um formato novo…" numa linha: o assistente, e o modelo salvo vai para ela (e para a lista).
+  // "Ensinar um formato novo" numa linha (a ação no pé da lista): o assistente, e o modelo salvo vai para ela (e para a lista).
   const [ensinando, setEnsinando] = useState(null); // a linha
   const [novos, setNovos] = useState([]);
   const todos = [...modelos, ...novos];
@@ -119,7 +120,7 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
               <td colSpan={6} className="px-2 py-1.5">
                 <button type="button" onClick={novo}
                   className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-400 text-[11px] leading-none">+</span>
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-400"><IconMais className="h-2 w-2" /></span>
                   Adicionar cartão
                 </button>
               </td>

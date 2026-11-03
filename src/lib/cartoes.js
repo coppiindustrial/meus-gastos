@@ -14,9 +14,9 @@ export const rotuloFormato = (f, modelo = null) => (f === 'modelo' ? `Importa pe
 
 // OS MODELOS DO USUÁRIO no "Como a fatura entra" (migration 011): cada um vira a opção 'modelo:<id>', entre os prontos
 // e o manual. `valorDoFormato`/`formatoDoValor` vão e voltam entre o cartão ({ formato, modelo_id }) e a opção.
-// O "Ensinar um formato novo…" (o que abre o `AssistenteModelo`) não é uma opção: é a AÇÃO no pé da lista
+// O "Ensinar um formato novo" (o que abre o `AssistenteModelo`) não é uma opção: é a AÇÃO no pé da lista
 // (`ENSINAR_FORMATO`, o `acao` do `SelectSimples`), depois de uma linha — como o "+ Criar categoria" (03/11/2026).
-export const ENSINAR_FORMATO = 'Ensinar um formato novo…';
+export const ENSINAR_FORMATO = 'Ensinar um formato novo';
 export function opcoesFormato(modelos = []) {
   const deFatura = (modelos ?? []).filter((m) => m.tipo === 'fatura' && !m.pronto);
   return [

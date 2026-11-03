@@ -113,9 +113,11 @@ export function anoContraAno({ faturas, parcelas, a, b }) {
 }
 
 // AS COMPRAS DE UMA LOJA (03/11/2026, a pedido: "o Claude não foi 10×"). Uma linha da fatura não é uma compra:
-//   · as PARCELAS da mesma compra (mesmo valor e nº de parcelas, a mesma compra de origem — o mês da FATURA menos as
-//     parcelas já pagas) contam UMA vez ("Dell 5×" era uma compra em 12x, parcelas 8 a 12 no período). É a
-//     competência, não a data: o Nubank anda a data um mês por parcela, a XP repete a da compra em todas;
+//   · as PARCELAS da mesma compra (o mesmo nº de parcelas, a mesma compra de origem — o mês da FATURA menos as
+//     parcelas já pagas — e o mesmo valor) contam UMA vez ("Dell 5×" era uma compra em 12x, parcelas 8 a 12 no
+//     período). É a competência, não a data: o Nubank anda a data um mês por parcela, a XP repete a da compra em todas.
+//     O VALOR com a folga do ARREDONDAMENTO (03/11/2026): uma parcela leva o resto da divisão (a Brooksfield: a 1ª de
+//     R$ 644,40 e as outras de R$ 644,37, e virava duas compras) — até 1 centavo por parcela;
 //   · o IOF da compra internacional vem numa linha à parte, do MESMO DIA, com 2,5–7% de outra (R$ 550,00 + R$ 19,25):
 //     entra no valor da compra, não conta como outra.
 // `linhas`: as da loja ({ id, data, competencia, valor_centavos, parcela_atual, parcela_total }). Devolve as compras, a mais nova em
@@ -123,37 +125,40 @@ export function anoContraAno({ faturas, parcelas, a, b }) {
 const IOF_MIN = 0.025;
 const IOF_MAX = 0.07;
 export function comprasDaLoja(linhas) {
-  const grupos = new Map();
+  const grupos = [];
+  const porOrigem = new Map(); // 'nº de parcelas|mês da compra' → as compras parceladas de lá
+  const nova = (l, v, avulsa) => { const g = { data: l.data, total: 0, iof: 0, parcelas: null, linhas: 0, _valor: v, _avulsa: avulsa }; grupos.push(g); return g; };
   linhas.forEach((l) => {
     const v = Number(l.valor_centavos);
-    const k = l.parcela_total
-      ? `p|${l.parcela_total}|${v}|${addMeses(String(l.competencia ?? l.data).slice(0, 7), -((l.parcela_atual ?? 1) - 1))}`
-      : `a|${l.id ?? Math.random()}`;
-    const g = grupos.get(k) ?? { data: l.data, total: 0, iof: 0, parcelas: null, linhas: 0, _valor: v };
+    let g;
+    if (l.parcela_total) {
+      const k = `${l.parcela_total}|${addMeses(String(l.competencia ?? l.data).slice(0, 7), -((l.parcela_atual ?? 1) - 1))}`;
+      const daOrigem = porOrigem.get(k) ?? [];
+      g = daOrigem.find((x) => Math.abs(x._valor - v) <= l.parcela_total);
+      if (!g) { g = nova(l, v, false); daOrigem.push(g); porOrigem.set(k, daOrigem); }
+      const p = g.parcelas ?? { de: l.parcela_atual, ate: l.parcela_atual, total: l.parcela_total };
+      g.parcelas = { de: Math.min(p.de, l.parcela_atual), ate: Math.max(p.ate, l.parcela_atual), total: l.parcela_total };
+    } else g = nova(l, v, true);
     g.total += v;
     g.linhas += 1;
     if (String(l.data) < String(g.data)) g.data = l.data;
-    if (l.parcela_total) {
-      const p = g.parcelas ?? { de: l.parcela_atual, ate: l.parcela_atual, total: l.parcela_total };
-      g.parcelas = { de: Math.min(p.de, l.parcela_atual), ate: Math.max(p.ate, l.parcela_atual), total: l.parcela_total };
-    }
-    grupos.set(k, g);
   });
   // O IOF: a avulsa pequena vai para a maior do mesmo dia (cada compra recebe um IOF só).
-  const avulsas = [...grupos.entries()].filter(([k]) => k.startsWith('a|')).map(([k, g]) => ({ k, g }))
-    .sort((x, y) => y.g._valor - x.g._valor);
+  const avulsas = grupos.filter((g) => g._avulsa).sort((x, y) => y._valor - x._valor);
   const comIof = new Set();
-  [...avulsas].reverse().forEach(({ k, g }) => {
-    const dona = avulsas.find((x) => x.k !== k && !comIof.has(x.k) && x.g.data === g.data && grupos.has(x.k)
-      && g._valor >= x.g._valor * IOF_MIN && g._valor <= x.g._valor * IOF_MAX);
-    if (!dona || !grupos.has(k)) return;
-    dona.g.total += g._valor;
-    dona.g.iof += g._valor;
-    dona.g.linhas += 1;
-    comIof.add(dona.k);
-    grupos.delete(k);
+  const fora = new Set();
+  [...avulsas].reverse().forEach((g) => {
+    if (fora.has(g)) return;
+    const dona = avulsas.find((x) => x !== g && !comIof.has(x) && !fora.has(x) && x.data === g.data
+      && g._valor >= x._valor * IOF_MIN && g._valor <= x._valor * IOF_MAX);
+    if (!dona) return;
+    dona.total += g._valor;
+    dona.iof += g._valor;
+    dona.linhas += 1;
+    comIof.add(dona);
+    fora.add(g);
   });
-  return [...grupos.values()].map(({ _valor, ...g }) => g).sort((x, y) => String(y.data).localeCompare(String(x.data)));
+  return grupos.filter((g) => !fora.has(g)).map(({ _valor, _avulsa, ...g }) => g).sort((x, y) => String(y.data).localeCompare(String(x.data)));
 }
 
 // POR CATEGORIA: de onde o cartão foi gasto no período e ONDE mais se comprou. `lancamentos`: [{ id, data,

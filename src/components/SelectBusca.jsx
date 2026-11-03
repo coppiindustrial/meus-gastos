@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import SearchInput from './SearchInput.jsx';
-import { IconSeta } from './icons.jsx';
+import { IconMais, IconSeta } from './icons.jsx';
 import posicionarPopover from '../lib/posicionarPopover.js';
 import useEscape from '../lib/useEscape.js';
 
@@ -154,7 +154,7 @@ export default function SelectBusca({
             <div className="mt-1.5 border-t border-gray-100 pt-1.5">
               <button type="button" onClick={() => { setAberto(false); acao.onClick(q.trim()); }}
                 className="flex w-full items-center gap-2.5 rounded-[3px] px-3 py-2 text-left text-[13.5px] font-medium text-gray-800 transition-colors hover:bg-gray-100">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-gray-400 text-gray-500">+</span>
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-gray-400 text-gray-500"><IconMais className="h-2.5 w-2.5" /></span>
                 <span className="min-w-0 flex-1 truncate">{acao.rotulo(q.trim())}</span>
               </button>
             </div>

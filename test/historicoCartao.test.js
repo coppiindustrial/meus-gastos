@@ -61,6 +61,12 @@ test('comprasDaLoja: as parcelas da mesma compra contam uma vez; o IOF do mesmo 
   // a Dell (Nubank: a data anda com a parcela): as parcelas 8 a 12 de 12, uma por fatura — 1 compra
   const dell = comprasDaLoja([8, 9, 10, 11, 12].map((p, i) => ({ id: p, data: `2026-0${i + 1}-06`, competencia: `2026-0${i + 2}-01`, valor_centavos: 123191, parcela_atual: p, parcela_total: 12 })));
   assert.deepEqual(dell, [{ data: '2026-01-06', total: 615955, iof: 0, parcelas: { de: 8, ate: 12, total: 12 }, linhas: 5 }]);
+  // a Brooksfield (XP: a data da compra em todas): a 1ª parcela leva o resto da divisão (R$ 644,40, as outras R$ 644,37)
+  // — 1 compra, parcelas 1 a 5; outra compra em 10x no mesmo mês, de outro valor, segue à parte
+  const brooks = [1, 2, 3, 4, 5].map((p) => ({ id: p, data: '2026-05-11', competencia: `2026-${String(p + 5).padStart(2, '0')}-01`, valor_centavos: p === 1 ? 64440 : 64437, parcela_atual: p, parcela_total: 10 }));
+  assert.deepEqual(comprasDaLoja(brooks), [{ data: '2026-05-11', total: 322188, iof: 0, parcelas: { de: 1, ate: 5, total: 10 }, linhas: 5 }]);
+  const outra = { id: 9, data: '2026-05-20', competencia: '2026-06-01', valor_centavos: 15000, parcela_atual: 1, parcela_total: 10 };
+  assert.deepEqual(comprasDaLoja([...brooks, outra]).map((c) => [c.total, c.parcelas.de, c.parcelas.ate]), [[15000, 1, 1], [322188, 1, 5]]);
   // a XP repete a data da compra em todas as parcelas: duas compras parceladas, não quatro
   const xp = comprasDaLoja([
     ...[1, 2, 3].map((p) => ({ id: `a${p}`, data: '2026-06-27', competencia: `2026-0${6 + p}-01`, valor_centavos: 84000, parcela_atual: p, parcela_total: 5 })),
