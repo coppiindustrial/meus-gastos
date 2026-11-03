@@ -4,10 +4,10 @@ import AreaArrastar from './AreaArrastar.jsx';
 import Spinner from './Spinner.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import {
-  classificarLinhas, faturaExistente, hashDoTexto, importarFatura, listarRegrasParaClassificar,
+  acrescentarCreditos, classificarLinhas, faturaExistente, hashDoTexto, importarFatura, listarRegrasParaClassificar,
 } from '../api/faturas.js';
 import { registrarImportacao } from '../api/importacoes.js';
-import { lerFaturaComModelos } from '../lib/lerFatura.js';
+import { creditosQueFaltam, lerFaturaComModelos, semSaldoAnterior, separarCreditos } from '../lib/lerFatura.js';
 import { decodificar } from '../lib/modeloCsv.js';
 import { listarModelos } from '../api/modelos.js';
 import AssistenteModelo from './AssistenteModelo.jsx';
@@ -36,14 +36,17 @@ async function reconhecer(arquivo, cartoes, regras, modelos, modeloId = null) {
   try {
     const r = lerFaturaComModelos(texto, arquivo.name, { modelos, cartoes, modeloId });
     const { cartao, vencimento } = r;
-    const linhas = classificarLinhas(r.linhas, regras).filter((l) => !l.ignorar);
+    // OS CRÉDITOS (migration 012): o estorno entra negativo e abate; da fatura que já existe, os que faltam nela.
+    const linhas = classificarLinhas(semSaldoAnterior(r.linhas).compras, regras).filter((l) => !l.ignorar);
+    const creditos = classificarLinhas(separarCreditos(r.ignoradas).creditos, regras).filter((l) => !l.ignorar);
     const existente = cartao && vencimento ? await faturaExistente(cartao.id, vencimento) : null;
+    const faltam = existente ? creditosQueFaltam(creditos, existente.creditos ?? []) : creditos;
     return {
-      tipo: 'fatura', nome: arquivo.name, cartao, vencimento, linhas, existente, modelo: r.modelo,
+      tipo: 'fatura', nome: arquivo.name, cartao, vencimento, linhas, creditos, faltam, existente, modelo: r.modelo,
       hash: await hashDoTexto(texto),
-      total: linhas.reduce((s, l) => s + l.valor_centavos, 0),
-      semRegra: linhas.filter((l) => !l.categoria_id).length,
-      acao: !cartao || !vencimento ? 'nada' : existente ? 'pular' : 'importar',
+      total: [...linhas, ...creditos].reduce((s, l) => s + l.valor_centavos, 0),
+      semRegra: [...linhas, ...creditos].filter((l) => !l.categoria_id).length,
+      acao: !cartao || !vencimento ? 'nada' : existente ? (faltam.length ? 'creditos' : 'pular') : 'importar',
     };
   } catch {
     try {
@@ -96,13 +99,14 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
     } catch (err) { toast.error(err.message); } finally { setLendo(false); }
   };
 
-  const alternar = (nome) => setItens((xs) => xs.map((i) => (i.nome === nome ? { ...i, acao: i.acao === 'pular' ? 'substituir' : 'pular' } : i)));
+  const definir = (nome, acao) => setItens((xs) => xs.map((i) => (i.nome === nome ? { ...i, acao } : i)));
   const tirar = (nome) => setItens((xs) => xs.filter((i) => i.nome !== nome));
 
-  const aGravar = itens.filter((i) => i.tipo === 'fatura' && (i.acao === 'importar' || i.acao === 'substituir'));
+  const aGravar = itens.filter((i) => i.tipo === 'fatura' && ['importar', 'substituir', 'creditos'].includes(i.acao));
   const extrato = itens.find((i) => i.tipo === 'extrato' && i.acao === 'abrir');
+  const soCreditos = aGravar.length > 0 && aGravar.every((i) => i.acao === 'creditos');
   const rotuloBotao = aGravar.length
-    ? `Importar ${aGravar.length} ${aGravar.length === 1 ? 'fatura' : 'faturas'}${extrato ? ' e abrir o extrato' : ''}`
+    ? `${soCreditos ? 'Acrescentar os créditos de' : 'Gravar'} ${aGravar.length} ${aGravar.length === 1 ? 'fatura' : 'faturas'}${extrato ? ' e abrir o extrato' : ''}`
     : extrato ? 'Abrir o extrato' : 'Importar';
 
   const importar = async () => {
@@ -110,10 +114,16 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
     try {
       for (const f of aGravar) {
         setGravando(`${f.cartao.nome} ${formatDate(f.vencimento)}…`);
+        if (f.acao === 'creditos') {
+          await acrescentarCreditos({ faturaId: f.existente.id, cartaoId: f.cartao.id, vencimento: f.vencimento, linhas: f.faltam });
+          feitas += 1;
+          continue;
+        }
         const faturaId = await importarFatura({
           cartaoId: f.cartao.id, vencimento: f.vencimento, arquivo: f.nome, hash: f.hash, linhas: f.linhas,
           substituirId: f.acao === 'substituir' ? f.existente?.id : undefined,
         });
+        if (f.creditos.length) await acrescentarCreditos({ faturaId, cartaoId: f.cartao.id, vencimento: f.vencimento, linhas: f.creditos });
         await registrarImportacao({
           tipo: 'fatura', cartao_id: f.cartao.id, fatura_id: faturaId, competencia: competenciaDe(f.vencimento), arquivo: f.nome,
           linhas: f.linhas.length, total_centavos: f.total,
@@ -121,7 +131,7 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
         });
         feitas += 1;
       }
-      if (feitas) toast.success(`${feitas} ${feitas === 1 ? 'fatura importada' : 'faturas importadas'}.`);
+      if (feitas) toast.success(`${feitas} ${feitas === 1 ? 'fatura gravada' : 'faturas gravadas'}.`);
       onFeito(extrato?.arquivo ?? null);
     } catch (err) {
       toast.error(`${feitas ? `${feitas} entraram; ` : ''}parou em ${gravando || 'uma fatura'}: ${err.message}`);
@@ -131,7 +141,7 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
   };
 
   const conteudo = (i) => {
-    if (i.tipo === 'fatura') return `${i.linhas.length} compras · ${formatBRL(i.total)}`;
+    if (i.tipo === 'fatura') return `${i.linhas.length} compras${i.creditos.length ? ` · ${i.creditos.length} ${i.creditos.length === 1 ? 'crédito' : 'créditos'}` : ''} · ${formatBRL(i.total)}`;
     if (i.tipo === 'extrato') return `${formatDate(i.de)} a ${formatDate(i.ate)} · ${i.qtd} mov.`;
     return '—';
   };
@@ -165,9 +175,14 @@ export default function ImportarArquivos({ cartoes, onFechar, onFeito }) {
           <span className={CHIP} style={TOM_AVISO}>
             já importada{i.existente.importado_de === 'planilha' ? ' (planilha)' : ` em ${formatDateTime(i.existente.importada_em).slice(0, 5)}`}
           </span>
-          <button type="button" onClick={() => alternar(i.nome)} className="mt-0.5 block text-[11px] text-gray-500 underline hover:text-gray-800">
-            {i.acao === 'substituir' ? 'vai substituir · pular' : 'vai pular · substituir'}
-          </button>
+          {/* O QUE FAZER COM ELA: acrescentar só os créditos que faltam (o padrão, quando faltam), pular ou substituir. */}
+          <span className="mt-0.5 block text-[11px] text-gray-500">
+            {i.acao === 'creditos' ? `vai acrescentar ${i.faltam.length === 1 ? 'o crédito que falta' : `os ${i.faltam.length} créditos que faltam`} (${formatBRL(i.faltam.reduce((s, l) => s + l.valor_centavos, 0))})`
+              : i.acao === 'substituir' ? 'vai substituir' : 'vai pular'}
+            {[['creditos', 'só os créditos'], ['pular', 'pular'], ['substituir', 'substituir']].filter(([a]) => a !== i.acao && (a !== 'creditos' || i.faltam.length)).map(([a, r]) => (
+              <span key={a}> · <button type="button" onClick={() => definir(i.nome, a)} className="underline hover:text-gray-800">{r}</button></span>
+            ))}
+          </span>
         </>
       );
     }

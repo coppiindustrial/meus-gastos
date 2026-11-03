@@ -140,7 +140,8 @@ export function descricaoDaEntrada({ tipo, descricao, catAntes, catDepois }) {
 // O que um texto vira numa coluna. Devolve { campo, valor } ou { motivo } (por que não serve).
 // `entrada` (só no valor): o texto começa com "+", o que numa linha NOVA faz dela uma entrada. O valor aceita CONTA
 // (`calcularValor`): "=846,43+192,39", "100+50"; com o "+" da entrada na frente: "+=1000+500".
-export function interpretar(c, texto, { tipo = 'saida', categorias = [], anoBase } = {}) {
+// `credito`: a linha é um ESTORNO do cartão (valor negativo, migration 012) — o valor digitado continua negativo.
+export function interpretar(c, texto, { tipo = 'saida', categorias = [], anoBase, credito = false } = {}) {
   const col = COLUNAS[c];
   const t = String(texto ?? '').trim();
   if (!col?.campo) return { motivo: `${col?.nome ?? 'Esta coluna'} não se edita na grade.` };
@@ -152,7 +153,7 @@ export function interpretar(c, texto, { tipo = 'saida', categorias = [], anoBase
     const centavos = calcularValor(t.replace(/^\+/, ''));
     if (!centavos) return { motivo: `"${t}" não é um valor nem uma conta.` };
     if (centavos < 0 && /\d[+\-*/]/.test(t)) return { motivo: `a conta "${t}" deu negativo.` };
-    return { campo: 'valor_centavos', valor: Math.abs(centavos), entrada: t.startsWith('+') };
+    return { campo: 'valor_centavos', valor: credito ? -Math.abs(centavos) : Math.abs(centavos), entrada: t.startsWith('+') };
   }
   if (col.id === 'categoria') {
     if (!t || t === '—' || norm(t) === 'sem categoria') return { campo: 'categoria_id', valor: null };
@@ -236,7 +237,7 @@ export function planejarColagem({ matriz, linhas, inicio, categorias, anoBase })
       const c = inicio.c + j;
       if (c >= COLUNAS.length) { if (texto) foraDaGrade += 1; return; }
       if (!texto) return;
-      const res = interpretar(c, texto, { tipo, categorias, anoBase: ano });
+      const res = interpretar(c, texto, { tipo, categorias, anoBase: ano, credito: Number(linha?.valor_centavos) < 0 });
       if (res.motivo) fora.push({ r, c, motivo: res.motivo });
       else mudancas.push({ r, campo: res.campo, valor: res.valor });
     });

@@ -385,7 +385,16 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (`excluirModelo` devolve os cartões dele ao lançamento manual antes).
 - `lib/lerFatura.js`: reconhece o formato pelo CABEÇALHO — Nubank original (`date,title,amount`, parcela no fim do
   título: "Loja - Parcela 9/12") e o da XP (`Data;Estabelecimento;Portador;Valor;Parcela`, também o das faturas do
-  Nubank que o usuário converteu). Valor negativo (pagamento, estorno) fica de fora, como na planilha. Desde 03/11/2026
+  Nubank que o usuário converteu). OS CRÉDITOS ENTRAM (03/11/2026, migration 012 — antes todo negativo ficava de fora,
+  "como na planilha", e o total da fatura ficava com as compras BRUTAS: a XP de outubro dava R$ 15.036,36 em vez dos
+  R$ 14.073,56 do banco): só o PAGAMENTO fica de fora; o ESTORNO e o CRÉDITO entram como gasto de cartão com valor
+  NEGATIVO (`separarCreditos`), classificados pelas regras como as compras, e abatem da fatura, dos gastos e da
+  categoria — não são entrada. A linha do SALDO DO MÊS ANTERIOR ("Valor pendente do mês anterior", a fatura paga com
+  atraso repetida na seguinte) também fica de fora (`semSaldoAnterior`); multa, juros e IOF do atraso entram. Fatura
+  que já existe sem os créditos: "Acrescentar só os créditos que faltam" (`creditosQueFaltam` + `acrescentarCreditos`,
+  sem substituir nada; no "Importar arquivos" é o padrão quando faltam). Os créditos gravam num passo à parte das
+  compras: sem a 012, a fatura entra e o aviso diz que eles faltam. Na grade, a marca "estorno" e o valor segue
+  negativo ao editar (`interpretar` com `credito`); no "Onde mais comprou" abate do total da loja sem ser compra. Desde 03/11/2026
   lê pelos `MODELOS_PRONTOS` de `lib/modeloCsv.js` (a mesma leitura dos modelos do usuário); a API dele não mudou.
 - Cartão e vencimento pelo nome do arquivo (`Nubank_AAAA-MM-DD…`, `FaturaAAAA-MM-DD…`); sem pista, o vencimento é o
   próximo dia de vencimento do cartão depois da última compra. Competência = mês do vencimento.
@@ -406,7 +415,8 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
 
 ## Convenções
 
-- **Dinheiro em centavos inteiros (`bigint`) e positivos**; a direção vem de `tipo` (`saida`/`entrada`). Use
+- **Dinheiro em centavos inteiros (`bigint`) e positivos**; a direção vem de `tipo` (`saida`/`entrada`). A ÚNICA exceção é o
+  ESTORNO do cartão (gasto de origem `cartao` com valor negativo, migration 012). Use
   `lib/dinheiro.js` (`parseValor`, `formatBRL`, `brlCurto` — todos em CENTAVOS). Nunca some reais em float.
 - **Datas**: coluna DATE pelos 10 primeiros caracteres (`formatDate`, `diaDeData`); timestamp por `formatDateTime`.
   Nunca `new Date('AAAA-MM-DD')`. **Competência** é `'AAAA-MM'` no front e `date` dia 1 no banco

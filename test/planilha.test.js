@@ -151,3 +151,9 @@ test('interpretar: conta no valor, com e sem o "+" da entrada', () => {
   assert.match(interpretar(4, '=100-250').motivo, /negativo/);
   assert.match(interpretar(4, '=abc').motivo, /nem uma conta/);
 });
+
+test('interpretar: no ESTORNO do cartão (migration 012) o valor digitado continua negativo', () => {
+  assert.deepEqual(interpretar(4, '119,80', { credito: true }), { campo: 'valor_centavos', valor: -11980, entrada: false });
+  assert.deepEqual(interpretar(4, '-119,80', { credito: true }), { campo: 'valor_centavos', valor: -11980, entrada: false });
+  assert.equal(interpretar(4, '-119,80').valor, 11980); // numa compra, o sinal não muda o tipo
+});

@@ -23,6 +23,46 @@ export function lerFatura(texto) {
   return { formato: modelo.id === 'nubank' ? 'nubank' : 'padrao', ...lerComModelo(texto, modelo.config) };
 }
 
+// OS CRÉDITOS DA FATURA (03/11/2026, migration 012): dos valores negativos (`ignoradas`), só o PAGAMENTO da fatura
+// continua de fora; o ESTORNO e o CRÉDITO ("Estorno de …", "Ajuste a crédito", a compra cancelada) entram com o valor
+// NEGATIVO e abatem do total, como no banco (a XP de outubro: R$ 15.036,36 de compras − R$ 962,80 = R$ 14.073,56).
+// Devolve { creditos, pagamentos }.
+const PAGAMENTO = /\bpagamento\b|\bpagto\b|\bpgto\b/i;
+export function separarCreditos(ignoradas = []) {
+  const creditos = [];
+  const pagamentos = [];
+  ignoradas.forEach((l) => {
+    if (!l.valor_centavos) return;
+    (PAGAMENTO.test(l.estabelecimento) ? pagamentos : creditos).push(l);
+  });
+  return { creditos, pagamentos };
+}
+
+// O SALDO DO MÊS ANTERIOR (03/11/2026): a fatura paga com atraso volta na seguinte como uma linha POSITIVA ("Valor
+// pendente do mês anterior", no Nubank) — é a fatura anterior repetida, que já conta no mês dela; fica de fora, como o
+// pagamento. Multa, juros e IOF do atraso continuam: são gasto de verdade. Devolve { compras, anteriores }.
+const SALDO_ANTERIOR = /valor pendente d[oe] m[eê]s anterior|saldo (da fatura )?anterior|saldo em atraso/i;
+export function semSaldoAnterior(linhas = []) {
+  const compras = [];
+  const anteriores = [];
+  linhas.forEach((l) => (SALDO_ANTERIOR.test(l.estabelecimento) ? anteriores : compras).push(l));
+  return { compras, anteriores };
+}
+
+// Os créditos do arquivo que a fatura GRAVADA ainda não tem (mesma data, valor e estabelecimento; repetidos contam
+// um a um) — o "Acrescentar só os créditos que faltam" das faturas importadas antes da 012, sem substituir nada.
+const chaveCredito = (l) => `${String(l.data).slice(0, 10)}|${Number(l.valor_centavos)}|${String(l.estabelecimento ?? '').trim().toUpperCase()}`;
+export function creditosQueFaltam(creditos, gravados = []) {
+  const conta = new Map();
+  gravados.forEach((g) => conta.set(chaveCredito(g), (conta.get(chaveCredito(g)) ?? 0) + 1));
+  return creditos.filter((c) => {
+    const n = conta.get(chaveCredito(c)) ?? 0;
+    if (!n) return true;
+    conta.set(chaveCredito(c), n - 1);
+    return false;
+  });
+}
+
 // Pelo nome do arquivo: "Nubank_2026-08-13…" → Nubank, vence 13/08/2026; "Fatura2026-05-10…" → XP.
 export function pistaDoArquivo(nome) {
   let m = String(nome).match(/^nubank_(\d{4}-\d{2}-\d{2})/i);

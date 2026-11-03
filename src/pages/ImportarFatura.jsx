@@ -7,10 +7,10 @@ import Spinner from '../components/Spinner.jsx';
 import { Campo } from '../components/Comuns.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import {
-  classificarLinhas, faturaExistente, hashDoTexto, importarFatura, listarRegrasParaClassificar,
+  acrescentarCreditos, classificarLinhas, faturaExistente, hashDoTexto, importarFatura, listarRegrasParaClassificar,
 } from '../api/faturas.js';
 import { registrarImportacao } from '../api/importacoes.js';
-import { lerFaturaComModelos } from '../lib/lerFatura.js';
+import { creditosQueFaltam, lerFaturaComModelos, semSaldoAnterior, separarCreditos } from '../lib/lerFatura.js';
 import { decodificar } from '../lib/modeloCsv.js';
 import { ligarCartaoAoModelo, listarModelos } from '../api/modelos.js';
 import { modeloParaLigar } from '../lib/cartoes.js';
@@ -24,6 +24,9 @@ import { competenciaDe, formatDate, formatDateTime, nomeCompetencia } from '../l
 // editáveis. Se já existe fatura do mesmo cartão e vencimento, só entra SUBSTITUINDO a anterior.
 // `inicial` ({ cartaoId, vencimento }): aberto pela célula "falta importar" da tela Importar — vale quando
 // o nome do arquivo não diz outra coisa. Cada importação vai para o histórico (`registrarImportacao`).
+// OS CRÉDITOS (03/11/2026, migration 012): o estorno e o crédito do cartão entram com o valor NEGATIVO e abatem do total
+// (`separarCreditos`; só o pagamento fica de fora). Fatura que já existe sem eles: "Acrescentar só os créditos que
+// faltam" grava só esses, sem substituir (`creditosQueFaltam`, `acrescentarCreditos`).
 // OS MODELOS (03/11/2026, fase 7.3 do importador configurável): o arquivo é lido pelo primeiro modelo que reconhece o
 // cabeçalho — os que você ensinou, depois Nubank e XP (`lerFaturaComModelos`, testada), e o texto sai dos BYTES
 // (UTF-8 ou o Windows-1252 do Excel). Nenhum reconhece: "Ensinar este formato" abre o `AssistenteModelo` já com o
@@ -82,25 +85,48 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
     return () => { vivo = false; };
   }, [cartaoId, vencimento]);
 
-  // As que uma regra de ignorar pega não entram (nem na conta do total).
-  const todas = lido && regras ? classificarLinhas(lido.linhas, regras) : null;
+  // As que uma regra de ignorar pega não entram (nem na conta do total). Os créditos são classificados como as compras.
+  const { creditos: creditosLidos, pagamentos } = separarCreditos(lido?.ignoradas);
+  const { compras: comprasLidas, anteriores } = semSaldoAnterior(lido?.linhas);
+  const todas = lido && regras ? classificarLinhas([...comprasLidas, ...creditosLidos], regras) : null;
   const classificadas = todas?.filter((l) => !l.ignorar) ?? null;
+  const compras = classificadas?.filter((l) => l.valor_centavos > 0) ?? [];
+  const creditos = classificadas?.filter((l) => l.valor_centavos < 0) ?? [];
+  const faltam = existente ? creditosQueFaltam(creditos, existente.creditos ?? []) : creditos;
   const ignoradasPorRegra = todas?.filter((l) => l.ignorar) ?? [];
   const semCategoria = classificadas?.filter((l) => !l.categoria_id).length ?? 0;
-  const total = classificadas?.reduce((s, l) => s + l.valor_centavos, 0) ?? 0;
+  const soma = (ls) => ls.reduce((s, l) => s + l.valor_centavos, 0);
+  const total = soma(classificadas ?? []);
   const pronto = lido && classificadas && cartaoId && /^\d{4}-\d{2}-\d{2}$/.test(vencimento);
   const ligar = lido ? modeloParaLigar(cartao, lido.modelo) : null;
+
+  // Só os créditos que faltam na fatura que já existe (nada é substituído).
+  const gravarCreditos = async () => {
+    setGravando(true);
+    try {
+      await acrescentarCreditos({ faturaId: existente.id, cartaoId, vencimento, linhas: faltam });
+      toast.success(`${faltam.length} ${faltam.length === 1 ? 'crédito acrescentado' : 'créditos acrescentados'}: a fatura passa a ${formatBRL(Number(existente.total_centavos) + soma(faltam))}.`);
+      onImportada({ revisar: faltam.filter((l) => !l.categoria_id).length });
+    } catch (err) {
+      toast.error(err.message);
+      setGravando(false);
+    }
+  };
 
   const gravar = async () => {
     setGravando(true);
     try {
       const faturaId = await importarFatura({
-        cartaoId, vencimento, arquivo: lido.arquivo, hash: lido.hash, linhas: classificadas, substituirId: existente?.id,
-      }, (n) => setAndamento(`${n} de ${classificadas.length}`));
+        cartaoId, vencimento, arquivo: lido.arquivo, hash: lido.hash, linhas: compras, substituirId: existente?.id,
+      }, (n) => setAndamento(`${n} de ${compras.length}`));
+      // os créditos num passo à parte: sem a migration 012 o banco os recusa, e a fatura não pode ficar pela metade
+      if (creditos.length) {
+        try { await acrescentarCreditos({ faturaId, cartaoId, vencimento, linhas: creditos }); } catch (err) { toast.error(`A fatura entrou sem os créditos: ${err.message}`); }
+      }
       await registrarImportacao({
         tipo: 'fatura', cartao_id: cartaoId, fatura_id: faturaId, competencia: competenciaDe(vencimento), arquivo: lido.arquivo,
         linhas: classificadas.length, total_centavos: total,
-        resumo: [`${classificadas.length} compras`, semCategoria && `${semCategoria} sem regra`, existente && 'substituiu a anterior'].filter(Boolean).join(' · '),
+        resumo: [`${compras.length} compras`, creditos.length && `${creditos.length} ${creditos.length === 1 ? 'crédito' : 'créditos'}`, semCategoria && `${semCategoria} sem regra`, existente && 'substituiu a anterior'].filter(Boolean).join(' · '),
       });
       let ligou = false;
       if (ligar) {
@@ -170,16 +196,24 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
             {cartao && !cartao.ativo && <p className="text-amber-700">Este cartão está inativo.</p>}
 
             <ul className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md bg-gray-50 px-3 py-2.5">
-              <li><strong>{classificadas?.length ?? 0}</strong> compras · {formatBRL(total)}</li>
-              <li><strong>{classificadas?.filter((l) => l.parcela_total).length ?? 0}</strong> parceladas</li>
+              <li><strong>{compras.length}</strong> compras · {formatBRL(soma(compras))}</li>
+              <li><strong>{compras.filter((l) => l.parcela_total).length}</strong> parceladas</li>
               <li><strong>{(classificadas?.length ?? 0) - semCategoria}</strong> classificadas pelas regras</li>
               <li className={semCategoria ? 'text-amber-700' : ''}><strong>{semCategoria}</strong> para revisar</li>
               {ignoradasPorRegra.length > 0 && (
                 <li className="col-span-2 text-gray-500">Ignoradas por regra: {ignoradasPorRegra.map((l) => `${l.estabelecimento} ${formatBRL(l.valor_centavos)}`).join('; ')}</li>
               )}
-              {lido.ignoradas.length > 0 && (
+              {creditos.length > 0 && (
+                <li className="col-span-2">
+                  <strong>{creditos.length}</strong> {creditos.length === 1 ? 'crédito ou estorno abate' : 'créditos e estornos abatem'} {formatBRL(-soma(creditos))}:{' '}
+                  <span className="text-gray-500">{creditos.map((l) => `${l.estabelecimento} ${formatBRL(l.valor_centavos)}`).join('; ')}</span>
+                </li>
+              )}
+              <li className="col-span-2 border-t border-gray-200 pt-1"><strong>Total da fatura: {formatBRL(total)}</strong></li>
+              {pagamentos.length + anteriores.length > 0 && (
                 <li className="col-span-2 text-gray-500">
-                  Fora da fatura (pagamentos e estornos): {lido.ignoradas.map((l) => `${l.estabelecimento} ${formatBRL(-l.valor_centavos)}`).join('; ')}
+                  Fora da fatura ({[pagamentos.length && 'pagamento', anteriores.length && 'a fatura anterior, já contada no mês dela'].filter(Boolean).join('; ')}):{' '}
+                  {[...pagamentos.map((l) => `${l.estabelecimento} ${formatBRL(-l.valor_centavos)}`), ...anteriores.map((l) => `${l.estabelecimento} ${formatBRL(l.valor_centavos)}`)].join('; ')}
                 </li>
               )}
             </ul>
@@ -195,12 +229,18 @@ export default function ImportarFatura({ cartoes, onFechar, onImportada, inicial
                 Já existe a fatura do {cartao?.nome} com vencimento {formatDate(vencimento)}: {existente.qtd} lançamentos,{' '}
                 {formatBRL(existente.total_centavos)}, {existente.importado_de === 'planilha' ? 'vinda da planilha' : `importada em ${formatDateTime(existente.importada_em)}`}.
                 {' '}Importar <strong>substitui</strong> a anterior (e as categorias que você tiver mudado nela).
+                {faltam.length > 0 && <> Ou acrescente só {faltam.length === 1 ? 'o crédito que falta' : `os ${faltam.length} créditos que faltam`}: a fatura passa a <strong>{formatBRL(Number(existente.total_centavos) + soma(faltam))}</strong>, e nada mais muda.</>}
               </div>
             )}
 
             <div className="flex items-center justify-end gap-2 pt-1">
               {gravando && andamento && <span className="mr-auto text-xs text-gray-500">Gravando… {andamento}</span>}
               <button type="button" className="btn-secondary" onClick={onFechar}>Cancelar</button>
+              {existente && faltam.length > 0 && (
+                <button type="button" className="btn-primary" onClick={gravarCreditos} disabled={!pronto || gravando}>
+                  Acrescentar só os créditos ({formatBRL(soma(faltam))})
+                </button>
+              )}
               <button type="button" className={existente ? 'btn-danger' : 'btn-primary'} onClick={gravar} disabled={!pronto || gravando}>
                 {gravando ? <><Spinner className="h-4 w-4" /> Importando…</> : existente ? 'Substituir fatura' : 'Importar'}
               </button>

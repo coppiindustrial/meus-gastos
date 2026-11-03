@@ -492,7 +492,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
       toast.info('Data e valor não ficam vazios.');
       return false;
     }
-    const res = interpretar(ed.c, texto, { tipo, categorias, anoBase: ano });
+    const res = interpretar(ed.c, texto, { tipo, categorias, anoBase: ano, credito: Number(l?.valor_centavos) < 0 });
     if (res.motivo) { toast.error(res.motivo); return false; }
     const mudancas = [{ r: ed.r, campo: res.campo, valor: res.valor }];
     const entradas = new Set(res.entrada && (!l || l.rascunho) ? [ed.r] : []);
@@ -773,7 +773,11 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
       } else if (col.id === 'origem') conteudo = <span className="truncate text-gray-500">{l.rascunho ? (l.tipo === 'entrada' ? 'Entrada' : 'Avulso') : textoOrigem(l)}</span>;
       else if (col.id === 'valor') {
         conteudo = l.valor_centavos
-          ? <span className={`ml-auto tabular-nums ${l.tipo === 'entrada' ? 'font-semibold text-green-700' : 'text-gray-800'}`}>{l.tipo === 'entrada' ? '+ ' : ''}{formatBRL(l.valor_centavos)}</span>
+          ? <span className={`ml-auto tabular-nums ${l.tipo === 'entrada' ? 'font-semibold text-green-700' : 'text-gray-800'}`}>
+              {/* o ESTORNO do cartão (valor negativo, migration 012): abate da fatura e da categoria */}
+              {l.valor_centavos < 0 && <span className="mr-1.5 rounded-[3px] bg-hx-dcfce7 px-1 py-px text-[10.5px] font-semibold text-hx-166534">estorno</span>}
+              {l.tipo === 'entrada' ? '+ ' : ''}{formatBRL(l.valor_centavos)}
+            </span>
           : <span className="ml-auto text-gray-400">{l.rascunho ? 'falta o valor' : ''}</span>;
       } else conteudo = <span className="truncate text-gray-500">{l.obs}</span>;
     } else if (c === 1) {

@@ -12,13 +12,16 @@ export async function listarFaturas() {
   return linhas.map((f) => ({ ...f, qtd: f.lancamentos?.[0]?.count ?? 0, competencia: f.competencia.slice(0, 7) }));
 }
 
-// A fatura já importada para este cartão e vencimento (ou null).
+// A fatura já importada para este cartão e vencimento (ou null). `creditos`: os estornos/créditos que ela já tem
+// (valor negativo, migration 012) — para o "Acrescentar só os créditos que faltam".
 export async function faturaExistente(cartaoId, vencimento) {
   const linhas = await exigir(supabase.from('faturas')
     .select('id, arquivo, importado_de, importada_em, total_centavos, lancamentos(count)')
     .eq('cartao_id', cartaoId).eq('vencimento', vencimento));
   const f = linhas[0];
-  return f ? { ...f, qtd: f.lancamentos?.[0]?.count ?? 0 } : null;
+  if (!f) return null;
+  const creditos = await exigir(supabase.from('lancamentos').select('data, estabelecimento, valor_centavos').eq('fatura_id', f.id).lt('valor_centavos', 0));
+  return { ...f, qtd: f.lancamentos?.[0]?.count ?? 0, creditos };
 }
 
 // SHA-256 do texto do arquivo (guardado na fatura, para reconhecer o mesmo arquivo depois).
@@ -55,23 +58,38 @@ export async function importarFatura({ cartaoId, vencimento, arquivo, hash, linh
     hash_arquivo: hash,
     total_centavos: linhas.reduce((s, l) => s + l.valor_centavos, 0),
   }).select('id').single());
-  await inserirEmLotes('lancamentos', linhas.map((l) => ({
-    tipo: 'saida',
-    origem: 'cartao',
-    data: l.data,
-    competencia,
-    descricao: l.estabelecimento,
-    estabelecimento: l.estabelecimento,
-    valor_centavos: l.valor_centavos,
-    categoria_id: l.categoria_id,
-    fatura_id: fatura.id,
-    cartao_id: cartaoId,
-    parcela_atual: l.parcela_atual,
-    parcela_total: l.parcela_total,
-    portador: l.portador,
-    revisar: !l.categoria_id,
-  })), aoAvancar);
+  await inserirEmLotes('lancamentos', linhas.map((l) => doCartao(l, { competencia, faturaId: fatura.id, cartaoId })), aoAvancar);
   return fatura.id;
+}
+
+// A linha lida (compra, ou o CRÉDITO com valor negativo — migration 012) como lançamento da fatura.
+const doCartao = (l, { competencia, faturaId, cartaoId }) => ({
+  tipo: 'saida',
+  origem: 'cartao',
+  data: l.data,
+  competencia,
+  descricao: l.estabelecimento,
+  estabelecimento: l.estabelecimento,
+  valor_centavos: l.valor_centavos,
+  categoria_id: l.categoria_id,
+  fatura_id: faturaId,
+  cartao_id: cartaoId,
+  parcela_atual: l.parcela_atual,
+  parcela_total: l.parcela_total,
+  portador: l.portador,
+  revisar: !l.categoria_id,
+});
+
+// ACRESCENTAR SÓ OS CRÉDITOS QUE FALTAM (03/11/2026): a fatura importada antes da 012 ficou sem os estornos; grava só
+// eles nela, sem substituir nada (as categorias que você mudou ficam). O total se refaz pelo gatilho da 009.
+// Sem a migration 012, o banco recusa o valor negativo: o erro diz o que falta.
+export async function acrescentarCreditos({ faturaId, cartaoId, vencimento, linhas }) {
+  const competencia = competenciaParaBanco(competenciaDe(vencimento));
+  try {
+    await inserirEmLotes('lancamentos', linhas.map((l) => doCartao(l, { competencia, faturaId, cartaoId })));
+  } catch (err) {
+    throw /valor|check/i.test(err.message) ? new Error('Falta aplicar a migration 012 no Supabase (SQL Editor) para gravar os créditos.') : err;
+  }
 }
 
 // O TOTAL GUARDADO de cada fatura volta a ser a soma dos lançamentos que ficaram nela (03/11/2026): tirar do app uma

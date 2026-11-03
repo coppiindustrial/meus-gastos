@@ -82,3 +82,12 @@ test('comprasDaLoja: as parcelas da mesma compra contam uma vez; o IOF do mesmo 
   // duas compras no mesmo dia que não são IOF (uma não é 2,5–7% da outra) continuam duas
   assert.equal(comprasDaLoja([{ id: 1, data: '2026-09-29', valor_centavos: 1998 }, { id: 2, data: '2026-09-29', valor_centavos: 1897 }]).length, 2);
 });
+
+test('porCategoria: o estorno abate do total da loja, mas não conta como compra', () => {
+  const r = porCategoria([
+    { id: 1, data: '2026-09-28', categoria_id: 'v', estabelecimento: 'AIRBNB', valor_centavos: 29300 },
+    { id: 2, data: '2026-09-28', categoria_id: 'v', estabelecimento: 'AIRBNB', valor_centavos: 31929 },
+    { id: 3, data: '2026-09-28', categoria_id: 'v', estabelecimento: 'AIRBNB', valor_centavos: -29300 },
+  ], [{ id: 'v', nome: 'Viagem', grupo: { cor: '#00f' } }]);
+  assert.deepEqual([r.total, r.lojas[0].vezes, r.lojas[0].total, r.lojas[0].estornos], [31929, 2, 31929, -29300]);
+});

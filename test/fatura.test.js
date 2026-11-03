@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lerFatura, lerFaturaComModelos, pistaDoArquivo, vencimentoProvavel } from '../src/lib/lerFatura.js';
+import {
+  creditosQueFaltam, lerFatura, lerFaturaComModelos, pistaDoArquivo, semSaldoAnterior, separarCreditos, vencimentoProvavel,
+} from '../src/lib/lerFatura.js';
 import { criarClassificador, regraPega } from '../src/lib/classificar.js';
 
 // Dados FICTÍCIOS (o repositório é público): mesmo formato dos arquivos reais.
@@ -97,4 +99,32 @@ test('classificação: primeira regra por prioridade, sem diferenciar maiúscula
   assert.equal(classificar('Loja qualquer'), null);
   assert.equal(regraPega('mp*birden', 'MP *BIRDEN LTDA'), true);
   assert.equal(regraPega('A.B', 'AXB'), false); // ponto é literal, não curinga de regex
+});
+
+test('créditos da fatura: o pagamento fica de fora, o estorno entra negativo; os que faltam na fatura gravada', () => {
+  const ignoradas = [
+    { data: '2026-09-04', estabelecimento: 'Pagamento de fatura', valor_centavos: -1324148 },
+    { data: '2026-09-02', estabelecimento: 'AMAZONMKTPLC*MAGAZINEL', valor_centavos: -11980 },
+    { data: '2026-09-28', estabelecimento: 'AIRBNB PAGAM*AIRB', valor_centavos: -29300 },
+    { data: '2026-07-06', estabelecimento: 'Pagamento recebido', valor_centavos: -299873 },
+    { data: '2026-06-01', estabelecimento: 'Ajuste a crédito', valor_centavos: -27524 },
+    { data: '2026-06-01', estabelecimento: 'Zero', valor_centavos: 0 },
+  ];
+  const { creditos, pagamentos } = separarCreditos(ignoradas);
+  assert.deepEqual(creditos.map((l) => l.estabelecimento), ['AMAZONMKTPLC*MAGAZINEL', 'AIRBNB PAGAM*AIRB', 'Ajuste a crédito']);
+  assert.equal(pagamentos.length, 2);
+  // já gravado um deles (o mesmo dia, valor e nome, sem diferenciar maiúscula): faltam os outros dois
+  const falta = creditosQueFaltam(creditos, [{ data: '2026-09-02', estabelecimento: 'amazonmktplc*magazinel ', valor_centavos: '-11980' }]);
+  assert.deepEqual(falta.map((l) => l.estabelecimento), ['AIRBNB PAGAM*AIRB', 'Ajuste a crédito']);
+  assert.equal(creditosQueFaltam(creditos, []).length, 3);
+});
+
+test('o saldo do mês anterior (a fatura paga com atraso) fica de fora; multa e juros continuam', () => {
+  const { compras, anteriores } = semSaldoAnterior([
+    { estabelecimento: 'Valor pendente do mês anterior', valor_centavos: 248154 },
+    { estabelecimento: 'Multa por fatura atrasada', valor_centavos: 4982 },
+    { estabelecimento: 'aiqfome - NuPay', valor_centavos: 12100 },
+  ]);
+  assert.deepEqual(anteriores.map((l) => l.valor_centavos), [248154]);
+  assert.deepEqual(compras.map((l) => l.estabelecimento), ['Multa por fatura atrasada', 'aiqfome - NuPay']);
 });

@@ -192,11 +192,13 @@ export function porCategoria(lancamentos, categorias, maxLojas = Infinity) {
   });
   const desc = (p, q) => q.total - p.total;
   const lista = [...lojas.values()].map(({ chave, nome, linhas, porCat }) => {
-    const compras = comprasDaLoja(linhas);
-    const soma = compras.reduce((s, c) => s + c.total, 0);
+    // os ESTORNOS (valor negativo, migration 012) abatem do total da loja, mas não são compras
+    const compras = comprasDaLoja(linhas.filter((l) => Number(l.valor_centavos) > 0));
+    const estornos = linhas.filter((l) => Number(l.valor_centavos) < 0).reduce((s, l) => s + Number(l.valor_centavos), 0);
+    const soma = compras.reduce((s, c) => s + c.total, 0) + estornos;
     const [categoriaId] = [...porCat.entries()].sort((a, b) => b[1] - a[1])[0];
     return {
-      chave, nome, vezes: compras.length, total: soma, ticket: Math.round(soma / compras.length), ultima: compras[0]?.data ?? null,
+      chave, nome, vezes: compras.length, total: soma, ticket: compras.length ? Math.round(soma / compras.length) : 0, ultima: compras[0]?.data ?? null, estornos,
       categoriaId: categoriaId === 'sem' ? null : categoriaId, parcelada: compras.some((c) => c.parcelas), iof: compras.reduce((s, c) => s + c.iof, 0), compras,
     };
   });
