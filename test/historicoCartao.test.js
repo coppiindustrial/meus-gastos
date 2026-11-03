@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { anoContraAno, anosComFatura, linhaDoTempo, porCategoria } from '../src/lib/historicoCartao.js';
+import { anoContraAno, anosComFatura, comprasDaLoja, linhaDoTempo, porCategoria } from '../src/lib/historicoCartao.js';
 
 // Dados FICTÍCIOS.
 const F = (competencia, total_centavos, qtd = 10) => ({ competencia, vencimento: `${competencia}-13`, total_centavos, qtd });
@@ -37,12 +37,36 @@ test('anoContraAno: lado a lado, parcelas depois da última fatura e a comparaç
 test('porCategoria: as categorias do período e as lojas que mais pesaram (sem diferenciar maiúscula)', () => {
   const categorias = [{ id: 'm', nome: 'Mercado', grupo: { cor: '#0a0' } }, { id: 'r', nome: 'Restaurante', grupo: { cor: '#f80' } }];
   const r = porCategoria([
-    { categoria_id: 'm', estabelecimento: 'MERCADO BOM', valor_centavos: 5000 },
-    { categoria_id: 'm', estabelecimento: 'mercado  bom', valor_centavos: 3000 },
-    { categoria_id: 'r', estabelecimento: 'PIZZA', valor_centavos: 4000 },
-    { categoria_id: null, descricao: 'Ajuste', valor_centavos: 1000 },
+    { id: 1, data: '2026-10-02', categoria_id: 'm', estabelecimento: 'MERCADO BOM', valor_centavos: 5000 },
+    { id: 2, data: '2026-10-09', categoria_id: 'm', estabelecimento: 'mercado  bom', valor_centavos: 3000 },
+    { id: 3, data: '2026-10-05', categoria_id: 'r', estabelecimento: 'PIZZA', valor_centavos: 4000 },
+    { id: 4, data: '2026-10-06', categoria_id: null, descricao: 'Ajuste', valor_centavos: 1000 },
   ], categorias, 2);
   assert.equal(r.total, 13000);
   assert.deepEqual(r.categorias.map((c) => [c.nome, c.total, c.qtd, c.cor]), [['Mercado', 8000, 2, '#0a0'], ['Restaurante', 4000, 1, '#f80'], ['Sem categoria', 1000, 1, null]]);
-  assert.deepEqual(r.lojas, [{ nome: 'MERCADO BOM', vezes: 2, total: 8000 }, { nome: 'PIZZA', vezes: 1, total: 4000 }]);
+  assert.deepEqual(r.lojas.map((l) => [l.nome, l.vezes, l.total, l.ticket, l.ultima, l.categoriaId]),
+    [['MERCADO BOM', 2, 8000, 4000, '2026-10-09', 'm'], ['PIZZA', 1, 4000, 4000, '2026-10-05', 'r']]);
+});
+
+test('comprasDaLoja: as parcelas da mesma compra contam uma vez; o IOF do mesmo dia entra na compra', () => {
+  // o Claude: cada cobrança com o IOF (3,5%) numa linha à parte — 4 linhas, 2 compras
+  const claude = comprasDaLoja([
+    { id: 1, data: '2026-08-18', valor_centavos: 55000 }, { id: 2, data: '2026-08-18', valor_centavos: 1925 },
+    { id: 3, data: '2026-09-18', valor_centavos: 1925 }, { id: 4, data: '2026-09-18', valor_centavos: 55000 },
+  ]);
+  assert.deepEqual(claude, [
+    { data: '2026-09-18', total: 56925, iof: 1925, parcelas: null, linhas: 2 },
+    { data: '2026-08-18', total: 56925, iof: 1925, parcelas: null, linhas: 2 },
+  ]);
+  // a Dell (Nubank: a data anda com a parcela): as parcelas 8 a 12 de 12, uma por fatura — 1 compra
+  const dell = comprasDaLoja([8, 9, 10, 11, 12].map((p, i) => ({ id: p, data: `2026-0${i + 1}-06`, competencia: `2026-0${i + 2}-01`, valor_centavos: 123191, parcela_atual: p, parcela_total: 12 })));
+  assert.deepEqual(dell, [{ data: '2026-01-06', total: 615955, iof: 0, parcelas: { de: 8, ate: 12, total: 12 }, linhas: 5 }]);
+  // a XP repete a data da compra em todas as parcelas: duas compras parceladas, não quatro
+  const xp = comprasDaLoja([
+    ...[1, 2, 3].map((p) => ({ id: `a${p}`, data: '2026-06-27', competencia: `2026-0${6 + p}-01`, valor_centavos: 84000, parcela_atual: p, parcela_total: 5 })),
+    { id: 'b1', data: '2026-09-08', competencia: '2026-10-01', valor_centavos: 42500, parcela_atual: 1, parcela_total: 4 },
+  ]);
+  assert.deepEqual(xp.map((c) => [c.data, c.total, c.parcelas]), [['2026-09-08', 42500, { de: 1, ate: 1, total: 4 }], ['2026-06-27', 252000, { de: 1, ate: 3, total: 5 }]]);
+  // duas compras no mesmo dia que não são IOF (uma não é 2,5–7% da outra) continuam duas
+  assert.equal(comprasDaLoja([{ id: 1, data: '2026-09-29', valor_centavos: 1998 }, { id: 2, data: '2026-09-29', valor_centavos: 1897 }]).length, 2);
 });

@@ -159,6 +159,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   variação no mesmo período), POR CATEGORIA (lê os lançamentos do cartão: `listarDoCartao`; categorias e as lojas que
   mais pesaram) e TABELA (fatura a fatura, contra a média, e as parcelas que vêm). Contas em `lib/historicoCartao.js`
   (testada). Clicar num mês abre os Lançamentos dele.
+  AJUSTES (03/11/2026, a pedido): LEGENDAS CLICÁVEIS e CARTÕES DE RESUMO com hover que acende o tipo no gráfico (o da
+  linha do tempo: faturas, última, parcelas, média, maior; clique fixa) — `useDestaque` + `LegendaClicavel`
+  (exportados; a legenda do bloco usa os mesmos). "Onde o cartão vai" tem a MÉDIA POR FATURA (o total ÷ as faturas do
+  período) e o clique filtra as lojas. "Onde mais comprou" mostra todas, com busca e ordem, categoria, COMPRAS, ticket
+  médio e a última; clicar abre as compras. COMPRA ≠ LINHA DA FATURA (`comprasDaLoja`, testada): as parcelas da mesma
+  compra contam uma vez (pela COMPETÊNCIA menos as parcelas pagas — o Nubank anda a data por parcela, a XP repete a da
+  compra) e o IOF da compra internacional (linha do mesmo dia com 2,5–7% de outra) entra no valor dela. O "N
+  lançamentos" das faturas continua contando linhas.
   Contas em `lib/cartoes.js` (testada). Cabeçalho do DRE: ✎ `ModalCadastroCartoes` (tabela de formulário, "Salvar
   alterações (N)"; cartão com lançamentos não se exclui) · ▾ Exportar CSV / Importar; "+ Novo cartão" = o formulário
   de um (clicar no nome do bloco também o abre).

@@ -112,11 +112,56 @@ export function anoContraAno({ faturas, parcelas, a, b }) {
   };
 }
 
-// POR CATEGORIA: de onde o cartão foi gasto no período e ONDE mais se comprou. `lancamentos`: [{ categoria_id,
-// estabelecimento, descricao, valor_centavos }]; `categorias`: as do cadastro (com `grupo`). Devolve
-// { total, categorias: [{ id, nome, cor, total, qtd }], lojas: [{ nome, vezes, total }] } (as lojas, as `maxLojas` maiores).
+// AS COMPRAS DE UMA LOJA (03/11/2026, a pedido: "o Claude não foi 10×"). Uma linha da fatura não é uma compra:
+//   · as PARCELAS da mesma compra (mesmo valor e nº de parcelas, a mesma compra de origem — o mês da FATURA menos as
+//     parcelas já pagas) contam UMA vez ("Dell 5×" era uma compra em 12x, parcelas 8 a 12 no período). É a
+//     competência, não a data: o Nubank anda a data um mês por parcela, a XP repete a da compra em todas;
+//   · o IOF da compra internacional vem numa linha à parte, do MESMO DIA, com 2,5–7% de outra (R$ 550,00 + R$ 19,25):
+//     entra no valor da compra, não conta como outra.
+// `linhas`: as da loja ({ id, data, competencia, valor_centavos, parcela_atual, parcela_total }). Devolve as compras, a mais nova em
+// cima: [{ data, total, iof, parcelas: { de, ate, total } | null, linhas }].
+const IOF_MIN = 0.025;
+const IOF_MAX = 0.07;
+export function comprasDaLoja(linhas) {
+  const grupos = new Map();
+  linhas.forEach((l) => {
+    const v = Number(l.valor_centavos);
+    const k = l.parcela_total
+      ? `p|${l.parcela_total}|${v}|${addMeses(String(l.competencia ?? l.data).slice(0, 7), -((l.parcela_atual ?? 1) - 1))}`
+      : `a|${l.id ?? Math.random()}`;
+    const g = grupos.get(k) ?? { data: l.data, total: 0, iof: 0, parcelas: null, linhas: 0, _valor: v };
+    g.total += v;
+    g.linhas += 1;
+    if (String(l.data) < String(g.data)) g.data = l.data;
+    if (l.parcela_total) {
+      const p = g.parcelas ?? { de: l.parcela_atual, ate: l.parcela_atual, total: l.parcela_total };
+      g.parcelas = { de: Math.min(p.de, l.parcela_atual), ate: Math.max(p.ate, l.parcela_atual), total: l.parcela_total };
+    }
+    grupos.set(k, g);
+  });
+  // O IOF: a avulsa pequena vai para a maior do mesmo dia (cada compra recebe um IOF só).
+  const avulsas = [...grupos.entries()].filter(([k]) => k.startsWith('a|')).map(([k, g]) => ({ k, g }))
+    .sort((x, y) => y.g._valor - x.g._valor);
+  const comIof = new Set();
+  [...avulsas].reverse().forEach(({ k, g }) => {
+    const dona = avulsas.find((x) => x.k !== k && !comIof.has(x.k) && x.g.data === g.data && grupos.has(x.k)
+      && g._valor >= x.g._valor * IOF_MIN && g._valor <= x.g._valor * IOF_MAX);
+    if (!dona || !grupos.has(k)) return;
+    dona.g.total += g._valor;
+    dona.g.iof += g._valor;
+    dona.g.linhas += 1;
+    comIof.add(dona.k);
+    grupos.delete(k);
+  });
+  return [...grupos.values()].map(({ _valor, ...g }) => g).sort((x, y) => String(y.data).localeCompare(String(x.data)));
+}
+
+// POR CATEGORIA: de onde o cartão foi gasto no período e ONDE mais se comprou. `lancamentos`: [{ id, data,
+// categoria_id, estabelecimento, descricao, valor_centavos, parcela_atual, parcela_total }]; `categorias`: as do
+// cadastro (com `grupo`). Devolve { total, categorias: [{ id, nome, cor, total, qtd }], lojas: [{ chave, nome, vezes
+// (COMPRAS, não linhas — `comprasDaLoja`), total, ticket, ultima, categoriaId, parcelada, iof, compras }] }.
 const chaveLoja = (s) => String(s ?? '').trim().replace(/\s+/g, ' ').toLocaleUpperCase('pt-BR');
-export function porCategoria(lancamentos, categorias, maxLojas = 15) {
+export function porCategoria(lancamentos, categorias, maxLojas = Infinity) {
   const catPorId = new Map(categorias.map((c) => [c.id, c]));
   const cats = new Map();
   const lojas = new Map();
@@ -131,10 +176,20 @@ export function porCategoria(lancamentos, categorias, maxLojas = 15) {
     const nome = (l.estabelecimento || l.descricao || '').trim();
     if (!nome) return;
     const k = chaveLoja(nome);
-    const x = lojas.get(k) ?? { nome, vezes: 0, total: 0 };
-    x.vezes += 1; x.total += v;
+    const x = lojas.get(k) ?? { chave: k, nome, linhas: [], porCat: new Map() };
+    x.linhas.push(l);
+    x.porCat.set(id, (x.porCat.get(id) ?? 0) + v);
     lojas.set(k, x);
   });
   const desc = (p, q) => q.total - p.total;
-  return { total, categorias: [...cats.values()].sort(desc), lojas: [...lojas.values()].sort(desc).slice(0, maxLojas) };
+  const lista = [...lojas.values()].map(({ chave, nome, linhas, porCat }) => {
+    const compras = comprasDaLoja(linhas);
+    const soma = compras.reduce((s, c) => s + c.total, 0);
+    const [categoriaId] = [...porCat.entries()].sort((a, b) => b[1] - a[1])[0];
+    return {
+      chave, nome, vezes: compras.length, total: soma, ticket: Math.round(soma / compras.length), ultima: compras[0]?.data ?? null,
+      categoriaId: categoriaId === 'sem' ? null : categoriaId, parcelada: compras.some((c) => c.parcelas), iof: compras.reduce((s, c) => s + c.iof, 0), compras,
+    };
+  });
+  return { total, categorias: [...cats.values()].sort(desc), lojas: lista.sort(desc).slice(0, maxLojas) };
 }

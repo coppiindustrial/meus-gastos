@@ -76,7 +76,7 @@ export async function criarLancamentos(lista) {
 // null = todas), só o que a conta usa. Paginado: um cartão passa de mil compras em poucos meses.
 export function listarDoCartao(cartaoId, desde) {
   return buscarTudo(() => {
-    let q = supabase.from('lancamentos').select('id, categoria_id, estabelecimento, descricao, valor_centavos, competencia').eq('cartao_id', cartaoId);
+    let q = supabase.from('lancamentos').select('id, data, categoria_id, estabelecimento, descricao, valor_centavos, competencia, parcela_atual, parcela_total').eq('cartao_id', cartaoId);
     if (desde) q = q.gte('competencia', competenciaParaBanco(desde));
     return q.order('id');
   });

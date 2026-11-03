@@ -11,7 +11,7 @@ import { PageLoading } from '../components/Spinner.jsx';
 import { Campo, Etiqueta, RodapeForm } from '../components/Comuns.jsx';
 import { IconAbrir, IconLapis, IconMais, IconSeta } from '../components/icons.jsx';
 import BalaoGrafico, { useBalao } from '../components/graficos/BalaoGrafico.jsx';
-import AmpliadoCartao from '../components/AmpliadoCartao.jsx';
+import AmpliadoCartao, { LegendaClicavel, marcaLegenda, useDestaque } from '../components/AmpliadoCartao.jsx';
 import ImportarFatura from './ImportarFatura.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { contarUsoCartao, criarCartoesSugeridos, listarCartoes, salvarCartao } from '../api/cadastros.js';
@@ -129,6 +129,11 @@ function BlocoCartao({ cartao: c, r, uso, onEditar, onImportar, onVer, onVerMes,
   // e o balão diz o mês, o total, as compras e a diferença para a média; clicar abre os lançamentos do mês.
   const balao = useBalao(230, 120);
   const ativo = balao.ativo !== null ? r.grafico[balao.ativo] : null;
+  // A LEGENDA CLICÁVEL (03/11/2026): a marca acende o seu tipo de coluna (hover) e o fixa (clique).
+  const destaque = useDestaque();
+  const apagada = (s) => destaque.atual && !({
+    faturas: s.tipo === 'fatura' && s.total > 0, ultima: s.tipo === 'fatura' && s.comp === r.ultima?.competencia, parcelas: s.tipo === 'parcelas',
+  }[destaque.atual]);
   const icone = 'inline-flex h-7 w-7 items-center justify-center rounded-[6px] border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50';
   return (
     <div className={`card flex flex-col gap-4 p-4 transition-[border-color,box-shadow] duration-150 hover:border-gray-300 hover:shadow-md ${c.ativo ? '' : 'opacity-60'}`}>
@@ -191,7 +196,7 @@ function BlocoCartao({ cartao: c, r, uso, onEditar, onImportar, onVer, onVerMes,
                 // A área de cada mês é a coluna INTEIRA (não só a barra): a de um mês baixo também se aponta.
                 <button key={s.comp} type="button" aria-label={`${nomeCompetencia(s.comp)}: ${s.total ? formatBRL(s.total) : futura ? 'sem parcelas' : 'sem fatura'}${futura ? ' em parcelas já compradas' : ''}`}
                   onMouseMove={balao.aoMover(i)} onClick={() => !futura && s.total && onVerMes(s.comp)}
-                  className={`flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-[3px] ${hoje ? 'ml-[3px] border-l border-dashed border-gray-300 pl-[3px]' : ''} ${!futura && s.total ? 'cursor-pointer' : 'cursor-default'} ${balao.esmaecido(i) ? 'opacity-40' : ''} transition-opacity duration-150`}>
+                  className={`flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-[3px] ${hoje ? 'ml-[3px] border-l border-dashed border-gray-300 pl-[3px]' : ''} ${!futura && s.total ? 'cursor-pointer' : 'cursor-default'} ${balao.esmaecido(i) ? 'opacity-40' : apagada(s) ? 'opacity-25' : ''} transition-opacity duration-150`}>
                   <span className={`whitespace-nowrap text-[10px] leading-none tabular-nums ${ultima ? 'font-semibold text-gray-800' : futura ? '' : 'text-gray-500'}`}
                     style={futura ? { color: 'var(--serie-gastos)' } : undefined}>
                     {s.total && (!estreito || marcos.has(s.comp)) ? numeroK(s.total) : ''}
@@ -210,11 +215,11 @@ function BlocoCartao({ cartao: c, r, uso, onEditar, onImportar, onVer, onVerMes,
             ))}
           </div>
           {r.grafico.some((s) => s.tipo === 'parcelas') && (
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-gray-500">
-              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px] bg-gray-300" />faturas</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ background: 'var(--serie-gastos)' }} />última</span>
-              <span className="inline-flex items-center gap-1.5"><span className="barra-parcelas h-2 w-2 rounded-[2px]" />parcelas já compradas que vêm</span>
-            </div>
+            <LegendaClicavel destaque={destaque} className="-ml-1.5 mt-1.5 !text-[10.5px]" itens={[
+              { key: 'faturas', rotulo: 'faturas', marca: marcaLegenda('faturas') },
+              { key: 'ultima', rotulo: 'última', marca: marcaLegenda('ultima') },
+              { key: 'parcelas', rotulo: 'parcelas já compradas que vêm', marca: marcaLegenda('parcelas') },
+            ]} />
           )}
         </div>
       )}
