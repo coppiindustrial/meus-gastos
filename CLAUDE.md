@@ -154,7 +154,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   do mês.
   O HISTÓRICO DO CARTÃO (03/11/2026, mockup "Cartões · o ampliado do cartão"): o ⤢ do bloco (só no computador) abre
   `components/AmpliadoCartao.jsx`, o painel dos ampliados (1280px/90vh, tela cheia, CSV da aba), com a troca de cartão,
-  o período (12 / 24 meses / todo o histórico / ANO — a pílula "Ano" e, ao lado, a lista dos anos com fatura:
+  o período (12 / 24 meses / todo o histórico / ANO — a pílula "Ano ▾" abre o `MenuContexto` dos anos com fatura e,
+  escolhido, mostra o ano ("2026 ▾"):
   janeiro a dezembro, ou até a fatura mais nova e as parcelas do ano; `periodo` 'ano:AAAA' em `linhaDoTempo`) e quatro abas — LINHA DO TEMPO (todas as faturas do período, o número em
   cada coluna, a média tracejada, o ano embaixo, depois as parcelas hachuradas), ANO × ANO (dois anos lado a lado; a
   variação no mesmo período), POR CATEGORIA (lê os lançamentos do cartão: `listarDoCartao`; categorias e as lojas que

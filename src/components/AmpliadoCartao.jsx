@@ -6,7 +6,8 @@ import SelectSimples from './SelectSimples.jsx';
 import Spinner from './Spinner.jsx';
 import { Bolinha } from './Comuns.jsx';
 import BalaoGrafico, { useBalao } from './graficos/BalaoGrafico.jsx';
-import { IconMaximize, IconMinimize } from './icons.jsx';
+import MenuContexto from './MenuContexto.jsx';
+import { IconMaximize, IconMinimize, IconSeta } from './icons.jsx';
 import { BuscaFaixa } from './filtros/Segmentos.jsx';
 import { listarDoCartao } from '../api/lancamentos.js';
 import { listarCategorias } from '../api/cadastros.js';
@@ -421,13 +422,17 @@ export default function AmpliadoCartao({ cartoes, cartaoId: inicial, faturas, pa
   const [cartaoId, setCartaoId] = useState(inicial);
   const [aba, setAbaEstado] = useState('linha');
   const [periodo, setPeriodo] = useState('12');
-  const [anoSel, setAnoSel] = useState(null); // o ano do período "Ano" (a lista ao lado das pílulas)
+  const [anoSel, setAnoSel] = useState(null); // o ano do período "Ano" (o menu da própria pílula)
+  const [menuAno, setMenuAno] = useState(null);
+  const periodosRef = useRef(null);
+  const anoAbertoNoClique = useRef(false);
   const destaque = useDestaque(); // o da linha do tempo (a legenda e os cartões de resumo)
   const setAba = (x) => { setAbaEstado(x); destaque.limpar(); };
   const doCartao = useMemo(() => faturas.filter((f) => f.cartao_id === cartaoId), [faturas, cartaoId]);
   const parcelasDoCartao = useMemo(() => parcelas.filter((p) => p.cartao_id === cartaoId), [parcelas, cartaoId]);
   const anos = useMemo(() => anosComFatura(doCartao), [doCartao]);
-  // UM ANO (03/11/2026): a pílula "Ano" e, ao lado, a lista dos anos com fatura (o mais novo, se o escolhido não é do cartão).
+  // UM ANO (03/11/2026): a pílula "Ano ▾" abre o MENU dos anos com fatura (o `MenuContexto`, como o "Mais ações");
+  // escolhido, ela mostra o ano ("2026 ▾"). O mais novo, se o escolhido não é do cartão.
   const anoDoPeriodo = anos.includes(anoSel) ? anoSel : anos[0] ?? hoje.slice(0, 4);
   const periodoConta = periodo === 'ano' ? `ano:${anoDoPeriodo}` : periodo;
   const t = useMemo(() => linhaDoTempo({ faturas: doCartao, parcelas: parcelasDoCartao, periodo: periodoConta, hoje }), [doCartao, parcelasDoCartao, periodoConta, hoje]);
@@ -511,19 +516,38 @@ export default function AmpliadoCartao({ cartoes, cartaoId: inicial, faturas, pa
       </Tooltip>
     </>
   );
+  // O clique em "Ano" abre o menu dos anos (de novo com ele aberto, fecha); os outros períodos trocam direto.
+  const escolherPeriodo = (k) => {
+    if (k !== 'ano') { setPeriodo(k); return; }
+    if (anoAbertoNoClique.current || menuAno) { anoAbertoNoClique.current = false; setMenuAno(null); return; }
+    const el = [...(periodosRef.current?.querySelectorAll('button') ?? [])].pop();
+    const rr = el?.getBoundingClientRect();
+    if (!rr) return;
+    const nDoAno = (x) => doCartao.filter((f) => f.competencia.startsWith(x)).length;
+    setMenuAno({ x: rr.left, y: rr.bottom + 4, titulo: 'Ano', itens: anos.map((x) => ({
+      rotulo: x, sub: `${plural(nDoAno(x), 'fatura', 'faturas')}${periodo === 'ano' && x === anoDoPeriodo ? ' · o da tela' : ''}`,
+      onEscolher: () => { setAnoSel(x); setPeriodo('ano'); },
+    })) });
+  };
   const { resumo } = t;
   return (
     <Modal open onClose={onClose} title={`Histórico · ${cartao?.nome ?? ''}`} subtitulo={`vence dia ${cartao?.dia_vencimento ?? '—'} · ${plural(doCartao.length, 'fatura', 'faturas')} no app`}
       acoes={acoes} alturaCheia animarTamanho padding="p-0"
       maxWidth={cheio ? 'max-w-[96vw]' : 'max-w-[min(1280px,95vw)]'} altura={cheio ? 'h-[94vh]' : 'h-[90vh]'}>
+      <MenuContexto menu={menuAno} onFechar={() => setMenuAno(null)} />
       <div className="flex h-full min-h-0 flex-col gap-4 px-5 pb-4 pt-4">
         <div className="flex flex-wrap items-center gap-2.5">
           {comFatura.length > 1 && (
             <AbasPilula abas={comFatura.map((c) => ({ key: c.id, label: c.nome }))} valor={cartaoId} onChange={(id) => { setCartaoId(id); setPar(null); }} variante="claro" altura={30} folga={2} />
           )}
-          {aba !== 'anos' && <AbasPilula abas={PERIODOS.map((p) => ({ key: p.value, label: p.label }))} valor={periodo} onChange={setPeriodo} variante="claro" altura={30} folga={2} />}
-          {aba !== 'anos' && periodo === 'ano' && (
-            <SelectSimples compacto value={anoDoPeriodo} onChange={setAnoSel} opcoes={anos.map((x) => ({ value: x, label: x }))} className="w-[96px]" />
+          {aba !== 'anos' && (
+            <span ref={periodosRef} className="inline-flex" onMouseDown={() => { anoAbertoNoClique.current = !!menuAno; }}>
+              <AbasPilula variante="claro" altura={30} folga={2} valor={periodo} onChange={escolherPeriodo}
+                abas={PERIODOS.map((p) => (p.value !== 'ano' ? { key: p.value, label: p.label } : {
+                  key: 'ano', aria: 'Escolher o ano',
+                  label: <span className="inline-flex items-center gap-1.5">{periodo === 'ano' ? anoDoPeriodo : 'Ano'}<IconSeta className={`text-gray-400 transition-transform duration-200 ${menuAno ? 'rotate-180' : ''}`} /></span>,
+                }))} />
+            </span>
           )}
           <span className="flex-1" />
           <AbasPilula abas={ABAS} valor={aba} onChange={setAba} altura={30} folga={2} />
