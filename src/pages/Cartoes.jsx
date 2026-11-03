@@ -164,18 +164,19 @@ function BlocoCartao({ cartao: c, r, uso, modelo, onEditar, onImportar, onVer, o
               <button type="button" aria-label="Importar a fatura" onClick={onImportar} className={icone}><IcoImportar className="h-3.5 w-3.5" /></button>
             </Tooltip>
           )}
+          {r.ultima && (
+            <Tooltip label={`Ver os lançamentos de ${competenciaCurta(r.ultima.competencia)}`}>
+              <button type="button" aria-label="Ver os lançamentos" onClick={onVer} className={icone}><IconAbrir className="h-3.5 w-3.5" /></button>
+            </Tooltip>
+          )}
           {r.faturas > 0 && (
-            // só no computador: o painel é largo (no celular, como a grade dos Lançamentos, não há)
+            // por último, como o ⤢ dos blocos da Visão geral; só no computador: o painel é largo (no celular, como a
+            // grade dos Lançamentos, não há)
             <span className="hidden md:inline-flex">
               <Tooltip label="O histórico do cartão (linha do tempo, ano × ano, por categoria)">
                 <button type="button" aria-label="Ver o histórico do cartão" onClick={onHistorico} className={icone}><IcoAmpliar className="h-3.5 w-3.5" /></button>
               </Tooltip>
             </span>
-          )}
-          {r.ultima && (
-            <Tooltip label={`Ver os lançamentos de ${competenciaCurta(r.ultima.competencia)}`}>
-              <button type="button" aria-label="Ver os lançamentos" onClick={onVer} className={icone}><IconAbrir className="h-3.5 w-3.5" /></button>
-            </Tooltip>
           )}
         </span>
       </div>
