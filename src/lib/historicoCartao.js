@@ -4,7 +4,8 @@
 import { addMeses, competenciaDe } from './format.js';
 
 const mesesEntre = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
-export const PERIODOS = [{ value: '12', label: '12 meses' }, { value: '24', label: '24 meses' }, { value: 'tudo', label: 'Todo o histórico' }];
+// 'ano' (03/11/2026, a pedido): UM ANO escolhido numa lista ao lado (os anos crescem); para as contas, 'ano:AAAA'.
+export const PERIODOS = [{ value: '12', label: '12 meses' }, { value: '24', label: '24 meses' }, { value: 'tudo', label: 'Todo o histórico' }, { value: 'ano', label: 'Ano' }];
 
 // As faturas do cartão somadas por competência: Map 'AAAA-MM' → { total, qtd, vencimento }.
 function porCompetencia(faturas) {
@@ -30,16 +31,19 @@ function parcelasPorMes(parcelas) {
 }
 
 // LINHA DO TEMPO: os meses do período até a fatura mais recente (mês sem fatura = coluna vazia) e, depois dela, TODAS
-// as parcelas que vêm. `faturas`/`parcelas`: só as do cartão. `periodo`: '12' | '24' | 'tudo'.
+// as parcelas que vêm. `faturas`/`parcelas`: só as do cartão. `periodo`: '12' | '24' | 'tudo' | 'ano:AAAA' (janeiro a
+// dezembro daquele ano — ou até a fatura mais recente, e então as parcelas que vêm DENTRO do ano).
 // Devolve { colunas: [{ comp, tipo, total, qtd, vencimento }], anos: [{ ano, n }], resumo, linhas (a tabela) }.
 export function linhaDoTempo({ faturas, parcelas, periodo = '12', hoje }) {
   const fs = porCompetencia(faturas);
   const ps = parcelasPorMes(parcelas);
   const comps = [...fs.keys()].sort();
-  const fim = comps[comps.length - 1] ?? competenciaDe(hoje);
-  const inicio = periodo === 'tudo' ? (comps[0] ?? fim) : addMeses(fim, -(Number(periodo) - 1));
+  const ultimaFatura = comps[comps.length - 1] ?? competenciaDe(hoje);
+  const ano = String(periodo).startsWith('ano:') ? String(periodo).slice(4) : null;
+  const fim = ano && `${ano}-12` < ultimaFatura ? `${ano}-12` : ultimaFatura;
+  const inicio = ano ? `${ano}-01` : periodo === 'tudo' ? (comps[0] ?? fim) : addMeses(fim, -(Number(periodo) - 1));
   const nPass = mesesEntre(inicio, fim) + 1;
-  const ultimaParcela = [...ps.keys()].filter((k) => k > fim).sort().pop();
+  const ultimaParcela = [...ps.keys()].filter((k) => k > fim && (!ano || k <= `${ano}-12`)).sort().pop();
   const nFut = ultimaParcela ? mesesEntre(fim, ultimaParcela) : 0;
   const colunas = [
     ...Array.from({ length: nPass }, (_, i) => {

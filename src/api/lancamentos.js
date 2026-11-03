@@ -74,10 +74,11 @@ export async function criarLancamentos(lista) {
 // As linhas inteiras (para guardar no desfazer antes de excluir).
 // O "POR CATEGORIA" do histórico do cartão (o ampliado dos Cartões): as compras do cartão desde `desde` ('AAAA-MM';
 // null = todas), só o que a conta usa. Paginado: um cartão passa de mil compras em poucos meses.
-export function listarDoCartao(cartaoId, desde) {
+export function listarDoCartao(cartaoId, desde, ate = null) {
   return buscarTudo(() => {
     let q = supabase.from('lancamentos').select('id, data, categoria_id, estabelecimento, descricao, valor_centavos, competencia, parcela_atual, parcela_total').eq('cartao_id', cartaoId);
     if (desde) q = q.gte('competencia', competenciaParaBanco(desde));
+    if (ate) q = q.lte('competencia', competenciaParaBanco(ate));
     return q.order('id');
   });
 }

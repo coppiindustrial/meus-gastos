@@ -23,6 +23,12 @@ test('linhaDoTempo: o período até a fatura mais nova (mês vazio = coluna vazi
   // todo o histórico começa na primeira fatura
   const tudo = linhaDoTempo({ faturas, parcelas: [], periodo: 'tudo', hoje: '2026-11-03' });
   assert.deepEqual([tudo.colunas[0].comp, tudo.colunas.length, tudo.resumo.faturas, tudo.resumo.parcelas], ['2025-03', 20, 5, null]);
+  // UM ANO: um ano passado vai de janeiro a dezembro, sem parcelas; o da fatura mais nova, até ela e as parcelas do ano
+  const ano25 = linhaDoTempo({ faturas, parcelas, periodo: 'ano:2025', hoje: '2026-11-03' });
+  assert.deepEqual([ano25.colunas[0].comp, ano25.colunas.length, ano25.resumo.total, ano25.resumo.faturas, ano25.resumo.parcelas], ['2025-01', 12, 300000, 2, null]);
+  const ano26 = linhaDoTempo({ faturas, parcelas, periodo: 'ano:2026', hoje: '2026-11-03' });
+  assert.deepEqual(ano26.colunas.map((c) => c.comp).slice(-3), ['2026-09', '2026-10', '2026-11']);
+  assert.deepEqual([ano26.colunas.length, ano26.resumo.total, ano26.resumo.parcelas], [11, 850000, { total: 15000, ate: '2026-11' }]);
 });
 
 test('anoContraAno: lado a lado, parcelas depois da última fatura e a comparação no mesmo período', () => {

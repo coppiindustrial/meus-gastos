@@ -421,11 +421,16 @@ export default function AmpliadoCartao({ cartoes, cartaoId: inicial, faturas, pa
   const [cartaoId, setCartaoId] = useState(inicial);
   const [aba, setAbaEstado] = useState('linha');
   const [periodo, setPeriodo] = useState('12');
+  const [anoSel, setAnoSel] = useState(null); // o ano do período "Ano" (a lista ao lado das pílulas)
   const destaque = useDestaque(); // o da linha do tempo (a legenda e os cartões de resumo)
   const setAba = (x) => { setAbaEstado(x); destaque.limpar(); };
   const doCartao = useMemo(() => faturas.filter((f) => f.cartao_id === cartaoId), [faturas, cartaoId]);
   const parcelasDoCartao = useMemo(() => parcelas.filter((p) => p.cartao_id === cartaoId), [parcelas, cartaoId]);
-  const t = useMemo(() => linhaDoTempo({ faturas: doCartao, parcelas: parcelasDoCartao, periodo, hoje }), [doCartao, parcelasDoCartao, periodo, hoje]);
+  const anos = useMemo(() => anosComFatura(doCartao), [doCartao]);
+  // UM ANO (03/11/2026): a pílula "Ano" e, ao lado, a lista dos anos com fatura (o mais novo, se o escolhido não é do cartão).
+  const anoDoPeriodo = anos.includes(anoSel) ? anoSel : anos[0] ?? hoje.slice(0, 4);
+  const periodoConta = periodo === 'ano' ? `ano:${anoDoPeriodo}` : periodo;
+  const t = useMemo(() => linhaDoTempo({ faturas: doCartao, parcelas: parcelasDoCartao, periodo: periodoConta, hoje }), [doCartao, parcelasDoCartao, periodoConta, hoje]);
   const cartao = cartoes.find((c) => c.id === cartaoId);
   const comFatura = cartoes.filter((c) => faturas.some((f) => f.cartao_id === c.id));
   const ultimaComp = useMemo(() => {
@@ -434,7 +439,6 @@ export default function AmpliadoCartao({ cartoes, cartaoId: inicial, faturas, pa
   }, [doCartao, hoje]);
 
   // ANO × ANO: o mais novo com fatura e o anterior a ele.
-  const anos = useMemo(() => anosComFatura(doCartao), [doCartao]);
   const [par, setPar] = useState(null);
   const b = par?.b && anos.includes(par.b) ? par.b : anos[0] ?? hoje.slice(0, 4);
   const a = par?.a && anos.includes(par.a) ? par.a : anos[1] ?? String(Number(b) - 1);
@@ -443,6 +447,7 @@ export default function AmpliadoCartao({ cartoes, cartaoId: inicial, faturas, pa
 
   // POR CATEGORIA: os lançamentos do cartão no período, lidos só quando a aba abre.
   const desde = t.colunas.find((c) => c.tipo === 'fatura')?.comp ?? null;
+  const ate = periodo === 'ano' ? t.colunas.filter((c) => c.tipo === 'fatura').pop()?.comp ?? null : null;
   const [cats, setCats] = useState(null);
   const [categorias, setCategorias] = useState(null);
   useEffect(() => {
@@ -451,14 +456,14 @@ export default function AmpliadoCartao({ cartoes, cartaoId: inicial, faturas, pa
     setCats(null);
     (async () => {
       try {
-        const [ls, cs] = await Promise.all([listarDoCartao(cartaoId, periodo === 'tudo' ? null : desde), categorias ?? listarCategorias()]);
+        const [ls, cs] = await Promise.all([listarDoCartao(cartaoId, periodo === 'tudo' ? null : desde, ate), categorias ?? listarCategorias()]);
         if (!vivo) return;
         if (!categorias) setCategorias(cs);
         setCats(porCategoria(ls, cs));
       } catch (err) { if (vivo) { toast.error(err.message); setCats({ total: 0, categorias: [], lojas: [] }); } }
     })();
     return () => { vivo = false; };
-  }, [aba, cartaoId, periodo, desde]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aba, cartaoId, periodo, desde, ate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const periodoTexto = t.colunas.length ? `${competenciaCurta(desde ?? t.colunas[0].comp)} a ${competenciaCurta(t.colunas.filter((c) => c.tipo === 'fatura').pop()?.comp ?? t.colunas[0].comp)}` : '';
   const exportar = () => {
@@ -517,6 +522,9 @@ export default function AmpliadoCartao({ cartoes, cartaoId: inicial, faturas, pa
             <AbasPilula abas={comFatura.map((c) => ({ key: c.id, label: c.nome }))} valor={cartaoId} onChange={(id) => { setCartaoId(id); setPar(null); }} variante="claro" altura={30} folga={2} />
           )}
           {aba !== 'anos' && <AbasPilula abas={PERIODOS.map((p) => ({ key: p.value, label: p.label }))} valor={periodo} onChange={setPeriodo} variante="claro" altura={30} folga={2} />}
+          {aba !== 'anos' && periodo === 'ano' && (
+            <SelectSimples compacto value={anoDoPeriodo} onChange={setAnoSel} opcoes={anos.map((x) => ({ value: x, label: x }))} className="w-[96px]" />
+          )}
           <span className="flex-1" />
           <AbasPilula abas={ABAS} valor={aba} onChange={setAba} altura={30} folga={2} />
         </div>
@@ -535,7 +543,7 @@ export default function AmpliadoCartao({ cartoes, cartaoId: inicial, faturas, pa
         )}
         {aba === 'linha' && <LinhaDoTempo t={t} ultimaComp={ultimaComp} onVerMes={onVerMes} destaque={destaque} />}
         {aba === 'anos' && <AnoContraAno r={r} a={a} b={b} opcoesAno={opcoesAno} setA={(x) => setPar({ a: x, b })} setB={(x) => setPar({ a, b: x })} onVerMes={onVerMes} />}
-        {aba === 'categorias' && <PorCategoria key={`${cartaoId}:${periodo}`} dados={cats} periodoTexto={periodoTexto} nFaturas={resumo.faturas} />}
+        {aba === 'categorias' && <PorCategoria key={`${cartaoId}:${periodoConta}`} dados={cats} periodoTexto={periodoTexto} nFaturas={resumo.faturas} />}
         {aba === 'tabela' && <Tabela t={t} ultimaComp={ultimaComp} onVerMes={onVerMes} />}
       </div>
     </Modal>
