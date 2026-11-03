@@ -12,8 +12,8 @@ import {
   atualizarCampos, criarLancamentos, excluirLancamentos, restaurarLancamentos,
 } from '../../api/lancamentos.js';
 import {
-  COLUNAS, colunaEditavel, descricaoDaEntrada, faixaDe, interpretar, ladrilhar, lerBloco, limparFaixa, naFaixa, planejarColagem, preencherAbaixo,
-  resumoSelecao, textoDaFaixa, textoOrigem,
+  COLUNAS, colunaEditavel, descricaoDaEntrada, faixaDe, interpretar, ladrilhar, lerBloco, limparFaixa, linhasDasFaixas, naFaixa, naSelecao, planejarColagem,
+  preencherAbaixo, resumoSelecao, textoDaFaixa, textoDasFaixas, textoOrigem,
 } from '../../lib/planilha.js';
 import { formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
 import { competenciaAtual, formatDate, todayISO } from '../../lib/format.js';
@@ -31,6 +31,10 @@ import {
 // SELEÇÃO: `sel` é a célula ATIVA (onde se digita, e o canto de onde a faixa parte) e `ext` o outro
 // canto; sem `ext` a seleção é uma célula só. Shift+setas, Shift+clique e arrastar o mouse estendem a
 // faixa; clicar no número da linha pega a linha inteira, no cabeçalho a coluna inteira.
+// CTRL+CLIQUE (e Ctrl+arrastar, no número da linha ou no cabeçalho também) SOMA uma faixa à seleção, como no Excel
+// (03/11/2026): as de antes ficam em `outras`, acesas, e a nova é a ativa. A barra soma todas; Delete limpa todas;
+// excluir, marcar revisado e mudar a categoria valem para as linhas de todas; Ctrl+C copia se as colunas forem as
+// mesmas; Ctrl+D preenche cada uma. Qualquer seleção sem o Ctrl (clique, seta, Tab, Esc, colar) volta a ser uma só.
 //
 // O TECLADO É O DE UMA PLANILHA, e quem o ouve é a CAIXA (focável), não as células: setas andam,
 // digitar começa a editar substituindo o valor, F2/Enter/duplo clique editam o que está lá, Enter
@@ -86,7 +90,14 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     if (apagando.current) { apagando.current = false; return; }
     setApagada(false);
   }, [sel, ext]);
-  const [editor, setEditor] = useState(null);     // { r, c, texto, digitando }
+  // As faixas de antes do Ctrl+clique. Mudar a célula ativa sem o Ctrl (`somando` desligado) as solta.
+  const [outras, setOutras] = useState([]);
+  const somando = useRef(false);
+  useEffect(() => {
+    if (somando.current) { somando.current = false; return; }
+    setOutras((o) => (o.length ? [] : o));
+  }, [sel]);
+  const [editor, setEditor] = useState(null);     // { r, c, texto, digitando, rs? } — `rs`: as linhas da categoria
   const [menu, setMenu] = useState(null);
   const [marcas, setMarcas] = useState(null);     // { alcance, fora: Map("r:c" → motivo) } — a última colagem
   const [selo, setSelo] = useState(null);         // "N células copiadas" (some sozinho)
@@ -101,7 +112,10 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   // A última linha (n) é a linha em branco do fim; as reais e os rascunhos vão de 0 a n−1.
   const n = linhas.length;
   const faixa = faixaDe(sel, ext ?? sel);
-  const multi = faixa.r0 !== faixa.r1 || faixa.c0 !== faixa.c1;
+  const faixas = [...outras, faixa];
+  // as faixas sem a linha em branco do fim (a que só tem ela fica de fora)
+  const faixasReais = faixas.map((f) => ({ ...f, r1: Math.min(f.r1, n - 1) })).filter((f) => f.r1 >= f.r0);
+  const multi = outras.length > 0 || faixa.r0 !== faixa.r1 || faixa.c0 !== faixa.c1;
   const vis = !apagada; // a seleção aparece
   const catPorId = useMemo(() => new Map(categorias.map((c) => [c.id, c])), [categorias]);
   const comCategoria = useCallback((l) => ({ ...l, categoria: l.categoria_id ? catPorId.get(l.categoria_id) ?? l.categoria : null }), [catPorId]);
@@ -296,12 +310,24 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
 
   // ------------------------------------------------------------ ações
 
-  const linhasReais = (f) => linhas.slice(f.r0, Math.min(f.r1, n - 1) + 1).filter((l) => l && !l.rascunho);
+  // As linhas de todas as faixas da seleção (sem repetir), e as gravadas entre elas.
+  const linhasDaSelecao = () => linhasDasFaixas(faixas, n).map((r) => linhas[r]).filter(Boolean);
+  const linhasReais = () => linhasDaSelecao().filter((l) => !l.rascunho);
 
   // COPIAR (Ctrl+C e o menu): o bloco como o Excel lê, e a borda que anda em volta dele até o Esc, uma
   // edição ou um desfazer — como no DRE. É o keydown que copia, e não o evento `copy`: numa caixa que não
   // é campo de texto o navegador nem sempre o dispara.
   const copiar = async (f = faixa) => {
+    if (outras.length) {
+      const res = textoDasFaixas(linhas, faixasReais);
+      if (res.motivo) { toast.info(res.motivo); return; }
+      const ok = await copiarTexto(res.texto);
+      focar();
+      if (!ok) { toast.error('O navegador não deixou copiar.'); return; }
+      setCopia(null);
+      setSelo(`${plural(res.celulas, 'célula copiada', 'células copiadas')} (${plural(res.linhas, 'linha', 'linhas')}, uma embaixo da outra) · Ctrl+V cola aqui ou no Excel`);
+      return;
+    }
     const g = { ...f, r1: Math.min(f.r1, n - 1) };
     if (g.r1 < g.r0) return;
     const ok = await copiarTexto(textoDaFaixa(linhas, g));
@@ -331,18 +357,20 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     try { colarTexto(await navigator.clipboard.readText()); } catch { toast.info('O navegador não liberou o que foi copiado: selecione a célula e use Ctrl+V.'); }
   };
 
-  const preencher = (f = faixa) => {
-    const g = { ...f, r1: Math.min(f.r1, n - 1) };
-    if (g.r1 <= g.r0) return;
-    const { mudancas, fora } = preencherAbaixo(linhas, g);
-    setMarcas(fora.length ? { alcance: g, fora: new Map(fora.map((x) => [`${x.r}:${x.c}`, x.motivo])) } : null);
+  // Sem `f`, preenche CADA faixa da seleção (a primeira linha de cada uma desce nela).
+  const preencher = (f) => {
+    const gs = (f ? [{ ...f, r1: Math.min(f.r1, n - 1) }] : faixasReais).filter((g) => g.r1 > g.r0);
+    if (!gs.length) return;
+    const feitos = gs.map((g) => preencherAbaixo(linhas, g));
+    const mudancas = feitos.flatMap((x) => x.mudancas);
+    const fora = feitos.flatMap((x) => x.fora);
+    setMarcas(fora.length ? { alcance: gs[gs.length - 1], fora: new Map(fora.map((x) => [`${x.r}:${x.c}`, x.motivo])) } : null);
     aplicar(mudancas, `preencher ${plural(mudancas.length, 'célula', 'células')}`);
   };
 
   const limpar = () => {
-    const g = { ...faixa, r1: Math.min(faixa.r1, n - 1) };
-    if (g.r1 < g.r0) return;
-    const { mudancas, presos } = limparFaixa(linhas, g);
+    if (!faixasReais.length) return;
+    const { mudancas, presos } = limparFaixa(linhas, faixasReais);
     if (!mudancas.length && presos) { toast.info('Data e valor não ficam vazios: digite o valor certo por cima.'); return; }
     aplicar(mudancas, `limpar ${plural(mudancas.length, 'célula', 'células')}`);
   };
@@ -363,8 +391,8 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   };
 
   const excluir = async () => {
-    const alvo = linhasReais(faixa);
-    const rascunhos = linhas.slice(faixa.r0, Math.min(faixa.r1, n - 1) + 1).filter((l) => l?.rascunho).map((l) => l.id);
+    const alvo = linhasReais();
+    const rascunhos = linhasDaSelecao().filter((l) => l.rascunho).map((l) => l.id);
     if (rascunhos.length) setTodas((todas) => todas.filter((x) => !rascunhos.includes(x.id)));
     if (!alvo.length) return;
     const ok = await confirmar({
@@ -387,7 +415,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   };
 
   const marcarRevisado = () => {
-    const alvo = linhasReais(faixa).filter((l) => l.revisar);
+    const alvo = linhasReais().filter((l) => l.revisar);
     if (!alvo.length) return;
     const itens = alvo.map((l) => ({ id: l.id, antes: { revisar: true }, depois: { revisar: false } }));
     setTodas((todas) => todas.map((x) => (alvo.some((l) => l.id === x.id) ? { ...x, revisar: false } : x)));
@@ -399,18 +427,18 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     });
   };
 
-  // A categoria escolhida vai para TODAS as linhas da seleção (as do tipo certo).
-  const escolherCategoria = (id, r0 = faixa.r0, r1 = faixa.r1) => {
+  // A categoria escolhida vai para TODAS as linhas da seleção (as do tipo certo). `rs`: as linhas (em ordem).
+  const escolherCategoria = (id, rs = linhasDasFaixas(faixas, n + 1)) => {
     const mudancas = [];
     const tipoCat = id ? catPorId.get(id)?.grupo.tipo : null;
-    for (let r = r0; r <= r1; r++) {
+    rs.forEach((r) => {
       const l = linhas[r];
-      if (l && !l.rascunho && tipoCat && l.tipo !== tipoCat) continue;
+      if (l && !l.rascunho && tipoCat && l.tipo !== tipoCat) return;
       if (!l && tipoCat === 'entrada') { mudancas.push({ r, campo: 'tipo', valor: 'entrada' }); }
       mudancas.push({ r, campo: 'categoria_id', valor: id });
-    }
-    const um = r0 === r1 && linhas[r0];
-    aplicar(mudancas, um ? `categoria de “${linhas[r0].descricao || 'linha nova'}”` : `categoria de ${plural(r1 - r0 + 1, 'linha', 'linhas')}`);
+    });
+    const um = rs.length === 1 && linhas[rs[0]];
+    aplicar(mudancas, um ? `categoria de “${um.descricao || 'linha nova'}”` : `categoria de ${plural(rs.length, 'linha', 'linhas')}`);
   };
 
   // ------------------------------------------------------------ edição
@@ -479,6 +507,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
       if (apagada) return;
       e.preventDefault(); e.stopPropagation();
       if (ext) { apagando.current = true; setExt(null); }
+      setOutras([]);
       setMarcas(null); setSelo(null); setCopia(null); setApagada(true);
       return;
     }
@@ -522,8 +551,13 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     focar();
     setMarcas(null);
     if (e.shiftKey) setExt({ r, c });
-    else { setSel({ r, c }); setExt(null); arrasto.current = 'faixa'; }
+    else {
+      if ((e.ctrlKey || e.metaKey) && vis) somar();
+      setSel({ r, c }); setExt(null); arrasto.current = 'faixa';
+    }
   };
+  // Ctrl: a faixa de agora vai para `outras` e a próxima seleção começa ao lado dela.
+  const somar = () => { somando.current = true; setOutras((o) => [...o, faixa]); };
   const aoPassar = (r, c) => {
     if (arrasto.current === 'faixa') setExt({ r, c });
     else if (arrasto.current === 'preencher') setAlvoPreencher(Math.max(r, faixa.r1));
@@ -601,17 +635,24 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   const selecionarLinhas = (e, r) => {
     e.preventDefault();
     focar();
-    if (e.shiftKey) { setSel((s) => ({ r: s.r, c: 0 })); setExt({ r, c: ULTIMA_COL }); }
-    else { setSel({ r, c: 0 }); setExt({ r, c: ULTIMA_COL }); }
+    if (e.shiftKey) { somando.current = outras.length > 0; setSel((s) => ({ r: s.r, c: 0 })); setExt({ r, c: ULTIMA_COL }); }
+    else {
+      if ((e.ctrlKey || e.metaKey) && vis) somar();
+      setSel({ r, c: 0 }); setExt({ r, c: ULTIMA_COL });
+    }
   };
-  const selecionarColuna = (c) => { focar(); setSel({ r: 0, c }); setExt({ r: Math.max(0, n - 1), c }); };
+  const selecionarColuna = (e, c) => {
+    focar();
+    if ((e.ctrlKey || e.metaKey) && vis) somar();
+    setSel({ r: 0, c }); setExt({ r: Math.max(0, n - 1), c });
+  };
 
   // ------------------------------------------------------------ menu
 
   const itensMenu = () => {
-    const reais = linhasReais(faixa);
-    const nLin = Math.min(faixa.r1, n - 1) - faixa.r0 + 1;
-    const celulas = Math.max(0, nLin) * (faixa.c1 - faixa.c0 + 1);
+    const reais = linhasReais();
+    const nLin = linhasDasFaixas(faixas, n).length;
+    const celulas = faixasReais.length ? resumoSelecao(linhas, faixasReais).celulas : 0;
     const topo = pilha.desfazer[pilha.desfazer.length - 1];
     const prox = pilha.refazer[pilha.refazer.length - 1];
     const aRevisar = reais.filter((l) => l.revisar).length;
@@ -619,12 +660,12 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     return [
       { rotulo: 'Copiar', icone: <IcoCopiar />, atalho: 'Ctrl+C', sub: multi ? `${plural(celulas, 'célula', 'células')}, para colar no Excel` : undefined, desabilitado: celulas === 0, motivo: celulas === 0 ? 'a linha em branco não tem o que copiar' : undefined, onEscolher: () => copiar() },
       { rotulo: 'Colar', icone: <IcoColar />, atalho: 'Ctrl+V', sub: 'um valor ou um bloco do Excel, a partir do canto de cima', onEscolher: colarDoMenu },
-      nLin > 1
+      faixasReais.some((g) => g.r1 > g.r0)
         ? { rotulo: 'Preencher para baixo', icone: <IcoPreencher />, atalho: 'Ctrl+D', sub: 'a primeira linha se repete nas de baixo', onEscolher: () => preencher() }
         : { rotulo: 'Preencher para baixo', icone: <IcoPreencher />, atalho: 'Ctrl+D', desabilitado: true, motivo: 'selecione duas linhas ou mais' },
       { rotulo: 'Limpar', icone: <IcoLimpar />, atalho: 'Delete', sub: 'descrição, categoria e observação', onEscolher: limpar },
       { sep: true },
-      { rotulo: reais.length > 1 || nLin > 1 ? `Mudar a categoria de ${plural(nLin, 'linha', 'linhas')}…` : 'Mudar categoria…', icone: <IcoEtiqueta />, atalho: 'Enter', onEscolher: () => { setEditor({ r: faixa.r0, c: C_CAT, texto: '', digitando: false, r1: Math.max(faixa.r0, faixa.r1) }); } },
+      { rotulo: reais.length > 1 || nLin > 1 ? `Mudar a categoria de ${plural(nLin, 'linha', 'linhas')}…` : 'Mudar categoria…', icone: <IcoEtiqueta />, atalho: 'Enter', onEscolher: () => { setEditor({ r: faixa.r0, c: C_CAT, texto: '', digitando: false, rs: linhasDasFaixas(faixas, n + 1) }); } },
       aRevisar
         ? { rotulo: aRevisar === 1 ? 'Marcar como revisado' : `Marcar ${aRevisar} como revisados`, icone: <IcoRevisado />, onEscolher: marcarRevisado }
         : { rotulo: 'Marcar como revisado', icone: <IcoRevisado />, desabilitado: true, motivo: 'nada a revisar na seleção' },
@@ -650,6 +691,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   const tituloMenu = () => {
     const nLin = faixa.r1 - faixa.r0 + 1;
     const nCol = faixa.c1 - faixa.c0 + 1;
+    if (outras.length) return `Seleção · ${plural(faixas.length, 'faixa', 'faixas')} · ${plural(linhasDasFaixas(faixas, n).length, 'linha', 'linhas')}`;
     if (multi) return `Seleção · ${plural(nLin, 'linha', 'linhas')} × ${plural(nCol, 'coluna', 'colunas')}`;
     const l = linhas[sel.r];
     return `${COLUNAS[sel.c].nome} · ${l ? (l.descricao || 'linha nova') : 'linha em branco'}`;
@@ -658,7 +700,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   const abrirMenu = (e, r, c) => {
     e.preventDefault();
     focar();
-    if (!naFaixa(faixa, r, c)) { setSel({ r, c }); setExt(null); }
+    if (!naSelecao(faixas, r, c)) { setSel({ r, c }); setExt(null); }
     setMenu({ x: e.clientX, y: e.clientY, pendente: true });
   };
   const abrirMenuNaCelula = () => {
@@ -673,7 +715,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
 
   // ------------------------------------------------------------ desenho
 
-  const resumo = vis && multi ? resumoSelecao(linhas, { ...faixa, r1: Math.min(faixa.r1, n - 1) }) : null;
+  const resumo = vis && multi ? resumoSelecao(linhas, faixasReais) : null;
   const larguraTotal = 44 + Object.values(LARGURAS).reduce((s, w) => s + (w ?? 260), 0);
   const fPreencher = alvoPreencher != null && alvoPreencher > faixa.r1 ? { ...faixa, r0: faixa.r1 + 1, r1: alvoPreencher } : null;
 
@@ -690,11 +732,11 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
   const celula = (l, r, c) => {
     const col = COLUNAS[c];
     const ativa = vis && sel.r === r && sel.c === c;
-    const dentro = vis && multi && naFaixa(faixa, r, c);
+    const dentro = vis && multi && naSelecao(faixas, r, c);
     const motivoFora = marcas?.fora.get(`${r}:${c}`);
     const editando = editor && editor.r === r && editor.c === c;
     const sombras = [];
-    if (multi && dentro) sombras.push(...sombraFaixa(r, c, faixa));
+    if (dentro) faixas.forEach((f) => { if (naFaixa(f, r, c)) sombras.push(...sombraFaixa(r, c, f)); });
     if (ativa) sombras.push(`inset 0 0 0 2px ${AZUL}`);
     if (fPreencher && naFaixa(fPreencher, r, c)) sombras.push(`inset 0 0 0 1px ${AZUL}`);
     const fundo = motivoFora ? 'grade-hachura' : dentro && !ativa ? 'bg-hx-eff5ff' : '';
@@ -721,7 +763,8 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     } else if (c === 1) {
       conteudo = <span className="text-gray-400">Digite para lançar…</span>;
     }
-    const ultimaFaixa = vis && multi && r === faixa.r1 && c === faixa.c1 && !editor;
+    // com várias faixas não há alça (como no Excel): o Ctrl+D preenche cada uma
+    const ultimaFaixa = vis && multi && !outras.length && r === faixa.r1 && c === faixa.c1 && !editor;
     return (
       <td key={c} data-cel={`${r}:${c}`} title={motivoFora || undefined}
         onMouseDown={(e) => aoPressionar(e, r, c)} onMouseEnter={() => aoPassar(r, c)}
@@ -736,12 +779,12 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
             onTexto={(texto) => setEditor((ed) => ({ ...ed, texto }))}
             onFechar={fecharEditor}
             onCategoria={(id, depois) => {
-              escolherCategoria(id, editor.r, editor.r1 ?? editor.r);
+              escolherCategoria(id, editor.rs ?? [editor.r]);
               setEditor(null);
               if (depois) mover(depois[0], depois[1]);
               setTimeout(focar, 0);
             }}
-            onCriarCategoria={(nome) => { setCriandoCat({ nome, r0: editor.r, r1: editor.r1 ?? editor.r }); setEditor(null); }} />
+            onCriarCategoria={(nome) => { setCriandoCat({ nome, rs: editor.rs ?? [editor.r] }); setEditor(null); }} />
         )}
         <BordaCopia borda={bordaDaCopia(copia, r, c)} foco={focada} />
         {(ultimaFaixa || (!multi && ativa && !editor)) && (
@@ -754,7 +797,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
     );
   };
 
-  const tipoNovaCat = linhas[criandoCat?.r0]?.tipo ?? 'saida';
+  const tipoNovaCat = linhas[criandoCat?.rs[0]]?.tipo ?? 'saida';
 
   return (
     <div>
@@ -779,12 +822,12 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
             <tr>
               <th className="sticky left-0 top-0 z-30 h-[33px] border-b border-r border-gray-300 bg-hx-f9fafb" aria-label="Linha" />
               {COLUNAS.map((col, c) => {
-                const acesa = vis && c >= faixa.c0 && c <= faixa.c1;
+                const acesa = vis && faixas.some((f) => c >= f.c0 && c <= f.c1);
                 const ordenada = ordem?.col === col.id;
                 // O TÍTULO seleciona a coluna (o jeito da planilha); a SETA ao lado ORDENA — ela aparece no hover
                 // (apagada) e fica sempre à vista, escura, na coluna ordenada. A 3ª vez volta à ordem padrão.
                 return (
-                  <th key={col.id} onMouseDown={(e) => { e.preventDefault(); selecionarColuna(c); }}
+                  <th key={col.id} onMouseDown={(e) => { e.preventDefault(); selecionarColuna(e, c); }}
                     style={acesa ? { boxShadow: `inset 0 -2px 0 ${AZUL}` } : undefined}
                     aria-sort={ordenada ? (ordem.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
                     className={`group/th sticky top-0 z-20 h-[33px] cursor-pointer select-none border-b border-r border-gray-300 px-2.5 text-left text-[11px] font-semibold uppercase tracking-wide last:border-r-0 ${
@@ -810,10 +853,10 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
           </thead>
           <tbody>
             {[...linhas, null].map((l, r) => {
-              const acesa = vis && r >= faixa.r0 && r <= faixa.r1;
+              const acesa = vis && faixas.some((f) => r >= f.r0 && r <= f.r1);
               return (
                 <tr key={l?.id ?? 'branco'} className={l?.rascunho || !l ? 'bg-hx-fbfcfd' : ''}>
-                  <td onMouseDown={(e) => selecionarLinhas(e, r)} onContextMenu={(e) => { if (!naFaixa(faixa, r, 0)) selecionarLinhas(e, r); abrirMenu(e, r, 0); }}
+                  <td onMouseDown={(e) => selecionarLinhas(e, r)} onContextMenu={(e) => { if (!naSelecao(faixas, r, 0)) selecionarLinhas(e, r); abrirMenu(e, r, 0); }}
                     style={acesa ? { boxShadow: `inset -2px 0 0 ${AZUL}` } : undefined}
                     className={`sticky left-0 z-10 h-8 cursor-pointer select-none border-b border-r border-gray-200 text-center text-[11px] tabular-nums ${
                       acesa ? 'bg-hx-eef2f7 font-semibold text-gray-800' : 'bg-hx-f9fafb text-gray-400'}`}>
@@ -866,12 +909,12 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
         <ModalCategoria tipo={tipoNovaCat} nomeInicial={criandoCat.nome}
           onFechar={() => { setCriandoCat(null); setTimeout(focar, 0); }}
           onSalvo={(cat) => {
-            const { r0, r1 } = criandoCat;
+            const { rs } = criandoCat;
             setCriandoCat(null);
             onCategoriaCriada(cat);
             // A lista de categorias da página ainda não tem a nova: grava direto pelo id.
             const mudancas = [];
-            for (let r = r0; r <= r1; r++) if (!linhas[r] || linhas[r].rascunho || linhas[r].tipo === cat.grupo?.tipo) mudancas.push({ r, campo: 'categoria_id', valor: cat.id });
+            rs.forEach((r) => { if (!linhas[r] || linhas[r].rascunho || linhas[r].tipo === cat.grupo?.tipo) mudancas.push({ r, campo: 'categoria_id', valor: cat.id }); });
             aplicar(mudancas, `categoria “${cat.nome}”`);
             setTimeout(focar, 0);
           }} />

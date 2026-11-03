@@ -18,12 +18,15 @@ import useEscape from '../lib/useEscape.js';
 // É o que o `SelectSimples` usa: os seletores do app têm uma implementação só.
 // `acao`: { rotulo(q), onClick(q) } — um botão fixo no pé da lista ("+ Criar categoria"), que recebe o
 // texto da busca. A lista fecha antes de chamar.
+// `compacto`: a altura de campo de tabela (32px), no BOTÃO — como no `CampoData`. O `className` fica na caixa de
+// fora (largura, margem): um `!h-8` ali deixava o botão com os 38px dele, vazando para baixo da linha.
 const norm = (s) => String(s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
 const LARGURA_MIN = 320;
 const ALTURA = 400;
 
 export default function SelectBusca({
   value, onChange, opcoes, placeholder = 'Selecione…', buscaPlaceholder = 'Buscar…', className = '', disabled = false, semBusca = false, acao,
+  compacto = false,
 }) {
   const [aberto, setAberto] = useState(false);
   const [pos, setPos] = useState(null);
@@ -121,7 +124,7 @@ export default function SelectBusca({
   return (
     <div className={className}>
       <button ref={btnRef} type="button" onClick={abrir} disabled={disabled} aria-haspopup="listbox" aria-expanded={aberto}
-        className={`input flex items-center justify-between gap-2 text-left ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+        className={`input flex items-center justify-between gap-2 text-left ${compacto ? '!h-8 text-[12.5px]' : ''} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
         <span className={`flex min-w-0 items-center gap-2 ${sel ? 'text-gray-800' : 'text-gray-400'}`}>
           {sel?.grupo?.cor && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: sel.grupo.cor }} />}
           <span className="truncate">{sel ? sel.label : placeholder}</span>

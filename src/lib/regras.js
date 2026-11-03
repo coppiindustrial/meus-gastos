@@ -40,6 +40,27 @@ export function usoDasRegras(regras, nomes) {
 }
 
 // Os nomes distintos dos lançamentos (sem diferenciar maiúscula): [{ nome, n, ultima }].
+// O QUE UMA REGRA DE IGNORAR AINDA DEIXA NO APP (03/11/2026): a regra que vira "Ignorar" só decide as próximas
+// importações; o que já entrou continua lá. Estes são os lançamentos gravados em que ela é a PRIMEIRA regra (na ordem
+// gravada, a mesma do uso) que pega o estabelecimento. O lançado à mão não tem estabelecimento: nunca entra.
+// `lancamentos`: [{ id, estabelecimento, … }]. Devolve Map id da regra → [lançamentos].
+export function ignoradosNoApp(regras, lancamentos) {
+  const comp = regras.filter((r) => r.palavra_chave?.trim()).map((r) => ({ r, re: padraoDe(r.palavra_chave.trim()) }));
+  const out = new Map();
+  lancamentos.forEach((l) => {
+    const nome = (l.estabelecimento || '').trim();
+    if (!nome) return;
+    const vencedora = comp.find((c) => c.re.test(nome))?.r;
+    if (!vencedora?.ignorar) return;
+    if (!out.has(vencedora.id)) out.set(vencedora.id, []);
+    out.get(vencedora.id).push(l);
+  });
+  return out;
+}
+// Na confirmação de tirar, vêm marcados todos MENOS o fixo do mês (o extrato o criou como o fixo: tirá-lo faz o mês
+// voltar a mostrá-lo "a lançar").
+export const ehFixo = (l) => l.origem === 'fixo' || !!l.recorrencia_id;
+
 export function nomesDistintos(lancamentos) {
   const m = new Map();
   lancamentos.forEach((l) => {

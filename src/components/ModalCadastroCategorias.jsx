@@ -273,7 +273,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
                       </span>
                     </td>
                     <td className={`${td} bg-hx-f6f7f8`}>
-                      <SelectSimples value={g.tipo} onChange={(v) => mudaGrupo(g.id, 'tipo', v)} opcoes={TIPOS} disabled={g.excluir} className="!h-8 text-[12.5px]" />
+                      <SelectSimples value={g.tipo} onChange={(v) => mudaGrupo(g.id, 'tipo', v)} opcoes={TIPOS} disabled={g.excluir} compacto />
                     </td>
                     <td className={`${td} bg-hx-f6f7f8 text-right text-[11.5px] text-gray-400`} colSpan={3}>{plural(x.n, 'categoria', 'categorias')}</td>
                     <td className={`${td} bg-hx-f6f7f8`}>
@@ -332,7 +332,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
                   </td>
                   <td className={td}>
                     {sai ? <span className="px-2 text-gray-400">—</span>
-                      : <SelectSimples value={c.grupo_id} onChange={(v) => moverPara([c.id], v)} opcoes={opcoesGrupo} className="!h-8 text-[12.5px]" />}
+                      : <SelectSimples value={c.grupo_id} onChange={(v) => moverPara([c.id], v)} opcoes={opcoesGrupo} compacto />}
                   </td>
                   <td className={`${td} text-right tabular-nums text-gray-600`}>{n || <span className="text-gray-300">—</span>}</td>
                   <td className={`${td} text-right tabular-nums text-gray-500`}>{regras[c.id] || <span className="text-gray-300">—</span>}</td>
@@ -365,13 +365,13 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
           {juntando ? (
             <>
               <span className="text-[12.5px] text-gray-600">Fica:</span>
-              <SelectSimples value={juntando} onChange={setJuntando} opcoes={listaMarcadas.map((c) => ({ value: c.id, label: c.nome }))} className="!h-8 w-[220px] text-[12.5px]" />
+              <SelectSimples value={juntando} onChange={setJuntando} opcoes={listaMarcadas.map((c) => ({ value: c.id, label: c.nome }))} compacto className="w-[220px]" />
               <button type="button" className="btn-primary !h-8 !px-3 !text-[12.5px]" onClick={juntar}>Juntar {listaMarcadas.length}</button>
               <button type="button" className="btn-secondary !h-8 !px-3 !text-[12.5px]" onClick={() => setJuntando(null)}>Voltar</button>
             </>
           ) : (
             <>
-              <SelectSimples value="" onChange={(v) => { moverPara([...marcadas], v); desmarcar(); }} opcoes={opcoesGrupo} placeholder="Mover para…" className="!h-8 w-[180px] text-[12.5px]" />
+              <SelectSimples value="" onChange={(v) => { moverPara([...marcadas], v); desmarcar(); }} opcoes={opcoesGrupo} placeholder="Mover para…" compacto className="w-[180px]" />
               <button type="button" className="btn-secondary !h-8 !px-3 !text-[12.5px]" disabled={listaMarcadas.length < 2}
                 title={listaMarcadas.length < 2 ? 'Marque duas ou mais' : 'Os lançamentos, fixos e regras das outras passam para a que fica'}
                 onClick={() => setJuntando([...listaMarcadas].sort((a, b) => (qtd[b.id] ?? 0) - (qtd[a.id] ?? 0))[0].id)}>Juntar em uma…</button>

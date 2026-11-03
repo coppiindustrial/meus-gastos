@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { alteracoesRegras, diferencaRegra, nomesDistintos, prioridades, quemPega, totalAlteracoesRegras, usoDasRegras, validarRegras } from '../src/lib/regras.js';
+import { alteracoesRegras, diferencaRegra, ehFixo, ignoradosNoApp, nomesDistintos, prioridades, quemPega, totalAlteracoesRegras, usoDasRegras, validarRegras } from '../src/lib/regras.js';
 
 // Dados FICTÍCIOS.
 const R = (id, palavra_chave, categoria_id, prioridade, pos, extra = {}) => ({
@@ -8,6 +8,29 @@ const R = (id, palavra_chave, categoria_id, prioridade, pos, extra = {}) => ({
   orig: { palavra_chave, categoria_id, ignorar: false, prioridade }, ...extra,
 });
 const regras = [R('a', 'BURGER', 'res', 5, 0), R('b', 'BURGER KING', 'del', 5, 1), R('c', 'POSTO', 'gas', 9, 2), R('d', 'LOJA VELHA', 'ves', 12, 3)];
+
+test('ignoradosNoApp: só o que a regra de ignorar decide (a primeira que pega), nunca o lançado à mão', () => {
+  const gravadas = [
+    { id: 'p', palavra_chave: 'CONDOMINIO*FENIX', ignorar: true },
+    { id: 'q', palavra_chave: 'CONDOMINIO', categoria_id: 'casa', ignorar: false },
+    { id: 'r', palavra_chave: 'MERCADO', ignorar: true },
+    { id: 's', palavra_chave: 'MERCADO BOM', categoria_id: 'merc', ignorar: false },
+  ];
+  const lancs = [
+    { id: 1, estabelecimento: 'CONDOMINIO EDIFICIO RESIDENCIAL FENIX' },
+    { id: 2, estabelecimento: 'CONDOMINIO OUTRO' },        // a 'p' não pega; quem decide é a 'q' (categoria)
+    { id: 3, estabelecimento: 'mercado bom ltda' },         // a 'r' (ignorar) vem antes da 's'
+    { id: 4, estabelecimento: null, descricao: 'Condomínio Fenix' }, // lançado à mão
+    { id: 5, estabelecimento: '  ' },
+  ];
+  const m = ignoradosNoApp(gravadas, lancs);
+  assert.deepEqual([...m.keys()], ['p', 'r']);
+  assert.deepEqual(m.get('p').map((l) => l.id), [1]);
+  assert.deepEqual(m.get('r').map((l) => l.id), [3]);
+  // a ordem decide: com a de categoria antes, a de ignorar não pega mais nada
+  assert.equal(ignoradosNoApp([gravadas[3], gravadas[2]], lancs).size, 0);
+  assert.ok(ehFixo({ origem: 'fixo' }) && ehFixo({ origem: 'manual', recorrencia_id: 'x' }) && !ehFixo({ origem: 'cartao' }));
+});
 
 test('nomesDistintos e usoDasRegras: a primeira decide; escondida e sem uso', () => {
   const nomes = nomesDistintos([

@@ -90,7 +90,7 @@ export default function ModalCadastroCartoes({ cartoes, uso = {}, onFechar, onSa
                     <input className={`input !h-8 text-right text-[12.5px] tabular-nums ${borda(l.id, 'dia')}`} inputMode="numeric" disabled={l.excluir}
                       value={l.dia_vencimento} onChange={(e) => muda(l.id, 'dia_vencimento', e.target.value.replace(/\D/g, '').slice(0, 2))} />
                   </td>
-                  <td className={td}><SelectSimples value={l.formato} onChange={(v) => muda(l.id, 'formato', v)} opcoes={FORMATOS} disabled={l.excluir} className="!h-8 text-[12.5px]" /></td>
+                  <td className={td}><SelectSimples value={l.formato} onChange={(v) => muda(l.id, 'formato', v)} opcoes={FORMATOS} disabled={l.excluir} compacto /></td>
                   <td className={td}><Toggle compacto checked={l.ativo} disabled={l.excluir} onChange={(v) => muda(l.id, 'ativo', v)} rotulo={`${l.nome || 'Cartão'} ativo`} /></td>
                   <td className={`${td} text-right tabular-nums text-gray-500`}>{l.novo ? '—' : n || <span className="text-gray-300">0</span>}</td>
                   <td className={`${td} text-right`}>

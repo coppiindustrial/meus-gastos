@@ -74,6 +74,20 @@ export async function importarFatura({ cartaoId, vencimento, arquivo, hash, linh
   return fatura.id;
 }
 
+// O TOTAL GUARDADO de cada fatura volta a ser a soma dos lançamentos que ficaram nela (03/11/2026): tirar do app uma
+// compra ignorada deixava a fatura (e a tela Cartões) com o total antigo.
+export async function recalcularTotais(faturaIds) {
+  const ids = [...new Set(faturaIds.filter(Boolean))];
+  for (let i = 0; i < ids.length; i += 100) {
+    const parte = ids.slice(i, i + 100);
+    const linhas = await buscarTudo(() => supabase.from('lancamentos').select('id, fatura_id, valor_centavos').in('fatura_id', parte).order('id'));
+    for (const id of parte) {
+      const total = linhas.filter((l) => l.fatura_id === id).reduce((s, l) => s + Number(l.valor_centavos), 0);
+      await exigir(supabase.from('faturas').update({ total_centavos: total }).eq('id', id));
+    }
+  }
+}
+
 // Apaga a fatura e os lançamentos dela.
 export function excluirFatura(id) {
   return exigir(supabase.from('faturas').delete().eq('id', id));

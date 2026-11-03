@@ -1,5 +1,7 @@
 import { buscarTudo, exigir, supabase } from './supabase.js';
 import { regraPega } from '../lib/classificar.js';
+import { recalcularTotais } from './faturas.js';
+import { excluirLancamentos } from './lancamentos.js';
 
 // Regras de classificação e as pendências (lançamentos de cartão sem categoria).
 
@@ -42,15 +44,23 @@ export function criarRegra(campos) {
 // Os nomes dos lançamentos que as regras classificam (fatura e extrato gravam o `estabelecimento`), para contar o
 // uso de cada regra (`usoDasRegras`).
 export function listarNomesClassificaveis() {
-  return buscarTudo(() => supabase.from('lancamentos').select('id, estabelecimento, data')
+  return buscarTudo(() => supabase.from('lancamentos').select('id, estabelecimento, data, fatura_id')
     .not('estabelecimento', 'is', null).order('id'));
+}
+
+// TIRAR DO APP o que uma regra de ignorar pega (tela Regras e "Ignorar sempre" das Pendências): apaga os lançamentos
+// e refaz o total das faturas de onde saíram. `lancamentos`: [{ id, fatura_id }]. Não há desfazer.
+export async function tirarDoApp(lancamentos) {
+  const ids = lancamentos.map((l) => l.id);
+  for (let i = 0; i < ids.length; i += 100) await excluirLancamentos(ids.slice(i, i + 100));
+  await recalcularTotais(lancamentos.map((l) => l.fatura_id));
 }
 
 // ------------------------------------------------------------ Pendências
 
 export function listarPendencias() {
   return buscarTudo(() => supabase.from('lancamentos')
-    .select('id, data, competencia, descricao, estabelecimento, valor_centavos, parcela_atual, parcela_total, cartao:cartoes(nome)')
+    .select('id, data, competencia, descricao, estabelecimento, valor_centavos, parcela_atual, parcela_total, fatura_id, cartao:cartoes(nome)')
     .eq('revisar', true)
     .order('data', { ascending: false }).order('id'));
 }

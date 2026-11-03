@@ -65,6 +65,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   na ordenada; 3ª vez volta ao padrão, data mais nova em cima) — `ordenarLinhas`/`proximaOrdem` em `lib/planilha.js`,
   a escolha lembrada no navegador. A ordem vale ao carregar e ao clicar, e não se refaz sozinha (editar não pula a
   linha). ESC TIRA A SELEÇÃO, como no DRE (nada aceso, sem a soma); seta/Tab/Enter ou clique a trazem de volta.
+  CTRL+CLIQUE SOMA FAIXAS (03/11/2026, como no Excel; também no nº da linha e no cabeçalho): as de antes ficam em
+  `outras`; a barra soma todas sem repetir célula, Delete limpa todas, excluir / revisado / categoria valem para as
+  linhas de todas, Ctrl+D preenche cada uma, Ctrl+C só com as mesmas colunas (`naSelecao`, `linhasDasFaixas`,
+  `textoDasFaixas` em `lib/planilha.js`, testadas); sem alça. Seleção sem o Ctrl volta a ser uma só.
 - **Categorias = planilha agrupada** (opção A): grupos recolhíveis, e por categoria o uso tirado da `resumo_mensal`
   (`lib/usoCategorias.js`: 12 meses, total no mês, média pelos meses com dado, último uso).
   GERIR (29/10/2026, opção A do mockup "Categorias · gerir mais fácil"): o cabeçalho é o grupo do DRE (✎ Gerir
@@ -152,6 +156,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   CABEÇALHO: clicar no título ordena a vista (palavra, categoria, pegou — este do maior; 3ª vez volta; "#" = a ordem
   das regras), lembrado em `regras_ordem`; ordenada, a alça não arrasta. ▾ "Aplicar nas
   pendências agora" (as de ignorar ficam de fora) e Exportar CSV.
+  A DE IGNORAR TIRA O QUE JÁ ENTROU (03/11/2026): a regra só decide as próximas importações, então a gravada como
+  "Ignorar" que ainda pega lançamentos (a primeira que pega, pela ordem gravada — `ignoradosNoApp`, testada) ganha o
+  aviso "N ainda no app · tirar", e salvar uma regra que virou (ou nasceu) "Ignorar" já pergunta. Os dois abrem o
+  `components/ModalTirarIgnorados.jsx`: a lista (data, nome, de onde, valor), todos marcados MENOS o fixo do mês
+  (`ehFixo`: o extrato o criou como o fixo; tirado, o mês volta a pedi-lo "a lançar"). "Tirar" = `tirarDoApp`
+  (`api/regras.js`): apaga e REFAZ O TOTAL das faturas (`recalcularTotais` em `api/faturas.js` — o `total_centavos`
+  guardado ficava com a compra; o "Ignorar sempre" das Pendências também passa por ele). Sem desfazer.
 
 ## Extrato da conta corrente
 
@@ -326,6 +337,10 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
 - **Seletores**: escolher categoria é sempre o `SeletorCategoria` (busca, grupos em ordem alfabética, "+ Criar
   categoria" que abre o `ModalCategoria` e já escolhe a nova). Listas curtas: `SelectSimples` (= `SelectBusca`
   sem busca). Os dois portam a lista ao body — nunca `absolute` dentro de cartão/modal, que recorta.
+  Em TABELA, `compacto` (32px no BOTÃO, como o `CampoData`); o `className` vai na caixa de fora — um `!h-8` ali
+  deixava o botão com 38px, vazando para baixo da linha (03/11/2026).
+- **Barra lateral em z-[32]** (no computador): acima dos cabeçalhos presos das tabelas (z-30 — no empate a tela
+  cobria o menu da barra recolhida) e abaixo do ampliado (z-[35]) e dos modais.
 - **Datas**: nunca `<input type="date">`/`"month"` (destoam). Data = `CampoData`; mês (vigência, competência) =
   `CampoMes` — os dois em `components/CampoData.jsx`, o calendário COPIADO do Gestor (`CalendarioData` +
   `calendario/CabecalhoCalendario.jsx`, sem os feriados) e o `CalendarioMes` no mesmo desenho. O calendário vai

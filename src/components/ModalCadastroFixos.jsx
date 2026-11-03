@@ -212,7 +212,7 @@ export default function ModalCadastroFixos({ recs, categorias, ultimos, onFechar
                   <td className="border-b border-gray-100 px-2 py-1.5">
                     {l.excluir ? <span className="px-2 text-gray-400">—</span> : (
                       <SeletorCategoria value={l.categoria_id} onChange={(v) => mudar(l.id, 'categoria_id', v)} categorias={categorias} tipo="saida"
-                        extras={SEM_CATEGORIA} placeholder="Sem categoria" className="!h-8 text-[12.5px]" onCriada={onCategoriaCriada} />
+                        extras={SEM_CATEGORIA} placeholder="Sem categoria" compacto onCriada={onCategoriaCriada} />
                     )}
                   </td>
                   <td className="border-b border-gray-100 px-2 py-1.5">

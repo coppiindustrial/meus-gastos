@@ -11,6 +11,7 @@ import ModalCategoria from './ModalCategoria.jsx';
 // avisa quem chamou para recarregar a lista dele — até lá, a nova fica guardada aqui e já aparece.
 export default function SeletorCategoria({
   value, onChange, categorias, tipo, extras = [], incluirInativas = false, onCriada, className, placeholder = 'Categoria…', criar = true,
+  compacto = false,
 }) {
   const [novas, setNovas] = useState([]);
   const [criando, setCriando] = useState(null); // nome inicial do formulário, ou null
@@ -27,7 +28,7 @@ export default function SeletorCategoria({
 
   return (
     <>
-      <SelectBusca className={className} value={value} onChange={onChange} opcoes={opcoes} placeholder={placeholder}
+      <SelectBusca className={className} compacto={compacto} value={value} onChange={onChange} opcoes={opcoes} placeholder={placeholder}
         buscaPlaceholder="Buscar categoria ou grupo"
         acao={criar ? { rotulo: (q) => (q ? `Criar categoria "${q}"` : 'Criar categoria nova'), onClick: (q) => setCriando(q) } : undefined} />
       {criando !== null && (

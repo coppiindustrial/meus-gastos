@@ -15,7 +15,8 @@ import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { listarCategorias } from '../api/cadastros.js';
 import { atualizarRegra, classificarLancamentos, criarRegra, excluirRegra, listarNomesClassificaveis, listarPendencias, listarRegras } from '../api/regras.js';
 import { criarClassificador, regraPega } from '../lib/classificar.js';
-import { alteracoesRegras, diferencaRegra, nomesDistintos, quemPega, totalAlteracoesRegras, usoDasRegras, validarRegras } from '../lib/regras.js';
+import ModalTirarIgnorados from '../components/ModalTirarIgnorados.jsx';
+import { alteracoesRegras, diferencaRegra, ignoradosNoApp, nomesDistintos, quemPega, totalAlteracoesRegras, usoDasRegras, validarRegras } from '../lib/regras.js';
 import { competenciaCurta } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
 import { exportCsv } from '../lib/exportCsv.js';
@@ -23,6 +24,9 @@ import { useListaArrastavel } from '../lib/useListaArrastavel.js';
 
 // REGRAS DE CLASSIFICAÇÃO (a aba "Regras" da planilha): a primeira regra, na ordem, cuja palavra-chave aparece no
 // nome do estabelecimento dá a categoria (ou diz "ignorar": não é gasto). Vale para o que se importa daqui em diante.
+// A DE IGNORAR TAMBÉM TIRA O QUE JÁ ENTROU (03/11/2026): a regra gravada como "Ignorar" que ainda pega lançamentos
+// ganha o aviso "N ainda no app · tirar", e salvar uma regra que virou (ou nasceu) "Ignorar" já pergunta — os dois
+// abrem o `ModalTirarIgnorados` (a lista, o fixo do mês desmarcado, o total das faturas refeito).
 //
 // A TELA (30/10/2026, opção A do mockup "Regras · overhaul"): a TABELA DE FORMULÁRIO do cadastro dos fixos e do das
 // categorias — a ordem é a alça ⠿ (arrastar = mudar a prioridade), a palavra e a categoria são campos, marcar várias
@@ -72,6 +76,8 @@ export default function Regras() {
   const [linhas, setLinhas] = useState([]); // o rascunho, na ordem da tela
   const [categorias, setCategorias] = useState([]);
   const [nomes, setNomes] = useState(null); // os nomes do histórico, para o uso
+  const [lancs, setLancs] = useState(null); // os lançamentos com estabelecimento (o que as de ignorar ainda pegam)
+  const [tirando, setTirando] = useState(null); // os grupos do `ModalTirarIgnorados`, ou null
   const [busca, setBusca] = useState('');
   const [cats, setCats] = useState([]);
   const [tipo, setTipo] = useState('');
@@ -102,7 +108,7 @@ export default function Regras() {
       setCategorias(c);
       setMarcadas(new Set()); setErro(null);
     } catch (err) { toast.error(err.message); setRegras([]); }
-    listarNomesClassificaveis().then((ls) => setNomes(nomesDistintos(ls))).catch(() => setNomes([]));
+    listarNomesClassificaveis().then((ls) => { setLancs(ls); setNomes(nomesDistintos(ls)); }).catch(() => { setLancs([]); setNomes([]); });
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -111,6 +117,13 @@ export default function Regras() {
   const maxPegou = useMemo(() => (uso ? Math.max(1, ...[...uso.values()].map((u) => u.pegou)) : 1), [uso]);
   const nSemUso = uso ? [...uso.values()].filter((u) => u.aviso?.tipo === 'sem-uso').length : 0;
   const nEscondidas = uso ? [...uso.values()].filter((u) => u.aviso?.tipo === 'escondida').length : 0;
+  // O que cada regra de ignorar GRAVADA ainda deixa no app (pela ordem gravada, como o uso).
+  const ignorados = useMemo(() => (regras && lancs ? ignoradosNoApp(regras, lancs) : null), [regras, lancs]);
+  const abrirTirar = (ids, mapa = ignorados, lista = regras) => {
+    const grupos = ids.map((id) => ({ regra: (lista ?? []).find((r) => r.id === id) ?? { id, palavra_chave: '' }, lancs: mapa?.get(id) ?? [] }))
+      .filter((g) => g.lancs.length);
+    if (grupos.length) setTirando(grupos);
+  };
 
   const catPorId = useMemo(() => new Map(categorias.map((c) => [c.id, c])), [categorias]);
   const posicao = useMemo(() => new Map(linhas.filter((l) => !l.excluir).map((l, i) => [l.id, i + 1])), [linhas]);
@@ -194,6 +207,8 @@ export default function Regras() {
       texto: `Exclui ${plural(alt.excluir.length, 'regra', 'regras')} (${alt.excluir.slice(0, 4).map((l) => `"${l.orig.palavra_chave}"`).join(', ')}${alt.excluir.length > 4 ? '…' : ''}). Os lançamentos já classificados não mudam.`,
       confirmar: 'Salvar', perigo: true,
     }))) return;
+    // as que viram (ou nascem) "Ignorar": depois de gravar, pergunta se tira o que elas já deixaram entrar
+    const viraram = new Set([...alt.novas, ...alt.mudadas].filter((l) => l.ignorar && !l.orig?.ignorar).map((l) => l.palavra_chave.trim().toLowerCase()));
     setSalvando(true);
     try {
       for (const l of alt.excluir) await excluirRegra(l.id);
@@ -205,6 +220,12 @@ export default function Regras() {
     }
     await carregar();
     setSalvando(false);
+    if (viraram.size) {
+      try {
+        const [r2, ls] = await Promise.all([listarRegras(), listarNomesClassificaveis()]);
+        abrirTirar(r2.filter((r) => r.ignorar && viraram.has(r.palavra_chave.trim().toLowerCase())).map((r) => r.id), ignoradosNoApp(r2, ls), r2);
+      } catch { /* o aviso na linha da regra continua valendo */ }
+    }
   };
 
   // "Aplicar nas pendências agora": as regras GRAVADAS classificam o que está a revisar (as de ignorar ficam de fora).
@@ -283,7 +304,7 @@ export default function Regras() {
           {l.excluir ? <span className="px-2 text-gray-400">{nomeCat(l) ?? '—'}</span> : (
             <span className={borda(l.id, 'categoria') ? 'block rounded-md ring-1 ring-hx-e5484d' : ''}>
               <SeletorCategoria value={l.ignorar ? IGNORAR : l.categoria_id} onChange={(v) => muda([l.id], daLista(v))} categorias={categorias} tipo="saida"
-                extras={EXTRAS_IGNORAR} placeholder="Categoria…" className="!h-8 text-[12.5px]"
+                extras={EXTRAS_IGNORAR} placeholder="Categoria…" compacto
                 onCriada={() => listarCategorias().then(setCategorias).catch(() => {})} />
             </span>
           )}
@@ -302,6 +323,13 @@ export default function Regras() {
               title={`Os ${u.pegaria} lançamentos que ela pegaria já são pegos pela regra #${posicao.get(u.aviso.por)} antes dela. Arraste-a para cima, ou exclua.`}>
               escondida por #{posicao.get(u.aviso.por)} {palavraDe(u.aviso.por)}
             </span>
+          )}
+          {!l.novo && !l.excluir && ignorados?.get(l.id)?.length > 0 && (
+            <button type="button" onClick={() => abrirTirar([l.id])}
+              title="Ela é de ignorar, mas estes lançamentos entraram antes dela (ou com outra regra): clique para ver e tirar do app."
+              className="inline-flex items-center rounded-[4px] bg-hx-fef3c7 px-1.5 py-0.5 font-semibold text-hx-92400e underline-offset-2 hover:underline">
+              {ignorados.get(l.id).length} ainda no app · tirar
+            </button>
           )}
           {!l.novo && u?.aviso?.tipo === 'sem-uso' && (
             <span className="inline-flex rounded-[4px] bg-gray-100 px-1.5 py-0.5 font-semibold text-gray-500" title="Nenhum lançamento do histórico tem um nome que ela pegue.">sem uso</span>
@@ -432,7 +460,7 @@ export default function Regras() {
                 <span className="flex-1" />
                 <span className="w-[260px]">
                   <SeletorCategoria value={null} onChange={(v) => { muda([...marcadas], daLista(v)); setMarcadas(new Set()); }} categorias={categorias} tipo="saida"
-                    extras={EXTRAS_IGNORAR} placeholder="Mudar a categoria…" className="!h-8 text-[12.5px]" />
+                    extras={EXTRAS_IGNORAR} placeholder="Mudar a categoria…" compacto />
                 </span>
                 <button type="button" className="btn-secondary !h-8 !px-3 !text-[12.5px]" onClick={() => { muda([...marcadas], { excluir: true }); setMarcadas(new Set()); }}>Excluir</button>
                 <button type="button" onClick={() => setMarcadas(new Set())} className="text-[12px] text-gray-500 underline underline-offset-2 hover:text-gray-800">Desmarcar</button>
@@ -456,6 +484,7 @@ export default function Regras() {
         </>
       )}
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
+      {tirando && <ModalTirarIgnorados grupos={tirando} onFechar={() => setTirando(null)} onFeito={carregar} />}
     </div>
   );
 }

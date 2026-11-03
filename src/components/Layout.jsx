@@ -231,8 +231,10 @@ export default function Layout({ children }) {
         <div className="fixed inset-0 z-40 bg-veu/40 animate-backdrop-in md:hidden" onClick={() => setMenuMovel(false)} aria-hidden="true" />
       )}
 
+      {/* z-[32]: acima dos cabeçalhos presos das tabelas (z-30, o canto da grade e o título da matriz dos fixos — no
+          empate, a tela vinha por cima e cortava o menu da barra recolhida) e abaixo do ampliado (z-[35]) e dos modais. */}
       <aside
-        className={`${menuMovel ? 'fixed left-0 top-0 z-50 flex shadow-2xl animate-pop-in' : 'hidden'} md:flex shrink-0 md:self-start md:sticky md:top-0 md:z-30 h-[100dvh] md:h-screen bg-white text-hx-20262f flex-col md:relative border-r border-hx-e8eaee ${arrastando ? '' : 'transition-all duration-200'}`}
+        className={`${menuMovel ? 'fixed left-0 top-0 z-50 flex shadow-2xl animate-pop-in' : 'hidden'} md:flex shrink-0 md:self-start md:sticky md:top-0 md:z-[32] h-[100dvh] md:h-screen bg-white text-hx-20262f flex-col md:relative border-r border-hx-e8eaee ${arrastando ? '' : 'transition-all duration-200'}`}
         style={{ width: collapsed ? 70 : (menuMovel ? Math.min(largura, 300) : largura) }}>
         {/* Alça de redimensionamento (só quando expandida, no computador) */}
         {!collapsed && !menuMovel && (

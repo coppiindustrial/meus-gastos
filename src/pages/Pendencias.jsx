@@ -12,9 +12,8 @@ import { BuscaFaixa, SegUnico } from '../components/filtros/Segmentos.jsx';
 import { IconLista, IconSeta } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
-import { excluirLancamentos } from '../api/lancamentos.js';
 import { listarCategorias } from '../api/cadastros.js';
-import { classificarLancamentos, desclassificar, excluirRegra, listarPendencias, salvarRegra } from '../api/regras.js';
+import { classificarLancamentos, desclassificar, excluirRegra, listarPendencias, salvarRegra, tirarDoApp } from '../api/regras.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { formatDate } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
@@ -110,7 +109,8 @@ export default function Pendencias() {
           if (p.regra) {
             try { await salvarRegra({ palavra_chave: p.regra, ignorar: true }); } catch (err) { if (!/duplicate|unique/i.test(err.message)) throw err; } // a regra já existia: segue
           }
-          for (let i = 0; i < p.ids.length; i += 100) await excluirLancamentos(p.ids.slice(i, i + 100));
+          const porId = new Map((pendencias ?? []).map((x) => [x.id, x]));
+          await tirarDoApp(p.ids.map((id) => ({ id, fatura_id: porId.get(id)?.fatura_id ?? null }))); // e o total da fatura
           tirados += p.ids.length;
           continue;
         }
@@ -260,7 +260,7 @@ export default function Pendencias() {
                         <td className={`${td} text-right tabular-nums text-gray-800`}>{formatBRL(g.total)}</td>
                         <td className={td}>
                           <SeletorCategoria value={e.categoriaId} onChange={(v) => escolher([g.chave], { categoriaId: daLista(v) })} categorias={categorias} tipo="saida" extras={NENHUMA}
-                            onCriada={() => listarCategorias().then(setCategorias).catch(() => {})} placeholder="Escolher…" className="!h-8 text-[12.5px]" />
+                            onCriada={() => listarCategorias().then(setCategorias).catch(() => {})} placeholder="Escolher…" compacto />
                         </td>
                         <td className={td}>
                           <span className="flex items-center gap-2">
@@ -287,7 +287,7 @@ export default function Pendencias() {
                 <span className="flex-1" />
                 <span className="w-[260px]">
                   <SeletorCategoria value={null} onChange={(v) => { escolher([...marcadas], { categoriaId: daLista(v) }); setMarcadas(new Set()); }} categorias={categorias} tipo="saida" extras={NENHUMA}
-                    onCriada={() => listarCategorias().then(setCategorias).catch(() => {})} placeholder={`Categoria para as ${marcadas.size}…`} className="!h-8 text-[12.5px]" />
+                    onCriada={() => listarCategorias().then(setCategorias).catch(() => {})} placeholder={`Categoria para as ${marcadas.size}…`} compacto />
                 </span>
                 <button type="button" className="btn-secondary !h-8 !px-3 !text-[12.5px]" onClick={() => setMarcadas(new Set())}>Desmarcar</button>
               </div>

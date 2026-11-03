@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  descricaoDaEntrada, faixaDe, interpretar, ladrilhar, lerBloco, lerData, limparFaixa, ordenarLinhas, planejarColagem, preencherAbaixo, proximaOrdem, resumoSelecao, textoDaFaixa,
+  descricaoDaEntrada, faixaDe, interpretar, ladrilhar, lerBloco, lerData, limparFaixa, linhasDasFaixas, naSelecao, ordenarLinhas, planejarColagem, preencherAbaixo, proximaOrdem,
+  resumoSelecao, textoDaFaixa, textoDasFaixas,
 } from '../src/lib/planilha.js';
 
 // Dados FICTÍCIOS. Colunas: 0 Data · 1 Descrição · 2 Categoria · 3 Origem · 4 Valor · 5 Observação.
@@ -99,6 +100,22 @@ test('limparFaixa: data e valor não esvaziam', () => {
 test('resumoSelecao: gasto e entrada em totais separados', () => {
   const s = resumoSelecao(linhas, faixaDe({ r: 0, c: 3 }, { r: 2, c: 4 }));
   assert.deepEqual(s, { celulas: 6, gastos: 8190, entradas: 850000, nGastos: 2, nEntradas: 1 });
+});
+
+test('várias faixas (Ctrl+clique): soma e conta sem repetir a célula que está em duas', () => {
+  const faixas = [faixaDe({ r: 0, c: 4 }), faixaDe({ r: 1, c: 4 }, { r: 2, c: 4 }), faixaDe({ r: 1, c: 4 })];
+  assert.deepEqual(resumoSelecao(linhas, faixas), { celulas: 3, gastos: 8190, entradas: 850000, nGastos: 2, nEntradas: 1 });
+  assert.ok(naSelecao(faixas, 2, 4));
+  assert.ok(!naSelecao(faixas, 2, 3));
+  assert.deepEqual(linhasDasFaixas([faixaDe({ r: 2, c: 0 }), faixaDe({ r: 0, c: 1 }, { r: 3, c: 1 })], 3), [0, 1, 2]);
+});
+
+test('várias faixas: limpar todas e copiar só com as mesmas colunas', () => {
+  const { mudancas } = limparFaixa(linhas, [faixaDe({ r: 0, c: 1 }), faixaDe({ r: 2, c: 1 }), faixaDe({ r: 0, c: 1 })]);
+  assert.deepEqual(mudancas, [{ r: 0, campo: 'descricao', valor: '' }, { r: 2, campo: 'descricao', valor: '' }]);
+  assert.deepEqual(textoDasFaixas(linhas, [faixaDe({ r: 2, c: 1 }, { r: 2, c: 4 }), faixaDe({ r: 0, c: 1 }, { r: 0, c: 4 })]),
+    { texto: 'Feira\tMercado\tAvulso\t46,00\nPagamento\tSalário\tEntrada\t+8500,00', linhas: 2, celulas: 8 });
+  assert.match(textoDasFaixas(linhas, [faixaDe({ r: 0, c: 1 }), faixaDe({ r: 2, c: 4 })]).motivo, /mesmas colunas/);
 });
 
 test('ladrilhar: um valor enche a seleção; um bloco se repete só em múltiplos', () => {

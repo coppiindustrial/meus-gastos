@@ -74,6 +74,30 @@ export function faixaDe(a, b = a) {
 }
 export const naFaixa = (f, r, c) => !!f && r >= f.r0 && r <= f.r1 && c >= f.c0 && c <= f.c1;
 
+// VÁRIAS FAIXAS (Ctrl+clique, como no Excel): a seleção vira uma lista de faixas — as de antes do Ctrl e a ativa.
+// As contas abaixo aceitam uma faixa ou a lista; uma célula em duas faixas conta uma vez.
+const listaDe = (f) => (Array.isArray(f) ? f : [f]);
+export const naSelecao = (faixas, r, c) => listaDe(faixas).some((f) => naFaixa(f, r, c));
+function celulasDe(faixas) {
+  const vistas = new Set();
+  const out = [];
+  listaDe(faixas).forEach((f) => {
+    for (let r = f.r0; r <= f.r1; r++) {
+      for (let c = f.c0; c <= f.c1; c++) {
+        const k = `${r}:${c}`;
+        if (!vistas.has(k)) { vistas.add(k); out.push([r, c]); }
+      }
+    }
+  });
+  return out;
+}
+// As linhas da seleção, em ordem e sem repetir (só as abaixo de `n`, se vier).
+export function linhasDasFaixas(faixas, n = Infinity) {
+  const rs = new Set();
+  listaDe(faixas).forEach((f) => { for (let r = f.r0; r <= Math.min(f.r1, n - 1); r++) rs.add(r); });
+  return [...rs].sort((a, b) => a - b);
+}
+
 // ------------------------------------------------------------ ler o que se digita
 
 // "27/10", "27/10/26", "27/10/2026", "27-10-2026" ou "2026-10-27" → 'AAAA-MM-DD' (null se não for data).
@@ -173,6 +197,16 @@ export function textoDaFaixa(linhas, f) {
   return out.join('\n');
 }
 
+// COPIAR VÁRIAS FAIXAS, como o Excel: só quando todas têm as MESMAS colunas — as linhas vão uma embaixo da outra,
+// de cima para baixo (sem repetir a que estiver em duas). Senão, `motivo` diz por quê.
+export function textoDasFaixas(linhas, faixas) {
+  const fs = listaDe(faixas);
+  const [a] = fs;
+  if (fs.some((f) => f.c0 !== a.c0 || f.c1 !== a.c1)) return { motivo: 'Para copiar várias seleções, todas precisam ter as mesmas colunas (como no Excel).' };
+  const rs = linhasDasFaixas(fs, linhas.length);
+  return { texto: rs.map((r) => textoDaFaixa(linhas, { r0: r, r1: r, c0: a.c0, c1: a.c1 })).join('\n'), linhas: rs.length, celulas: rs.length * (a.c1 - a.c0 + 1) };
+}
+
 // ONDE CADA CÉLULA DO BLOCO CAI, a partir de `inicio` (o canto de cima à esquerda da seleção, como no
 // Excel). A linha i do bloco cai na i-ésima linha da tela a partir dali; passando da última, vira
 // LINHA NOVA (r ≥ linhas.length). Célula em branco no bloco não muda nada.
@@ -238,36 +272,32 @@ export function preencherAbaixo(linhas, f) {
 }
 
 // LIMPAR (Delete): descrição, categoria e observação esvaziam; data e valor não ficam vazios.
-export function limparFaixa(linhas, f) {
+export function limparFaixa(linhas, faixas) {
   const mudancas = [];
   let presos = 0;
-  for (let r = f.r0; r <= f.r1; r++) {
-    for (let c = f.c0; c <= f.c1; c++) {
-      const col = COLUNAS[c];
-      if (!col.campo) continue;
-      if (col.id === 'data' || col.id === 'valor') { presos += 1; continue; }
-      const vazio = col.id === 'categoria' ? null : '';
-      if ((linhas[r][col.campo] ?? vazio) !== vazio) mudancas.push({ r, campo: col.campo, valor: vazio });
-    }
-  }
+  celulasDe(faixas).forEach(([r, c]) => {
+    const col = COLUNAS[c];
+    if (!col.campo || !linhas[r]) return;
+    if (col.id === 'data' || col.id === 'valor') { presos += 1; return; }
+    const vazio = col.id === 'categoria' ? null : '';
+    if ((linhas[r][col.campo] ?? vazio) !== vazio) mudancas.push({ r, campo: col.campo, valor: vazio });
+  });
   return { mudancas, presos };
 }
 
 // A BARRA SOB A GRADE, como a do Excel: quantas células e, nas de valor, a soma e a média. Gasto e
 // entrada não se somam um com o outro: com os dois na seleção, a barra diz cada total.
-export function resumoSelecao(linhas, f) {
-  const celulas = (f.r1 - f.r0 + 1) * (f.c1 - f.c0 + 1);
+export function resumoSelecao(linhas, faixas) {
+  const cels = celulasDe(faixas);
   const cValor = COLUNAS.findIndex((x) => x.id === 'valor');
   const t = { gastos: 0, entradas: 0, nGastos: 0, nEntradas: 0 };
-  if (cValor >= f.c0 && cValor <= f.c1) {
-    for (let r = f.r0; r <= f.r1; r++) {
-      const l = linhas[r];
-      if (!l?.valor_centavos) continue;
-      if (l.tipo === 'entrada') { t.entradas += l.valor_centavos; t.nEntradas += 1; }
-      else { t.gastos += l.valor_centavos; t.nGastos += 1; }
-    }
-  }
-  return { celulas, ...t };
+  cels.forEach(([r, c]) => {
+    const l = linhas[r];
+    if (c !== cValor || !l?.valor_centavos) return;
+    if (l.tipo === 'entrada') { t.entradas += l.valor_centavos; t.nEntradas += 1; }
+    else { t.gastos += l.valor_centavos; t.nGastos += 1; }
+  });
+  return { celulas: cels.length, ...t };
 }
 
 // COLAR NUMA SELEÇÃO MAIOR repete o bloco, como o Excel: um valor só preenche a seleção inteira, e um
