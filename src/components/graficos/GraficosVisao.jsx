@@ -893,7 +893,9 @@ export function JaComprometido({ meses, media, ctrl }) {
   return (
     // o rótulo da média vai NUMA FAIXA ACIMA das linhas (`pt-5`), à esquerda da tracejada: ao lado dela, ele caía em
     // cima do valor da primeira linha
-    <div className="relative flex h-full min-h-0 flex-col gap-1 pt-5" onMouseLeave={balao.aoSair}>
+    // AS LINHAS ENCOLHEM ATÉ CABER (`flex-1` com piso de 16px e 2px entre elas): na altura padrão do bloco os 11 meses
+    // pediam rolagem
+    <div className="relative flex h-full min-h-0 flex-col gap-0.5 pt-5" onMouseLeave={balao.aoSair}>
       {media > 0 && (
         <div className="pointer-events-none absolute bottom-0 top-0 border-l-[1.5px] border-dashed transition-opacity duration-150"
           style={{ left: naBarra(fr(media)), borderColor: COR_ANTERIOR, opacity: ctrl.opSerie('media') }}>
@@ -902,7 +904,7 @@ export function JaComprometido({ meses, media, ctrl }) {
       )}
       {meses.map((mm, k) => (
         <div key={mm.competencia} onMouseMove={balao.aoMover(k)}
-          className="grid min-h-[20px] flex-1 cursor-default items-center gap-2 transition-opacity duration-100"
+          className="grid min-h-[16px] flex-1 cursor-default items-center gap-2 transition-opacity duration-100"
           style={{ gridTemplateColumns: `${ROT_MES}px minmax(0,1fr) ${VALOR_MES}px`, maxHeight: 34, opacity: balao.esmaecido(k) ? 0.4 : 1 }}>
           <span className={`truncate text-[11px] tabular-nums ${k === 0 ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>{competenciaCurta(mm.competencia)}</span>
           <div className="relative h-[60%] max-h-[16px] min-h-[8px]">
