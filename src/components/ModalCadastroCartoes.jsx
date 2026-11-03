@@ -5,7 +5,8 @@ import Toggle from './Toggle.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { excluirCartao, salvarCartao } from '../api/cadastros.js';
-import { diferencaCartao, formatoDoValor, opcoesFormato, validarCartoes, valorDoFormato } from '../lib/cartoes.js';
+import { ENSINAR, diferencaCartao, formatoDoValor, opcoesFormato, validarCartoes, valorDoFormato } from '../lib/cartoes.js';
+import AssistenteModelo from './AssistenteModelo.jsx';
 
 // O CADASTRO DOS CARTÕES EM POP-UP (30/10/2026, opção A do mockup "Cartões · overhaul"): a tabela de formulário do
 // cadastro dos fixos e do das categorias — cada célula é um campo, "+ cartão" acrescenta, a lixeira marca para sair,
@@ -23,6 +24,10 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
   const [linhas, setLinhas] = useState(() => cartoes.map(daLinha));
   const [erro, setErro] = useState(null);
   const [salvando, setSalvando] = useState(false);
+  // "+ Ensinar um formato novo…" numa linha: o assistente, e o modelo salvo vai para ela (e para a lista).
+  const [ensinando, setEnsinando] = useState(null); // a linha
+  const [novos, setNovos] = useState([]);
+  const todos = [...modelos, ...novos];
 
   const muda = (id, campo, v) => { setLinhas((ls) => ls.map((l) => (l.id === id ? { ...l, [campo]: v } : l))); setErro(null); };
   const conta = (l) => !(l.novo && (l.excluir || !l.nome.trim()));
@@ -91,7 +96,7 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
                     <input className={`input !h-8 text-right text-[12.5px] tabular-nums ${borda(l.id, 'dia')}`} inputMode="numeric" disabled={l.excluir}
                       value={l.dia_vencimento} onChange={(e) => muda(l.id, 'dia_vencimento', e.target.value.replace(/\D/g, '').slice(0, 2))} />
                   </td>
-                  <td className={td}><SelectSimples value={valorDoFormato(l)} onChange={(v) => { const f = formatoDoValor(v); muda(l.id, 'formato', f.formato); muda(l.id, 'modelo_id', f.modelo_id); }} opcoes={opcoesFormato(modelos)} disabled={l.excluir} compacto /></td>
+                  <td className={td}><SelectSimples value={valorDoFormato(l)} onChange={(v) => { if (v === ENSINAR) { setEnsinando(l); return; } const f = formatoDoValor(v); muda(l.id, 'formato', f.formato); muda(l.id, 'modelo_id', f.modelo_id); }} opcoes={opcoesFormato(todos, { ensinar: true })} disabled={l.excluir} compacto /></td>
                   <td className={td}><Toggle compacto checked={l.ativo} disabled={l.excluir} onChange={(v) => muda(l.id, 'ativo', v)} rotulo={`${l.nome || 'Cartão'} ativo`} /></td>
                   <td className={`${td} text-right tabular-nums text-gray-500`}>{l.novo ? '—' : n || <span className="text-gray-300">0</span>}</td>
                   <td className={`${td} text-right`}>
@@ -124,6 +129,10 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
           {salvando ? 'Salvando…' : nAlt ? `Salvar alterações (${nAlt})` : 'Salvar alterações'}
         </button>
       </div>
+      {ensinando && (
+        <AssistenteModelo cartao={ensinando} onFechar={() => setEnsinando(null)}
+          onSalvo={(m) => { setNovos((ns) => [...ns, m]); muda(ensinando.id, 'formato', 'modelo'); muda(ensinando.id, 'modelo_id', m.id); setEnsinando(null); }} />
+      )}
     </Modal>
   );
 }

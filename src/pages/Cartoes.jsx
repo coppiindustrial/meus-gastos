@@ -18,7 +18,8 @@ import { contarUsoCartao, criarCartoesSugeridos, listarCartoes, salvarCartao } f
 import { listarFaturas } from '../api/faturas.js';
 import { listarParcelasFuturas } from '../api/resumo.js';
 import { CARTOES_SUGERIDOS } from '../lib/sugestoes.js';
-import { formatoDoValor, opcoesFormato, resumoDosCartoes, rotuloFormato, valorDoFormato } from '../lib/cartoes.js';
+import { ENSINAR, formatoDoValor, opcoesFormato, resumoDosCartoes, rotuloFormato, valorDoFormato } from '../lib/cartoes.js';
+import AssistenteModelo from '../components/AssistenteModelo.jsx';
 import { listarModelos } from '../api/modelos.js';
 import { formatBRL, numeroK } from '../lib/dinheiro.js';
 import { competenciaCurta, formatDate, nomeCompetencia, todayISO } from '../lib/format.js';
@@ -45,12 +46,16 @@ const IcoCartao = ({ className }) => (
   </svg>
 );
 
-// `modelos`: os modelos de importação do usuário (migration 011) — entram no "Como a fatura entra".
+// `modelos`: os modelos de importação do usuário (migration 011) — entram no "Como a fatura entra", com o "+ Ensinar
+// um formato novo…" que abre o `AssistenteModelo`; o modelo salvo já fica escolhido (e na lista, até a tela recarregar).
 function ModalCartao({ cartao, modelos, onFechar, onSalvo }) {
   const toast = useToast();
   const [form, setForm] = useState(() => cartao ?? { nome: '', dia_vencimento: 10, formato: 'manual', ativo: true });
   const [erros, setErros] = useState({});
   const [salvando, setSalvando] = useState(false);
+  const [ensinando, setEnsinando] = useState(false);
+  const [novos, setNovos] = useState([]);
+  const todos = [...(modelos ?? []), ...novos];
   const enviar = async (e) => {
     e.preventDefault();
     const dia = Number(form.dia_vencimento);
@@ -80,8 +85,13 @@ function ModalCartao({ cartao, modelos, onFechar, onSalvo }) {
             onChange={(e) => setForm({ ...form, dia_vencimento: e.target.value.replace(/\D/g, '').slice(0, 2) })} />
         </Campo>
         <Campo rotulo="Como a fatura entra">
-          <SelectSimples value={valorDoFormato(form)} onChange={(v) => setForm({ ...form, ...formatoDoValor(v) })} opcoes={opcoesFormato(modelos)} />
+          <SelectSimples value={valorDoFormato(form)} onChange={(v) => (v === ENSINAR ? setEnsinando(true) : setForm({ ...form, ...formatoDoValor(v) }))}
+            opcoes={opcoesFormato(todos, { ensinar: true })} />
         </Campo>
+        {ensinando && (
+          <AssistenteModelo cartao={form} onFechar={() => setEnsinando(false)}
+            onSalvo={(m) => { setNovos((ns) => [...ns, m]); setForm((f) => ({ ...f, formato: 'modelo', modelo_id: m.id })); setEnsinando(false); }} />
+        )}
         <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
           <Toggle compacto checked={form.ativo} onChange={(ativo) => setForm({ ...form, ativo })} rotulo="Ativo" /> Ativo (aparece na hora de lançar e de importar)
         </label>

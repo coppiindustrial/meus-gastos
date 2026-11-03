@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MODELOS_PRONTOS, assinatura, decodificar, detectarFormato, lerComModelo, lerDataNoFormato, reconhecerModelo, separarParcela,
-  sugerirColunas, vencimentoDoNome,
+  MODELOS_PRONTOS, assinatura, comPapel, decodificar, detectarFormato, lerComModelo, lerDataNoFormato, papelDaColuna, problemaDoModelo,
+  reconhecerModelo, separarParcela, sugerirColunas, vencimentoDoNome,
 } from '../src/lib/modeloCsv.js';
+import { vencimentoDoArquivo } from '../src/lib/lerFatura.js';
 
 // Dados FICTÍCIOS: um banco "Inter" inventado, com título antes do cabeçalho, a parcela no texto e o total no fim.
 const INTER = [
@@ -82,6 +83,29 @@ test('detectarFormato e sugerirColunas: o que o assistente já propõe', () => {
   const nu = 'date,title,amount\n2026-08-05,Padaria Exemplo,"53,90"\n2026-07-06,Loja Teste - Parcela 9/12,"208,25"';
   const sn = sugerirColunas(nu, detectarFormato(nu));
   assert.deepEqual([sn.separador, sn.colunas.data, sn.colunas.estabelecimento, sn.colunas.valor, sn.data, sn.parcela], [',', 0, 1, 2, 'aaaa-mm-dd', 'texto']);
+});
+
+test('assistente: dar o papel a uma coluna, o que falta para ler e o vencimento do arquivo', () => {
+  // dar "Parcela" à coluna 3 liga o modo 'coluna'; dar "Data" à 4 tira a data da 0 (e o valor que a 4 tinha)
+  let c = comPapel(CONFIG_INTER, 3, 'parcela');
+  assert.deepEqual([c.colunas.parcela, c.parcela], [3, 'coluna']);
+  c = comPapel(c, 3, '');
+  assert.deepEqual([c.colunas.parcela, c.parcela], [null, 'nenhuma']);
+  c = comPapel(CONFIG_INTER, 4, 'data');
+  assert.deepEqual([c.colunas.data, c.colunas.valor], [4, null]);
+  assert.equal(papelDaColuna(CONFIG_INTER.colunas, 1), 'estabelecimento');
+  assert.equal(papelDaColuna(CONFIG_INTER.colunas, 2), '');
+  // o que falta: a coluna do valor; a data no formato errado; o sinal trocado (nenhum gasto)
+  assert.match(problemaDoModelo(INTER, c), /o valor/);
+  assert.match(problemaDoModelo(INTER, { ...CONFIG_INTER, data: 'aaaa-mm-dd' }), /Linha 3 ilegível/);
+  const semPagamento = INTER.split('\r\n').filter((l) => !l.includes('PAGAMENTO')).join('\r\n');
+  assert.match(problemaDoModelo(semPagamento, { ...CONFIG_INTER, gasto: 'negativo' }), /outro sinal/);
+  assert.equal(problemaDoModelo(INTER, CONFIG_INTER), null);
+  // o vencimento: pelo nome (sem data no nome, cai para o dia do cartão), pelo dia, ou perguntar
+  const ls = lerComModelo(INTER, CONFIG_INTER).linhas;
+  assert.deepEqual(vencimentoDoArquivo({ vencimento: 'nome' }, 'Inter_2026-11-15.csv', ls, 15), { vencimento: '2026-11-15', como: 'nome' });
+  assert.deepEqual(vencimentoDoArquivo({ vencimento: 'nome' }, 'fatura.csv', ls, 15), { vencimento: '2026-10-15', como: 'dia' });
+  assert.deepEqual(vencimentoDoArquivo({ vencimento: 'perguntar' }, 'x.csv', ls, 15), { vencimento: null, como: 'perguntar' });
 });
 
 test('decodificar: UTF-8 quando lê limpo, senão Windows-1252 (o CSV do Excel)', () => {

@@ -145,6 +145,38 @@ export const MODELOS_PRONTOS = [
   },
 ];
 
+// ------------------------------------------------------------ o assistente (fase 7.2): as mãos das telas
+
+// O que uma coluna pode ser (o seletor em cima de cada coluna, no passo 2). '' = ignorar (não entra).
+export const PAPEIS = [
+  { value: 'data', label: 'Data' }, { value: 'estabelecimento', label: 'Estabelecimento' }, { value: 'valor', label: 'Valor' },
+  { value: 'parcela', label: 'Parcela' }, { value: 'portador', label: 'Portador' }, { value: '', label: 'Ignorar' },
+];
+export const papelDaColuna = (colunas, j) => Object.keys(colunas).find((k) => colunas[k] === j) ?? '';
+
+// Dá o `papel` à coluna `j` (tirando-o da coluna que o tinha, e o que `j` tinha antes). A parcela acompanha: dar o
+// papel "Parcela" a uma coluna põe o modo 'coluna'; tirá-lo, com o modo 'coluna', volta a 'nenhuma'.
+export function comPapel(config, j, papel) {
+  const colunas = { ...config.colunas };
+  Object.keys(colunas).forEach((k) => { if (colunas[k] === j || k === papel) colunas[k] = null; });
+  if (papel) colunas[papel] = j;
+  let parcela = config.parcela;
+  if (papel === 'parcela') parcela = 'coluna';
+  else if (parcela === 'coluna' && colunas.parcela == null) parcela = 'nenhuma';
+  return { ...config, colunas, parcela };
+}
+
+// O que impede o modelo de ler o arquivo (o rodapé do passo 2 diz e o "Próximo" espera), ou null.
+export function problemaDoModelo(texto, config) {
+  const falta = [['data', 'a data'], ['estabelecimento', 'o estabelecimento'], ['valor', 'o valor']].find(([k]) => config.colunas?.[k] == null);
+  if (falta) return `Diga qual coluna é ${falta[1]}.`;
+  try {
+    const r = lerComModelo(texto, config);
+    if (!r.linhas.length) return r.ignoradas.length ? 'Nenhum gasto: todos os valores vieram com o outro sinal — troque "o gasto vem".' : 'Nenhuma linha de gasto no arquivo.';
+    return null;
+  } catch (err) { return err.message; }
+}
+
 // ------------------------------------------------------------ o que o assistente sugere (fase 2)
 
 const SEPARADORES = [';', ',', '\t'];

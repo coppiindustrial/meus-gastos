@@ -1,4 +1,4 @@
-import { MODELOS_PRONTOS, lerComModelo, linhasDoTexto, reconhecerModelo } from './modeloCsv.js';
+import { MODELOS_PRONTOS, lerComModelo, linhasDoTexto, reconhecerModelo, vencimentoDoNome } from './modeloCsv.js';
 
 // LEITURA DO CSV DA FATURA. Dois formatos prontos, reconhecidos pelo CABEÇALHO (não pelo nome do arquivo):
 //
@@ -43,4 +43,15 @@ export function vencimentoProvavel(linhas, diaVencimento) {
   const noMes = (ano, m) => Math.min(diaVencimento, new Date(Date.UTC(ano, m, 0)).getUTCDate());
   if (dia >= noMes(y, mes)) { mes += 1; if (mes > 12) { mes = 1; y += 1; } }
   return `${y}-${p2(mes)}-${p2(noMes(y, mes))}`;
+}
+
+// O VENCIMENTO DE UM ARQUIVO pelo que o modelo diz (`config.vencimento`, fase 7 do importador configurável):
+// 'nome' = a data no nome do arquivo (sem ela, cai para a do dia); 'dia' = o dia do cartão depois da última compra;
+// 'perguntar' = nenhum (a tela pede). Devolve { vencimento, como }.
+export function vencimentoDoArquivo(config, nomeArquivo, linhas, diaVencimento) {
+  if (config.vencimento === 'perguntar') return { vencimento: null, como: 'perguntar' };
+  const doNome = config.vencimento === 'nome' ? vencimentoDoNome(nomeArquivo) : null;
+  if (doNome) return { vencimento: doNome, como: 'nome' };
+  const doDia = vencimentoProvavel(linhas, diaVencimento);
+  return { vencimento: doDia, como: doDia ? 'dia' : 'perguntar' };
 }

@@ -60,6 +60,7 @@ test('grafico (opção D): as faturas até a mais recente e depois as parcelas q
 test('formato pelo MODELO (migration 011): as opções, a ida e volta, e a diferença que o cadastro grava', () => {
   const modelos = [{ id: 'm1', nome: 'Inter · fatura', tipo: 'fatura' }, { id: 'm2', nome: 'Inter · extrato', tipo: 'extrato' }];
   assert.deepEqual(opcoesFormato(modelos).map((o) => o.value), ['nubank', 'xp', 'modelo:m1', 'manual']); // o de extrato não serve a cartão
+  assert.deepEqual(opcoesFormato([], { ensinar: true }).map((o) => o.value), ['nubank', 'xp', 'ensinar', 'manual']);
   assert.equal(rotuloFormato('modelo', modelos[0]), 'Importa pelo modelo Inter · fatura');
   assert.deepEqual(formatoDoValor('modelo:m1'), { formato: 'modelo', modelo_id: 'm1' });
   assert.deepEqual(formatoDoValor('xp'), { formato: 'xp', modelo_id: null });

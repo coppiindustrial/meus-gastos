@@ -14,11 +14,14 @@ export const rotuloFormato = (f, modelo = null) => (f === 'modelo' ? `Importa pe
 
 // OS MODELOS DO USUÁRIO no "Como a fatura entra" (migration 011): cada um vira a opção 'modelo:<id>', entre os prontos
 // e o manual. `valorDoFormato`/`formatoDoValor` vão e voltam entre o cartão ({ formato, modelo_id }) e a opção.
-export function opcoesFormato(modelos = []) {
+// `ensinar` (fase 7.2): a opção que abre o assistente (`AssistenteModelo`) — o valor 'ensinar' não vai para o cartão.
+export const ENSINAR = 'ensinar';
+export function opcoesFormato(modelos = [], { ensinar = false } = {}) {
   const deFatura = (modelos ?? []).filter((m) => m.tipo === 'fatura' && !m.pronto);
   return [
     ...FORMATOS.filter((f) => f.value !== 'manual'),
     ...deFatura.map((m) => ({ value: `modelo:${m.id}`, label: `Importa pelo modelo ${m.nome}` })),
+    ...(ensinar ? [{ value: ENSINAR, label: '+ Ensinar um formato novo…' }] : []),
     FORMATOS.find((f) => f.value === 'manual'),
   ];
 }

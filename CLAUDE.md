@@ -342,6 +342,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   formato 'modelo' + `modelo_id` do cartão; `api/modelos.js`, `listarModelos` devolve null sem a tabela). Para o
   assistente (7.2): `detectarFormato` e `sugerirColunas` (pelo nome do cabeçalho e pelo conteúdo) e `decodificar`
   (UTF-8, ou Windows-1252 quando o UTF-8 não lê limpo).
+  O ASSISTENTE (7.2, 03/11/2026, o mockup aprovado): `components/AssistenteModelo.jsx`, três passos — O ARQUIVO (um
+  CSV de exemplo; separador, codificação, linha do cabeçalho e rodapé achados e trocáveis; o arquivo como é), AS
+  COLUNAS (o seletor em cima de cada uma — `comPapel`/`papelDaColuna`; data, sinal do gasto, parcela; o rodapé diz o
+  que falta — `problemaDoModelo`; linhas do outro sinal em vermelho) e CONFERIR E SALVAR (como entra, com a categoria
+  das regras; o vencimento — `vencimentoDoArquivo` em `lib/lerFatura.js`; "reconhecer pelo cabeçalho"; o nome).
+  Abre pelo "+ Ensinar um formato novo…" (`ENSINAR` em `opcoesFormato`) no formulário e no cadastro do cartão; o
+  modelo salvo já fica escolhido. Sem a migration 011, salvar explica que ela falta.
 - `lib/lerFatura.js`: reconhece o formato pelo CABEÇALHO — Nubank original (`date,title,amount`, parcela no fim do
   título: "Loja - Parcela 9/12") e o da XP (`Data;Estabelecimento;Portador;Valor;Parcela`, também o das faturas do
   Nubank que o usuário converteu). Valor negativo (pagamento, estorno) fica de fora, como na planilha. Desde 03/11/2026
