@@ -75,7 +75,8 @@ export async function importarFatura({ cartaoId, vencimento, arquivo, hash, linh
 }
 
 // O TOTAL GUARDADO de cada fatura volta a ser a soma dos lançamentos que ficaram nela (03/11/2026): tirar do app uma
-// compra ignorada deixava a fatura (e a tela Cartões) com o total antigo.
+// compra ignorada deixava a fatura (e a tela Cartões) com o total antigo. Com a migration 009 o gatilho do banco já
+// faz isto a cada lançamento que sai ou muda (também pela grade); daqui fica a garantia de antes dela.
 export async function recalcularTotais(faturaIds) {
   const ids = [...new Set(faturaIds.filter(Boolean))];
   for (let i = 0; i < ids.length; i += 100) {

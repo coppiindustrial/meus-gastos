@@ -314,6 +314,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - `lib/classificar.js` reproduz o `PROCURAR` do Excel da planilha: primeira regra por prioridade, substring sem
   diferenciar maiúscula, com CURINGAS (`*`, `?`, `~*`) — 42 regras da planilha dependem deles.
 - Fatura é única por cartão + vencimento; a repetida só entra substituindo (a FK apaga os lançamentos da anterior).
+- O TOTAL DA FATURA (`faturas.total_centavos`, o que a tela Cartões mostra) = a soma dos lançamentos dela, mantida
+  pelo GATILHO da migration 009 (03/11/2026) a cada lançamento que entra, sai, muda de valor ou de fatura — antes era
+  gravado só na importação, e excluir uma compra pela grade deixava o total antigo.
 - Os CSVs reais ficam em `dados/Faturas cartão/` (fora do git). Teste dos leitores: dados FICTÍCIOS em `test/`.
 
 ## Histórico da planilha (fase 2, já importado)
