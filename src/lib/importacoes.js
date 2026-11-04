@@ -4,8 +4,8 @@ import { addMeses, competenciaDe } from './format.js';
 // mês) e uma do extrato da conta. Funções puras, testadas em test/importacoes.test.js. Datas 'AAAA-MM-DD',
 // competência 'AAAA-MM'; nada passa por `new Date('AAAA-MM-DD')` (as contas de dia são em UTC, por número).
 //
-// Uma fonte DEVE o mês quando ele já pode ser importado: a fatura, a partir do vencimento (competência =
-// mês do vencimento); o extrato, quando o mês acabou. Antes disso a célula é "futuro" (fatura) ou "em
+// Uma fonte DEVE o mês quando ele já pode ser importado: a fatura, desde o 1º dia do mês dela (competência =
+// mês do vencimento; até 04/11/2026 era só a partir do vencimento); o extrato, quando o mês acabou. Antes disso a célula é "futuro" (fatura) ou "em
 // andamento" (extrato) e não conta como pendência. Antes da primeira importação da fonte, "—" (ela ainda não
 // existia aqui), e o mesmo para o cartão inativo depois da última fatura dele.
 
@@ -69,13 +69,17 @@ function celulaFatura(comp, hoje, cartao, fats) {
     };
   }
   const comps = fats.map((x) => x.competencia).sort();
+  const chegou = comp <= competenciaDe(hoje);
   if (!comps.length || comp < comps[0]) {
     const vence = vencimentoNoMes(comp, cartao.dia_vencimento);
-    return cartao.ativo && vence <= hoje ? { estado: 'na', antes: true, vence } : { estado: 'na' };
+    return cartao.ativo && chegou ? { estado: 'na', antes: true, vence } : { estado: 'na' };
   }
   if (!cartao.ativo && comp > comps[comps.length - 1]) return { estado: 'na' };
   const vence = vencimentoNoMes(comp, cartao.dia_vencimento);
-  return vence <= hoje ? { estado: 'falta', vence, pendente: true } : { estado: 'futuro', vence };
+  // A FATURA FALTA DESDE O 1º DIA DO MÊS DELA (04/11/2026, a pedido; antes, só a partir do vencimento): virou o mês, as
+  // faturas que vencem nele já se importam (fecham dias antes do vencimento). `aVencer`: ainda não venceu.
+  if (!chegou) return { estado: 'futuro', vence };
+  return vence > hoje ? { estado: 'falta', vence, pendente: true, aVencer: true } : { estado: 'falta', vence, pendente: true };
 }
 
 // A TABELA DO ANO: as colunas (um cartão por coluna, na ordem do nome, + o extrato) e uma linha por mês, do

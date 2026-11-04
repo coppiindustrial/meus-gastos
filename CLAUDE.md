@@ -119,7 +119,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   nas outras).
 - ABA "POR MÊS": linha = mês do ano (filtro de ano), coluna = FONTE (cada cartão e o extrato); a célula diz QUANDO
   entrou ou o que falta (`mesesDoAno` em `lib/importacoes.js`, testada). Fonte DEVE o mês quando ele já pode ser
-  importado: a fatura a partir do vencimento; o extrato quando o mês acabou (o mês corrente é "em andamento" ou
+  importado: a fatura DESDE O 1º DIA DO MÊS DELA (04/11/2026, a pedido — virou o mês, as faturas que vencem nele já
+  contam no menu, "Falta · vence dd/mm" com `aVencer`; antes era só a partir do vencimento); o extrato quando o mês acabou (o mês corrente é "em andamento" ou
   "até dd/mm", sem contar como pendência). Antes da primeira importação da fonte, "—" — que não cobra, mas tem o ↓ no
   hover (`antes`: excluir o extrato de um mês o deixa antes do primeiro que sobrou, e ele precisa poder voltar).
   O ANO da tela é o de hoje (troca sozinho em 1º de janeiro; a lista tem os anos com dado). EM JANEIRO o que falta

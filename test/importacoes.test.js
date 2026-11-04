@@ -40,6 +40,23 @@ test('fatura: importada, da planilha, falta (já venceu), futura e antes de exis
   assert.equal(linha('2026-05').celulas.vl.estado, 'na');
 });
 
+test('fatura: falta desde o 1º dia do mês dela, mesmo antes de vencer (virou o mês: 2 faturas + o extrato)', () => {
+  const ext = [E('2026-10-01', '2026-10-31', '2026-10-31T20:00:00Z')];
+  const fats = [F('nu', '2026-10'), F('xp', '2026-10')];
+  const t = mesesDoAno({ ano: 2026, hoje: '2026-11-01', cartoes: [xp, nubank], faturas: fats, extratos: [] });
+  const nov = t.linhas.find((l) => l.comp === '2026-11');
+  assert.deepEqual(nov.celulas.nu, { estado: 'falta', vence: '2026-11-13', pendente: true, aVencer: true });
+  assert.deepEqual(nov.celulas.xp, { estado: 'falta', vence: '2026-11-10', pendente: true, aVencer: true });
+  assert.equal(t.linhas.find((l) => l.comp === '2026-12').celulas.nu.estado, 'futuro');
+  // o extrato de outubro (o mês acabou) + as duas faturas de novembro = 3 no menu
+  const semOut = [E('2026-09-01', '2026-09-30', '2026-10-01T10:00:00Z')];
+  assert.equal(pendenciasAgora({ hoje: '2026-11-01', cartoes: [xp, nubank], faturas: fats, extratos: semOut }), 3);
+  assert.equal(pendenciasAgora({ hoje: '2026-11-01', cartoes: [xp, nubank], faturas: fats, extratos: ext }), 2);
+  // depois do vencimento, sem o `aVencer`
+  const dia14 = mesesDoAno({ ano: 2026, hoje: '2026-11-14', cartoes: [nubank], faturas: fats, extratos: null });
+  assert.deepEqual(dia14.linhas.find((l) => l.comp === '2026-11').celulas.nu, { estado: 'falta', vence: '2026-11-13', pendente: true });
+});
+
 test('extrato: mês inteiro, mês em andamento parcial e meses antes do primeiro', () => {
   assert.equal(linha('2026-08').celulas.extrato.estado, 'ok');
   // 30/08 → 02/09 é um buraco de fim de semana: a folga junta, e setembro fica inteiro
@@ -70,7 +87,8 @@ test('faltam: por linha e no total; o número do menu olha o ano e o mês anteri
   assert.equal(pendenciasAgora({ hoje, cartoes: [xp, nubank, velho], faturas, extratos }), 1);
   // em janeiro, dezembro do ano anterior ainda conta
   const jan = pendenciasAgora({ hoje: '2027-01-02', cartoes: [nubank], faturas, extratos: null });
-  assert.equal(jan, 1); // dez/2026 sem fatura do Nubank (out e nov já são do ano passado: só na tabela)
+  // dez/2026 sem fatura do Nubank + a de jan/2027, que já falta no dia 2 (out e nov são do ano passado: só na tabela)
+  assert.equal(jan, 2);
 });
 
 test('unirPeriodos e periodoDasLinhas', () => {

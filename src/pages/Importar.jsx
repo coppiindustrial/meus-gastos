@@ -54,7 +54,7 @@ const MARCAS = [
   { id: 'ok', rotulo: 'Importado', explica: 'Entrou por aqui: a data é o dia em que foi importado.' },
   { id: 'pl', rotulo: 'Da planilha', explica: 'Veio do histórico da planilha (fase 2).' },
   { id: 'parcial', rotulo: 'Em parte', explica: 'O extrato vai até o dia mostrado; o resto do mês ainda não entrou.' },
-  { id: 'falta', rotulo: 'Falta importar', explica: 'A fatura já venceu (ou o mês do extrato acabou) e não entrou.' },
+  { id: 'falta', rotulo: 'Falta importar', explica: 'O mês da fatura chegou (ou o mês do extrato acabou) e ela não entrou.' },
   { id: 'na', rotulo: 'Não existia', explica: 'A fonte ainda não era usada aqui naquele mês (ou o cartão foi desativado).' },
 ];
 const Ponto = ({ tipo }) => (tipo === 'na'
@@ -76,7 +76,10 @@ function detalhe(cel, col, comp) {
     };
   }
   if (cel.estado === 'parcial') return { titulo, linhas: [`Entrou até ${formatDate(cel.ate)}.`, cel.pendente ? 'O mês acabou: falta o resto.' : `Faltam ${cel.faltamDias} dias até hoje.`], acao: true };
-  if (cel.estado === 'falta') return { titulo, linhas: [col.tipo === 'fatura' ? `Venceu em ${formatDate(cel.vence)} e ainda não entrou.` : 'O mês acabou e o extrato dele não entrou.'], acao: true };
+  if (cel.estado === 'falta') {
+    return { titulo, linhas: [col.tipo !== 'fatura' ? 'O mês acabou e o extrato dele não entrou.'
+      : cel.aVencer ? `Vence em ${formatDate(cel.vence)}: o mês dela chegou e ela ainda não entrou.` : `Venceu em ${formatDate(cel.vence)} e ainda não entrou.`], acao: true };
+  }
   if (cel.estado === 'andamento') return { titulo, linhas: ['O mês ainda não acabou.'], acao: true };
   if (cel.estado === 'futuro') return { titulo, linhas: [cel.vence ? `Vence em ${formatDate(cel.vence)}.` : 'Mês que ainda não chegou.'] };
   if (cel.antes) return { titulo, linhas: ['Antes da primeira importação desta fonte: não conta como pendência.', 'Dá para importar mesmo assim (o ↓ no canto).'], acao: true };
@@ -97,7 +100,7 @@ function Celula({ cel, col, comp, apagada, onAgir, onAbrir, onDica }) {
     curto = cel.pendente ? 'faltou o resto' : `faltam ${cel.faltamDias} dias`;
   } else if (cel.estado === 'falta') {
     texto = <span className="font-semibold text-hx-9a6f00">Falta</span>;
-    curto = col.tipo === 'fatura' ? `venceu ${ddmm(cel.vence)}` : 'o mês acabou';
+    curto = col.tipo === 'fatura' ? `${cel.aVencer ? 'vence' : 'venceu'} ${ddmm(cel.vence)}` : 'o mês acabou';
   } else if (cel.estado === 'andamento') {
     texto = <span className="text-gray-400">em andamento</span>;
   } else if (cel.estado === 'futuro') {
