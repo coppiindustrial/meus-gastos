@@ -782,6 +782,9 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
         conteudo = (
           <>
             <span className={`truncate ${l.descricao ? 'text-gray-800' : 'text-gray-400'}`}>{l.descricao || (l.rascunho ? 'descrição' : '—')}</span>
+            {/* o ESTORNO do cartão (valor negativo, migration 012): abate da fatura e da categoria. A marca mora aqui, na
+                coluna que estica — ao lado do valor ela passava da largura da coluna (132px). */}
+            {l.valor_centavos < 0 && <span className="ml-2 shrink-0"><Etiqueta tom="verde">estorno</Etiqueta></span>}
             {l.revisar && <span className="ml-2 shrink-0"><Etiqueta tom="ambar">Revisar</Etiqueta></span>}
           </>
         );
@@ -793,8 +796,6 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
       else if (col.id === 'valor') {
         conteudo = l.valor_centavos
           ? <span className={`ml-auto tabular-nums ${l.tipo === 'entrada' ? 'font-semibold text-green-700' : 'text-gray-800'}`}>
-              {/* o ESTORNO do cartão (valor negativo, migration 012): abate da fatura e da categoria */}
-              {l.valor_centavos < 0 && <span className="mr-1.5 rounded-[3px] bg-hx-dcfce7 px-1 py-px text-[10.5px] font-semibold text-hx-166534">estorno</span>}
               {l.tipo === 'entrada' ? '+ ' : ''}{formatBRL(l.valor_centavos)}
             </span>
           : <span className="ml-auto text-gray-400">{l.rascunho ? 'falta o valor' : ''}</span>;
