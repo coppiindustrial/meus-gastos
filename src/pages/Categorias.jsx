@@ -20,6 +20,7 @@ import {
 import { listarResumoMensal } from '../api/resumo.js';
 import { CORES_GRUPO, GRUPOS_SUGERIDOS } from '../lib/sugestoes.js';
 import { usoPorCategoria } from '../lib/usoCategorias.js';
+import MarcaDesde from '../components/graficos/MarcaDesde.jsx';
 import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaAtual, competenciaCurta } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
@@ -341,7 +342,7 @@ export default function Categorias() {
                   <th className="table-th border-b border-gray-200">Categoria</th>
                   <th className="table-th border-b border-gray-200 text-right">Lançamentos</th>
                   <th className="table-th border-b border-gray-200 text-right">Total em {mesCurto}</th>
-                  <th className="table-th border-b border-gray-200 text-right">Média / mês</th>
+                  <th className="table-th border-b border-gray-200 text-right">Média / mês<span className="inline-block w-4" aria-hidden="true" /></th>
                   <th className="table-th border-b border-gray-200 text-right">Último uso</th>
                   <th className="table-th border-b border-gray-200" aria-label="Ações" />
                 </tr>
@@ -372,7 +373,7 @@ export default function Categorias() {
                         <td className="border-b border-gray-200 px-3 text-right text-[13px] font-semibold tabular-nums">
                           <span className={entrada ? 'text-green-700' : 'text-gray-800'}>{noMes ? formatBRL(noMes) : '—'}</span>
                         </td>
-                        <td className="border-b border-gray-200 px-3 text-right text-[13px] font-semibold tabular-nums text-gray-700">{media ? formatBRL(media) : '—'}</td>
+                        <td className="border-b border-gray-200 px-3 text-right text-[13px] font-semibold tabular-nums text-gray-700">{media ? formatBRL(media) : '—'}<MarcaDesde desde={null} /></td>
                         <td className="border-b border-gray-200" />
                         <td className="border-b border-gray-200 pr-2">
                           <span className="flex justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/linha:opacity-100 md:focus-within:opacity-100">
@@ -409,8 +410,8 @@ export default function Categorias() {
                       </td>
                       <td className="border-b border-gray-100 px-3 text-right text-[13px] tabular-nums text-gray-600"
                           title={u?.desde ? `Gasto fixo: a média conta desde ${competenciaCurta(u.desde)}` : undefined}>
-                          {u?.desde && <span className="mr-1 text-[11px] text-gray-400">desde {competenciaCurta(u.desde)}</span>}
                           {u?.media ? formatBRL(u.media) : <span className="text-gray-300">—</span>}
+                          <MarcaDesde desde={u?.desde} />
                         </td>
                       <td className="border-b border-gray-100 px-3 text-right text-[12.5px] text-gray-500">{u?.ultimo ? competenciaCurta(u.ultimo) : <span className="text-gray-300">nunca</span>}</td>
                       <td className="border-b border-gray-100 pr-2">

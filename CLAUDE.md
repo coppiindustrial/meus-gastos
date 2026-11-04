@@ -309,7 +309,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   PARTIR DO 1º MÊS em que aparece no período (`mediaDaCategoria`; o condomínio de quem se mudou em junho não divide
   desde janeiro); o EVENTUAL segue dividido por todos os meses do período (a festa de um mês pesa no ano). A média do
   GRUPO = a soma das médias das categorias (fecha com o Total). Vale no Gastos por grupo, na tabela grupo × mês e na
-  tela Categorias (`usoCategorias`); onde a média começou depois, "desde mmm/aa" ao lado do número.
+  tela Categorias (`usoCategorias`); onde a média começou depois, um RELÓGIO depois do número (`MarcaDesde`,
+  04/11/2026, opção A do mockup — o "desde mmm/aa" escrito empurrava só aquelas linhas e desalinhava a coluna): toda
+  linha, o cabeçalho e o Total reservam o mesmo espaço de 16px; o "desde" fica no hover e no balão, e a legenda diz
+  "◷ média desde o 1º mês (gasto fixo)".
 - Gastos por origem = rosca com UMA COR POR ORIGEM (`--origem-cartao/-fixo/-manual` no index.css — azul, laranja e,
   desde 02/11/2026, CINZA nos avulsos: o violeta se confundia com o "Sobrou" do Saldo do mês ao lado — validadas nos
   dois temas) e o centro que conta a fatia sob o cursor. Ela MEDE a caixa e escolhe o arranjo que cabe (rosca ao

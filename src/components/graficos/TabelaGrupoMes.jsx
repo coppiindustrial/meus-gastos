@@ -9,6 +9,7 @@ import { IconExpandirTudo, IconMaximize, IconMinimize } from '../icons.jsx';
 import { formatBRL } from '../../lib/dinheiro.js';
 import { competenciaCurta, nomeCompetencia } from '../../lib/format.js';
 import useLinhasAnimadas, { atributosLinha } from '../../lib/useLinhasAnimadas.js';
+import MarcaDesde, { IconRelogio, LEGENDA_DESDE } from './MarcaDesde.jsx';
 
 // GRUPO × MÊS (a tabela da Visão geral; 02/11/2026, opção A do mockup "cor do saldo e Grupo × mês interativo"): o
 // "Gastos por tipo" da planilha aberto por mês. Cada grupo abre nas categorias (a animação do DRE). A cor de fundo
@@ -162,7 +163,7 @@ export function TabelaGrupoMes({ grupos, comps, total, porMes, periodo, onMes, a
               </th>
             ))}
             <th className={`${th} ${naColuna('total') ? 'text-gray-900' : 'text-gray-500'}`}>Total</th>
-            <th className={`${th} border-r-0 px-3 ${naColuna('media') ? 'text-gray-900' : 'text-gray-500'}`}>{pct ? '% total' : 'Média'}</th>
+            <th className={`${th} border-r-0 px-3 ${naColuna('media') ? 'text-gray-900' : 'text-gray-500'}`}>{pct ? '% total' : <>Média<span className="inline-block w-4" aria-hidden="true" /></>}</th>
           </tr>
         </thead>
         <tbody>
@@ -188,7 +189,7 @@ export function TabelaGrupoMes({ grupos, comps, total, porMes, periodo, onMes, a
                 </td>
                 <td {...sob(x.id, 'media')} className={`border-b border-gray-100 px-3 text-right tabular-nums ${grupo ? 'text-gray-600' : 'text-gray-500'} ${classeCelula(x.id, 'media')}`}>
                   {pct ? `${pctDe(item.total, total)}%` : (
-                    <>{item.desde && item.desde !== 'parcial' && <span className="mr-1 text-[10.5px] text-gray-400">desde {competenciaCurta(item.desde)}</span>}{reais(item.media)}</>
+                    <>{reais(item.media)}<MarcaDesde desde={item.desde} meses={item.mesesMedia} /></>
                   )}
                 </td>
               </tr>
@@ -252,7 +253,7 @@ function AmpliadoGrupoMes({ onClose, onExportar, ...props }) {
           <span className="inline-flex overflow-hidden rounded-md border border-gray-300 bg-white">
             <BotaoTudo grupos={props.grupos} abertos={abertos} setAbertos={setAbertos} classe={`${BTN} !h-[30px]`} />
           </span>
-          <span className="ml-auto hidden text-[11.5px] text-gray-400 md:inline">{modo === 'pct' ? 'cada célula = a parte do mês' : 'em reais · o tom mais forte é o mês mais caro de cada linha'}</span>
+          <span className="ml-auto hidden items-center gap-1 text-[11.5px] text-gray-400 md:inline-flex">{modo === 'pct' ? 'cada célula = a parte do mês' : <>em reais · o tom mais forte é o mês mais caro de cada linha · <IconRelogio /> {LEGENDA_DESDE}</>}</span>
         </div>
         <div className="min-h-0 flex-1 overflow-auto border-t border-gray-100 [scrollbar-gutter:stable]">
           <TabelaGrupoMes {...props} abertos={abertos} setAbertos={setAbertos} pct={modo === 'pct'} filtro={busca} />
@@ -270,7 +271,7 @@ export default function BlocoGrupoMes({ onExportar, ...props }) {
     <section className="card flex flex-col overflow-hidden !p-0">
       <div className="flex shrink-0 items-center gap-2 px-4 pb-2.5 pt-3">
         <h2 className="m-0 text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500">
-          Grupo × mês <span className="font-medium normal-case tracking-normal text-gray-400">· em reais · o tom mais forte é o mês mais caro de cada linha</span>
+          Grupo × mês <span className="font-medium normal-case tracking-normal text-gray-400">· em reais · o tom mais forte é o mês mais caro de cada linha · <IconRelogio className="inline h-[10px] w-[10px] align-[-1px]" /> {LEGENDA_DESDE}</span>
         </h2>
         <span className="flex-1" />
         {/* O GRUPO DO DRE: os ícones numa caixa só, o nome no tooltip. */}

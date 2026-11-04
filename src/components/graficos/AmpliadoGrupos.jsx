@@ -6,6 +6,7 @@ import { BuscaFaixa } from '../filtros/Segmentos.jsx';
 import BalaoGrafico, { useBalao } from './BalaoGrafico.jsx';
 import Variacao from './Variacao.jsx';
 import { MiniCurva, VoltarGrupos } from './GraficosVisao.jsx';
+import MarcaDesde, { IconRelogio, LEGENDA_DESDE } from './MarcaDesde.jsx';
 import { IconMaximize, IconMinimize } from '../icons.jsx';
 import { variacao } from '../../lib/visaoGeral.js';
 import { formatBRL } from '../../lib/dinheiro.js';
@@ -122,7 +123,7 @@ export default function AmpliadoGrupos({ onClose, grupos, total, meses, comps = 
             <span>Proporção</span>
             <span className="text-right">Total</span>
             <span className="text-right">%</span>
-            <span className="text-right">Média/mês</span>
+            <span className="text-right">Média/mês<span className="inline-block w-4" aria-hidden="true" /></span>
             {comTendencia && <span>Tendência</span>}
             {comVariacao && <span className="whitespace-nowrap text-right">vs. ano ant.</span>}
           </div>
@@ -157,7 +158,7 @@ export default function AmpliadoGrupos({ onClose, grupos, total, meses, comps = 
                       <span className="whitespace-nowrap text-right text-[11.5px] tabular-nums text-gray-500"
                         title={it.desde === 'parcial' ? 'A soma das médias das categorias (a do gasto fixo conta desde o 1º mês dele)'
                           : it.desde ? `Gasto fixo: a média conta desde ${competenciaCurta(it.desde)} (${it.mesesMedia} ${it.mesesMedia === 1 ? 'mês' : 'meses'})` : undefined}>
-                        {it.desde && it.desde !== 'parcial' && <span className="mr-1 text-[10.5px] text-gray-400">desde {competenciaCurta(it.desde)}</span>}{formatBRL(it.media)}
+                        {formatBRL(it.media)}<MarcaDesde desde={it.desde} meses={it.mesesMedia} />
                       </span>
                       {comTendencia && <MiniCurva valores={comps.map((c) => it.meses?.[c] ?? 0)} cor={it.cor} largura={96} altura={20} />}
                       {comVariacao && <span className="flex justify-end"><Variacao v={v} sobeBom={false} titulo="Contra o mesmo período do ano anterior" /></span>}
@@ -177,11 +178,14 @@ export default function AmpliadoGrupos({ onClose, grupos, total, meses, comps = 
               <span className="truncate text-[11.5px] text-gray-400">
                 {termo ? `${lista.length} de ${todos.length} ${nome[1]}` : `${lista.length} ${lista.length === 1 ? nome[0] : nome[1]}`}
               </span>
+              {lista.some((it) => it.desde && it.desde !== 'parcial') && (
+                <span className="hidden items-center gap-1 whitespace-nowrap text-[11px] text-gray-400 md:inline-flex"><IconRelogio /> {LEGENDA_DESDE}</span>
+              )}
             </span>
             <span />
             <span className="whitespace-nowrap text-right font-semibold tabular-nums text-gray-900">{formatBRL(totLista)}</span>
             <span className="text-right text-[11.5px] tabular-nums text-gray-500">{pctDe(totLista)}%</span>
-            <span className="whitespace-nowrap text-right text-[11.5px] tabular-nums text-gray-500">{formatBRL(soma((it) => it.media))}</span>
+            <span className="whitespace-nowrap text-right text-[11.5px] tabular-nums text-gray-500">{formatBRL(soma((it) => it.media))}<span className="inline-block w-4" aria-hidden="true" /></span>
             {comTendencia && <span />}
             {comVariacao && <span className="flex justify-end"><Variacao v={varTotal} sobeBom={false} titulo="Contra o mesmo período do ano anterior" /></span>}
           </div>
