@@ -36,7 +36,9 @@ import { lsSet } from '../lib/storage.js';
 // tela nem botão: ela foi importada uma vez, e a linha dela na aba Histórico abre o pop-up (`ModalPlanilha`).
 
 const COR = { ok: '#22a06b', pl: '#9ca3af', parcial: '#4b8fe2', falta: '#e8a317' };
-const Ico = ({ children, className = 'h-3.5 w-3.5' }) => (
+// Os tamanhos em PIXEL INTEIRO (04/11/2026): em rem, sobre a raiz de 14px, o `h-3.5` dava 12,25px e o `h-6` do botão
+// da célula 21px — o ícone caía a 4,375px da borda, entre pixels, e parecia fora do centro.
+const Ico = ({ children, className = 'h-[14px] w-[14px]' }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
 );
 // O desenho ocupa de y=4 a y=20 (centro 12, o do quadro): antes ia até 21 e, no botão de 24px, o ícone parecia fora do centro.
@@ -129,9 +131,9 @@ function Celula({ cel, col, comp, apagada, onAgir, onAbrir, onDica }) {
           <span className="ml-auto shrink-0">
           <Tooltip label={col.tipo === 'fatura' ? `Importar a fatura ${col.cartao.nome}` : 'Importar o extrato'}>
             <button type="button" onClick={onAgir} aria-label="Importar"
-              className={`botao-celula inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] border transition duration-150 ${
+              className={`botao-celula inline-flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[5px] border transition duration-150 ${
                 cel.estado === 'falta' ? '' : 'opacity-0 focus:opacity-100 group-hover/cel:opacity-100'}`}>
-              <IcoImportar className="block h-3.5 w-3.5" />
+              <IcoImportar className="block h-[14px] w-[14px]" />
             </button>
           </Tooltip>
           </span>
@@ -352,7 +354,7 @@ export default function Importar() {
     if (extrato) setExtrato({ arquivo: extrato });
   };
 
-  const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
+  const ICONE = 'flex h-[32px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
 
   return (
     <div>
