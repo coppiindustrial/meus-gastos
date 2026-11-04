@@ -560,6 +560,14 @@
   .dre-formiga-x, .dre-formiga-y { animation: none; }
 }
 
+/* O OLHO DE OCULTAR VALORES PISCA (fecha e abre) ao alternar — a animação do Gestor (`.icone-pisca` de lá, com a
+   curva `--press`), posta por `animarIcone` (`lib/ocultarValores.js`). */
+.icone-pisca svg { animation: icone-pisca 0.34s cubic-bezier(0.2, 0.8, 0.2, 1); transform-origin: 50% 50%; }
+@keyframes icone-pisca { 45% { transform: scaleY(0.12); } }
+@media (prefers-reduced-motion: reduce) {
+  .icone-pisca svg { animation: none; }
+}
+
 /* ---- IMPRESSÃO ---------------------------------------------------------------------------------
    O PRIMEIRO `@media print` do app, e ele existe para UMA tela: o Relatório Comercial. O caminho
    para PDF aqui é o do navegador (Ctrl+P → Salvar como PDF) — o app não tem biblioteca de PDF, e

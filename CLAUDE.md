@@ -297,6 +297,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (04/11/2026): a linha do Total tem `data-segue` (o `useLinhasAnimadas` a desliza junto com as de baixo; antes pulava
   inteira no 1º quadro ao abrir e no último ao recolher) e a coluna do nome tem LARGURA FIXA (236px: cabe o grupo e a
   categoria — pelo conteúdo, abrir um grupo alargava a coluna e todas as outras andavam 24px).
+- O OLHO DE OCULTAR VALORES (04/11/2026, COPIADO do Gestor, o das telas do celular de lá): no trilho do cabeçalho
+  (e no flutuante), antes do ↻ — `onOcultar`/`oculto` do `GridPersonalizavel`, `IconOlho` em `icons.jsx`. Fechado,
+  todo valor em reais, percentual e número com casas vira "•••" NO QUE A TELA DESENHA (`useMascararValores` em
+  `lib/ocultarValores.js`: um `MutationObserver` no body pega também balões e ampliados); contagens, anos e meses
+  ficam. Lembrado em `visao_ocultar`. Para MOSTRAR, os blocos remontam (`versao` no `key` do `renderWidget`). O
+  olho PISCA ao alternar (`.icone-pisca` no index.css, `animarIcone`) — o `className` do botão não pode mudar com o
+  estado (a cor vai por `aria-pressed:`), senão o React leva a classe da animação embora.
 - O "SOBROU" do Saldo do mês tem cor própria, violeta (`--serie-sobrou`, 02/11/2026): era o verde das entradas.
 - TRÊS BLOCOS NOVOS (03/11/2026, opções A, C e D do mockup "Visão geral · novos gráficos"; escopo do grid `visao_v5`:
   quem tinha a disposição salva os ganha no lugar e ligados — `abaixoDe`/`aoLadoDe`/`emSeguida` no `ESCOPO_ANTIGO`):

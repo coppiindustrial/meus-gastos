@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GridPersonalizavel from '../components/dashboard/GridPersonalizavel.jsx';
 import CardAutoAltura from '../components/dashboard/CardAutoAltura.jsx';
@@ -30,6 +30,7 @@ import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
 import { exportCsv } from '../lib/exportCsv.js';
 import { lsGet, lsSet } from '../lib/storage.js';
+import { useMascararValores } from '../lib/ocultarValores.js';
 import { varCor } from '../lib/varCor.js';
 
 // A VISÃO GERAL (tela inicial) — o Dashboard da planilha refeito no estilo do Gestor: não é a foto de
@@ -49,6 +50,7 @@ const OPCOES_TIPO = [{ value: '', label: 'Todos' }, { value: 'saida', label: 'Ga
 const OPCOES_ORIGEM = [...ORIGENS, ['entrada', 'Entradas']].map(([value, label]) => ({ value, label }));
 const OPCOES_COMPARAR = [{ value: 'anterior', label: 'Ano anterior', chip: 'Comparar: ano anterior' }, { value: 'nada', label: 'Sem comparação', chip: 'Sem comparação' }];
 const LS_COMPARAR = 'visao_comparar';
+const LS_OCULTAR = 'visao_ocultar';
 const ATALHOS = [['O ano todo', []], ['1º tri', [1, 2, 3]], ['2º tri', [4, 5, 6]], ['3º tri', [7, 8, 9]], ['4º tri', [10, 11, 12]]];
 
 // "jan a out de 2026", "jul, set e nov de 2026", "2025 e 2026".
@@ -203,6 +205,16 @@ export default function VisaoGeral() {
   const setComparar = (v) => { setCompararEstado(v); lsSet(LS_COMPARAR, v); };
   const [forma, setFormaEstado] = useState(() => (FORMAS.some((f) => f.id === lsGet(LS_FORMA)) ? lsGet(LS_FORMA) : 'colunas'));
   const setForma = (v) => { setFormaEstado(v); lsSet(LS_FORMA, v); };
+  // O OLHO (04/11/2026, o do Gestor): fechado, todo valor da tela vira "•••" (`useMascararValores`), lembrado no
+  // navegador. Para MOSTRAR de novo os blocos REMONTAM (`versao` no `key`): o React não relê o texto que o "•••" trocou.
+  const [oculto, setOcultoEstado] = useState(() => lsGet(LS_OCULTAR) === 'sim');
+  const [versao, setVersao] = useState(0);
+  const alternarOculto = () => setOcultoEstado((o) => {
+    lsSet(LS_OCULTAR, o ? '' : 'sim');
+    if (o) setVersao((v) => v + 1);
+    return !o;
+  });
+  useMascararValores(oculto);
   const [ampliado, setAmpliado] = useState(false);
   const [gruposAmpliado, setGruposAmpliado] = useState(false);
   const ctrl = useDestaqueSeries();
@@ -514,8 +526,8 @@ export default function VisaoGeral() {
     <>
       <GridPersonalizavel escopo="visao_v5" titulo="Visão geral"
         acessorio={linhas && <span className="hidden text-sm text-gray-500 sm:inline">{textoPer.replace(/^./, (c) => c.toUpperCase())} · {r.meses} {r.meses === 1 ? 'mês' : 'meses'} com lançamentos</span>}
-        catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={renderWidget} abaixo={filtros}
-        pronto={!!linhas} onAtualizar={carregar} atualizando={carregando} />
+        catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={(id) => <Fragment key={`${id}-${versao}`}>{renderWidget(id)}</Fragment>} abaixo={filtros}
+        pronto={!!linhas} onAtualizar={carregar} atualizando={carregando} oculto={oculto} onOcultar={alternarOculto} />
 
       {/* O "Gastos por grupo" AMPLIADO: a lista inteira (grupos ou categorias) no painel do Gestor. */}
       {gruposAmpliado && (

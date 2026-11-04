@@ -9,7 +9,8 @@ import { PageLoading } from '../Spinner.jsx';
 import Checkbox from '../Checkbox.jsx';
 import Tooltip from '../Tooltip.jsx';
 import MiniaturaWidget from './MiniaturaWidget.jsx';
-import { IconAtualizar } from '../icons.jsx';
+import { IconAtualizar, IconOlho } from '../icons.jsx';
+import { animarIcone } from '../../lib/ocultarValores.js';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 
 // O GRID PERSONALIZÁVEL — copiado do Gestor Coppi (`components/dashboard/GridPersonalizavel.jsx`, o
@@ -537,7 +538,9 @@ export function PersonalizarModal({
 // `useAutoRefresh`. Não há estado central no dashboard — cada widget busca por conta própria —, e
 // passar um refresh por props atravessaria dezenas de componentes para resolver um clique.
 // O ícone gira enquanto houver busca em voo (contador do próprio hook), não por um tempo fixo.
-export function TrilhoAcoes({ onPersonalizar, onAtualizar, atualizando = false, flutuante = false }) {
+// O OLHO (04/11/2026, o do Gestor): `onOcultar` liga o botão de ocultar os valores, antes do Atualizar; ele pisca ao
+// alternar (`animarIcone`). Quem esconde é a página (`useMascararValores`).
+export function TrilhoAcoes({ onPersonalizar, onAtualizar, atualizando = false, flutuante = false, oculto = false, onOcultar }) {
   const btn = `inline-flex items-center gap-1.5 rounded-[6px] transition-colors duration-[120ms] ${
     // 36px e não `h-9`: `h-9` é 2,25rem, que sobre a raiz de 87,5% dá 31,5 — ímpar, e num
     // `devicePixelRatio` de 1,5 cai em 47,25 pixels físicos, fora da grade. O número tem de ser
@@ -551,6 +554,18 @@ export function TrilhoAcoes({ onPersonalizar, onAtualizar, atualizando = false, 
           atenção. Quadrado nos dois estados (28 no cabeçalho, 36 flutuando), ambos pares.
           Os dois tamanhos divergem de propósito: no cabeçalho o botão divide a faixa de 60px com o
           título, e flutuando ele é o único alvo sobre os widgets — ali 32px pediam mira. */}
+      {onOcultar && (
+        <Tooltip label={oculto ? 'Mostrar os valores' : 'Ocultar os valores'}>
+          <button type="button" onClick={(e) => { animarIcone(e.currentTarget); onOcultar(); }} aria-pressed={oculto}
+            aria-label={oculto ? 'Mostrar os valores' : 'Ocultar os valores'}
+            // O `className` NÃO muda com o `oculto` (a cor vai pelo `aria-pressed`): o React reescreveria a classe e levaria
+            // junto o `.icone-pisca` que o `animarIcone` acabou de pôr — o olho não piscava.
+            className={`inline-flex items-center justify-center rounded-[6px] text-gray-600 transition-[background-color,transform] duration-[120ms] hover:bg-gray-200 active:scale-90 active:bg-gray-300 aria-pressed:text-gray-900 ${
+              flutuante ? 'h-[36px] w-[36px]' : 'h-[28px] w-[28px]'}`}>
+            <IconOlho fechado={oculto} className={flutuante ? 'h-[18px] w-[18px]' : 'h-[16px] w-[16px]'} />
+          </button>
+        </Tooltip>
+      )}
       <Tooltip label={atualizando ? 'Atualizando…' : 'Recarregar os números'}>
         <button type="button" onClick={onAtualizar} aria-label="Atualizar os números"
           className={`inline-flex items-center justify-center rounded-[6px] transition-colors duration-[120ms] text-gray-600 hover:bg-gray-200 active:bg-gray-300 ${
@@ -601,7 +616,7 @@ export function TrilhoAcoes({ onPersonalizar, onAtualizar, atualizando = false, 
 //   abaixo       — nó renderizado entre a faixa do título e o grid (a faixa de filtros global).
 export default function GridPersonalizavel({
   escopo = 'principal', titulo, acessorio, catalogo, permitidos, renderWidget, acoes,
-  ajustarItem, ocultar, pronto = true, abaixo = null, onAtualizar, atualizando = false,
+  ajustarItem, ocultar, pronto = true, abaixo = null, onAtualizar, atualizando = false, oculto = false, onOcultar,
 }) {
   const confirmar = useConfirmacao();
   const [config, setConfig] = useState(null);
@@ -1080,7 +1095,7 @@ export default function GridPersonalizavel({
         acoes={!edicao && (
           <>
             {acoes}
-            <TrilhoAcoes onPersonalizar={abrirEdicao} onAtualizar={onAtualizar} atualizando={atualizando} />
+            <TrilhoAcoes onPersonalizar={abrirEdicao} onAtualizar={onAtualizar} atualizando={atualizando} oculto={oculto} onOcultar={onOcultar} />
           </>
         )} />
       <div ref={sentinelaRef} className="h-px" aria-hidden="true" />
@@ -1090,7 +1105,7 @@ export default function GridPersonalizavel({
       {/* Gêmeo flutuante do trilho do topo, para quem já rolou a página. */}
       {!edicao && cabecalhoFora && (
         <div className="fixed bottom-6 right-6 z-30 animate-flutuante-in motion-reduce:animate-none">
-          <TrilhoAcoes flutuante onPersonalizar={abrirEdicao} onAtualizar={onAtualizar} atualizando={atualizando} />
+          <TrilhoAcoes flutuante onPersonalizar={abrirEdicao} onAtualizar={onAtualizar} atualizando={atualizando} oculto={oculto} onOcultar={onOcultar} />
         </div>
       )}
 
