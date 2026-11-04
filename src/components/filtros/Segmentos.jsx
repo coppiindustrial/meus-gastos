@@ -3,6 +3,7 @@ import SegmentoFiltro, { GrupoMenu, OpcaoMenu } from './SegmentoFiltro.jsx';
 import SearchInput from '../SearchInput.jsx';
 import Tooltip from '../Tooltip.jsx';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../../lib/format.js';
+import { PERIODOS_FIXOS, rotuloPeriodo } from '../../lib/periodo.js';
 
 // Os segmentos que uma tela monta dentro do `Trilho` (copiados do Gestor, `Segmentos.jsx`). Cada um é
 // um invólucro fino: a regra do filtro (o que é multi, de onde saem as opções) fica na PÁGINA.
@@ -121,7 +122,7 @@ const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
 
 // O miolo do menu é um componente próprio para o ANO nascer do mês escolhido a cada abertura (o corpo do
 // segmento só monta com o menu aberto).
-function MenuMeses({ value, onChange, fechar, hoje }) {
+function MenuMeses({ value, onChange, fechar, hoje, marcar = true }) {
   const [ano, setAno] = useState(() => Number(value.slice(0, 4)));
   return (
     <div className="p-1">
@@ -133,7 +134,7 @@ function MenuMeses({ value, onChange, fechar, hoje }) {
       <div className="grid grid-cols-4 gap-1">
         {MESES_CURTOS.map((m, i) => {
           const c = `${ano}-${String(i + 1).padStart(2, '0')}`;
-          const sel = c === value;
+          const sel = marcar && c === value;
           return (
             <button key={c} type="button" onClick={() => { onChange(c); fechar(); }}
               className={`rounded-[3px] py-[7px] text-[12px] transition-colors ${sel ? 'bg-gray-800 font-semibold text-white'
@@ -163,6 +164,61 @@ export function SegMes({ value, onChange, id = 'mes' }) {
       <Tooltip label={`Próximo mês (${competenciaCurta(addMeses(value, 1))})`}>
         <button type="button" className={BTN_SETA} onClick={() => onChange(addMeses(value, 1))} aria-label="Próximo mês"><Seta /></button>
       </Tooltip>
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------- Mês ou PERÍODO (os Lançamentos, 04/11/2026)
+// O `SegMes` que também escolhe um período maior (`lib/periodo.js`): o menu tem os meses em cima e, depois de uma
+// linha, os últimos 3 / 12 meses (até o mês da tela), os anos com dado e o histórico inteiro. Num período o
+// segmento acende com o nome dele e o ✕ volta ao mês; o ‹ › anda o período (um mês, ou um ano no "Ano").
+// `onChange(periodo, comp)`.
+export function SegPeriodo({ periodo, comp, anos, onChange, id = 'mes' }) {
+  const hoje = competenciaAtual();
+  const noMes = periodo === 'mes';
+  const noAno = periodo.startsWith('ano:');
+  const ano = noAno ? Number(periodo.slice(4)) : null;
+  const textoMes = nomeCompetencia(comp).replace(' de ', '/').replace(/\/(\d{2})(\d{2})$/, '/$2');
+  const valor = noMes ? (comp === hoje ? '' : textoMes) : rotuloPeriodo(periodo, comp);
+  const andar = (n) => (noAno ? onChange(`ano:${ano + n}`, comp) : onChange(periodo, addMeses(comp, n)));
+  const dicaSeta = (n) => (noAno ? `${n < 0 ? 'Ano anterior' : 'Próximo ano'} (${ano + n})`
+    : noMes ? `${n < 0 ? 'Mês anterior' : 'Próximo mês'} (${competenciaCurta(addMeses(comp, n))})`
+      : `${n < 0 ? 'Um mês antes' : 'Um mês depois'} (até ${competenciaCurta(addMeses(comp, n))})`);
+  const setas = periodo !== 'tudo';
+  const opcoes = [
+    ...PERIODOS_FIXOS.map((p) => ({ value: p.value, label: p.label, descricao: `até ${competenciaCurta(comp)}` })),
+    ...anos.map((a) => ({ value: `ano:${a}`, label: `Ano ${a}` })),
+    { value: 'tudo', label: 'Todo o histórico', descricao: 'todos os meses com lançamento' },
+  ];
+  return (
+    <span className="inline-flex shrink-0 items-center">
+      {setas && (
+        <Tooltip label={dicaSeta(-1)}>
+          <button type="button" className={BTN_SETA} onClick={() => andar(-1)} aria-label={dicaSeta(-1)}><Seta volta /></button>
+        </Tooltip>
+      )}
+      <SegmentoFiltro id={id} rotulo="Mês" valor={valor} textoQuieto={noMes && comp === hoje ? textoMes : undefined}
+        largura={232} alturaMenu={250 + opcoes.length * 36}
+        onLimpar={noMes ? (comp === hoje ? undefined : () => onChange('mes', hoje)) : () => onChange('mes', comp)}>
+        {({ fechar }) => (
+          <>
+            <MenuMeses value={comp} marcar={noMes} hoje={hoje} fechar={fechar} onChange={(c) => onChange('mes', c)} />
+            <div className="mx-1 my-1 h-px bg-divisoria" />
+            <div className="px-[9px] pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Período</div>
+            {opcoes.map((o) => (
+              <OpcaoMenu key={o.value} selecionada={o.value === periodo} descricao={o.descricao}
+                onClick={() => { onChange(o.value, comp); fechar(); }}>
+                {o.label}
+              </OpcaoMenu>
+            ))}
+          </>
+        )}
+      </SegmentoFiltro>
+      {setas && (
+        <Tooltip label={dicaSeta(1)}>
+          <button type="button" className={BTN_SETA} onClick={() => andar(1)} aria-label={dicaSeta(1)}><Seta /></button>
+        </Tooltip>
+      )}
     </span>
   );
 }

@@ -43,11 +43,14 @@ const CHAVES = {
   valor: (l) => Number(l.valor_centavos) || 0,
   obs: (l) => (l.obs ? norm(l.obs) : '\uffff'),
 };
-export function ordenarLinhas(linhas, ordem) {
+// `porMes` (a tela num PERÍODO, `lib/periodo.js`): no padrão, o mês mais novo em cima e, dentro dele, o padrão — a
+// grade abre um grupo por mês. Com uma coluna escolhida a ordem vale para o período inteiro (o maior gasto do ano).
+export function ordenarLinhas(linhas, ordem, { porMes = false } = {}) {
   const reais = linhas.filter((l) => !l.rascunho);
   const rascunhos = linhas.filter((l) => l.rascunho);
   const chave = ordem && CHAVES[ordem.col];
   const sinal = ordem?.dir === 'desc' ? -1 : 1;
+  const padrao = porMes ? (a, b) => String(b.competencia ?? '').localeCompare(String(a.competencia ?? '')) || padraoGrade(a, b) : padraoGrade;
   const cmp = chave
     ? (a, b) => {
       const x = chave(a);
@@ -55,7 +58,7 @@ export function ordenarLinhas(linhas, ordem) {
       const d = typeof x === 'number' ? x - y : x.localeCompare(y, 'pt-BR');
       return d ? d * sinal : padraoGrade(a, b);
     }
-    : padraoGrade;
+    : padrao;
   return [...reais.sort(cmp), ...rascunhos];
 }
 

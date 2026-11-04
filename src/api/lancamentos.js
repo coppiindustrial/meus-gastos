@@ -13,6 +13,26 @@ export async function listarDoMes(comp) {
   return linhas.map((l) => ({ ...l, competencia: l.competencia.slice(0, 7) }));
 }
 
+// Os lançamentos de um PERÍODO ({ de, ate } em 'AAAA-MM', null = sem limite) — o período da tela (`lib/periodo.js`).
+// Paginado: o histórico inteiro passa de mil linhas.
+export async function listarPeriodo({ de, ate }) {
+  const linhas = await buscarTudo(() => {
+    let q = supabase.from('lancamentos').select(COLUNAS);
+    if (de) q = q.gte('competencia', competenciaParaBanco(de));
+    if (ate) q = q.lte('competencia', competenciaParaBanco(ate));
+    return q.order('competencia', { ascending: false }).order('data', { ascending: false }).order('id');
+  });
+  return linhas.map((l) => ({ ...l, competencia: l.competencia.slice(0, 7) }));
+}
+
+// O ÍNDICE DA BUSCA (o aviso "mais N em outros meses" e a busca rápida): todos os lançamentos, só o que a busca lê.
+export async function listarParaBusca() {
+  const linhas = await buscarTudo(() => supabase.from('lancamentos')
+    .select('id, data, competencia, tipo, origem, descricao, estabelecimento, obs, valor_centavos, categoria_id, revisar, parcela_atual, parcela_total, categoria:categorias(nome, grupo:grupos(cor)), cartao:cartoes(nome)')
+    .order('id'));
+  return linhas.map((l) => ({ ...l, competencia: l.competencia.slice(0, 7) }));
+}
+
 // Grava um lançamento. Entrada sempre tem origem 'entrada' e não tem cartão nem parcela.
 export function salvarLancamento(l) {
   const entrada = l.tipo === 'entrada';

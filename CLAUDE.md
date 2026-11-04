@@ -59,6 +59,21 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   AMPLIAR A TABELA (03/11/2026, opção A do mockup): o ⤢ no grupo do cabeçalho esconde os cartões do resumo e a grade
   ganha a altura até o fim da janela (`ateOFim`, medida de onde a caixa começa; refeita no resize); ⤡ volta.
   Lembrado em `lancamentos_ampliada`.
+  PROCURAR EM TODOS OS MESES (04/11/2026, opções C + B + D do mockup): (C) a pílula do mês é o `SegPeriodo`
+  (`filtros/Segmentos.jsx`): os meses e, depois de uma linha, últimos 3 / 12 meses (que TERMINAM no mês da tela),
+  os anos com dado e "Todo o histórico" (`lib/periodo.js`, testada; não é lembrado — a tela abre no mês). Num
+  período a grade lê `listarPeriodo` (paginado), agrupa por mês na ordem padrão (`ordenarLinhas` com `porMes`; a
+  faixa presa com o mês, quantos, quanto e "Abrir o mês" — `grupos` de `gruposPorMes`, que não é linha da planilha:
+  os `r` são os de `linhas`), os cartões de cima somam o período (`total` do `CartoesResumo`) e a linha nova entra
+  em `mesDaLinhaNova`. Com uma coluna ordenada, a ordem vale para o período inteiro, sem grupos. (B) Com algo na
+  busca, "Mais N em outros meses" (`outrosMeses` em `lib/buscaLancamentos.js`, a MESMA régua da busca da faixa,
+  `casaTermo`, com os outros filtros): o chip leva ao mês com a linha acesa (`irPara` da grade). (D) A BUSCA RÁPIDA
+  (Ctrl+K ou a lupa da barra, `components/busca/PaletaBusca.jsx` + `lib/useAtalhosGlobais.js`, COPIADOS do Gestor):
+  lançamentos do histórico inteiro (descrição, loja, categoria, cartão, VALOR — "644,37"; régua `casaPalavras`),
+  categorias e telas; abrir leva a `/lancamentos?mes=&id=` (a linha acesa; os filtros limpam), "Ver os N" a
+  `?periodo=tudo&busca=`, a categoria a `?periodo=tudo&cat=` — a tela lê e tira do endereço. As duas buscas leem o
+  ÍNDICE de `lib/useIndiceBusca.js` (todos os lançamentos, lidos uma vez por sessão e relidos depois de gravar,
+  pelo `EVENTO_DADOS`). Os "Abertos recentemente" guardam no navegador só id e mês (nunca descrição nem valor).
   NA LINHA NOVA A CATEGORIA DECIDE O TIPO (30/10/2026): a lista mostra as de gasto e as de entrada, e escolher uma
   de renda faz dela uma entrada (o "+" do valor manda mais). ENTRADA: escolher a categoria preenche a descrição VAZIA
   com o nome dela (`descricaoDaEntrada`, também no formulário; o que foi escrito não muda). CONTA NO VALOR, como no

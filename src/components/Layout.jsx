@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import useEscape from '../lib/useEscape.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { SbChevron, SbPanel, SbPanelR, SbLogout, SbTema, SbSol, SbMonitor, SbCheck } from './sidebarIcons.jsx';
+import { SbBusca, SbChevron, SbPanel, SbPanelR, SbLogout, SbTema, SbSol, SbMonitor, SbCheck } from './sidebarIcons.jsx';
+import PaletaBusca from './busca/PaletaBusca.jsx';
+import useAtalhosGlobais from '../lib/useAtalhosGlobais.js';
 import { GRUPOS, SOLTOS } from '../lib/navegacao.js';
 import useContadores from '../lib/useContadores.js';
 import { TEMAS, useTema } from '../lib/tema.js';
@@ -10,8 +12,8 @@ import Tooltip from './Tooltip.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 import { lsGet, lsSet } from '../lib/storage.js';
 
-// A BARRA LATERAL do Gestor Coppi (components/Layout.jsx de lá), sem o que este app não tem: sino,
-// buscador, atalhos de teclado e troca de senha. Ganhou o modo CELULAR: abaixo de `md` (768px) a
+// A BARRA LATERAL do Gestor Coppi (components/Layout.jsx de lá), sem o que este app não tem: sino, atalhos Alt+N e
+// troca de senha. O BUSCADOR (Ctrl+K ou a lupa, 04/11/2026) é o de lá, nos lançamentos: `busca/PaletaBusca.jsx`. Ganhou o modo CELULAR: abaixo de `md` (768px) a
 // barra some e vira um menu que abre por cima, pelo botão ☰ da faixa do topo.
 
 const LS_COLLAPSED = 'sidebar_recolhida';
@@ -156,6 +158,8 @@ export default function Layout({ children }) {
   const [flyout, setFlyout] = useState(null); // grupo com flyout aberto (menu recolhido)
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [menuMovel, setMenuMovel] = useState(false); // a barra aberta por cima, no celular
+  const [buscaOpen, setBuscaOpen] = useState(false);
+  useAtalhosGlobais({ alternarBusca: () => setBuscaOpen((o) => !o) });
   const userMenuRef = useRef(null);
 
   // No celular a barra é sempre a expandida: recolhida não cabe o texto, e o espaço é da tela.
@@ -208,6 +212,16 @@ export default function Layout({ children }) {
   const itemActive = (it) => (it.to === '/' ? pathname === '/' : pathname.startsWith(it.to));
   const groupActive = (grp) => grp.items.some(itemActive);
 
+  // A LUPA da busca rápida — o botão do Gestor (ao lado do sino de lá; aqui, ao lado do recolher).
+  const Lupa = ({ className = 'w-[30px] h-[30px]' }) => (
+    <Tooltip label="Buscar (Ctrl+K)">
+      <button type="button" onClick={() => { setMenuMovel(false); setBuscaOpen(true); }} aria-label="Buscar"
+        className={`flex items-center justify-center rounded-lg text-hx-8a919c hover:bg-hx-e7e9ef hover:text-hx-20262f transition shrink-0 ${className}`}>
+        <SbBusca className="h-[18px] w-[18px]" />
+      </button>
+    </Tooltip>
+  );
+
   const Avatar = ({ size = 'h-[34px] w-[34px]' }) => (
     <div className={`${size} rounded-[9px] shrink-0 flex items-center justify-center text-white text-[12px] font-bold`}
       style={{ background: 'linear-gradient(135deg,#414d8c,rgba(65,77,140,.75))' }}>
@@ -224,6 +238,7 @@ export default function Layout({ children }) {
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
         </button>
         <Marca />
+        <Lupa className="h-9 w-9" />
       </header>
 
       {/* Véu do menu do celular. */}
@@ -255,6 +270,7 @@ export default function Layout({ children }) {
               </Link></Tooltip>
             </div>
             <div className="flex flex-col items-center gap-[3px] pt-2 pb-2.5">
+              <Lupa className="w-9 h-[34px]" />
               <Tooltip label="Expandir menu"><button onClick={toggleCollapsed}
                 className="flex items-center justify-center w-9 h-[34px] rounded-lg text-hx-8a919c hover:bg-hx-e7e9ef hover:text-hx-20262f transition">
                 <SbPanelR className="h-5 w-5" />
@@ -265,6 +281,7 @@ export default function Layout({ children }) {
         ) : (
           <div className="flex items-center gap-2.5 px-3 h-[60px] border-b border-hx-eef0f2 overflow-hidden">
             <Marca />
+            {!menuMovel && <Lupa />}
             <Tooltip label={menuMovel ? 'Fechar menu' : 'Recolher menu'}><button
               onClick={menuMovel ? () => setMenuMovel(false) : toggleCollapsed}
               className="flex items-center justify-center w-[30px] h-[30px] rounded-lg text-hx-8a919c hover:bg-hx-e7e9ef hover:text-hx-20262f transition shrink-0">
@@ -409,6 +426,7 @@ export default function Layout({ children }) {
       <main className="flex-1 min-w-0 overflow-x-clip flex flex-col">
         <div className="p-6 w-full flex-1"><ErrorBoundary key={pathname}>{children}</ErrorBoundary></div>
       </main>
+      <PaletaBusca aberto={buscaOpen} onFechar={() => setBuscaOpen(false)} />
     </div>
   );
 }

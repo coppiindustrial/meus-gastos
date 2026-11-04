@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import MenuContexto from '../MenuContexto.jsx';
 import BordaCopia, { bordaDaCopia, medirCopia } from './BordaCopia.jsx';
@@ -16,7 +16,7 @@ import {
   preencherAbaixo, resumoSelecao, textoDaFaixa, textoDasFaixas, textoOrigem,
 } from '../../lib/planilha.js';
 import { formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
-import { competenciaAtual, formatDate, todayISO } from '../../lib/format.js';
+import { competenciaAtual, formatDate, nomeCompetencia, todayISO } from '../../lib/format.js';
 import posicionarPopover from '../../lib/posicionarPopover.js';
 import { copiarTexto } from '../../lib/copiar.js';
 import {
@@ -75,7 +75,12 @@ function textoEdicao(l, c) {
 // `linhas`: as da tela (filtradas, na ordem mostrada, com os rascunhos). `todas`/`setTodas`: a lista
 // inteira do mês, que é da página (os indicadores e os filtros saem dela).
 // `ateOFim`: a tabela ampliada (o ⤢ dos Lançamentos) — a caixa vai até o fim da janela, medida de onde ela começa.
-export default function GradeLancamentos({ linhas, todas, setTodas, categorias, comp, onAbrir, onRecarregar, onCategoriaCriada, ordem = null, onOrdenar, ateOFim = false }) {
+// `grupos` (a tela num PERÍODO, na ordem padrão): o Map de `gruposPorMes` — antes da 1ª linha de cada mês, uma faixa
+// presa sob o cabeçalho com o mês, quantos e quanto; `onAbrirMes(comp)` é o "Abrir o mês" dela. A faixa não é linha
+// da planilha: os índices (`r`) continuam sendo os de `linhas`. `comp` é o mês em que a LINHA NOVA entra.
+// `irPara` ({ id, n }): seleciona a linha daquele lançamento e a traz ao meio (o aviso dos outros meses e a busca
+// rápida); `n` muda a cada pedido.
+export default function GradeLancamentos({ linhas, todas, setTodas, categorias, comp, onAbrir, onRecarregar, onCategoriaCriada, ordem = null, onOrdenar, ateOFim = false, grupos = null, onAbrirMes, irPara = null }) {
   const toast = useToast();
   const todasRef = useRef(todas);
   todasRef.current = todas;
@@ -159,6 +164,20 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
 
   // Trocar de mês tira a borda da cópia (as linhas são outras).
   useEffect(() => { setCopia(null); }, [comp]);
+
+  // IR PARA um lançamento (`irPara`): quando a linha dele chega, ela vira a célula ativa (na descrição), no meio.
+  const irParaFeito = useRef(null);
+  useEffect(() => {
+    if (!irPara || irParaFeito.current === irPara.n) return;
+    const r = linhas.findIndex((l) => l.id === irPara.id);
+    if (r < 0) return;
+    irParaFeito.current = irPara.n;
+    setSel({ r, c: 1 });
+    setExt(null);
+    setOutras([]);
+    focar();
+    requestAnimationFrame(() => caixaRef.current?.querySelector(`[data-cel="${r}:1"]`)?.scrollIntoView({ block: 'center' }));
+  }, [irPara, linhas]);
 
   useEffect(() => {
     if (!selo) return undefined;
@@ -832,7 +851,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
           colarTexto(e.clipboardData?.getData('text/plain') ?? '');
         }}
         className={`grade-lancamentos ${alturaCheia ? '' : 'max-h-[calc(100vh-300px)]'} min-h-[260px] overflow-auto rounded-t-lg border border-gray-300 bg-white outline-none focus-visible:ring-0`}
-        style={{ scrollPaddingTop: 34, scrollPaddingLeft: 44, ...(alturaCheia ? { height: alturaCheia } : null) }}>
+        style={{ scrollPaddingTop: grupos ? 62 : 34, scrollPaddingLeft: 44, ...(alturaCheia ? { height: alturaCheia } : null) }}>
         <table className="table-fixed border-separate border-spacing-0" style={{ width: '100%', minWidth: larguraTotal }}>
           <colgroup>
             <col style={{ width: 44 }} />
@@ -874,8 +893,32 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
           <tbody>
             {[...linhas, null].map((l, r) => {
               const acesa = vis && faixas.some((f) => r >= f.r0 && r <= f.r1);
+              const grupo = grupos?.get(r);
               return (
-                <tr key={l?.id ?? 'branco'} className={l?.rascunho || !l ? 'bg-hx-fbfcfd' : ''}>
+                <Fragment key={l?.id ?? 'branco'}>
+                {grupo && (
+                  <tr>
+                    <td colSpan={COLUNAS.length + 1}
+                      className="sticky top-[33px] z-[15] h-7 border-b border-gray-300 bg-hx-f3f4f6 p-0 text-[12px]">
+                      <div className="flex h-full items-center gap-2 px-3">
+                        <span className="font-semibold text-gray-800">{nomeCompetencia(grupo.competencia)}</span>
+                        <span className="text-gray-500">· {plural(grupo.n, 'lançamento', 'lançamentos')}</span>
+                        {onAbrirMes && (
+                          <button type="button" tabIndex={-1} onMouseDown={(e) => e.preventDefault()} onClick={() => onAbrirMes(grupo.competencia)}
+                            className="ml-1 rounded px-1.5 py-0.5 text-[11.5px] font-medium text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800">
+                            Abrir o mês ↗
+                          </button>
+                        )}
+                        <span className="flex-1" />
+                        <span className="tabular-nums text-gray-600">
+                          {grupo.entradas > 0 && <><span className="font-semibold text-green-700">+ {formatBRL(grupo.entradas)}</span><span className="mx-1.5 text-gray-400">·</span></>}
+                          <span className="font-semibold text-gray-800">{formatBRL(grupo.gastos)}</span>
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                <tr className={l?.rascunho || !l ? 'bg-hx-fbfcfd' : ''}>
                   <td onMouseDown={(e) => selecionarLinhas(e, r)} onContextMenu={(e) => { if (!naSelecao(faixas, r, 0)) selecionarLinhas(e, r); abrirMenu(e, r, 0); }}
                     style={acesa ? { boxShadow: `inset -2px 0 0 ${AZUL}` } : undefined}
                     className={`sticky left-0 z-10 h-8 cursor-pointer select-none border-b border-r border-gray-200 text-center text-[11px] tabular-nums ${
@@ -884,6 +927,7 @@ export default function GradeLancamentos({ linhas, todas, setTodas, categorias, 
                   </td>
                   {COLUNAS.map((_, c) => celula(l, r, c))}
                 </tr>
+                </Fragment>
               );
             })}
           </tbody>

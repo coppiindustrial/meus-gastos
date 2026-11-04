@@ -136,11 +136,13 @@ const SOBE_E_BOM = { entradas: true, gastos: false, saldo: true };
 
 // O TOPO DOS LANÇAMENTOS. `serie`: [{ competencia, entradas, gastos, saldo }] do mais antigo ao atual
 // (o último é o da tela). `tipo`: o filtro de tipo da tela ('' | 'entrada' | 'saida'); `onTipo(t)` o troca.
-export default function CartoesResumo({ serie, tipo, onTipo, onMes }) {
+// `total` (a tela num PERÍODO): { entradas, gastos, saldo } do período inteiro — o número do cartão; a curva são os
+// meses do período e não há a pílula de variação (não há "o mês de antes" de um período).
+export default function CartoesResumo({ serie, tipo, onTipo, onMes, total = null }) {
   const cartao = (chave, ativo, onClicar, titulo) => {
     const vals = serie.map((m) => m[chave]);
-    const atual = vals[vals.length - 1];
-    const antes = vals.length > 1 ? vals[vals.length - 2] : null;
+    const atual = total ? total[chave] : vals[vals.length - 1];
+    const antes = !total && vals.length > 1 ? vals[vals.length - 2] : null;
     // A média só dos meses que têm o valor (o saldo: os que têm alguma entrada ou gasto), sem o mês em andamento.
     const m = mediaPorMes(serie, chave, { emAndamento: competenciaAtual(), presente: chave === 'saldo' ? (x) => x.entradas > 0 || x.gastos > 0 : undefined });
     return (
