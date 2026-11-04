@@ -153,7 +153,9 @@ export function TabelaGrupoMes({ grupos, comps, total, porMes, periodo, onMes, a
       <table className="w-full border-separate border-spacing-0 text-[12.5px]" style={{ minWidth: 300 + comps.length * 74 }}>
         <thead>
           <tr>
-            <th className={`${th0} left-0 z-30 border-r-gray-200 px-3 text-left text-gray-500`}>Grupo</th>
+            {/* LARGURA FIXA (04/11/2026): cabe o grupo (até 200px) e a categoria (recuo de 38 + até 180) — com a largura
+                pelo conteúdo, abrir um grupo alargava a coluna e TODAS as outras andavam 24px de uma vez */}
+            <th className={`${th0} left-0 z-30 border-r-gray-200 px-3 text-left text-gray-500`} style={{ width: 236, minWidth: 236 }}>Grupo</th>
             {comps.map((c) => (
               <th key={c} className={`${th} ${naColuna(c) ? 'text-gray-900' : 'text-gray-500'}`}>
                 {comps.length > 12 ? competenciaCurta(c) : MESES_CURTOS[Number(c.slice(5)) - 1]}
@@ -192,7 +194,7 @@ export function TabelaGrupoMes({ grupos, comps, total, porMes, periodo, onMes, a
               </tr>
             );
           })}
-          <tr className="bg-hx-f9fafb font-semibold">
+          <tr data-segue="" className="bg-hx-f9fafb font-semibold">
             <td className={`sticky left-0 z-10 h-8 border-r border-gray-200 bg-hx-f9fafb px-3 text-gray-800 ${naLinha('total') ? 'gm-acesa' : ''}`}>Total de gastos</td>
             {comps.map((c) => (
               <td key={c} {...sob('total', c)} onClick={() => porMes[c] && onMes?.(c)}

@@ -119,6 +119,16 @@ export default function useLinhasAnimadas(todas, visiveis, caixaRef) {
       }
     });
 
+    // O QUE VEM DEPOIS DAS LINHAS (`data-segue`, a linha do Total do Grupo × mês, 04/11/2026) desliza junto com as de
+    // baixo: sem isto ele pulava inteiro no primeiro quadro ao abrir e no último ao recolher (o "soco").
+    if (s || e) {
+      caixa.querySelectorAll('[data-segue]').forEach((el) => {
+        el.style.position = 'relative';
+        el.style.zIndex = '11';
+        animacoes.current.push({ el, anim: el.animate([{ transform: `translateY(${-e}px)` }, { transform: `translateY(${-s}px)` }], opcoes) });
+      });
+    }
+
     // A CAIXA ACOMPANHA O DESLIZE: a altura anima de onde estava até onde vai ficar. O `overflowY:
     // hidden` durante o gesto impede uma barra de rolagem de aparecer enquanto o conteúdo está maior.
     const maxInterno = Number.isFinite(maxH) ? maxH - moldura : Infinity;
