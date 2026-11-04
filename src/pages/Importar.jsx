@@ -121,8 +121,9 @@ function Celula({ cel, col, comp, apagada, onAgir, onAbrir, onDica }) {
           <span className="ml-auto shrink-0">
             <Tooltip label="Ver os lançamentos do mês">
               <button type="button" onClick={onAbrir} aria-label="Ver os lançamentos do mês"
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] border border-gray-200 bg-white text-gray-600 opacity-0 transition hover:bg-gray-50 focus:opacity-100 group-hover/cel:opacity-100">
-                <IconAbrir className="h-3 w-3" />
+                className="inline-flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[5px] border border-gray-200 bg-white text-gray-600 opacity-0 transition hover:bg-gray-50 focus:opacity-100 group-hover/cel:opacity-100">
+                {/* o mesmo tamanho do ↓ de importar (botão de 24px, ícone de 14px a 5px de cada lado, traço 2) */}
+                <IconAbrir className="block h-[14px] w-[14px] stroke-2" />
               </button>
             </Tooltip>
           </span>
