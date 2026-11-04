@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agrupar, ordenarGrupos, planoClassificar, problemaDaEscolha, quantasPega } from '../src/lib/pendencias.js';
+import { agrupar, ordenarGrupos, palavraDePartida, planoClassificar, problemaDaEscolha, quantasPega } from '../src/lib/pendencias.js';
 
 // Dados FICTÍCIOS.
 const P = (id, data, estabelecimento, valor_centavos, cartao = 'XP') => ({ id, data, estabelecimento, descricao: estabelecimento, valor_centavos, cartao: cartao ? { nome: cartao } : null });
@@ -46,4 +46,10 @@ test('planoClassificar: a regra pega os não escolhidos; o escolhido fica com a 
   assert.equal(plano.lancamentos, 2);
   // sem categoria não conta
   assert.equal(planoClassificar(g, { 'sushi kazu': { categoriaId: '', palavra: 'SUSHI' } }, pend).passos.length, 0);
+});
+
+test('palavraDePartida: o nome do estabelecimento, menos no estorno (só valores negativos), que começa sem regra', () => {
+  assert.equal(palavraDePartida({ nome: 'UBER *TRIP', itens: [{ valor_centavos: 2500 }, { valor_centavos: 1800 }] }), 'UBER *TRIP');
+  assert.equal(palavraDePartida({ nome: 'Ajuste a crédito', itens: [{ valor_centavos: -27524 }] }), '');
+  assert.equal(palavraDePartida({ nome: 'Loja', itens: [{ valor_centavos: 5000 }, { valor_centavos: '-5000' }] }), 'Loja'); // compra e estorno juntos
 });

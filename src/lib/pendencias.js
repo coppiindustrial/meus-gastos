@@ -37,6 +37,12 @@ export function ordenarGrupos(grupos, ordem = 'compras') {
   return [...grupos].sort(f);
 }
 
+// A PALAVRA DE PARTIDA da coluna Regra (04/11/2026, opção A do mockup "Pendências · regra vazia"): o nome do
+// estabelecimento — o que se repete (Uber, mercado) ganha a regra pronta —, menos no ESTORNO / CRÉDITO (só valores
+// negativos, migration 012): quase sempre é caso único ("Ajuste a crédito"), e uma regra mandaria todo ajuste futuro
+// para a mesma categoria. Ele começa SEM regra; o "+ criar regra" da linha traz o nome de volta.
+export const palavraDePartida = (g) => (g.itens.length && g.itens.every((p) => Number(p.valor_centavos) < 0) ? '' : g.nome);
+
 // Quantas pendências a palavra-chave pega (pode ser mais que o grupo: "UBER" pega todos os Uber).
 export const quantasPega = (palavra, pendencias) => (palavra.trim() ? pendencias.filter((p) => regraPega(palavra.trim(), nomeDe(p))).length : 0);
 

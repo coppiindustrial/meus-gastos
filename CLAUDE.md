@@ -139,6 +139,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (`desclassificar` + apaga as regras criadas). Marcar várias → "Categoria para as N". "Não classificar agora", a
   primeira opção da lista, tira a escolha (o valor '-' só existe na lista). Filtros: busca, cartão
   (ou Extrato), ordem (lembrada). Cabeçalho: ☰ Regras de classificação · ▾ Exportar CSV + "Classificar N".
+  A REGRA VAZIA (04/11/2026, opção A do mockup "Pendências · regra vazia"): o ESTORNO (só valores negativos) começa SEM
+  regra (`palavraDePartida`, testada — uma regra "Ajuste a crédito" mandaria todo ajuste futuro para a mesma
+  categoria), com a marca "estorno" e o "+ criar regra" no campo tracejado; com palavra, o ✕ do campo a tira. O
+  rodapé diz QUAIS regras nascem ("1 regra nova (UBER *TRIP)" ou "sem regra nova") antes de gravar.
 
 ## Cartões e Regras de classificação (30/10/2026, opção A dos mockups "· overhaul")
 

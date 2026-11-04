@@ -18,13 +18,17 @@ import { formatBRL } from '../lib/dinheiro.js';
 import { formatDate } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
 import { exportCsv } from '../lib/exportCsv.js';
-import { agrupar, fonteDe, nomeDe, ORDENS, ordenarGrupos, planoClassificar, problemaDaEscolha, quantasPega } from '../lib/pendencias.js';
+import {
+  agrupar, fonteDe, nomeDe, ORDENS, ordenarGrupos, palavraDePartida, planoClassificar, problemaDaEscolha, quantasPega,
+} from '../lib/pendencias.js';
 
 // REVISAR PENDÊNCIAS (opção A do mockup "Revisar pendências · a tabela", 30/10/2026): os lançamentos importados (fatura
 // ou extrato) que nenhuma regra classificou, UMA LINHA POR ESTABELECIMENTO, e a categoria escolhida NA PRÓPRIA LINHA
 // (o `SeletorCategoria`) — sem modal. A coluna Regra já vem com o nome e diz quantas pendências pega; apagar o texto =
 // só estas compras, sem regra. Escolher não grava: a linha fica marcada e "Classificar N" grava tudo de uma vez
 // (`planoClassificar`, testado), com "Desfazer" para a última vez. Marcar várias e escolher uma categoria vale para todas.
+// A REGRA VAZIA (04/11/2026, opção A do mockup): o ESTORNO começa sem regra (`palavraDePartida`) e tem o "+ criar
+// regra"; com palavra, o ✕ a tira num clique; o rodapé diz QUAIS regras nascem antes de gravar.
 
 const LS_ORDEM = 'pendencias_ordem';
 // TIRAR A ESCOLHA (30/10/2026, a pedido): a primeira opção da lista desfaz a categoria escolhida na linha (para
@@ -71,14 +75,14 @@ export default function Pendencias() {
   const grupos = useMemo(() => ordenarGrupos(todos, ordem)
     .filter((g) => (!t || g.chave.includes(t)) && (!fonte || g.itens.some((p) => fonteDe(p) === fonte))), [todos, ordem, t, fonte]);
 
-  // A escolha de cada grupo: a da pessoa ou a de partida (sem categoria, a palavra = o nome).
-  const escolhaDe = (g) => escolhas[g.chave] ?? { categoriaId: '', palavra: g.nome };
+  // A escolha de cada grupo: a da pessoa ou a de partida (sem categoria; a palavra = o nome, menos no estorno).
+  const escolhaDe = (g) => escolhas[g.chave] ?? { categoriaId: '', palavra: palavraDePartida(g) };
   const escolher = (chaves, campos) => setEscolhas((e) => {
     const n = { ...e };
-    chaves.forEach((k) => { const g = todos.find((x) => x.chave === k); n[k] = { ...(e[k] ?? { categoriaId: '', palavra: g?.nome ?? '' }), ...campos }; });
+    chaves.forEach((k) => { const g = todos.find((x) => x.chave === k); n[k] = { ...(e[k] ?? { categoriaId: '', palavra: g ? palavraDePartida(g) : '' }), ...campos }; });
     return n;
   });
-  const todasEscolhas = useMemo(() => Object.fromEntries(todos.map((g) => [g.chave, escolhas[g.chave] ?? { categoriaId: '', palavra: g.nome }])), [todos, escolhas]);
+  const todasEscolhas = useMemo(() => Object.fromEntries(todos.map((g) => [g.chave, escolhas[g.chave] ?? { categoriaId: '', palavra: palavraDePartida(g) }])), [todos, escolhas]);
   const plano = useMemo(() => planoClassificar(todos, todasEscolhas, pendencias ?? []), [todos, todasEscolhas, pendencias]);
   const nEscolhidos = plano.passos.length;
   const problemas = useMemo(() => new Map(plano.passos.map((p) => [p.chave, problemaDaEscolha(todos.find((g) => g.chave === p.chave), todasEscolhas[p.chave])]).filter(([, m]) => m)), [plano, todos, todasEscolhas]);
@@ -250,6 +254,7 @@ export default function Pendencias() {
                         <td className={td}>
                           <span className="flex min-w-0 items-center gap-2">
                             <span className="truncate font-semibold text-gray-800" title={g.nome}>{g.nome}</span>
+                            {g.total < 0 && <span className="shrink-0 rounded-[3px] bg-hx-dcfce7 px-1 py-px text-[10.5px] font-semibold text-hx-166534">estorno</span>}
                             <span className="inline-grid h-[18px] min-w-[20px] shrink-0 place-items-center rounded-full bg-gray-100 px-1.5 text-[11px] font-semibold text-gray-600">{g.itens.length}</span>
                           </span>
                         </td>
@@ -264,9 +269,21 @@ export default function Pendencias() {
                         </td>
                         <td className={td}>
                           <span className="flex items-center gap-2">
-                            <input className={`input !h-8 min-w-0 flex-1 text-[12.5px] ${problema ? '!border-hx-e5484d' : ''}`} value={e.palavra}
-                              placeholder="sem regra (só estas)" title={problema ?? undefined}
-                              onChange={(ev) => escolher([g.chave], { palavra: ev.target.value })} />
+                            {/* com palavra: o ✕ dentro do campo tira a regra; vazio (tracejado): "+ criar regra" traz o nome */}
+                            <span className="relative flex min-w-0 flex-1 items-center">
+                              <input className={`input !h-8 min-w-0 flex-1 text-[12.5px] ${e.palavra ? '!pr-8' : '!border-dashed !bg-transparent !pr-24'} ${problema ? '!border-hx-e5484d' : ''}`} value={e.palavra}
+                                placeholder={g.itens.length === 1 ? 'sem regra (só este)' : 'sem regra (só estas)'} title={problema ?? undefined}
+                                onChange={(ev) => escolher([g.chave], { palavra: ev.target.value })} />
+                              {e.palavra ? (
+                                <button type="button" onClick={() => escolher([g.chave], { palavra: '' })} title="Sem regra (só estas compras)" aria-label="Sem regra"
+                                  className="absolute right-1.5 inline-flex h-5 w-5 items-center justify-center rounded-[4px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700">
+                                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                                </button>
+                              ) : (
+                                <button type="button" onClick={() => escolher([g.chave], { palavra: g.nome })} title={`Criar a regra "${g.nome}"`}
+                                  className="absolute right-1.5 whitespace-nowrap rounded-[4px] px-1.5 py-0.5 text-[11.5px] font-medium text-gray-600 underline-offset-2 transition-colors hover:bg-gray-100 hover:text-gray-900 hover:underline">+ criar regra</button>
+                              )}
+                            </span>
                             <span className={`w-[52px] shrink-0 text-right text-[11px] ${problema ? 'text-hx-c0393d' : 'text-gray-500'}`}>
                               {problema ? 'não pega' : e.palavra.trim() ? <>pega <b className="text-gray-800">{pega}</b></> : '—'}
                             </span>
@@ -297,7 +314,7 @@ export default function Pendencias() {
                   {nEscolhidos ? (
                     <><b className="font-semibold text-hx-166534">{plural(nEscolhidos, 'escolhida', 'escolhidas')}</b>
                       {` · ${plural(plano.lancamentos, 'lançamento', 'lançamentos')}`}
-                      {plano.regras ? ` · ${plural(plano.regras, 'regra nova', 'regras novas')}` : ''}
+                      {plano.regras ? ` · ${plural(plano.regras, 'regra nova', 'regras novas')} (${plano.passos.filter((p) => p.regra).slice(0, 3).map((p) => p.regra).join(', ')}${plano.regras > 3 ? '…' : ''})` : ' · sem regra nova'}
                       {plano.deOutros ? ` · ${plano.deOutros} de outros estabelecimentos (a regra pega)` : ''} · ainda não gravado</>
                   ) : ultimo ? (
                     <>Classificou {plural(ultimo.n, 'lançamento', 'lançamentos')}. <button type="button" className="underline underline-offset-2 hover:text-gray-800" onClick={desfazer} disabled={salvando}>Desfazer</button></>
