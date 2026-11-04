@@ -6,6 +6,7 @@ import posicionarPopover from '../../lib/posicionarPopover.js';
 import useEscape from '../../lib/useEscape.js';
 import { brlCurto, formatBRL } from '../../lib/dinheiro.js';
 import { nomeCompetencia } from '../../lib/format.js';
+import { useNoCelular } from '../../lib/celular.js';
 
 // O AVISO "AGORA" DA VISÃO GERAL (a opção A do mockup): a linha do widget "Alertas" do Dashboard do
 // Gestor (`components/dashboard/Alertas.jsx`) — o título, um divisor e as pendências como PÍLULAS no tom
@@ -50,6 +51,29 @@ export default function AvisoAgora({ hoje, pendentes, revisar, parcelasProx, onL
   const nFixos = meses.reduce((s, c) => s + pendentes[c].length, 0);
   const proximo = parcelasProx ? mesDe(parcelasProx.competencia).toLowerCase() : null;
   const tom = revisar ? GRAVE : nFixos ? MEDIO : null;
+  // NO CELULAR (só para ver, 04/11/2026) as pílulas só INFORMAM: lançar o fixo e revisar ficam no computador — o
+  // menu com "Lançar" e o atalho para as Pendências saem.
+  const soLer = useNoCelular();
+
+  if (soLer) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2.5">
+        <span className="mr-0.5 text-[13px] font-semibold text-gray-800">{mesDe(hoje)}</span>
+        {!tom && <span className="text-[12.5px] text-gray-500">em dia — nada a lançar ou revisar</span>}
+        {nFixos > 0 && (
+          <button type="button" onClick={() => navigate('/fixos')} className={PILULA} style={{ background: MEDIO.bg, color: MEDIO.cor }}>
+            {plural(nFixos, 'fixo a lançar', 'fixos a lançar')}
+          </button>
+        )}
+        {revisar > 0 && <span className={`${PILULA} cursor-default`} style={{ background: GRAVE.bg, color: GRAVE.cor }}>{plural(revisar, 'a revisar', 'a revisar')}</span>}
+        {parcelasProx && (
+          <span className={`${PILULA} cursor-default`} style={{ background: ESTADO.bg, color: ESTADO.cor }}>
+            {brlCurto(parcelasProx.total)} em parcelas de {proximo}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[58px] items-center px-5">

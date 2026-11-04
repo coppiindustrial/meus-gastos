@@ -23,7 +23,9 @@ import {
 } from '../api/fixos.js';
 import { matrizDoAno, pendentesPorMes, recorrenciasDoHistorico, ultimoLancado } from '../lib/fixos.js';
 import { formatBRL, parseValor, valorParaCampo } from '../lib/dinheiro.js';
-import { competenciaAtual, competenciaCurta } from '../lib/format.js';
+import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
+import { useNoCelular, useSlotTopo } from '../lib/celular.js';
+import { createPortal } from 'react-dom';
 import { exportCsv } from '../lib/exportCsv.js';
 import { lsGet, lsSet } from '../lib/storage.js';
 
@@ -136,8 +138,94 @@ function DoHistorico({ sugeridas, categorias, onCriado }) {
 const OPCOES_SITUACAO = [{ value: 'ativos', label: 'Só os ativos', chip: 'Ativos' }, { value: '', label: 'Todos' }, { value: 'inativos', label: 'Só os inativos', chip: 'Inativos' }];
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 
+// NO CELULAR (só para ver, 04/11/2026, o mockup "Meus Gastos no celular"): no lugar da matriz de editar, o MÊS em lista
+// — cada fixo com a situação (lançado, a lançar com o sugerido, previsto, não teve) e quanto do mês já entrou — e o ano
+// em colunas curtas (tocar num mês o abre). O mês na segunda linha do topo (‹ chip ›). Lançar fica no computador.
+function FixosMovel({ recs, lancs, pulados, hoje }) {
+  const slotTopo = useSlotTopo();
+  const [comp, setComp] = useState(hoje);
+  const ano = Number(comp.slice(0, 4));
+  const matriz = useMemo(() => matrizDoAno(recs, lancs, ano, hoje, pulados ?? []), [recs, lancs, ano, hoje, pulados]);
+  const i = matriz.comps.indexOf(comp);
+  const linhas = matriz.linhas.map((l) => ({ l, cel: l.celulas[i] })).filter((x) => x.cel.estado !== 'fora');
+  const lancados = linhas.filter((x) => x.cel.estado === 'lancado');
+  const totalLanc = lancados.reduce((t, x) => t + x.cel.valor, 0);
+  const previsto = linhas.reduce((t, x) => t + (x.cel.estado === 'lancado' ? x.cel.valor : x.cel.estado === 'pulado' ? 0 : Number(x.cel.sugerido ?? 0)), 0);
+  const contam = linhas.filter((x) => x.cel.estado !== 'pulado').length;
+  const maxAno = Math.max(1, ...matriz.comps.map((c) => matriz.totais[c]));
+  const SITUACAO = {
+    lancado: ['lançado', 'bg-hx-dcfce7 text-hx-166534'],
+    pendente: ['a lançar', 'bg-hx-fdf3d9 text-hx-9a6f00'],
+    futuro: ['previsto', 'bg-gray-100 text-gray-500'],
+    pulado: ['não teve', 'bg-gray-100 text-gray-400'],
+  };
+  const seta = (n) => (
+    <button type="button" onClick={() => setComp(addMeses(comp, n))} aria-label={n < 0 ? 'Mês anterior' : 'Próximo mês'}
+      className="toque toque-icone flex h-[36px] w-[34px] shrink-0 items-center justify-center rounded-[10px] border border-gray-300 bg-white text-gray-600">
+      <svg viewBox="0 0 24 24" className="h-[15px] w-[15px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={n < 0 ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6'} /></svg>
+    </button>
+  );
+  return (
+    <div className="flex flex-col gap-3">
+      {slotTopo && createPortal(
+        <div className="flex items-center gap-1.5 px-3 pb-2.5">
+          {seta(-1)}
+          <button type="button" onClick={() => setComp(hoje)} title="Voltar ao mês atual"
+            className="toque flex h-[36px] min-w-0 flex-1 items-center justify-center rounded-[10px] border border-gray-300 bg-white px-3 text-[14px] font-semibold text-gray-900">
+            <span className="truncate">{nomeCompetencia(comp)}</span>
+          </button>
+          {seta(1)}
+        </div>,
+        slotTopo,
+      )}
+      <div className="rounded-[12px] border border-gray-200 bg-white p-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <b className="text-[14px] text-gray-900">{lancados.length} de {contam} lançados</b>
+          <span className="text-[12.5px] tabular-nums text-gray-500">{formatBRL(totalLanc)} de {formatBRL(previsto)}</span>
+        </div>
+        <div className="mt-2 h-[6px] overflow-hidden rounded-full bg-gray-100">
+          <div className="h-full rounded-full bg-green-600" style={{ width: `${previsto ? Math.min(100, (totalLanc / previsto) * 100) : 0}%` }} />
+        </div>
+      </div>
+      {linhas.length === 0 ? <ListaVazia>Nenhum gasto fixo vigente em {nomeCompetencia(comp).toLowerCase()}.</ListaVazia> : (
+        <ul className="overflow-hidden rounded-[12px] border border-gray-200 bg-white">
+          {linhas.map(({ l, cel }) => (
+            <li key={l.rec.id} className="flex min-h-[52px] items-center gap-3 border-t border-gray-100 px-3 py-2 first:border-t-0">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] text-gray-900">{l.rec.descricao}</span>
+                <span className="block truncate text-[12px] text-gray-500">dia {l.rec.dia_do_mes} · {l.rec.categoria?.nome ?? 'Sem categoria'}</span>
+              </span>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${SITUACAO[cel.estado][1]}`}>{SITUACAO[cel.estado][0]}</span>
+              <span className={`w-[86px] shrink-0 text-right text-[13.5px] tabular-nums ${cel.estado === 'lancado' ? 'font-semibold text-gray-900' : 'text-gray-400'}`}>
+                {cel.estado === 'lancado' ? formatBRL(cel.valor) : cel.estado === 'pulado' ? '—' : formatBRL(cel.sugerido ?? 0)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="rounded-[12px] border border-gray-200 bg-white p-3">
+        <div className="mb-2 flex items-baseline gap-2"><b className="text-[13px] text-gray-900">{ano}</b><span className="text-[11.5px] text-gray-400">lançado por mês · toque para abrir</span></div>
+        <div className="flex h-[78px] items-end gap-[4px]">
+          {matriz.comps.map((c) => {
+            const v = matriz.totais[c];
+            return (
+              <button key={c} type="button" onClick={() => setComp(c)} aria-label={`${nomeCompetencia(c)}: ${formatBRL(v)}`}
+                className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                <span className={`w-full rounded-[3px] ${c === comp ? 'bg-orange-500' : 'bg-orange-200'}`} style={{ height: `${Math.max(v ? 4 : 0, (v / maxAno) * 58)}px` }} />
+                <span className={`text-[10px] ${c === comp ? 'font-bold text-gray-900' : 'text-gray-400'}`}>{'JFMAMJJASOND'[Number(c.slice(5)) - 1]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <p className="px-2 text-center text-[11.5px] text-gray-400">Lançar, marcar "não teve" e cadastrar ficam no computador.</p>
+    </div>
+  );
+}
+
 export default function Fixos() {
   const toast = useToast();
+  const movel = useNoCelular();
   const hoje = competenciaAtual();
   const anoAtual = Number(hoje.slice(0, 4));
   const [ano, setAnoEstado] = useState(() => Number(lsGet(LS_ANO)) || anoAtual);
@@ -194,6 +282,7 @@ export default function Fixos() {
   }, [categorias]);
 
   if (!recs) return (<div><CabecalhoPagina titulo="Gastos fixos" /><PageLoading /></div>);
+  if (movel) return <FixosMovel recs={recs} lancs={lancs} pulados={pulados} hoje={hoje} />;
 
   const sugeridas = recs.length === 0 ? recorrenciasDoHistorico(semRec) : [];
   const filtrando = Boolean(busca || cats.length || situacao !== 'ativos' || ano !== anoAtual);

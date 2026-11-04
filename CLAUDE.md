@@ -456,8 +456,23 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
   (`competenciaParaBanco`). Gasto de cartão conta no mês do **vencimento da fatura**.
 - **Tela nova**: entra em `lib/navegacao.js` (barra lateral e menu do celular) e em `App.jsx`; a página abre com
   `CabecalhoPagina` como PRIMEIRO filho (ele nega o `p-6` do Layout e nomeia a aba do navegador).
-- **Celular**: abaixo de `md` a barra lateral vira menu (☰). Telas precisam ser legíveis em 375px (tabela larga →
-  rolagem horizontal dentro do `card` ou lista).
+- **Celular** (04/11/2026, opção A do mockup "Meus Gastos no celular": SÓ PARA VER; COPIADO do celular do Gestor):
+  `lib/celular.js` decide (`ehCelular` = até 767px E toque grosso; "Ver versão completa" vale até fechar o app, em
+  `sessionStorage`) e o `Layout` troca a barra lateral pelo casco `components/movel/LayoutMovel.jsx` — sem rotas
+  próprias: a tela lê `useNoCelular()` e desenha a versão dela. O casco: topo fixo de 56px (☰, o nome da tela, a lupa da
+  busca rápida, o avatar) com a SEGUNDA LINHA por portal (`useSlotTopo`: o ‹ mês › dos Lançamentos e dos Fixos), a
+  GAVETA (`movel/PainelMovel.jsx`: 280px, desliza, fecha arrastando, tocando fora ou com o voltar do aparelho —
+  `useVoltarFecha`) com as telas de ler (Visão geral, Lançamentos, Gastos fixos, Cartões, Patrimônio), e a folha do
+  usuário (tema, versão completa, sair). `html.app-movel`: sem zoom (`travarZoom`, nunca `minimum-scale=1`), sem
+  clarão do toque, `overflow-x: clip`, e o escuro mais escuro (#0a0a0a / #161616). No celular: o `CabecalhoPagina` some
+  (as ações dele são de editar), todo `Modal` vira TELA CHEIA (entra da direita, voltar de vidro, sem as `acoes`), os
+  FILTROS são a folha `movel/FiltrosMovel.jsx` (por campos: pílulas, meses, único, lista; rascunho que só vale no "Ver
+  resultados"), o toque aperta e volta com mola (`.toque`, `.toque-icone`). Por tela: a Visão geral sem o grid (os
+  blocos em `BLOCOS_MOVEL`, ordem e altura fixas; sem o grupo × mês; 4 números 2 × 2 com a média curta), os
+  Lançamentos em lista por dia (por mês num período) com a FICHA só de leitura numa folha, os Fixos como o mês em lista
+  e o ano em colunas, e nos Cartões e no Patrimônio somem importar, editar e excluir. O "Agora" só informa. Tela nova:
+  se ela for de ler, entra em `SECOES_MOVEL` e desenha a sua versão; se for de editar, fica fora da gaveta. Os meses dos
+  gráficos na tela estreita: UM A CADA TRÊS, contados do último, sem `truncate` (`pulaNoCelular`).
 - **Seletores**: escolher categoria é sempre o `SeletorCategoria` (busca, grupos em ordem alfabética, "+ Criar
   categoria" que abre o `ModalCategoria` e já escolhe a nova). Listas curtas: `SelectSimples` (= `SelectBusca`
   sem busca). Os dois portam a lista ao body — nunca `absolute` dentro de cartão/modal, que recorta.

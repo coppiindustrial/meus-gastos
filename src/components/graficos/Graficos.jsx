@@ -14,7 +14,8 @@ export const CALHA = 44; // largura da calha do eixo Y (rótulos "R$ 20 mil")
 
 // Rótulo de mês um sim, um não no celular quando são muitos (12 rótulos "set/26" não cabem em 375px);
 // o último sempre aparece. Escondido com `invisible`, para a coluna continuar ocupando o lugar.
-const pulaNoCelular = (i, n) => (n > 6 && (n - 1 - i) % 2 === 1 ? 'max-sm:invisible' : '');
+// Na tela estreita, um mês a cada três, contados do último (a regra do celular do Gestor).
+const pulaNoCelular = (i, n) => (n > 6 && (n - 1 - i) % 3 !== 0 ? 'max-sm:invisible' : '');
 
 // Grade + calha do eixo Y (em reais, a partir de centavos).
 export function Grade({ esc, children }) {

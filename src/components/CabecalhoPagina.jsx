@@ -1,4 +1,5 @@
 import { useTituloAba } from '../lib/useTituloAba.js';
+import { useNoCelular } from '../lib/celular.js';
 
 // Cabeçalho de página em FAIXA — o desenho que o Dashboard estreou e que agora vale para as demais
 // abas: nome da página à esquerda, ações à direita, faixa branca de ponta a ponta com linha e uma
@@ -39,6 +40,11 @@ import { useTituloAba } from '../lib/useTituloAba.js';
 export default function CabecalhoPagina({ titulo, acessorio, acoes }) {
   // `titulo` é ReactNode; só string vira nome de aba, e o hook ignora o resto sozinho.
   useTituloAba(titulo);
+  // NO CELULAR (04/11/2026) a faixa some: o nome da tela está no topo fixo do `LayoutMovel`, e as ações daqui são as de
+  // editar (lançar, importar, cadastrar), que no celular não existem. A tela que precisa de um controle o põe no
+  // próprio conteúdo.
+  const movel = useNoCelular();
+  if (movel) return null;
   return (
     <div className="-mx-6 -mt-6 flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-hx-eef0f2 bg-white px-6 shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
       <div className="flex min-w-0 items-baseline gap-3">

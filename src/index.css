@@ -568,6 +568,127 @@
   .icone-pisca svg { animation: none; }
 }
 
+/* ---- O APP NO CELULAR (04/11/2026, COPIADO do Gestor: o bloco "app no celular" do index.css de lá) ----------------
+   `lib/celular.js`, `components/movel/`. Curvas de iOS, sem biblioteca: `--press` é o ease-out de tudo; `--mola`
+   passa um pouco do ponto e volta (a entrada da folha e a volta do botão pressionado). */
+:root {
+  --press: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --mola: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* Só com o casco do celular (`html.app-movel`, posto pelo `LayoutMovel`): sem o clarão azul do toque, sem o
+   "elástico" da página e SEM ZOOM (`pan-x pan-y` deixa só rolar). `overflow-x: clip` (e não `hidden`): nada alarga
+   a página, e o `sticky` do topo continua valendo. */
+html.app-movel { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; touch-action: pan-x pan-y; }
+html.app-movel body { overflow-x: clip; }
+
+/* A gaveta e a folha (`PainelMovel`). O fundo escurece com `--escurece` (1 aberto, 0 fechado). */
+.painel-movel-veu {
+  background: rgba(0, 0, 0, calc(0.45 * var(--escurece, 1)));
+  animation: movel-surge 0.15s ease-out;
+  transition: background-color 0.22s ease-out;
+}
+.painel-movel { position: absolute; transition: transform 0.24s var(--press); will-change: transform; }
+.painel-movel.arrastando { transition: none; }
+.painel-movel-baixo {
+  left: 0; right: 0; bottom: 0;
+  max-height: 92dvh; overflow-y: auto;
+  border-radius: 18px 18px 0 0;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  animation: movel-sobe 0.42s var(--mola);
+  /* a margem segura das laterais (o iPhone deitado) como BORDA TRANSPARENTE: um padding aqui venceria o `px-*` */
+  border-left: env(safe-area-inset-left, 0px) solid transparent;
+  border-right: env(safe-area-inset-right, 0px) solid transparent;
+}
+.painel-movel-esquerda {
+  top: 0; bottom: 0; left: 0;
+  border-left: env(safe-area-inset-left, 0px) solid transparent;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+  touch-action: pan-y;
+  animation: movel-entra-esq 0.34s var(--press);
+}
+@keyframes movel-surge { from { opacity: 0; } }
+@keyframes movel-sobe { from { transform: translateY(100%); } }
+@keyframes movel-entra-esq { from { transform: translateX(-100%); } }
+
+/* O RETORNO DE TOQUE: aperta rápido (80ms) e volta com mola (340ms). */
+.toque { transition: transform 0.34s var(--mola), background-color 0.16s ease, filter 0.16s ease; }
+.toque:active { transform: scale(0.96); transition-duration: 0.08s; }
+.toque-icone:active { transform: scale(0.9); }
+
+/* A TELA CHEIA (o `Modal` no celular: os ampliados) entra da direita e sai para a direita, em `SAIDA_TELA_MS`. */
+.tela-movel { box-shadow: -10px 0 28px rgba(0, 0, 0, 0.14); }
+.tela-movel-entra { animation: movel-tela-entra 0.32s var(--press); }
+.tela-movel-sai { animation: movel-tela-sai 0.26s cubic-bezier(0.4, 0, 1, 1) forwards; }
+@keyframes movel-tela-entra { from { transform: translateX(100%); } }
+@keyframes movel-tela-sai { to { transform: translateX(100%); } }
+
+/* A FAIXA DO TOPO DAS TELAS CHEIAS: presa no alto, translúcida e desfocada; o fio de baixo só depois de rolar. */
+.faixa-topo-movel {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  -webkit-backdrop-filter: blur(16px) saturate(180%); backdrop-filter: blur(16px) saturate(180%);
+  box-shadow: 0 0.5px 0 transparent; transition: box-shadow 0.2s ease;
+}
+.faixa-topo-movel.rolou { box-shadow: 0 0.5px 0 rgba(15, 23, 42, 0.14); }
+html[data-tema='escuro'] .faixa-topo-movel { background: rgba(28, 28, 28, 0.8); }
+html[data-tema='escuro'] .faixa-topo-movel.rolou { box-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.12); }
+
+/* O ESCURO DO CELULAR É MAIS ESCURO (a opção P3 do Gestor): página e topo a #0a0a0a (`.fundo-movel`), superfície
+   (`bg-white`: cartões, folhas, gaveta) a #161616 e a borda neutra a #262626. Só no celular e só no escuro. */
+@media screen {
+  html.app-movel[data-tema='escuro'] {
+    --tf-white: 22 22 22; --tb-white: 22 22 22; --tb-gray-200: 38 38 38; --tt-gray-900: 250 250 250;
+    background-color: #0a0a0a;
+  }
+  html.app-movel[data-tema='escuro'] body,
+  html.app-movel[data-tema='escuro'] .fundo-movel { background-color: #0a0a0a; }
+  html.app-movel[data-tema='escuro'] .faixa-topo-movel { background: rgba(10, 10, 10, 0.75); }
+}
+
+/* As linhas de dentro de um grupo aberto (a sanfona dos grupos no celular): um degrau mais escuro que o cartão. */
+.sanfona-filhos { background-color: #f9fafb; }
+html[data-tema='escuro'] .sanfona-filhos { background-color: #161616; }
+html.app-movel[data-tema='escuro'] .sanfona-filhos { background-color: #0d0d0d; --tb-gray-100: 28 28 28; }
+
+/* O VOLTAR DE VIDRO, o `.glass.circle` do "Meu treino": 44px, vidro com desfoque; APERTADO (`.pressed`) cresce para
+   112% com mola e acende um brilho no ponto do toque (`--x`, `--y`, de `apertarVidro`). */
+.vidro-mt {
+  position: relative; overflow: hidden; flex: none;
+  -webkit-backdrop-filter: blur(16px) saturate(180%); backdrop-filter: blur(16px) saturate(180%);
+  color: #111827; background: rgba(255, 255, 255, 0.55);
+  border: 0.5px solid rgba(15, 23, 42, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 14px rgba(15, 23, 42, 0.12);
+  touch-action: manipulation; -webkit-user-select: none; user-select: none;
+  transition: transform 0.55s var(--mola), background-color 0.35s ease, box-shadow 0.35s ease;
+}
+.vidro-mt::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at var(--x, 50%) var(--y, 30%), rgba(255, 255, 255, 0.45), transparent 60%);
+  transition: opacity 0.45s ease;
+}
+.vidro-mt > svg { position: relative; }
+.vidro-mt.pressed, .vidro-mt:active {
+  transform: scale(1.12); transition-duration: 0.16s; transition-timing-function: ease-out;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: inset 0 1px 0 #fff, 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+.vidro-mt.pressed::after { opacity: 0.6; transition-duration: 0.12s; }
+html[data-tema='escuro'] .vidro-mt {
+  color: #fff; background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+html[data-tema='escuro'] .vidro-mt.pressed, html[data-tema='escuro'] .vidro-mt:active {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 22px rgba(255, 255, 255, 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.app-movel *, html.app-movel *::before, html.app-movel *::after, .painel-movel, .painel-movel-veu {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* ---- IMPRESSÃO ---------------------------------------------------------------------------------
    O PRIMEIRO `@media print` do app, e ele existe para UMA tela: o Relatório Comercial. O caminho
    para PDF aqui é o do navegador (Ctrl+P → Salvar como PDF) — o app não tem biblioteca de PDF, e

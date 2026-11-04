@@ -30,7 +30,10 @@ import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
 import { exportCsv } from '../lib/exportCsv.js';
 import { lsGet, lsSet } from '../lib/storage.js';
-import { useMascararValores } from '../lib/ocultarValores.js';
+import { animarIcone, useMascararValores } from '../lib/ocultarValores.js';
+import { useNoCelular } from '../lib/celular.js';
+import FiltrosMovel from '../components/movel/FiltrosMovel.jsx';
+import { IconOlho } from '../components/icons.jsx';
 import { varCor } from '../lib/varCor.js';
 
 // A VISÃO GERAL (tela inicial) — o Dashboard da planilha refeito no estilo do Gestor: não é a foto de
@@ -154,6 +157,14 @@ const IconAmpliar = () => (
 
 // O GRUPO × MÊS mora em `components/graficos/TabelaGrupoMes.jsx` (o bloco, a tabela com o hover e o ampliado).
 
+// NO CELULAR (04/11/2026, opção A do mockup "Meus Gastos no celular"): sem o grid (nem "Personalizar"), os blocos numa
+// ORDEM FIXA, um embaixo do outro, cada um na altura que serve à tela estreita (`null` = a altura do conteúdo). O
+// grupo × mês fica de fora: a tabela larga não cabe, e o "Gastos por grupo" (com Categorias) diz o mesmo.
+const BLOCOS_MOVEL = [
+  ['vg_agora', null], ['vg_kpis', null], ['vg_meses', 300], ['vg_saldo', 240], ['vg_origem_mes', 270],
+  ['vg_origem', 330], ['vg_comprometido', 380], ['vg_fora', null], ['vg_grupos', 470],
+];
+
 // ------------------------------------------------------------ o catálogo do grid
 
 // OS BLOCOS DA VISÃO GERAL no `GridPersonalizavel` (o grid do Dashboard Comercial do Gestor): cada um se
@@ -215,6 +226,8 @@ export default function VisaoGeral() {
     return !o;
   });
   useMascararValores(oculto);
+  const movel = useNoCelular();
+  const [filtrosMovel, setFiltrosMovel] = useState(false);
   const [ampliado, setAmpliado] = useState(false);
   const [gruposAmpliado, setGruposAmpliado] = useState(false);
   const ctrl = useDestaqueSeries();
@@ -373,6 +386,24 @@ export default function VisaoGeral() {
     </div>
   );
 
+  // OS NÚMEROS NO CELULAR: quatro, 2 × 2 (a contagem de lançamentos sai), e a média em número curto — o cheio
+  // ("média R$ 43.564,83/mês") não cabia no cartão de meia largura.
+  const mediaCurta = (m) => (m.meses ? `${brlCurto(m.media)}/mês` : 'nada no período');
+  const kpisMovel = (
+    <div className="grid grid-cols-2 gap-2">
+      <CartaoKpi compacto icone="entradas" cor={CORES_KPI.entradas} rotulo="Entradas" valor={formatBRL(r.entradas)} valorCurto={brlCurto(r.entradas)} corValor="text-green-700"
+        variacao={vsAnt(r.entradas, rAnt?.entradas)} sub={mediaCurta(mEnt)} serie={serieDe('entradas', true)} ativo={tipo === 'entrada'} onClicar={() => setTipo(tipo === 'entrada' ? '' : 'entrada')} />
+      <CartaoKpi compacto icone="gastos" cor={CORES_KPI.gastos} rotulo="Gastos" valor={formatBRL(r.gastos)} valorCurto={brlCurto(r.gastos)}
+        variacao={vsAnt(r.gastos, rAnt?.gastos)} sobeBom={false} sub={mediaCurta(mGas)} serie={serieDe('gastos', true)} ativo={tipo === 'saida'} onClicar={() => setTipo(tipo === 'saida' ? '' : 'saida')} />
+      <CartaoKpi compacto icone="saldo" cor={CORES_KPI.saldo} rotulo="Saldo" valor={formatBRL(r.saldo)} valorCurto={brlCurto(r.saldo)}
+        corValor={r.saldo < 0 ? 'text-hx-c0393d' : 'text-gray-900'} variacao={rAnt ? variacaoSaldo(r.saldo, rAnt.saldo) : null}
+        sub={r.entradas ? `${Math.round((r.saldo / r.entradas) * 100)}% das entradas` : 'sem entradas'} serie={serieDe('saldo')} onClicar={() => setTipo('')} />
+      <CartaoKpi compacto icone="mes" cor={varCor('#ca8a04', 'texto')} rotulo="Mês mais caro"
+        valor={r.maisCaro ? nomeCompetencia(r.maisCaro.competencia).replace(/ de \d+$/, '') : '—'}
+        sub={r.maisCaro ? `${brlCurto(r.maisCaro.gastos)} em gastos` : 'nenhum gasto'} serie={serieDe('gastos')} />
+    </div>
+  );
+
   const agora = (
     <div className="card">
     <CardAutoAltura id="vg_agora">
@@ -521,6 +552,63 @@ export default function VisaoGeral() {
       </div>
     </FaixaProvider>
   );
+
+  // A TELA NO CELULAR: o botão dos filtros (a folha de baixo, `FiltrosMovel`), o comparar e o olho na primeira
+  // linha; os blocos na ordem fixa (`BLOCOS_MOVEL`). Os ampliados abrem em tela cheia (o `Modal` no celular).
+  if (movel) {
+    const extras = (tipo ? 1 : 0) + (origens.length ? 1 : 0) + (cats.length ? 1 : 0);
+    const opcoesCatMovel = opcoesCategoria.flatMap((g) => g.itens.map((c) => ({ value: c.value, label: c.label, sub: g.titulo === 'Geral' ? undefined : g.titulo, cor: g.cor })));
+    return (
+      <>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setFiltrosMovel(true)}
+              className="toque flex h-[36px] min-w-0 items-center gap-2 rounded-[10px] border border-gray-300 bg-white px-3 text-[13.5px] font-semibold text-gray-800">
+              <svg viewBox="0 0 24 24" className="h-[15px] w-[15px] shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+              <span className="truncate">{meses.length ? textoPer : `${textoPer} · ano todo`}</span>
+              {extras > 0 && <span className="shrink-0 rounded-full bg-gray-800 px-1.5 text-[11px] leading-[18px] text-white inverte-no-escuro">+{extras}</span>}
+            </button>
+            <span className="flex-1" />
+            <button type="button" onClick={() => setComparar(comparar === 'anterior' ? 'nada' : 'anterior')} aria-pressed={comparar === 'anterior'}
+              aria-label={comparar === 'anterior' ? 'Comparando com o ano anterior' : 'Sem comparação'}
+              className="toque toque-icone flex h-[36px] shrink-0 items-center gap-1.5 rounded-[10px] border border-gray-300 bg-white px-2.5 text-[13px] font-semibold text-gray-500 aria-pressed:text-gray-900">
+              <svg viewBox="0 0 24 24" className="h-[16px] w-[16px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 4 3 8l4 4M3 8h13M17 12l4 4-4 4M21 16H8" /></svg>
+              {comparar === 'anterior' ? anos.map((a) => a - 1).sort().join(', ') : 'não'}
+            </button>
+            <button type="button" onClick={(e) => { animarIcone(e.currentTarget); alternarOculto(); }} aria-pressed={oculto}
+              aria-label={oculto ? 'Mostrar os valores' : 'Ocultar os valores'}
+              className="toque toque-icone flex h-[36px] w-[40px] shrink-0 items-center justify-center rounded-[10px] border border-gray-300 bg-white text-gray-600 aria-pressed:text-gray-900">
+              <IconOlho fechado={oculto} className="h-[18px] w-[18px]" />
+            </button>
+          </div>
+          {!linhas ? <div className="py-16 text-center text-[13px] text-gray-400">Carregando…</div> : BLOCOS_MOVEL.map(([id, altura]) => (
+            <div key={`${id}-${versao}`} style={altura ? { height: altura } : undefined} className={altura ? 'flex flex-col [&>*]:min-h-0 [&>*]:flex-1' : ''}>
+              {id === 'vg_kpis' ? kpisMovel : renderWidget(id)}
+            </div>
+          ))}
+        </div>
+        <FiltrosMovel aberto={filtrosMovel} onFechar={() => setFiltrosMovel(false)}
+          valor={{ anos, meses, tipo, origens, cats }} vazio={{ anos: [anoAtual], meses: [], tipo: '', origens: [], cats: [] }}
+          onAplicar={(v) => { setAnos(v.anos); setMeses(v.meses); setTipo(v.tipo); setOrigens(v.origens); setCats(v.cats); }}
+          mais={2} campos={[
+            { tipo: 'pilulas', campo: 'anos', rotulo: 'Ano', multi: true, minimo: 1, opcoes: opcoesAnos.map((a) => ({ value: a, label: String(a) })) },
+            { tipo: 'meses', campo: 'meses', rotulo: 'Meses' },
+            { tipo: 'unico', campo: 'tipo', rotulo: 'Tipo', opcoes: OPCOES_TIPO },
+            { tipo: 'lista', campo: 'origens', rotulo: 'Origem', plural: 'origens', opcoes: OPCOES_ORIGEM },
+            { tipo: 'lista', campo: 'cats', rotulo: 'Categoria', plural: 'categorias', opcoes: opcoesCatMovel },
+          ]} />
+        {gruposAmpliado && (
+          <AmpliadoGrupos onClose={() => setGruposAmpliado(false)} grupos={grupos} total={r.gastos} meses={textoPer}
+            comps={comDado.map((m) => m.competencia)} anterior={gruposAnt} />
+        )}
+        {ampliado && (
+          <AmpliadoEntradasGastos onClose={() => setAmpliado(false)} linhas={filtradas} comps={comps} textoPer={textoPer}
+            comparar={comparar === 'anterior'} forma={forma} seletorForma={seletorForma} series={series} ctrl={ctrl}
+            onMes={abrirMes} desenhar={graficoMeses} />
+        )}
+      </>
+    );
+  }
 
   return (
     <>

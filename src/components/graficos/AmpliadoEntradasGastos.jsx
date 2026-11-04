@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import Modal from '../Modal.jsx';
+import { useNoCelular } from '../../lib/celular.js';
 import Tooltip from '../Tooltip.jsx';
 import AbasPilula from '../AbasPilula.jsx';
 import LegendaSeries from './LegendaSeries.jsx';
@@ -74,6 +75,11 @@ export default function AmpliadoEntradasGastos({ onClose, linhas, comps, textoPe
     </>
   );
 
+  // NO CELULAR (só para ver, 04/11/2026) a tabela fica com Mês, Entradas, Gastos e Saldo (o resto, de 1.105px, não cabia)
+  // e o gráfico mais baixo; o Modal já vira tela cheia sozinho.
+  const movel = useNoCelular();
+  const so = movel ? 'hidden' : '';
+
   return (
     <Modal open onClose={onClose} title="Entradas × gastos" subtitulo={subtitulo} acoes={acoes} alturaCheia animarTamanho
       maxWidth={cheio ? 'max-w-[96vw]' : 'max-w-[min(1280px,95vw)]'} altura={cheio ? 'h-[94vh]' : 'h-[90vh]'}>
@@ -81,50 +87,50 @@ export default function AmpliadoEntradasGastos({ onClose, linhas, comps, textoPe
         {seletorForma}
         <AbasPilula abas={ABAS_PERIODO} valor={quais} onChange={setQuais} variante="claro" altura={30} folga={2} />
       </div>
-      <div style={{ height: cheio ? 'max(340px, 46vh)' : 340 }}>{desenhar(r.porMes, anterior, { rotulosAte: 24 })}</div>
+      <div style={{ height: movel ? 260 : cheio ? 'max(340px, 46vh)' : 340 }}>{desenhar(r.porMes, anterior, { rotulosAte: 24 })}</div>
       {forma !== 'saldo' && <LegendaSeries series={series} ctrl={ctrl} />}
 
       <div className="mt-4 overflow-x-auto rounded-md border border-gray-200">
-        <table className="w-full text-[12.5px]">
+        <table className={`w-full ${movel ? 'text-[11.5px] [&_td]:!px-1.5 [&_th]:!px-1.5' : 'text-[12.5px]'}`}>
           <thead className="bg-hx-f9fafb">
             <tr>
               <th className={`${TH} text-left`}>Mês</th>
               {['Entradas', 'Cartão', 'Fixos', 'Avulsos', 'Gastos', 'Saldo', 'Acumulado', ...(anterior ? ['Um ano antes', 'Variação'] : []), 'Lanç.'].map((h) => (
-                <th key={h} className={`${TH} text-right`} title={h === 'Lanç.' ? 'Lançamentos' : h === 'Um ano antes' ? 'Gastos no mesmo mês um ano antes' : undefined}>{h}</th>
+                <th key={h} className={`${TH} text-right ${['Entradas', 'Gastos', 'Saldo'].includes(h) ? '' : so}`} title={h === 'Lanç.' ? 'Lançamentos' : h === 'Um ano antes' ? 'Gastos no mesmo mês um ano antes' : undefined}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {linhasTab.map((m) => (
               <tr key={m.competencia} className="cursor-pointer hover:bg-hx-f9fafb" onClick={() => onMes(m.competencia)} title="Abrir os lançamentos do mês">
-                <td className={`${TD} text-gray-800`}>{nomeCompetencia(m.competencia)}</td>
+                <td className={`${TD} text-gray-800`}>{movel ? competenciaCurta(m.competencia) : nomeCompetencia(m.competencia)}</td>
                 <td className={`${TD} text-right text-green-700`}>{formatBRL(m.entradas)}</td>
-                <td className={`${TD} text-right text-gray-500`}>{formatBRL(m.cartao)}</td>
-                <td className={`${TD} text-right text-gray-500`}>{formatBRL(m.fixo)}</td>
-                <td className={`${TD} text-right text-gray-500`}>{formatBRL(m.manual)}</td>
+                <td className={`${TD} text-right text-gray-500 ${so}`}>{formatBRL(m.cartao)}</td>
+                <td className={`${TD} text-right text-gray-500 ${so}`}>{formatBRL(m.fixo)}</td>
+                <td className={`${TD} text-right text-gray-500 ${so}`}>{formatBRL(m.manual)}</td>
                 <td className={`${TD} text-right font-semibold text-gray-900`}>{formatBRL(m.gastos)}</td>
                 <td className={`${TD} text-right ${m.saldo < 0 ? 'text-hx-c0393d' : 'text-gray-700'}`}>{formatBRL(m.saldo)}</td>
-                <td className={`${TD} text-right ${m.acumulado < 0 ? 'text-hx-c0393d' : 'text-gray-700'}`}>{formatBRL(m.acumulado)}</td>
-                {anterior && <td className={`${TD} text-right text-gray-500`}>{m.anterior ? formatBRL(m.anterior) : '—'}</td>}
-                {anterior && <td className={`${TD} text-right text-gray-500`}>{pctVar(m.variacao)}</td>}
-                <td className={`${TD} text-right text-gray-500`}>{m.qtd}</td>
+                <td className={`${TD} text-right ${so} ${m.acumulado < 0 ? 'text-hx-c0393d' : 'text-gray-700'}`}>{formatBRL(m.acumulado)}</td>
+                {anterior && <td className={`${TD} text-right text-gray-500 ${so}`}>{m.anterior ? formatBRL(m.anterior) : '—'}</td>}
+                {anterior && <td className={`${TD} text-right text-gray-500 ${so}`}>{pctVar(m.variacao)}</td>}
+                <td className={`${TD} text-right text-gray-500 ${so}`}>{m.qtd}</td>
               </tr>
             ))}
           </tbody>
           {linhasTab.length > 0 && (
             <tfoot>
               <tr>
-                <td className={`${TF} text-gray-800`}>Total · {linhasTab.length} {linhasTab.length === 1 ? 'mês' : 'meses'}</td>
+                <td className={`${TF} text-gray-800`}>{movel ? 'Total' : `Total · ${linhasTab.length} ${linhasTab.length === 1 ? 'mês' : 'meses'}`}</td>
                 <td className={`${TF} text-right text-green-700`}>{formatBRL(soma('entradas'))}</td>
-                <td className={`${TF} text-right text-gray-700`}>{formatBRL(soma('cartao'))}</td>
-                <td className={`${TF} text-right text-gray-700`}>{formatBRL(soma('fixo'))}</td>
-                <td className={`${TF} text-right text-gray-700`}>{formatBRL(soma('manual'))}</td>
+                <td className={`${TF} text-right text-gray-700 ${so}`}>{formatBRL(soma('cartao'))}</td>
+                <td className={`${TF} text-right text-gray-700 ${so}`}>{formatBRL(soma('fixo'))}</td>
+                <td className={`${TF} text-right text-gray-700 ${so}`}>{formatBRL(soma('manual'))}</td>
                 <td className={`${TF} text-right text-gray-900`}>{formatBRL(soma('gastos'))}</td>
                 <td className={`${TF} text-right ${soma('saldo') < 0 ? 'text-hx-c0393d' : 'text-gray-800'}`}>{formatBRL(soma('saldo'))}</td>
-                <td className={`${TF} text-right text-gray-400`}>—</td>
-                {anterior && <td className={`${TF} text-right text-gray-700`}>{totAnt ? formatBRL(totAnt) : '—'}</td>}
-                {anterior && <td className={`${TF} text-right text-gray-700`}>{pctVar(varTotal)}</td>}
-                <td className={`${TF} text-right text-gray-700`}>{soma('qtd')}</td>
+                <td className={`${TF} text-right text-gray-400 ${so}`}>—</td>
+                {anterior && <td className={`${TF} text-right text-gray-700 ${so}`}>{totAnt ? formatBRL(totAnt) : '—'}</td>}
+                {anterior && <td className={`${TF} text-right text-gray-700 ${so}`}>{pctVar(varTotal)}</td>}
+                <td className={`${TF} text-right text-gray-700 ${so}`}>{soma('qtd')}</td>
               </tr>
             </tfoot>
           )}

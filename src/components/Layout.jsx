@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { SbBusca, SbChevron, SbPanel, SbPanelR, SbLogout, SbTema, SbSol, SbMonitor, SbCheck } from './sidebarIcons.jsx';
 import PaletaBusca from './busca/PaletaBusca.jsx';
 import useAtalhosGlobais from '../lib/useAtalhosGlobais.js';
+import LayoutMovel from './movel/LayoutMovel.jsx';
+import { useCelular } from '../lib/celular.js';
 import { GRUPOS, SOLTOS } from '../lib/navegacao.js';
 import useContadores from '../lib/useContadores.js';
 import { TEMAS, useTema } from '../lib/tema.js';
@@ -142,7 +144,14 @@ function Marca() {
   );
 }
 
+// NO CELULAR (04/11/2026) o casco é outro, o do Gestor (`movel/LayoutMovel.jsx`): topo fixo, gaveta e só as telas
+// de ler. "Ver versão completa" volta a este, até fechar o app.
 export default function Layout({ children }) {
+  const celular = useCelular();
+  return celular ? <LayoutMovel>{children}</LayoutMovel> : <LayoutComputador>{children}</LayoutComputador>;
+}
+
+function LayoutComputador({ children }) {
   const { user, nome, logout } = useAuth();
   const [tema, setTema] = useTema();
   const { pathname } = useLocation();

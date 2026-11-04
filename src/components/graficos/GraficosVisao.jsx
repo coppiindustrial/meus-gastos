@@ -18,7 +18,9 @@ export const COR_SALDO = varCor('#374151', 'texto');
 export const COR_ANTERIOR = varCor('#9ca3af', 'texto');
 const pct = (f) => `${f * 100}%`;
 const sinal = (v) => (v === null ? '' : `${v > 0 ? '+' : ''}${v}%`);
-const pulaNoCelular = (i, n) => (n > 6 && (n - 1 - i) % 2 === 1 ? 'max-sm:invisible' : '');
+// NA TELA ESTREITA, UM MÊS A CADA TRÊS, contados do último (04/11/2026, a regra do celular do Gestor): um sim, um não
+// ainda dava cerca de 20px por nome, e o `truncate` cortava "abr" em "a…" e "dez" em "d…".
+const pulaNoCelular = (i, n) => (n > 6 && (n - 1 - i) % 3 !== 0 ? 'max-sm:invisible' : '');
 
 // ------------------------------------------------------------ o chrome do Gestor
 
@@ -205,7 +207,9 @@ function ReguaMeses({ meses }) {
   return (
     <div className="flex gap-1.5 pt-1" style={{ paddingLeft: CALHA_ESQ }}>
       {meses.map((m, i) => (
-        <span key={m.competencia} className={`min-w-0 flex-1 whitespace-nowrap text-center text-[10px] text-gray-500 ${n <= 24 ? 'truncate' : ''} ${pulaNoCelular(i, n)}`}>
+        // `flex justify-center` e sem `truncate`: o nome que passa da coluna sai centrado para os dois lados (as vizinhas,
+        // no celular, estão invisíveis), em vez de cortado em "a…".
+        <span key={m.competencia} className={`flex min-w-0 flex-1 justify-center whitespace-nowrap text-[10px] text-gray-500 ${pulaNoCelular(i, n)}`}>
           {(n - 1 - i) % passo === 0 ? rotuloMes(m, n) : ''}
         </span>
       ))}

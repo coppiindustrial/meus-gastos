@@ -7,6 +7,7 @@ import Checkbox from '../components/Checkbox.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { BotaoEditar, BotaoExcluir, Campo, Etiqueta, RodapeForm } from '../components/Comuns.jsx';
+import { useNoCelular } from '../lib/celular.js';
 import { ColunasMes, COR_ENTRADAS } from '../components/graficos/Graficos.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
@@ -120,6 +121,8 @@ export default function Patrimonio() {
   const [saldos, setSaldos] = useState([]);
   const [modal, setModal] = useState(null); // { tipo: 'conta' | 'saldos', item }
   const [aberta, setAberta] = useState(null); // conta com o histórico aberto
+  // NO CELULAR (só para ver, 04/11/2026): sem editar e sem excluir conta ou saldo — tocar na conta só mostra o histórico.
+  const movel = useNoCelular();
 
   const carregar = useCallback(async () => {
     try {
@@ -200,7 +203,7 @@ export default function Patrimonio() {
                   <th className="table-th hidden sm:table-cell">Tipo</th>
                   <th className="table-th text-right">Último saldo</th>
                   <th className="table-th hidden md:table-cell">Em</th>
-                  <th className="table-th w-[84px]" aria-label="Ações" />
+                  {!movel && <th className="table-th w-[84px]" aria-label="Ações" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -217,12 +220,14 @@ export default function Patrimonio() {
                       <td className="table-td hidden sm:table-cell">{nomeTipo(c.tipo)}</td>
                       <td className={`table-td text-right tabular-nums ${u && Number(u.valor_centavos) < 0 ? 'text-hx-c0393d' : ''}`}>{u ? formatBRL(u.valor_centavos) : '—'}</td>
                       <td className="table-td hidden text-gray-500 md:table-cell">{u ? formatDate(u.data) : '—'}</td>
-                      <td className="table-td" onClick={(e) => e.stopPropagation()}>
-                        <span className="flex justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/linha:opacity-100 md:focus-within:opacity-100">
-                          <BotaoEditar onClick={() => setModal({ tipo: 'conta', item: c })} />
-                          <BotaoExcluir onClick={() => apagarConta(c)} />
-                        </span>
-                      </td>
+                      {!movel && (
+                        <td className="table-td" onClick={(e) => e.stopPropagation()}>
+                          <span className="flex justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/linha:opacity-100 md:focus-within:opacity-100">
+                            <BotaoEditar onClick={() => setModal({ tipo: 'conta', item: c })} />
+                            <BotaoExcluir onClick={() => apagarConta(c)} />
+                          </span>
+                        </td>
+                      )}
                     </tr>,
                     aberta === c.id && (
                       <tr key={`${c.id}-h`}>
@@ -233,7 +238,7 @@ export default function Patrimonio() {
                                 <li key={s.id} className="flex items-center gap-3 py-1 text-sm">
                                   <span className="w-24 text-gray-500">{formatDate(s.data)}</span>
                                   <span className="flex-1 tabular-nums text-gray-800">{formatBRL(s.valor_centavos)}</span>
-                                  <BotaoExcluir titulo="Excluir este saldo" onClick={() => apagarSaldo(s)} />
+                                  {!movel && <BotaoExcluir titulo="Excluir este saldo" onClick={() => apagarSaldo(s)} />}
                                 </li>
                               ))}
                             </ul>
@@ -246,7 +251,7 @@ export default function Patrimonio() {
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-gray-500">Clique numa conta para ver e corrigir o histórico de saldos.</p>
+          <p className="mt-2 text-xs text-gray-500">{movel ? 'Toque numa conta para ver o histórico de saldos. Registrar e corrigir ficam no computador.' : 'Clique numa conta para ver e corrigir o histórico de saldos.'}</p>
         </>
       )}
 

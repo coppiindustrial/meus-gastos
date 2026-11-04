@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import useEscape from '../lib/useEscape.js';
 import useTravarRolagem from '../lib/travarRolagem.js';
 import Tooltip from './Tooltip.jsx';
+import { useNoCelular, useVoltarFecha, SAIDA_TELA_MS, apertarVidro } from '../lib/celular.js';
 
 // Quanto o modal fica no ar depois de fechado, só para a animação de saída acontecer. Tem de bater
 // com a duração do `modal-out`/`backdrop-out` (tailwind.config.js): mais curto aqui corta a
@@ -28,6 +29,10 @@ const IconX = ({ className = 'h-[15px] w-[15px]' }) => (
 // `z`: camada. O padrão z-[60] fica acima do painel lateral (z-50); a tela ampliada usa um valor
 // MENOR (z-[35]) justamente para a ficha lateral poder abrir por cima dela.
 // `padding` / `paddingCabecalho`: respiro interno — a tela ampliada pede mais que um formulário.
+// NO CELULAR (`useNoCelular`, 04/11/2026, copiado do `Modal` do Gestor) todo modal ocupa a TELA INTEIRA: sem
+// moldura, a faixa do topo presa com o voltar de vidro à esquerda e o título no centro (o "voltar" do aparelho também
+// fecha, `useVoltarFecha`), o corpo rolando por dentro e o respiro do iPhone (`safe-area`). As ações do cabeçalho
+// (Exportar CSV, tela cheia…) ficam de fora: no celular só se lê.
 // `animarTamanho`: anima a troca de `maxWidth`/`altura` em vez de saltar. Opt-in porque só a tela
 // ampliada muda de tamanho em uso (1º → 2º nível); nos formulários não haveria o que animar.
 export default function Modal({
@@ -41,13 +46,17 @@ export default function Modal({
   // clique e não havia o que animar.
   const [visivel, setVisivel] = useState(open);
   const [saindo, setSaindo] = useState(false);
+  const [rolou, setRolou] = useState(false); // o fio da faixa do topo no celular, só depois de rolar
+  // No celular a saída é o slide para a direita, mais longo que o esmaecer do computador.
+  const movel = useNoCelular();
+  const saidaMs = movel ? SAIDA_TELA_MS : SAIDA_MS;
   useEffect(() => {
     if (open) { setVisivel(true); setSaindo(false); return undefined; }
     if (!visivel) return undefined;
     setSaindo(true);
-    const t = setTimeout(() => { setVisivel(false); setSaindo(false); }, SAIDA_MS);
+    const t = setTimeout(() => { setVisivel(false); setSaindo(false); }, saidaMs);
     return () => clearTimeout(t);
-  }, [open, visivel]);
+  }, [open, visivel, saidaMs]);
 
   // O Escape fecha só a camada de CIMA, e quem decide isso é a pilha compartilhada — não este
   // componente. Ele já teve listener próprio em `window`, e como o `SidePanel` tinha outro no
@@ -60,7 +69,50 @@ export default function Modal({
   // Contador compartilhado com o `SidePanel`: ver `lib/travarRolagem.js`.
   useTravarRolagem(open);
 
+  useVoltarFecha(movel && open, onClose);
+
   if (!visivel) return null;
+
+  if (movel) {
+    return createPortal(
+      <div className={`tela-movel fundo-movel fixed inset-0 ${z === 'z-[35]' ? 'z-[60]' : z} bg-white ${
+        saindo ? 'tela-movel-sai' : 'tela-movel-entra'}`}
+        style={saindo ? { pointerEvents: 'none' } : undefined}
+        role="dialog" aria-modal="true" aria-label={title}>
+        <div className="absolute inset-0 overflow-auto overscroll-contain pb-[max(16px,env(safe-area-inset-bottom))]"
+          style={{
+            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 66px)',
+            paddingLeft: 'calc(env(safe-area-inset-left, 0px) + 12px)',
+            paddingRight: 'calc(env(safe-area-inset-right, 0px) + 12px)',
+          }}
+          onScroll={(e) => { const r = e.currentTarget.scrollTop > 4; if (r !== rolou) setRolou(r); }}>
+          {/* SEMPRE 1px MAIS ALTA QUE A TELA (a lição do Gestor): sem ter o que rolar, o iPhone mandava o arraste para
+              a página de TRÁS (travada) e nada se mexia. Com 1px de sobra ela sempre rola, e o dedo não escapa. */}
+          <div className="modal-movel-corpo min-h-[calc(100%+1px)]">
+            {subtitulo && <p className="mb-[10px] text-[12px] leading-[1.4] text-gray-500">{subtitulo}</p>}
+            {children}
+          </div>
+        </div>
+        <div className={`faixa-topo-movel absolute inset-x-0 top-0 z-10 min-h-[48px] pb-[6px] ${rolou ? 'rolou' : ''}`}
+          style={{
+            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)',
+            paddingLeft: 'calc(env(safe-area-inset-left, 0px) + 12px)',
+            paddingRight: 'calc(env(safe-area-inset-right, 0px) + 12px)',
+          }}>
+          <div className="flex justify-self-start">
+            <button type="button" onClick={onClose} onPointerDown={apertarVidro} aria-label="Voltar"
+              className="vidro-mt flex h-[44px] w-[44px] items-center justify-center rounded-full">
+              <svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
+            </button>
+          </div>
+          <h3 className="max-w-[56vw] truncate text-center text-[17px] font-semibold text-gray-900">{title}</h3>
+          <span aria-hidden="true" />
+        </div>
+      </div>,
+      document.body,
+    );
+  }
 
   // Portal para o body: escapa o `transform` de um SidePanel ancestral (que prenderia o
   // `fixed`) e o z-[60] padrão mantém o modal acima do painel lateral (z-50). Toasts em z-[70].

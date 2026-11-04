@@ -23,6 +23,7 @@ import AssistenteModelo from '../components/AssistenteModelo.jsx';
 import { listarModelos } from '../api/modelos.js';
 import { formatBRL, numeroK } from '../lib/dinheiro.js';
 import { competenciaCurta, formatDate, nomeCompetencia, todayISO } from '../lib/format.js';
+import { useNoCelular } from '../lib/celular.js';
 import { lsSet } from '../lib/storage.js';
 import { exportCsv } from '../lib/exportCsv.js';
 
@@ -146,12 +147,14 @@ function BlocoCartao({ cartao: c, r, uso, modelo, onEditar, onImportar, onVer, o
   const apagada = (s) => destaque.atual && !({
     faturas: s.tipo === 'fatura' && s.total > 0, ultima: s.tipo === 'fatura' && s.comp === r.ultima?.competencia, parcelas: s.tipo === 'parcelas',
   }[destaque.atual]);
-  const icone = 'inline-flex h-7 w-7 items-center justify-center rounded-[6px] border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50';
+  const movel = useNoCelular();
+  const icone = `inline-flex items-center justify-center rounded-[6px] border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 ${movel ? 'h-[36px] w-[36px]' : 'h-7 w-7'}`;
   return (
     <div className={`card flex flex-col gap-4 p-4 transition-[border-color,box-shadow] duration-150 hover:border-gray-300 hover:shadow-md ${c.ativo ? '' : 'opacity-60'}`}>
       <div className="flex items-start gap-3">
         <span className="mt-0.5 grid h-8 w-10 shrink-0 place-items-center rounded-[7px] bg-gray-100 text-gray-600"><IcoCartao className="h-5 w-5" /></span>
-        <button type="button" onClick={onEditar} className="min-w-0 flex-1 text-left" title="Editar o cartão">
+        {/* NO CELULAR (só para ver) o nome não abre o formulário, e o ↓ de importar sai. */}
+        <button type="button" onClick={movel ? undefined : onEditar} className={`min-w-0 flex-1 text-left ${movel ? 'cursor-default' : ''}`} title={movel ? undefined : 'Editar o cartão'}>
           <span className="flex items-center gap-2">
             <span className="truncate text-[15px] font-semibold text-gray-900">{c.nome}</span>
             {!c.ativo && <Etiqueta>Inativo</Etiqueta>}
@@ -159,7 +162,7 @@ function BlocoCartao({ cartao: c, r, uso, modelo, onEditar, onImportar, onVer, o
           <span className="block truncate text-[11.5px] text-gray-500">vence dia {c.dia_vencimento} · {minuscula(rotuloFormato(c.formato, modelo))}</span>
         </button>
         <span className="flex shrink-0 gap-1">
-          {r.proxima && c.formato !== 'manual' && (
+          {r.proxima && c.formato !== 'manual' && !movel && (
             <Tooltip label={r.proxima.importada ? `A fatura de ${ddmm(r.proxima.vencimento)} já entrou — importar de novo` : `Importar a fatura de ${ddmm(r.proxima.vencimento)}`}>
               <button type="button" aria-label="Importar a fatura" onClick={onImportar} className={icone}><IcoImportar className="h-3.5 w-3.5" /></button>
             </Tooltip>
