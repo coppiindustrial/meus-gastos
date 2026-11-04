@@ -15,7 +15,11 @@ import { forwardRef, useCallback, useRef, useState } from 'react';
 const SearchInput = forwardRef(function SearchInput({ size = 'md', className = '', onChange, ...props }, ref) {
   const sm = size === 'sm';
   const interno = useRef(null);
-  const [temTexto, setTemTexto] = useState(!!(props.value ?? props.defaultValue));
+  const [digitado, setTemTexto] = useState(!!(props.value ?? props.defaultValue));
+  // CONTROLADO, o × segue o `value`: o texto que chega DE FORA (a busca rápida leva o termo aos Lançamentos, o
+  // "Limpar" dos filtros o tira) não passa pelo `onChange`, e o × não aparecia (ou ficava). Não controlado, o
+  // que foi digitado.
+  const temTexto = props.value !== undefined ? !!props.value : digitado;
 
   // Uma ref para dois donos: a de fora (GrupoModal) e a de dentro (o ×). Sem isto, aceitar a ref
   // externa cegaria o componente para o próprio input.
