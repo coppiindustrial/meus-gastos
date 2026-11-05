@@ -237,6 +237,19 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - `contas` + `saldos` (foto do saldo numa data, única por conta + data: registrar de novo na mesma data substitui).
 - Patrimônio no mês = soma, por conta, da foto mais recente até o fim do mês (vale até a próxima); conta sem foto
   ainda não entra. Conta encerrada: registrar saldo 0 antes de desativar. Lógica em `lib/patrimonio.js` (testada).
+- O RENDIMENTO (05/11/2026, fase 8.A do PLANO; o plano e as telas no artefato "Patrimônio e rentabilidade"):
+  `movimentos_investimento` (migration 013: conta, data, aporte | resgate, valor, `origem` manual | extrato,
+  `id_externo` único) e `contas.recebe_extrato` (UMA conta; marcar uma desmarca as outras — `salvarConta`). Rendeu =
+  saldo − saldo anterior − (aportes − resgates) entre as duas fotos; o % = rendeu ÷ (saldo anterior + metade do líquido
+  aportado); o do ano ENCADEIA os meses; aportado = a 1ª foto + os aportes − os resgates depois dela; o resto é o
+  rendimento acumulado (`rendimentoPorMes`, `rendimentoDoPeriodo`, testadas em `test/rendimento.test.js`). Mês sem foto
+  nova não tem rendimento (null). O EXTRATO DO NUBANK: as linhas que já ficavam de fora como 'investimento' (RDB,
+  dinheiro guardado) viram APORTE (débito) e RESGATE (crédito) da conta que recebe o extrato (`movimentosDoExtrato`;
+  o mesmo identificador não entra duas vezes; re-importar um extrato antigo só acrescenta os que faltam; o "Excluir" do
+  histórico os apaga — `desfazer.movimentos`). O CDI do mês: a série 4391 do SGS do Banco Central (`api/cdi.js`, aberta
+  ao navegador); só os meses FECHADOS se comparam (o corrente vem parcial). "Registrar o mês": a data (no começo do mês,
+  o fim do anterior se não houver foto depois dele), e por conta saldo + aportes + resgates digitados (os do extrato já
+  somados e mostrados), com o "Rendeu" ao vivo. Sem a migration, a tela mostra só os saldos e avisa.
 
 ## Gastos fixos (fase 5)
 
