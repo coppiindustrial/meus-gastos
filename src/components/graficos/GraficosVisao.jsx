@@ -7,7 +7,7 @@ import { CLASSE_GUIA, COR_ROTULO, EIXO, GRADE, ROTULO_EIXO } from '../../lib/cor
 import { escalaLinear } from '../../lib/escala.js';
 import { varCor } from '../../lib/varCor.js';
 import { brlCurto, formatBRL } from '../../lib/dinheiro.js';
-import { competenciaCurta, nomeCompetencia } from '../../lib/format.js';
+import { competenciaAtual, competenciaCurta, nomeCompetencia } from '../../lib/format.js';
 import { variacao } from '../../lib/visaoGeral.js';
 
 // OS GRÁFICOS DA VISÃO GERAL, no chrome do Gestor (os mockups A e B de gráficos): balão que segue o
@@ -28,11 +28,12 @@ const pulaNoCelular = (i, n) => (n > 6 && (n - 1 - i) % 3 !== 0 ? 'max-sm:invisi
 // opção A do mockup): calha de 56px, rótulo a 8px da grade, grade tracejada e o zero cheio. Ela vai a
 // DOIS lugares (o padding da caixa e o `left` do miolo) e à régua dos meses — os três andam juntos.
 export const CALHA_ESQ = 56;
-function GradeEsq({ esc, children }) {
+// `direita`: uma calha à direita (o fim das linhas, `LinhasEntradasGastos`) — a grade para antes dela.
+function GradeEsq({ esc, direita = 0, children }) {
   const topo = (v) => `${100 - esc.fracao(v) * 100}%`;
   return (
     <div className="relative h-full" style={{ paddingLeft: CALHA_ESQ }}>
-      <div className="absolute inset-y-0 right-0" style={{ left: CALHA_ESQ }}>
+      <div className="absolute inset-y-0" style={{ left: CALHA_ESQ, right: direita }}>
         {esc.marcas.map((v) => (
           <div key={v} className={`absolute inset-x-0 ${v === 0 ? 'border-t' : 'border-t border-dashed'}`}
             style={{ top: topo(v), borderColor: v === 0 ? EIXO : GRADE }}>
@@ -201,11 +202,11 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
 // e a mesma calha das colunas). Com muitos meses (o histórico inteiro na ampliação) ela escreve um a cada
 // `passo`, para os rótulos não se atropelarem.
 function rotuloMes(m, n) { return n > 12 ? competenciaCurta(m.competencia) : competenciaCurta(m.competencia).slice(0, 3); }
-function ReguaMeses({ meses }) {
+function ReguaMeses({ meses, direita = 0 }) {
   const n = meses.length;
   const passo = n > 24 ? Math.ceil(n / 12) : 1;
   return (
-    <div className="flex gap-1.5 pt-1" style={{ paddingLeft: CALHA_ESQ }}>
+    <div className="flex gap-1.5 pt-1" style={{ paddingLeft: CALHA_ESQ, paddingRight: direita }}>
       {meses.map((m, i) => (
         // `flex justify-center` e sem `truncate`: o nome que passa da coluna sai centrado para os dois lados (as vizinhas,
         // no celular, estão invisíveis), em vez de cortado em "a…".
@@ -220,9 +221,34 @@ function ReguaMeses({ meses }) {
 // LINHAS (mensal ou ACUMULADO): entradas e gastos como curvas com a área clara embaixo, o saldo do mês
 // (no mensal) e o ano anterior tracejado. O acumulado soma mês a mês dentro do período: a distância
 // entre as duas curvas no fim é o que sobrou no período.
-export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado = false }) {
+//
+// O NÚMERO E O FIM DA LINHA (05/11/2026, opção D do mockup "Entradas × gastos em linhas": a A com o final da B) —
+// antes as linhas só desenhavam a forma, e lado a lado com as colunas pareciam vazias:
+//   · cada mês com o seu número (sem a unidade, a régua das colunas — `formatoRotulo`), o da série de cima ACIMA do
+//     ponto e o da de baixo ABAIXO; o saldo fica só como linha. Até `rotulosAte` meses, e só da tela `sm` para cima;
+//   · cada linha TERMINA com o nome e o valor do último mês fechado, numa calha à direita (`CALHA_DIR`, com o fio do
+//     ponto ao rótulo; empilhados com folga quando se tocariam) — o ponto desse mês não repete o número;
+//   · no ACUMULADO, a CHAVE na calha, entre o final de Entradas e o de Gastos: "sobrou · N%" e o valor;
+//   · o MÊS EM ANDAMENTO (o de hoje, que só tem parte do que vai entrar) tracejado e com o ponto vazio — antes a linha
+//     despencava em novembro como se o mês tivesse sido ruim.
+// Abaixo de 520px de largura (o celular), sem os números e sem a calha: o hover diz tudo.
+const CALHA_DIR = 104;
+const FOLGA_FIM = 30; // px entre dois rótulos do fim da linha
+export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado = false, rotulosAte = 12 }) {
   const balao = useBalao(250, 170);
+  const caixaRef = useRef(null);
+  const [caixa, setCaixa] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = caixaRef.current;
+    if (!el) return undefined;
+    const medir = () => setCaixa({ w: el.clientWidth, h: el.clientHeight });
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const n = meses.length;
+  const hoje = competenciaAtual();
   const acum = (campo) => { let t = 0; return meses.map((m) => (m.temDado ? (t += m[campo]) : null)); };
   const ent = acumulado ? acum('entradas') : meses.map((m) => (m.temDado ? m.entradas : null));
   const gas = acumulado ? acum('gastos') : meses.map((m) => (m.temDado ? m.gastos : null));
@@ -234,60 +260,165 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
   const esc = escalaLinear(Math.max(1, ...todos) / 100);
   const fr = (c) => esc.fracao(Math.max(0, c) / 100);
   const x = (i) => ((i + 0.5) / n) * 100;
+  const rot = formatoRotulo(esc.marcas[esc.marcas.length - 1]);
+
+  // O ÚLTIMO MÊS FECHADO (`u`) e o EM ANDAMENTO (`k`, o de hoje com dado, depois de `u`).
+  let u = -1;
+  let k = -1;
+  meses.forEach((m, j) => { if (m.temDado) { if (m.competencia < hoje) u = j; else if (m.competencia === hoje) k = j; } });
+  if (u < 0 && k >= 0) { u = k; k = -1; }
+  const largo = caixa.w >= 520;
+  const direita = largo && u >= 0 ? CALHA_DIR : 0;
+  const comRotulo = largo && n <= rotulosAte;
+
+  // Os trechos FECHADOS (o mês em andamento fica de fora: ele vai no tracejado).
   const trechos = (vals) => {
     const out = [];
     let atual = [];
-    vals.forEach((v, i) => {
-      if (v === null) { if (atual.length) out.push(atual); atual = []; return; }
-      atual.push([x(i), 100 - fr(v) * 100]);
+    vals.forEach((v, j) => {
+      if (v === null || j === k) { if (atual.length) out.push(atual); atual = []; return; }
+      atual.push([x(j), 100 - fr(v) * 100]);
     });
     if (atual.length) out.push(atual);
     return out;
   };
-  const linha = (vals, cor, op, { tracejado, area, larg = 2 } = {}) => trechos(vals).map((pts) => (
-    <g key={`${cor}${pts[0]}`} style={{ opacity: op, transition: 'opacity .15s' }}>
-      {area && pts.length > 1 && <polygon points={`${pts[0][0]},100 ${pts.map((p) => p.join(',')).join(' ')} ${pts[pts.length - 1][0]},100`} fill={cor} fillOpacity=".1" />}
-      <polyline points={pts.map((p) => p.join(',')).join(' ')} fill="none" stroke={cor} strokeWidth={larg} strokeLinejoin="round"
-        strokeDasharray={tracejado ? '4 3' : undefined} vectorEffect="non-scaling-stroke" />
+  const linha = (vals, cor, op, { tracejado, area, larg = 2 } = {}) => (
+    <g key={cor} style={{ opacity: op, transition: 'opacity .15s' }}>
+      {trechos(vals).map((pts) => (
+        <g key={`${pts[0]}`}>
+          {area && pts.length > 1 && <polygon points={`${pts[0][0]},100 ${pts.map((p) => p.join(',')).join(' ')} ${pts[pts.length - 1][0]},100`} fill={cor} fillOpacity=".1" />}
+          <polyline points={pts.map((p) => p.join(',')).join(' ')} fill="none" stroke={cor} strokeWidth={larg} strokeLinejoin="round"
+            strokeDasharray={tracejado ? '4 3' : undefined} vectorEffect="non-scaling-stroke" />
+        </g>
+      ))}
+      {/* o mês em andamento: do último fechado até ele, tracejado */}
+      {k >= 0 && u >= 0 && vals[u] !== null && vals[k] !== null && !tracejado && (
+        <line x1={x(u)} y1={100 - fr(vals[u]) * 100} x2={x(k)} y2={100 - fr(vals[k]) * 100} stroke={cor} strokeWidth={larg}
+          strokeDasharray="3 4" strokeOpacity=".7" vectorEffect="non-scaling-stroke" />
+      )}
     </g>
-  ));
+  );
   const i = balao.ativo;
   const m = i !== null ? meses[i] : null;
   const ponto = (vals, cor, chave) => (i !== null && vals?.[i] !== null && vals?.[i] !== undefined && ctrl.opSerie(chave) === 1 ? (
     <span key={chave} className="pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-white"
       style={{ left: `${x(i)}%`, bottom: pct(fr(vals[i])), background: cor }} />
   ) : null);
+  // os pontos fixos: o do último fechado (cheio) e o do mês em andamento (vazio)
+  const marcos = (vals, cor, chave) => [u, k].filter((j) => j >= 0 && vals?.[j] !== null && vals?.[j] !== undefined).map((j) => (
+    <span key={`${chave}${j}`} className="pointer-events-none absolute -translate-x-1/2 translate-y-1/2 rounded-full transition-opacity duration-150"
+      style={{ left: `${x(j)}%`, bottom: pct(fr(vals[j])), width: 8, height: 8, opacity: ctrl.opSerie(chave),
+        ...(j === k ? { border: `1.5px solid ${cor}`, background: 'rgb(var(--tf-white, 255 255 255))' } : { background: cor, boxShadow: '0 0 0 1.5px rgb(var(--tf-white, 255 255 255))' }) }} />
+  ));
+
+  // O NÚMERO DE CADA MÊS: a série de cima acima do ponto, a de baixo abaixo (o último fechado não: está no fim).
+  const numeros = comRotulo && ent.map((e, j) => {
+    const g = gas[j];
+    if (e === null || g === null || j === u || j === k) return null;
+    const entCima = e >= g;
+    const estilo = (v, cima) => (cima
+      ? { left: `${x(j)}%`, bottom: `calc(${fr(v) * 100}% + 5px)` }
+      : { left: `${x(j)}%`, top: `calc(${(1 - fr(v)) * 100}% + 5px)` });
+    const classe = 'pointer-events-none absolute -translate-x-1/2 whitespace-nowrap text-[9.5px] font-semibold tabular-nums transition-opacity duration-150 [paint-order:stroke] [-webkit-text-stroke:3px_rgb(var(--tf-white,255_255_255))]';
+    return (
+      <span key={`n${j}`}>
+        {e > 0 && <span className={classe} style={{ ...estilo(e, entCima), color: COR_ENTRADAS, opacity: ctrl.opSerie('entradas') < 1 ? 0.25 : 1 }}>{rot(e)}</span>}
+        {g > 0 && <span className={classe} style={{ ...estilo(g, !entCima), color: COR_GASTOS, opacity: ctrl.opSerie('gastos') < 1 ? 0.25 : 1 }}>{rot(g)}</span>}
+      </span>
+    );
+  });
+
+  // O FIM DA LINHA: o nome e o valor do último mês fechado de cada série, empilhados com folga.
+  const curto = (c) => brlCurto(c).replace('R$ ', '');
+  const mesU = u >= 0 ? competenciaCurta(meses[u].competencia).slice(0, 3) : '';
+  const fins = u >= 0 && direita ? [
+    { chave: 'entradas', rotulo: acumulado ? `Entradas até ${mesU}` : `Entradas · ${mesU}`, v: ent[u], cor: COR_ENTRADAS },
+    { chave: 'gastos', rotulo: acumulado ? `Gastos até ${mesU}` : `Gastos · ${mesU}`, v: gas[u], cor: COR_GASTOS },
+    ...(sal ? [{ chave: 'saldo', rotulo: `Saldo · ${mesU}`, v: sal[u], cor: COR_SALDO }] : []),
+  ].filter((f) => f.v !== null) : [];
+  const hIn = Math.max(1, caixa.h - 16); // a caixa do gráfico (o `pt-4` fica de fora)
+  const wIn = Math.max(1, caixa.w - CALHA_ESQ - direita);
+  fins.forEach((f) => { f.yPonto = (1 - fr(f.v)) * hIn; f.y = f.yPonto; });
+  const ordem = [...fins].sort((a, b) => a.y - b.y);
+  ordem.forEach((f, j) => { if (j && f.y - ordem[j - 1].y < FOLGA_FIM) f.y = ordem[j - 1].y + FOLGA_FIM; });
+  const sobra = ordem.length ? ordem[ordem.length - 1].y - (hIn - 6) : 0;
+  if (sobra > 0) ordem.forEach((f) => { f.y -= sobra; });
+  const distU = u >= 0 ? wIn * (1 - (u + 0.5) / n) : 0;
+
+  // A CHAVE DO ACUMULADO: entre as curvas, no último mês fechado.
+  const chave = acumulado && largo && u >= 0 && ent[u] !== null && gas[u] !== null && ent[u] > gas[u] ? {
+    sobrou: ent[u] - gas[u], pct: Math.round(((ent[u] - gas[u]) / ent[u]) * 100),
+  } : null;
+  const fimEnt = fins.find((f) => f.chave === 'entradas');
+  const fimGas = fins.find((f) => f.chave === 'gastos');
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 pt-4">
-        <GradeEsq esc={esc}>
+      <div ref={caixaRef} className="min-h-0 flex-1 pt-4">
+        <GradeEsq esc={esc} direita={direita}>
           <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             {ant && linha(ant, COR_ANTERIOR, ctrl.opSerie('anterior'), { tracejado: true, larg: 1.5 })}
             {linha(ent, COR_ENTRADAS, ctrl.opSerie('entradas'), { area: true })}
             {linha(gas, COR_GASTOS, ctrl.opSerie('gastos'), { area: true })}
             {sal && linha(sal, COR_SALDO, ctrl.opSerie('saldo'), { larg: 1.5 })}
           </svg>
+          {k >= 0 && largo && (
+            <span className="pointer-events-none absolute bottom-[4px] -translate-x-1/2 whitespace-nowrap text-[9.5px] italic text-gray-400" style={{ left: `${x(k)}%` }}>em andamento</span>
+          )}
+          {marcos(ent, COR_ENTRADAS, 'entradas')}{marcos(gas, COR_GASTOS, 'gastos')}{sal && marcos(sal, COR_SALDO, 'saldo')}
+          {numeros}
+          {/* o fim de cada linha, na calha da direita: o fio do ponto ao rótulo e o rótulo */}
+          {fins.length > 0 && (
+            <div className="pointer-events-none absolute inset-y-0 left-full" style={{ width: direita }}>
+              <svg className="absolute inset-0 overflow-visible" width={direita} height={hIn} aria-hidden="true">
+                {fins.map((f) => (
+                  <line key={f.chave} x1={-distU + 5} y1={f.yPonto} x2={8} y2={f.y} stroke={f.cor} strokeWidth="1"
+                    style={{ opacity: ctrl.opSerie(f.chave) * 0.45, transition: 'opacity .15s' }} />
+                ))}
+              </svg>
+              {fins.map((f) => (
+                <div key={f.chave} className="absolute left-[12px] -translate-y-1/2 whitespace-nowrap leading-tight transition-opacity duration-150"
+                  style={{ top: f.y, opacity: ctrl.opSerie(f.chave) < 1 ? 0.3 : 1 }}>
+                  <div className="text-[10px] text-gray-400">{f.rotulo}</div>
+                  <div className="text-[12.5px] font-bold tabular-nums" style={{ color: f.cor }}>{curto(f.v)}</div>
+                </div>
+              ))}
+              {/* A CHAVE do acumulado, NA CALHA, entre os dois finais (à esquerda das curvas ela encostava nos números de
+                  julho e agosto): o colchete liga Entradas a Gastos, e no meio quanto sobrou. */}
+              {chave && fimEnt && fimGas && fimGas.y - fimEnt.y >= 2 * FOLGA_FIM + 4 && (
+                <>
+                  <div className="absolute left-[12px] w-[5px] border-y border-l border-gray-400"
+                    style={{ top: fimEnt.y + 17, height: fimGas.y - fimEnt.y - 34 }} />
+                  <div className="absolute left-[22px] -translate-y-1/2 whitespace-nowrap leading-tight"
+                    style={{ top: (fimEnt.y + fimGas.y) / 2 }}>
+                    <div className="text-[10px] text-gray-500">sobrou · <b className="font-semibold text-gray-700">{chave.pct}%</b></div>
+                    <div className="text-[12.5px] font-bold tabular-nums text-gray-800">{curto(chave.sobrou)}</div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           {i !== null && <div className={CLASSE_GUIA} style={{ left: `${x(i)}%` }} />}
           {ponto(ent, COR_ENTRADAS, 'entradas')}{ponto(gas, COR_GASTOS, 'gastos')}{sal && ponto(sal, COR_SALDO, 'saldo')}
           <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
-            {meses.map((mm, k) => (
-              <button key={mm.competencia} type="button" onMouseMove={balao.aoMover(k)} onClick={() => mm.temDado && onMes?.(mm.competencia)}
+            {meses.map((mm, j) => (
+              <button key={mm.competencia} type="button" onMouseMove={balao.aoMover(j)} onClick={() => mm.temDado && onMes?.(mm.competencia)}
                 aria-label={nomeCompetencia(mm.competencia)}
                 className={`h-full min-w-0 flex-1 ${mm.temDado && onMes ? 'cursor-pointer' : 'cursor-default'}`} />
             ))}
           </div>
         </GradeEsq>
       </div>
-      <ReguaMeses meses={meses} />
+      <ReguaMeses meses={meses} direita={direita} />
       {m && (
-        <BalaoGrafico pos={balao.pos} largura={250} titulo={`${nomeCompetencia(m.competencia)}${acumulado ? ' · acumulado' : ''}`}
+        <BalaoGrafico pos={balao.pos} largura={250} titulo={`${nomeCompetencia(m.competencia)}${acumulado ? ' · acumulado' : ''}${i === k ? ' · em andamento' : ''}`}
           itens={m.temDado ? [
             { rotulo: 'Entradas', valor: formatBRL(ent[i]), cor: COR_ENTRADAS },
             { rotulo: 'Gastos', valor: formatBRL(gas[i]), cor: COR_GASTOS },
             { rotulo: acumulado ? 'Sobrou até aqui' : 'Saldo', valor: formatBRL(ent[i] - gas[i]), cor: COR_SALDO },
             ...(ant ? [{ rotulo: `Gastos ${acumulado ? 'até aqui ' : ''}um ano antes`, valor: formatBRL(ant[i] ?? 0), cor: COR_ANTERIOR }] : []),
           ] : []}
-          nota={m.temDado ? (onMes ? 'Clique para ver os lançamentos do mês' : undefined) : 'Nenhum lançamento neste mês.'} />
+          nota={m.temDado ? [i === k && 'O mês ainda não fechou.', onMes && 'Clique para ver os lançamentos do mês'].filter(Boolean).join(' ') || undefined : 'Nenhum lançamento neste mês.'} />
       )}
     </div>
   );

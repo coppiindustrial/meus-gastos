@@ -308,7 +308,9 @@ export default function VisaoGeral() {
   const alternarOrigem = (k) => setOrigens((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
 
   const textoPer = textoPeriodo(anos, meses);
-  const anterior = rAnt ? Object.fromEntries(comps.map((c, i) => [c, rAnt.porMes[i].gastos])) : null;
+  // "UM ANO ANTES" SÓ COM DADO (05/11/2026): sem o ano anterior no app, a série era uma linha colada no zero e a legenda
+  // a mostrava à toa.
+  const anterior = rAnt && rAnt.porMes.some((m) => m.gastos > 0) ? Object.fromEntries(comps.map((c, i) => [c, rAnt.porMes[i].gastos])) : null;
   // AS MÉDIAS POR MÊS (`mediaPorMes`): só os meses em que o valor aparece — mês sem entrada cadastrada não
   // é "entrada zero" — e sem o mês em andamento quando há outros (pela metade, puxaria a média para baixo).
   const hojeComp = competenciaAtual();
@@ -342,7 +344,7 @@ export default function VisaoGeral() {
   // os SEUS meses: o período da tela ou o histórico inteiro).
   const graficoMeses = (porMes = r.porMes, ant = anterior, { rotulosAte } = {}) => {
     if (forma === 'linhas' || forma === 'acumulado') {
-      return <LinhasEntradasGastos meses={porMes} anterior={ant} ctrl={ctrl} onMes={abrirMes} acumulado={forma === 'acumulado'} />;
+      return <LinhasEntradasGastos meses={porMes} anterior={ant} ctrl={ctrl} onMes={abrirMes} acumulado={forma === 'acumulado'} rotulosAte={rotulosAte} />;
     }
     return <ColunasEntradasGastos meses={porMes} anterior={ant} ctrl={ctrl} onMes={abrirMes} altura="auto" rotulosAte={rotulosAte} />;
   };

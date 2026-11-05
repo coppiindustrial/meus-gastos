@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  anoAnterior, compsDoHistorico, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaPorMes, periodo, resumoPeriodo, variacao,
+  anoAnterior, compsDoHistorico, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaMovelDosFixos, mediaPorMes, periodo, resumoPeriodo, variacao,
 } from '../src/lib/visaoGeral.js';
 
 // Linhas no formato da view resumo_mensal (valores fictícios).
@@ -162,4 +162,22 @@ test('jaComprometido: as parcelas que vêm e os fixos de cada mês, do atual at�
     ['2027-01', 540000, 1, 22000, 562000],
   ]);
   assert.equal(jaComprometido({ hoje: '2026-11' }).length, 6); // sem nada: o mínimo de meses
+});
+
+test('jaComprometido: o fixo não lançado conta a MÉDIA MÓVEL dos últimos 6 lançamentos; o novo, o padrão', () => {
+  const rec = (id, padrao) => ({ id, descricao: id, dia_do_mes: 1, ativa: true, inicio: '2026-01', fim: null, valor_padrao_centavos: padrao });
+  const recorrencias = [rec('luz', 20000), rec('novo', 50000)];
+  // a luz de jan a out: 100, 100, 100, 100, 200, 200, 200, 300, 300, 600 → os 6 últimos (mai a out) dão 300
+  const valores = [10000, 10000, 10000, 10000, 20000, 20000, 20000, 30000, 30000, 60000];
+  const lancamentos = valores.map((v, i) => ({ recorrencia_id: 'luz', competencia: `2026-${String(i + 1).padStart(2, '0')}`, valor_centavos: v }));
+  assert.equal(mediaMovelDosFixos(lancamentos, '2026-11').get('luz'), 30000);
+  assert.equal(mediaMovelDosFixos(lancamentos, '2026-11', 3).get('luz'), 40000);
+  assert.equal(mediaMovelDosFixos(lancamentos, '2026-07').get('luz'), 15000); // só o que veio até hoje (jan a jul: os 6 últimos)
+  const r = jaComprometido({ recorrencias, lancamentos, hoje: '2026-11', minMeses: 2 });
+  assert.deepEqual(r.map((m) => m.fixos), [30000 + 50000, 30000 + 50000]); // a luz pela média, o novo pelo padrão
+  // lançado o mês, ele conta pelo lançado e entra na média dos seguintes
+  const comNov = [...lancamentos, { recorrencia_id: 'luz', competencia: '2026-11', valor_centavos: 24000 }];
+  const r2 = jaComprometido({ recorrencias, lancamentos: comNov, hoje: '2026-11', minMeses: 2 });
+  // dez: a média de jun a nov — (200 + 200 + 300 + 300 + 600 + 240) / 6 = 306,67
+  assert.deepEqual(r2.map((m) => m.fixos), [24000 + 50000, 30667 + 50000]);
 });

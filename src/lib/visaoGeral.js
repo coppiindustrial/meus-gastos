@@ -181,9 +181,30 @@ export function foraDoNormal(linhas, comps, categorias, emAndamento, { minimo = 
 
 // JÁ COMPROMETIDO (03/11/2026, opção C do mockup, em barras deitadas): o que cada mês daqui para a frente já tem para
 // pagar antes de começar — as PARCELAS que vêm (a view `parcelas_futuras`: das faturas mais recentes de cada cartão) e
-// os GASTOS FIXOS do mês (o lançado, senão o sugerido, como na grade dos fixos; "não teve" e fora da vigência não
-// contam). Do mês atual até o da última parcela, com `minMeses` e `maxMeses`. Sempre do mês atual, sem os filtros.
+// os GASTOS FIXOS do mês (o lançado; senão a MÉDIA MÓVEL do fixo — "não teve" e fora da vigência não contam). Do mês
+// atual até o da última parcela, com `minMeses` e `maxMeses`. Sempre do mês atual, sem os filtros.
 // Devolve [{ competencia, parcelas, compras, fixos, total }].
+//
+// A MÉDIA MÓVEL (05/11/2026, a pedido: antes era o sugerido da grade, o ÚLTIMO lançado, e a luz de um mês valia para o
+// ano inteiro): o mês que ainda não foi lançado conta a média dos últimos `JANELA_FIXOS` lançamentos do fixo até hoje
+// (`mediaMovelDosFixos`); com menos, a dos que houver; sem nenhum (o fixo recém-cadastrado), o valor padrão. Ela anda
+// sozinha: cada mês lançado entra na conta e o mais velho sai. O valor sugerido para LANÇAR (a tela dos fixos) continua o
+// último lançado.
+export const JANELA_FIXOS = 6;
+export function mediaMovelDosFixos(lancamentos, hoje, janela = JANELA_FIXOS) {
+  const por = new Map();
+  lancamentos.forEach((l) => {
+    if (!l.recorrencia_id || String(l.competencia).slice(0, 7) > hoje) return;
+    if (!por.has(l.recorrencia_id)) por.set(l.recorrencia_id, []);
+    por.get(l.recorrencia_id).push(l);
+  });
+  const out = new Map();
+  por.forEach((ls, id) => {
+    const ultimos = ls.sort((a, b) => String(b.competencia).localeCompare(String(a.competencia))).slice(0, janela);
+    out.set(id, Math.round(ultimos.reduce((t, l) => t + Number(l.valor_centavos), 0) / ultimos.length));
+  });
+  return out;
+}
 const mesesEntre = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
 export function jaComprometido({ parcelas = [], recorrencias = [], lancamentos = [], pulados = [], hoje, minMeses = 6, maxMeses = 12 }) {
   const porComp = new Map();
@@ -197,6 +218,7 @@ export function jaComprometido({ parcelas = [], recorrencias = [], lancamentos =
   const ultima = [...porComp.keys()].sort().pop();
   const n = Math.min(maxMeses, Math.max(minMeses, ultima ? mesesEntre(hoje, ultima) + 1 : 0));
   const matrizes = new Map();
+  const media = mediaMovelDosFixos(lancamentos, hoje);
   const fixosDe = (comp) => {
     const ano = Number(comp.slice(0, 4));
     if (!matrizes.has(ano)) matrizes.set(ano, matrizDoAno(recorrencias, lancamentos, ano, hoje, pulados));
@@ -205,7 +227,8 @@ export function jaComprometido({ parcelas = [], recorrencias = [], lancamentos =
     return mz.linhas.reduce((s, l) => {
       const c = l.celulas[j];
       if (c.estado === 'lancado') return s + c.valor;
-      return c.estado === 'pendente' || c.estado === 'futuro' ? s + Number(c.sugerido ?? 0) : s;
+      if (c.estado !== 'pendente' && c.estado !== 'futuro') return s;
+      return s + (media.get(l.rec.id) ?? Number(l.rec.valor_padrao_centavos ?? c.sugerido ?? 0));
     }, 0);
   };
   return Array.from({ length: n }, (_, i) => {

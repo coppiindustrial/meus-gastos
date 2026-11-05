@@ -311,7 +311,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     da rosca, 2px entre as partes), o total em cima, logo abaixo do Saldo e com a mesma calha (cada mês embaixo do
     seu). FIXAR uma origem na legenda desenha só as fixadas NA ESCALA DELAS (os fixos somem perto do cartão).
   · JÁ COMPROMETIDO (`vg_comprometido`, `JaComprometido`, em BARRAS DEITADAS a pedido; contas em `jaComprometido`,
-    testada): do mês atual até a última parcela (6 a 12 meses), fixos (o lançado, senão o sugerido; "não teve" fora) +
+    testada): do mês atual até a última parcela (6 a 12 meses), fixos (o lançado; senão a MÉDIA MÓVEL dos últimos 6
+    lançamentos do fixo até hoje — `mediaMovelDosFixos`, `JANELA_FIXOS`, 05/11/2026, a pedido: antes era o último lançado,
+    e a luz de um mês valia o ano inteiro; sem lançamento, o padrão; "não teve" fora; o sugerido de LANÇAR não muda) +
     parcelas que vêm (hachuradas); a tracejada é a média dos gastos dos 12 meses fechados (sem os filtros, como o Agora).
   · FORA DO NORMAL (`vg_fora`, `ForaDoNormal`; `foraDoNormal`, testada): o último mês fechado do período contra a média
     de cada categoria nos 12 meses antes (a regra do `mediaDaCategoria`), em duas colunas, acima e abaixo; só a
@@ -364,6 +366,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   linha que a separa (`LegendaSeries` com `borda`), hover = guia tracejada + meses a 40% + ponto no saldo. Colunas
   SOBREPOSTAS: entradas larga, gastos estreita na frente (recuo 23%), CADA BARRA COM O SEU NÚMERO sem a unidade
   (o da barra mais alta sobe quando tocaria o outro — `posRotulo`).
+- AS LINHAS E O ACUMULADO COM NÚMERO (05/11/2026, opção D do mockup "Entradas × gastos em linhas": a A com o final da
+  B; `LinhasEntradasGastos`): cada mês com o seu número (a régua das colunas, sem a unidade; a série de cima acima do
+  ponto, a de baixo abaixo; até `rotulosAte` meses), cada linha TERMINA com o nome e o valor do último mês fechado
+  numa calha à direita (`CALHA_DIR` 104px, a `direita` do `GradeEsq` e da `ReguaMeses`; rótulos empilhados com
+  `FOLGA_FIM`), e no acumulado a CHAVE entre as curvas: "sobrou R$ X · N%". O MÊS EM ANDAMENTO (o de hoje) vai
+  tracejado com o ponto vazio. Abaixo de 520px medidos, sem os números nem a calha. "UM ANO ANTES" SÓ COM DADO: sem o
+  ano anterior no app, `anterior` é null (a série e a legenda somem, também nas colunas). Com a calha, os meses das
+  Linhas não ficam mais exatamente sobre os do Saldo do mês (as colunas continuam alinhadas).
 - A AMPLIAÇÃO substituiu a tela "Evolução mensal" (removida): `components/graficos/AmpliadoEntradasGastos.jsx`, o
   painel do Gestor (1280px/90vh, tela cheia 96vw/94vh), a tabela com todas as colunas (cartão, fixos, avulsos,
   acumulado, um ano antes, variação) + Total, CSV, e "Período da tela | Todo o histórico" (`compsDoHistorico`).
