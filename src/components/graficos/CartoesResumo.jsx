@@ -25,6 +25,10 @@ export const ICONES = {
   saldo: <path d="M5 12h14M12 5v14" />,
   lancamentos: <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />,
   mes: <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></>,
+  // os do Patrimônio (05/11/2026)
+  patrimonio: <path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6" />,
+  tendencia: <path d="M4 18l6-6 4 4 6-8" />,
+  liquidez: <><circle cx="12" cy="12" r="8" /><path d="M12 8v8" /></>,
 };
 export const CORES_KPI = { entradas: COR_ENTRADAS, gastos: COR_GASTOS, saldo: COR_SALDO };
 // O ícone em PIXEL INTEIRO (caixa de 26, desenho de 14; 22 e 12 no compacto): com o `h-3.5` (0,875rem

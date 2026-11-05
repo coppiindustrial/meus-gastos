@@ -44,12 +44,17 @@ export function excluirSaldo(id) {
 // ------------------------------------------------------------ os APORTES e RESGATES (migration 013)
 const semTabela = (err) => /movimentos_investimento|recebe_extrato|schema cache|does not exist/i.test(err?.message ?? '');
 
-// Todos os movimentos; null sem a migration 013 (a tela diz que ela falta e segue só com as fotos).
+// Todos os movimentos; null sem a migration 013 (a tela diz que ela falta e segue só com as fotos). Com a 014, cada um
+// traz o investimento em que entrou; sem ela, a leitura cai para a antiga.
+const COLS_MOV = 'id, conta_id, data, tipo, valor_centavos, descricao, origem, id_externo';
 export async function listarMovimentos() {
+  const ler = (cols) => buscarTudo(() => supabase.from('movimentos_investimento').select(cols).order('data').order('id'));
   try {
-    return await buscarTudo(() => supabase.from('movimentos_investimento')
-      .select('id, conta_id, data, tipo, valor_centavos, descricao, origem, id_externo').order('data').order('id'));
+    return await ler(`${COLS_MOV}, investimento_id`);
   } catch (err) {
+    if (/investimento_id/i.test(err?.message ?? '')) {
+      try { return await ler(COLS_MOV); } catch (e2) { if (semTabela(e2)) return null; throw e2; }
+    }
     if (semTabela(err)) return null;
     throw err;
   }

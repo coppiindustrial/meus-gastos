@@ -1,0 +1,90 @@
+import { buscarTudo, exigir, supabase } from './supabase.js';
+
+// OS INVESTIMENTOS de cada conta (migration 014): o cadastro do título (`investimentos`), o valor dele em cada data
+// (`valores_investimento`, um por título e data) e o aporte e o resgate em que ele entrou (`movimentos_investimento`
+// com `investimento_id`). Sem a migration, `listarInvestimentos` devolve null e a tela segue só com as contas.
+
+const semTabela = (err) => /investimentos|valores_investimento|investimento_id|schema cache|does not exist/i.test(err?.message ?? '');
+
+export async function listarInvestimentos() {
+  try {
+    const [invs, valores] = await Promise.all([
+      exigir(supabase.from('investimentos').select('*').order('ordem').order('nome')),
+      buscarTudo(() => supabase.from('valores_investimento').select('id, investimento_id, data, valor_centavos').order('data').order('id')),
+    ]);
+    return { investimentos: invs, valores };
+  } catch (err) {
+    if (semTabela(err)) return null;
+    throw err;
+  }
+}
+
+const CAMPOS = ['conta_id', 'nome', 'tipo', 'indexador', 'taxa', 'liquidez', 'liquidez_dias', 'carencia_ate', 'vencimento', 'emissor',
+  'aplicado_em', 'aplicado_inicial_centavos', 'observacao', 'ativo'];
+const limpar = (inv) => {
+  const d = {};
+  CAMPOS.forEach((k) => { if (inv[k] !== undefined) d[k] = inv[k] === '' && !['nome', 'emissor', 'observacao'].includes(k) ? null : inv[k]; });
+  if (d.nome !== undefined) d.nome = d.nome.trim();
+  if (d.emissor !== undefined) d.emissor = (d.emissor ?? '').trim();
+  if (d.observacao !== undefined) d.observacao = (d.observacao ?? '').trim();
+  if (d.liquidez && d.liquidez !== 'dias') d.liquidez_dias = null;
+  if (d.liquidez && d.liquidez !== 'carencia') d.carencia_ate = null;
+  if (d.indexador === null) d.taxa = null;
+  return d;
+};
+
+// Cadastra o título com a primeira foto (o "vale hoje" em `data`). `comoAporte`: é uma aplicação nova — o valor
+// também vira um aporte na mesma data (conta no "aportado no ano"; o rendimento não muda, a foto já o tem).
+export async function criarInvestimento(inv, { valor_centavos, data, comoAporte = false }) {
+  const novo = await exigir(supabase.from('investimentos').insert(limpar(inv)).select().single());
+  try {
+    await exigir(supabase.from('valores_investimento').insert({ investimento_id: novo.id, data, valor_centavos }));
+    if (comoAporte && valor_centavos > 0) {
+      await exigir(supabase.from('movimentos_investimento').insert({
+        conta_id: novo.conta_id, investimento_id: novo.id, data, tipo: 'aporte', valor_centavos, descricao: 'Aplicação inicial', origem: 'manual',
+      }));
+    }
+  } catch (err) {
+    await supabase.from('investimentos').delete().eq('id', novo.id); // sem a foto o título não vale nada: desfaz
+    throw err;
+  }
+  return novo;
+}
+
+// Muda o cadastro. Trocou de conta: os movimentos dele vão junto (o `conta_id` gravado acompanha o título).
+export async function atualizarInvestimento(id, mudancas) {
+  const d = limpar(mudancas);
+  const salvo = await exigir(supabase.from('investimentos').update(d).eq('id', id).select().single());
+  if (d.conta_id) await exigir(supabase.from('movimentos_investimento').update({ conta_id: d.conta_id }).eq('investimento_id', id));
+  return salvo;
+}
+
+// Apaga o título, os valores e os movimentos dele (FK em cascata).
+export function excluirInvestimento(id) {
+  return exigir(supabase.from('investimentos').delete().eq('id', id));
+}
+
+// O valor de vários títulos numa data (o "Registrar o mês"). Mesmo título e mesma data: substitui.
+// `itens`: [{ investimento_id, valor_centavos }]
+export function registrarValores(data, itens) {
+  if (!itens.length) return Promise.resolve();
+  return exigir(supabase.from('valores_investimento')
+    .upsert(itens.map((i) => ({ investimento_id: i.investimento_id, data, valor_centavos: i.valor_centavos })), { onConflict: 'investimento_id,data' }));
+}
+
+export function excluirValor(id) {
+  return exigir(supabase.from('valores_investimento').delete().eq('id', id));
+}
+
+// O aporte ou o resgate de um título (ou de uma conta sem títulos: `investimento_id` vazio). `encerrar`: o resgate de
+// tudo — grava também o valor 0 na data e tira o título da lista (fica no histórico).
+export async function lancarMovimento({ conta_id, investimento_id, data, tipo, valor_centavos, descricao = '' }, { encerrar = false } = {}) {
+  // sem o título (a conta inteira), a coluna nem vai: assim o lançamento funciona também sem a migration 014
+  await exigir(supabase.from('movimentos_investimento').insert({
+    conta_id, ...(investimento_id ? { investimento_id } : {}), data, tipo, valor_centavos, descricao: descricao.trim(), origem: 'manual',
+  }));
+  if (encerrar && investimento_id) {
+    await registrarValores(data, [{ investimento_id, valor_centavos: 0 }]);
+    await exigir(supabase.from('investimentos').update({ ativo: false }).eq('id', investimento_id));
+  }
+}

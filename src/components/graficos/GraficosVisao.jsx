@@ -29,7 +29,8 @@ const pulaNoCelular = (i, n) => (n > 6 && (n - 1 - i) % 3 !== 0 ? 'max-sm:invisi
 // DOIS lugares (o padding da caixa e o `left` do miolo) e à régua dos meses — os três andam juntos.
 export const CALHA_ESQ = 56;
 // `direita`: uma calha à direita (o fim das linhas, `LinhasEntradasGastos`) — a grade para antes dela.
-function GradeEsq({ esc, direita = 0, children }) {
+// `rotulo(v)`: o texto de cada marca (padrão: reais curtos; o Patrimônio passa o % do mês).
+export function GradeEsq({ esc, direita = 0, rotulo = (v) => brlCurto(v * 100), children }) {
   const topo = (v) => `${100 - esc.fracao(v) * 100}%`;
   return (
     <div className="relative h-full" style={{ paddingLeft: CALHA_ESQ }}>
@@ -38,7 +39,7 @@ function GradeEsq({ esc, direita = 0, children }) {
           <div key={v} className={`absolute inset-x-0 ${v === 0 ? 'border-t' : 'border-t border-dashed'}`}
             style={{ top: topo(v), borderColor: v === 0 ? EIXO : GRADE }}>
             <span className="absolute -top-[7px] right-full mr-2 whitespace-nowrap text-[10px] tabular-nums" style={{ color: ROTULO_EIXO }}>
-              {brlCurto(v * 100)}
+              {rotulo(v)}
             </span>
           </div>
         ))}
@@ -50,7 +51,7 @@ function GradeEsq({ esc, direita = 0, children }) {
 
 // O número de cada barra vai SEM a unidade (o eixo já diz "R$ 10 mil"), na unidade do topo do eixo — a
 // mesma em todas as barras, para "0,6" e "15,2" se lerem na mesma régua. `topo` em reais.
-function formatoRotulo(topo) {
+export function formatoRotulo(topo) {
   const fmt = (v, casas) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
   if (topo >= 1e6) return (c) => fmt(c / 1e8, 2);
   if (topo >= 1e3) return (c) => fmt(c / 1e5, 1);
@@ -61,7 +62,7 @@ function formatoRotulo(topo) {
 // `max()` mistura a % da barra com px e resolve no layout, sem medir a caixa.
 const AR_ROTULO = 3;
 const ALT_ROTULO = 14;
-function posRotulo(fracEste, fracOutro) {
+export function posRotulo(fracEste, fracOutro) {
   const base = `calc(${fracEste * 100}% + ${AR_ROTULO}px)`;
   if (fracOutro == null || fracEste < fracOutro) return base;
   return `max(${base}, calc(${fracOutro * 100}% + ${ALT_ROTULO + AR_ROTULO * 2}px))`;
@@ -202,7 +203,7 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
 // e a mesma calha das colunas). Com muitos meses (o histórico inteiro na ampliação) ela escreve um a cada
 // `passo`, para os rótulos não se atropelarem.
 function rotuloMes(m, n) { return n > 12 ? competenciaCurta(m.competencia) : competenciaCurta(m.competencia).slice(0, 3); }
-function ReguaMeses({ meses, direita = 0 }) {
+export function ReguaMeses({ meses, direita = 0 }) {
   const n = meses.length;
   const passo = n > 24 ? Math.ceil(n / 12) : 1;
   return (

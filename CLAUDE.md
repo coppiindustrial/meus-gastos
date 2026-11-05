@@ -250,6 +250,34 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   ao navegador); só os meses FECHADOS se comparam (o corrente vem parcial). "Registrar o mês": a data (no começo do mês,
   o fim do anterior se não houver foto depois dele), e por conta saldo + aportes + resgates digitados (os do extrato já
   somados e mostrados), com o "Rendeu" ao vivo. Sem a migration, a tela mostra só os saldos e avisa.
+- OS INVESTIMENTOS (05/11/2026, fase 8.B; o desenho aprovado "Investimentos no Patrimônio"; migration 014): cada título
+  (CDB, LCI, Tesouro…) é cadastrado DENTRO de uma conta (`investimentos`: tipo, indexador + taxa, liquidez — diária,
+  no vencimento, D+N, carência até —, vencimento, emissor, data da aplicação, "aplicado até hoje", observação, ativo),
+  com o VALOR de cada data em `valores_investimento` (o cadastro pede o "vale hoje" = a primeira foto; "aplicação nova"
+  também grava o aporte do mesmo valor) e o aporte / resgate no título (`movimentos_investimento.investimento_id`).
+  APORTE MANUAL (o extrato não diz em qual CDB entrou; a leitura do extrato segue só para a conta sem títulos). Tudo é
+  SÉRIE (`rendimentoDasSeries` + `seriesDoPatrimonio` em `lib/patrimonio.js`): a conta (`c:<id>`, as fotos de
+  `saldos`) vale pelas fotos dela ATÉ a primeira foto de um título dela (`fim`; no mês da troca ainda dá o rendimento
+  entre as fotos dela, mas não entra no total) e daí em diante é a SOMA DOS TÍTULOS (`i:<id>`); o movimento de um
+  título conta na conta dele. No mês em que a série ABRE, a foto de antes é a primeira (o título cadastrado no dia 5
+  rende até o dia 30). O aporte depois da última foto já entra no valor e no aplicado (não no rendimento). O aplicado
+  parte do "aplicado até hoje" (senão da primeira foto). A CARTEIRA (`carteira`, `ordenarCarteira`, `linhaMesAMes` em
+  `lib/investimentos.js`, testadas em `test/investimentos.test.js`). Resgatar tudo ("Resgatei tudo") grava o valor 0 e
+  desativa: sai da lista e do registrar ("Mostrar os N encerrados" os traz).
+  A TELA (opção A do mockup "Patrimônio · a tabela", com a B como segunda vista, a pedido): os quatro `CartaoKpi
+  compacto` (patrimônio, rendeu no mês, no ano, liquidez diária — ou o aportado no ano, sem títulos), o
+  `GraficoPatrimonio` (`components/patrimonio/`, o card do "Entradas × gastos": `GradeEsq` — que ganhou `rotulo` —,
+  número em cada coluna, guia e 40% no hover, `LegendaSeries`; "Colunas" aportado + rendimento | "% do mês × CDI") e
+  o `BlocoInvestimentos` (`TabelaInvestimentos.jsx`): CARTEIRA = a conta é o grupo que recolhe animado
+  (`useLinhasAnimadas`), títulos com liquidez (pílula azul na diária), vencimento (âmbar até 12 meses, a barrinha do
+  prazo), aplicado, vale hoje, rendeu, % do ano e a curva de 12 meses (balão no Rendeu e ao longo da curva), + aporte ·
+  − resgate · ✎ no hover, a SETA do cabeçalho ordena dentro de cada conta (`patrimonio_ordem`); MÊS A MÊS = a
+  Grupo × mês (cruz, R$ | %, o tom mais forte é o melhor mês da linha). Vista e recolhidas lembradas
+  (`patrimonio_vista`, `patrimonio_recolhidas`); ⇕ · ⬇ CSV · ⤢ ampliado. Os pop-ups em `ModaisPatrimonio.jsx`:
+  conta (com o histórico dela), investimento (o cadastro + histórico + excluir), aporte/resgate (a lista agrupada por
+  conta, "Novo investimento" no pé, "fica com R$ X aplicados") e "Registrar o mês" POR TÍTULO (a conta sem títulos é
+  uma linha; "+ aporte" na linha, por cima). Sem a 014, `listarInvestimentos` devolve null, a tabela mostra só as
+  contas e avisa (a leitura dos movimentos cai para a sem `investimento_id`).
 
 ## Gastos fixos (fase 5)
 

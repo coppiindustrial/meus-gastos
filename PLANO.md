@@ -20,7 +20,12 @@
 > **Fase 8 · Patrimônio e rentabilidade (plano em 2026-11-05)**: **8.A pronta (2026-11-05)** — aportes e resgates por
 > conta (`movimentos_investimento`, migration 013; a conta marcada "recebe o extrato" ganha os do RDB e do dinheiro
 > guardado a cada extrato importado), o rendimento (saldo − saldo anterior − aportes + resgates), o % do mês e do ano, o
-> aportado × rendimento e o CDI do mês (Banco Central). Próximas: 8.B (aplicações) e 8.C (renda variável BR e exterior).
+> aportado × rendimento e o CDI do mês (Banco Central). **8.B pronta (2026-11-05)** — os INVESTIMENTOS de cada conta
+> (migration 014: `investimentos` com tipo, indexador e taxa, liquidez, vencimento, emissor e o "aplicado até hoje";
+> `valores_investimento`, o valor de cada data; `movimentos_investimento.investimento_id`): o aporte e o resgate manuais
+> no título escolhido, o "Registrar o mês" por título, o rendimento por título; a tela = os números e o gráfico no jeito
+> da Visão geral e a tabela agrupada por conta (opção A do mockup "Patrimônio · a tabela"), com o mês a mês (a B) como
+> segunda vista. As fotos antigas da conta ficam como histórico. Próxima: 8.C (renda variável BR e exterior).
 > **Extrato da conta (2026-10-27)**: CSV do extrato do Nubank; entradas continuam à mão; fatura, investimentos e
 > transferências entre contas próprias (regra de ignorar) ficam de fora; pagamento de fixo vira o fixo do mês com o
 > valor real; o resto entra como avulso (sem regra → Revisar pendências). Migration 005.
@@ -164,7 +169,7 @@ Nomes, comentários e UI em português, como no Gestor.
 | **4. Resumo do mês** | Dashboard completo, parcelas futuras, evolução mensal, exportar CSV | Substitui o Dashboard da planilha |
 | **5. Gastos fixos** | Recorrências + sugestão mensal | Fixos do mês lançados com 1 clique cada |
 | **6. Patrimônio** | Contas, saldos, gráfico de evolução | Você vê seu patrimônio mês a mês |
-| **8. Patrimônio e rentabilidade** (plano aprovado em 2026-11-05, artefato "Patrimônio e rentabilidade") | 8.A rendimento por conta: aportes e resgates (migration 013; os do Nubank pelo extrato), rendeu no mês e no ano, aportado × rendimento, CDI do Banco Central (feito) · 8.B carteira por aplicação (renda fixa: indexador, taxa, vencimento, liquidez) · 8.C renda variável no Brasil e no exterior (ativos com moeda, operações, proventos, câmbio, alocação) | Você sabe quanto o patrimônio rendeu, separado do que você aportou |
+| **8. Patrimônio e rentabilidade** (plano aprovado em 2026-11-05, artefato "Patrimônio e rentabilidade") | 8.A rendimento por conta: aportes e resgates (migration 013; os do Nubank pelo extrato), rendeu no mês e no ano, aportado × rendimento, CDI do Banco Central (feito) · 8.B carteira por aplicação (renda fixa: indexador, taxa, vencimento, liquidez; migration 014) (feito) · 8.C renda variável no Brasil e no exterior (ativos com moeda, operações, proventos, câmbio, alocação) | Você sabe quanto o patrimônio rendeu, separado do que você aportou |
 | **7. Importador configurável** | 7.1 modelo de importação + leitura pelo modelo (feito) · 7.2 assistente (arquivo → colunas → conferir e salvar) (feito) · 7.3 importadores reconhecem os modelos; modelos em Cadastros (feito) · depois, modelos de extrato | Um cartão de banco novo entra sem programar: ensina o formato uma vez e os próximos CSVs entram sozinhos |
 | **Futuro** | Importar extrato da conta corrente (OFX/CSV) | — |
 
