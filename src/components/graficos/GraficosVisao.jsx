@@ -203,7 +203,8 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
 // e a mesma calha das colunas). Com muitos meses (o histórico inteiro na ampliação) ela escreve um a cada
 // `passo`, para os rótulos não se atropelarem.
 function rotuloMes(m, n) { return n > 12 ? competenciaCurta(m.competencia) : competenciaCurta(m.competencia).slice(0, 3); }
-export function ReguaMeses({ meses, direita = 0 }) {
+// `ativo`: o mês sob o cursor (o nome dele escurece e ganha peso).
+export function ReguaMeses({ meses, direita = 0, ativo = null }) {
   const n = meses.length;
   const passo = n > 24 ? Math.ceil(n / 12) : 1;
   return (
@@ -211,7 +212,8 @@ export function ReguaMeses({ meses, direita = 0 }) {
       {meses.map((m, i) => (
         // `flex justify-center` e sem `truncate`: o nome que passa da coluna sai centrado para os dois lados (as vizinhas,
         // no celular, estão invisíveis), em vez de cortado em "a…".
-        <span key={m.competencia} className={`flex min-w-0 flex-1 justify-center whitespace-nowrap text-[10px] text-gray-500 ${pulaNoCelular(i, n)}`}>
+        <span key={m.competencia} className={`flex min-w-0 flex-1 justify-center whitespace-nowrap text-[10px] transition-colors duration-150 ${
+          ativo === i ? 'font-semibold text-gray-800' : 'text-gray-500'} ${pulaNoCelular(i, n)}`}>
           {(n - 1 - i) % passo === 0 ? rotuloMes(m, n) : ''}
         </span>
       ))}
@@ -301,6 +303,10 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
   );
   const i = balao.ativo;
   const m = i !== null ? meses[i] : null;
+  // o último mês sob o cursor: os véus ficam nele ao sair (só apagam)
+  const ultimoRef = useRef(0);
+  if (i !== null) ultimoRef.current = i;
+  const ultimoMes = Math.min(ultimoRef.current, n - 1);
   const ponto = (vals, cor, chave) => (i !== null && vals?.[i] !== null && vals?.[i] !== undefined && ctrl.opSerie(chave) === 1 ? (
     <span key={chave} className="pointer-events-none absolute h-[9px] w-[9px] -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-white"
       style={{ left: `${x(i)}%`, bottom: pct(fr(vals[i])), background: cor }} />
@@ -352,6 +358,16 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
   } : null;
   const fimEnt = fins.find((f) => f.chave === 'entradas');
   const fimGas = fins.find((f) => f.chave === 'gastos');
+  // O HOVER NO FIM DA LINHA (05/11/2026, a pedido): o rótulo ganha o fundo, a série ACENDE (as outras recuam, como na
+  // legenda), o fio vai cheio e o mês do rótulo ganha a guia, o ponto e o balão. Na chave do acumulado, as duas séries
+  // ficam e o colchete escurece.
+  const [fimSob, setFimSob] = useState(null);
+  const sobreFim = (chaveFim) => ({
+    onMouseEnter: (e) => { setFimSob(chaveFim); if (chaveFim !== 'sobrou') ctrl.setHover(chaveFim); balao.aoMover(u)(e); },
+    onMouseMove: (e) => balao.aoMover(u)(e),
+    onMouseLeave: () => { setFimSob(null); ctrl.setHover(null); balao.aoSair(); },
+  });
+  const ROTULO_FIM = 'pointer-events-auto absolute -translate-y-1/2 cursor-default whitespace-nowrap rounded-[5px] px-1.5 py-0.5 leading-tight transition-[opacity,background-color,box-shadow] duration-150';
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -373,14 +389,14 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
             <div className="pointer-events-none absolute inset-y-0 left-full" style={{ width: direita }}>
               <svg className="absolute inset-0 overflow-visible" width={direita} height={hIn} aria-hidden="true">
                 {fins.map((f) => (
-                  <line key={f.chave} x1={-distU + 5} y1={f.yPonto} x2={8} y2={f.y} stroke={f.cor} strokeWidth="1"
-                    style={{ opacity: ctrl.opSerie(f.chave) * 0.45, transition: 'opacity .15s' }} />
+                  <line key={f.chave} x1={-distU + 5} y1={f.yPonto} x2={8} y2={f.y} stroke={f.cor} strokeWidth={fimSob === f.chave ? 1.5 : 1}
+                    style={{ opacity: ctrl.opSerie(f.chave) * (fimSob === f.chave ? 1 : 0.45), transition: 'opacity .15s' }} />
                 ))}
               </svg>
               {fins.map((f) => (
-                <div key={f.chave} className="absolute left-[12px] -translate-y-1/2 whitespace-nowrap leading-tight transition-opacity duration-150"
-                  style={{ top: f.y, opacity: ctrl.opSerie(f.chave) < 1 ? 0.3 : 1 }}>
-                  <div className="text-[10px] text-gray-400">{f.rotulo}</div>
+                <div key={f.chave} {...sobreFim(f.chave)} className={`${ROTULO_FIM} left-[6px] ${fimSob === f.chave ? 'bg-gray-100' : ''}`}
+                  style={{ top: f.y, opacity: ctrl.opSerie(f.chave) < 1 ? 0.3 : 1, boxShadow: fimSob === f.chave ? `inset 2px 0 0 ${f.cor}` : undefined }}>
+                  <div className={`text-[10px] transition-colors duration-150 ${fimSob === f.chave ? 'text-gray-600' : 'text-gray-400'}`}>{f.rotulo}</div>
                   <div className="text-[12.5px] font-bold tabular-nums" style={{ color: f.cor }}>{curto(f.v)}</div>
                 </div>
               ))}
@@ -388,9 +404,9 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
                   julho e agosto): o colchete liga Entradas a Gastos, e no meio quanto sobrou. */}
               {chave && fimEnt && fimGas && fimGas.y - fimEnt.y >= 2 * FOLGA_FIM + 4 && (
                 <>
-                  <div className="absolute left-[12px] w-[5px] border-y border-l border-gray-400"
+                  <div className={`absolute left-[12px] w-[5px] border-y border-l transition-colors duration-150 ${fimSob === 'sobrou' ? 'border-gray-700' : 'border-gray-400'}`}
                     style={{ top: fimEnt.y + 17, height: fimGas.y - fimEnt.y - 34 }} />
-                  <div className="absolute left-[22px] -translate-y-1/2 whitespace-nowrap leading-tight"
+                  <div {...sobreFim('sobrou')} className={`${ROTULO_FIM} left-[16px] ${fimSob === 'sobrou' ? 'bg-gray-100' : ''}`}
                     style={{ top: (fimEnt.y + fimGas.y) / 2 }}>
                     <div className="text-[10px] text-gray-500">sobrou · <b className="font-semibold text-gray-700">{chave.pct}%</b></div>
                     <div className="text-[12.5px] font-bold tabular-nums text-gray-800">{curto(chave.sobrou)}</div>
@@ -399,8 +415,20 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
               )}
             </div>
           )}
+          {/* O MÊS SOB O CURSOR EM DESTAQUE (05/11/2026, a pedido: a área do gráfico ficava parada, só a guia andava): a
+              faixa clara do mês e o RESTO DO GRÁFICO ESMAECIDO — o "outros meses a 40%" das colunas, aqui por duas véus na
+              cor do cartão, à esquerda e à direita do mês. Eles DESLIZAM de um mês ao outro (largura e posição animadas) e
+              ficam montados ao sair, só apagando, para a volta não nascer do canto. */}
+          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 transition-[width,opacity] duration-200 ease-out"
+            style={{ width: `${(ultimoMes / n) * 100}%`, opacity: i !== null ? 0.6 : 0, background: 'rgb(var(--tf-white, 255 255 255))' }} />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 transition-[left,opacity] duration-200 ease-out"
+            style={{ left: `${((ultimoMes + 1) / n) * 100}%`, opacity: i !== null ? 0.6 : 0, background: 'rgb(var(--tf-white, 255 255 255))' }} />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 rounded-[3px] transition-[left,opacity] duration-200 ease-out"
+            style={{ left: `${(ultimoMes / n) * 100}%`, width: `${100 / n}%`, opacity: i !== null ? 1 : 0, background: 'rgba(127, 127, 127, .07)' }} />
           {i !== null && <div className={CLASSE_GUIA} style={{ left: `${x(i)}%` }} />}
           {ponto(ent, COR_ENTRADAS, 'entradas')}{ponto(gas, COR_GASTOS, 'gastos')}{sal && ponto(sal, COR_SALDO, 'saldo')}
+          {/* o número do mês sob o cursor, por cima do véu (o último fechado não tem: está no fim da linha) */}
+          {i !== null && i !== u && i !== k && comRotulo && numeros[i]}
           <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
             {meses.map((mm, j) => (
               <button key={mm.competencia} type="button" onMouseMove={balao.aoMover(j)} onClick={() => mm.temDado && onMes?.(mm.competencia)}
@@ -410,7 +438,7 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
           </div>
         </GradeEsq>
       </div>
-      <ReguaMeses meses={meses} direita={direita} />
+      <ReguaMeses meses={meses} direita={direita} ativo={i} />
       {m && (
         <BalaoGrafico pos={balao.pos} largura={250} titulo={`${nomeCompetencia(m.competencia)}${acumulado ? ' · acumulado' : ''}${i === k ? ' · em andamento' : ''}`}
           itens={m.temDado ? [
