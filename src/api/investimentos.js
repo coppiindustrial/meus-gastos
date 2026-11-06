@@ -9,7 +9,8 @@ const semTabela = (err) => /investimentos|valores_investimento|investimento_id|s
 // Os DEPÓSITOS de antes do cadastro (migration 016): [] sem a tabela (o IR fica pelo bloco do cadastro).
 async function listarDepositos() {
   try {
-    return await buscarTudo(() => supabase.from('depositos_investimento').select('id, investimento_id, data, valor_centavos, referencia').order('data').order('id'));
+    // todas as colunas: o vencimento de cada um (018) vem quando existe
+    return await buscarTudo(() => supabase.from('depositos_investimento').select('*').order('data').order('id'));
   } catch (err) {
     if (/depositos_investimento|schema cache|does not exist/i.test(err?.message ?? '')) return null;
     throw err;
@@ -33,10 +34,16 @@ export async function listarInvestimentos() {
 // Substitui os depósitos de antes do cadastro de um título pela lista colada. `itens`: [{ data, valor_centavos }];
 // `referencia`: a data dos valores (o dia em que o banco os mostrou).
 export async function salvarDepositos(investimentoId, referencia, itens) {
+  // o VENCIMENTO de cada um (018) não está na tabela do pop-up: o da mesma data passa ao aporte novo
+  const antes = await exigir(supabase.from('depositos_investimento').select('*').eq('investimento_id', investimentoId));
+  const vencDe = Object.fromEntries(antes.filter((d) => d.vencimento).map((d) => [d.data, d.vencimento]));
   await exigir(supabase.from('depositos_investimento').delete().eq('investimento_id', investimentoId));
   if (itens.length) {
     // cada item pode ter a sua referência (o digitado como "o que foi depositado" leva a própria data — `planoDosDepositos`)
-    await exigir(supabase.from('depositos_investimento').insert(itens.map((i) => ({ investimento_id: investimentoId, data: i.data, valor_centavos: i.valor_centavos, referencia: i.referencia ?? referencia }))));
+    await exigir(supabase.from('depositos_investimento').insert(itens.map((i) => ({
+      investimento_id: investimentoId, data: i.data, valor_centavos: i.valor_centavos, referencia: i.referencia ?? referencia,
+      ...(vencDe[i.data] ? { vencimento: vencDe[i.data] } : {}),
+    }))));
   }
 }
 
@@ -48,8 +55,8 @@ export function atualizarDeposito(id, mudancas) {
 export function excluirDeposito(id) {
   return exigir(supabase.from('depositos_investimento').delete().eq('id', id));
 }
-export function inserirDeposito({ investimento_id, data, valor_centavos, referencia }) {
-  return exigir(supabase.from('depositos_investimento').insert({ investimento_id, data, valor_centavos, referencia }).select().single());
+export function inserirDeposito({ investimento_id, data, valor_centavos, referencia, vencimento }) {
+  return exigir(supabase.from('depositos_investimento').insert({ investimento_id, data, valor_centavos, referencia, ...(vencimento ? { vencimento } : {}) }).select().single());
 }
 
 // `prazo_meses` e `ao_vencer` (a migration 015) faltavam aqui: o "prazo por aplicação" do cadastro não gravava (06/11/2026).
@@ -126,10 +133,12 @@ export function excluirValorNaData(investimentoId, data) {
 // O aporte ou o resgate de um título (ou de uma conta sem títulos: `investimento_id` vazio). `encerrar`: o resgate de
 // tudo — grava também o valor 0 na data e tira o título da lista (fica no histórico). Devolve o movimento gravado (o
 // desfazer da tabela o apaga pelo id).
-export async function lancarMovimento({ conta_id, investimento_id, data, tipo, valor_centavos, descricao = '' }, { encerrar = false } = {}) {
+// `vencimento` (018): o do aporte, quando digitado — sem ele, a coluna nem vai (funciona sem a migration).
+export async function lancarMovimento({ conta_id, investimento_id, data, tipo, valor_centavos, descricao = '', vencimento = null }, { encerrar = false } = {}) {
   // sem o título (a conta inteira), a coluna nem vai: assim o lançamento funciona também sem a migration 014
   const mov = await exigir(supabase.from('movimentos_investimento').insert({
     conta_id, ...(investimento_id ? { investimento_id } : {}), data, tipo, valor_centavos, descricao: descricao.trim(), origem: 'manual',
+    ...(vencimento ? { vencimento } : {}),
   }).select('id').single());
   if (encerrar && investimento_id) {
     await registrarValores(data, [{ investimento_id, valor_centavos: 0 }]);

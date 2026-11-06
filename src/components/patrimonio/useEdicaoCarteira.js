@@ -17,7 +17,12 @@ import { formatDate } from '../../lib/format.js';
 // relê os dados depois de cada uma, e cada uma guarda o seu DESFAZER (a pilha do Ctrl+Z: o contrário do que gravou — o
 // valor de antes, ou apagar o que nasceu). `d`: o `useDadosPatrimonio`. Nada aqui loga valor.
 const diasEntre = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 86400000);
-const amigavel = (err) => (/duplicate|unique/i.test(err?.message ?? '') ? 'Já existe um valor nessa data para este investimento.' : err?.message ?? 'Não gravou.');
+const amigavel = (err) => {
+  const m = err?.message ?? '';
+  if (/duplicate|unique/i.test(m)) return 'Já existe um valor nessa data para este investimento.';
+  if (/vencimento/i.test(m) && /column|schema cache|does not exist/i.test(m)) return 'Falta aplicar a migration 018 (o vencimento de cada aporte): cole o arquivo no SQL Editor do Supabase.';
+  return m || 'Não gravou.';
+};
 
 export default function useEdicaoCarteira(d) {
   const toast = useToast();
@@ -151,7 +156,7 @@ export default function useEdicaoCarteira(d) {
 
   // O APORTE NOVO (a linha "+ aporte"). Com valores registrados depois da data, pergunta se eles já o incluem (a foto do
   // banco de depois inclui; a que nasceu junto com outro aporte, não) — "Somar" os cresce pela taxa até cada um.
-  const novoAporte = useCallback(async (x, data, valor) => {
+  const novoAporte = useCallback(async (x, data, valor, vencimento = null) => {
     const { valores, depositos, taxas } = dRef.current;
     const plano = planoDoNovoAporte({ inv: x.inv, data, valores, depositos });
     if (plano.erro) { toast.error(plano.erro); return { ok: false }; }
@@ -167,7 +172,7 @@ export default function useEdicaoCarteira(d) {
     }
     return rodar(`o aporte de ${formatBRL(valor)} em ${x.inv.nome}`, async () => {
       const desfazeres = [];
-      const mov = await lancarMovimento({ conta_id: x.inv.conta_id, investimento_id: x.inv.id, data, tipo: 'aporte', valor_centavos: valor });
+      const mov = await lancarMovimento({ conta_id: x.inv.conta_id, investimento_id: x.inv.id, data, tipo: 'aporte', valor_centavos: valor, vencimento });
       desfazeres.push(() => excluirMovimento(mov.id));
       // sem valor ainda: o aporte é também o valor dele nesse dia (o que o "Cadastrar e aplicar" faz)
       if (plano.foto) {
@@ -199,7 +204,7 @@ export default function useEdicaoCarteira(d) {
     return rodar(`a exclusão do aporte de ${formatDate(f.data)}`, async () => {
       if (f.tipo === 'dep') {
         await excluirDeposito(f.id);
-        return () => inserirDeposito({ investimento_id: l.x.inv.id, data: f.data, valor_centavos: f.valor, referencia: f.referencia });
+        return () => inserirDeposito({ investimento_id: l.x.inv.id, data: f.data, valor_centavos: f.valor, referencia: f.referencia, vencimento: f.vencimento });
       }
       const mov = movimentos.find((m) => m.id === f.id);
       const fotos = valores.filter((v) => v.investimento_id === l.x.inv.id);
@@ -207,7 +212,7 @@ export default function useEdicaoCarteira(d) {
       await excluirMovimento(f.id);
       if (gemea) await excluirValor(gemea.id);
       return async () => {
-        await salvarMovimentos([{ conta_id: mov.conta_id, investimento_id: mov.investimento_id, data: mov.data, tipo: mov.tipo, valor_centavos: Number(mov.valor_centavos), descricao: mov.descricao ?? '' }]);
+        await salvarMovimentos([{ conta_id: mov.conta_id, investimento_id: mov.investimento_id, data: mov.data, tipo: mov.tipo, valor_centavos: Number(mov.valor_centavos), descricao: mov.descricao ?? '', ...(mov.vencimento ? { vencimento: mov.vencimento } : {}) }]);
         if (gemea) await registrarValores(gemea.data, [{ investimento_id: l.x.inv.id, valor_centavos: Number(gemea.valor_centavos) }]);
       };
     });

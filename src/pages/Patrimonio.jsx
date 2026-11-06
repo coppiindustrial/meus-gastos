@@ -89,7 +89,8 @@ function OndeEsta({ grupos, total }) {
 // acontece (vence · reaplica · volta para a conta). Até 8, os mais perto primeiro.
 function ProximosVencimentos({ grupos, onVer }) {
   const lista = useMemo(() => grupos.flatMap((g) => g.itens.filter((x) => x.inv.ativo !== false).flatMap((x) => {
-    if (x.prazos) return x.prazos.lotes.filter((l) => l.vence && !l.vencida).map((l) => ({ data: l.vence, nome: x.inv.nome, lugar: g.conta.nome, cor: g.cor, valor: l.valor, oque: x.inv.ao_vencer === 'volta' ? 'volta' : 'reaplica' }));
+    // cada aporte com o seu vencimento: o do prazo por aplicação reaplica ou volta; o dos outros, vence
+    if (x.prazos) return x.prazos.lotes.filter((l) => l.vence && !l.vencida).map((l) => ({ data: l.vence, nome: x.inv.nome, lugar: g.conta.nome, cor: g.cor, valor: l.valor, oque: x.inv.liquidez !== 'por_aplicacao' ? 'vence' : x.inv.ao_vencer === 'volta' ? 'volta' : 'reaplica' }));
     if (x.venc && !x.venc.vencido) return [{ data: x.inv.vencimento, nome: x.inv.nome, lugar: g.conta.nome, cor: g.cor, valor: x.vale, oque: 'vence', perto: x.venc.perto }];
     return [];
   })).sort((a, b) => (a.data < b.data ? -1 : 1)).slice(0, 8), [grupos]);

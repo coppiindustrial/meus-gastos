@@ -486,12 +486,13 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
                     </span>
                     <span className="text-right tabular-nums text-gray-800">{formatBRL(l.valor)}</span>
                     <span className="text-right text-gray-600">
-                      {l.vence ? <>{l.vencida ? 'venceu' : 'vence'} <b className="font-semibold text-gray-800">{formatDate(l.vence)}</b>{l.renovacoes > 0 && <span className="block text-[11px] text-gray-400">reaplicou {l.renovacoes}×</span>}</>
+                      {l.vence ? <>{l.vencida ? 'venceu' : 'vence'} <b className="font-semibold text-gray-800">{formatDate(l.vence)}</b>{l.renovacoes > 0 && <span className="block text-[11px] text-gray-400">reaplicou {l.renovacoes}×</span>}{l.propria && <span className="block text-[11px] text-gray-400">digitado</span>}</>
                         : <span className="text-[12px] text-gray-400">{l.inicial ? 'sem a data da aplicação' : '—'}</span>}
                     </span>
                   </div>
                 ))}
-                <p className="text-xs text-gray-500">{`Cada aplicação fica ${rotuloPrazo(x.prazos.prazo)}; ${inv.ao_vencer === 'volta' ? 'ao vencer, o dinheiro volta para a conta (lance o resgate).' : 'ao vencer, reaplica sozinha por mais um prazo, sem virar resgate.'}`}</p>
+                {x.prazos.prazo ? <p className="text-xs text-gray-500">{`Cada aplicação fica ${rotuloPrazo(x.prazos.prazo)}; ${inv.ao_vencer === 'volta' ? 'ao vencer, o dinheiro volta para a conta (lance o resgate).' : 'ao vencer, reaplica sozinha por mais um prazo, sem virar resgate.'}`} O vencimento digitado num aporte (na tabela) vale como está.</p>
+                  : <p className="text-xs text-gray-500">O vencimento de cada aporte: o digitado na tabela (a célula Resgate da linha dele), ou o do investimento.</p>}
               </div>
             )}
             {aba === 'historico' && (

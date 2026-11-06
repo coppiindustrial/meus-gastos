@@ -9,8 +9,9 @@ import { calcularValor } from './dinheiro.js';
 // As colunas da carteira, na ordem da tela: o andar passa por todas (a calculada também se seleciona); só algumas editam.
 export const COLUNAS_CARTEIRA = ['nome', 'resgate', 'aplicado', 'vale', 'liquido', 'rendeu', 'ano', 'curva'];
 
-// Como a célula se edita: 'texto' (um nome), 'data', 'valor', 'rende' (o pop-up do nome, do tipo e da taxa), 'resgate'
-// (o pop-up da liquidez e do prazo) e 'novoInv' (o pop-up do investimento novo) — ou null (calculada: só se lê).
+// Como a célula se edita: 'texto' (um nome), 'data', 'valor', 'vencimento' (a data do aporte que vence: vazia, a regra do
+// investimento), 'rende' (o pop-up do nome, do tipo e da taxa), 'resgate' (o pop-up da liquidez e do prazo) e 'novoInv'
+// (o pop-up do investimento novo) — ou null (calculada: só se lê).
 // As linhas: 'grupo' (a instituição), 'inv', 'lote' (o aporte), 'novoAporte', 'novoInv' e 'novaInst' (as de acrescentar).
 export function modoDaCelula(l, col) {
   if (!l) return null;
@@ -28,9 +29,10 @@ export function modoDaCelula(l, col) {
       if (!f) return null;
       if (col === 'nome') return 'data';
       if (col === 'aplicado') return 'valor';
+      if (col === 'resgate') return f.tipo === 'inicial' ? null : 'vencimento'; // o do cadastro não tem onde guardar
       return null;
     }
-    case 'novoAporte': return col === 'nome' ? 'data' : col === 'aplicado' ? 'valor' : null;
+    case 'novoAporte': return col === 'nome' ? 'data' : col === 'aplicado' ? 'valor' : col === 'resgate' ? 'vencimento' : null;
     case 'novoInv': return col === 'nome' ? 'novoInv' : null;
     case 'novaInst': return col === 'nome' ? 'texto' : null;
     default: return null;
@@ -73,9 +75,10 @@ export function textoDaCelula(l, col, rascunho = null) {
   if (l.tipo === 'lote') {
     const f = l.lo.fonte;
     if (col === 'nome') return br(f?.data ?? l.lo.data);
+    if (col === 'resgate') return br(l.vence ?? ''); // o que aparece: o digitado, ou o da regra
     return f?.exato ? campoValor(f.valor) : campoValor(l.lo.depositado);
   }
-  if (l.tipo === 'novoAporte') return col === 'nome' ? br(rascunho?.data) : (rascunho?.valor ?? '');
+  if (l.tipo === 'novoAporte') return col === 'nome' ? br(rascunho?.data) : col === 'resgate' ? br(rascunho?.venc ?? '') : (rascunho?.valor ?? '');
   return '';
 }
 
@@ -88,6 +91,14 @@ export function lerCelula(modo, texto, hoje) {
     const d = lerData(t, hoje.slice(0, 4));
     if (!d) return { ok: false, erro: 'Data inválida: digite dd/mm/aaaa.' };
     if (d > hoje) return { ok: false, erro: 'A data não pode ser depois de hoje.' };
+    return { ok: true, valor: d };
+  }
+  // o vencimento: vazio volta à regra (null); sem o ano, o próximo dia com aquele dia e mês (vencimento é para a frente)
+  if (modo === 'vencimento') {
+    if (!t) return { ok: true, valor: null };
+    let d = lerData(t, hoje.slice(0, 4));
+    if (!d) return { ok: false, erro: 'Data inválida: digite dd/mm/aaaa.' };
+    if (/^\d{1,2}[/.-]\d{1,2}$/.test(t) && d < hoje) d = `${Number(d.slice(0, 4)) + 1}${d.slice(4)}`;
     return { ok: true, valor: d };
   }
   if (modo === 'valor') {
@@ -108,6 +119,8 @@ export function lerCelula(modo, texto, hoje) {
 // Devolve { alvo: 'mov' | 'dep' | 'inv', id, mudancas, antes, gemea? } — `antes` desfaz.
 export function planoDoAporte({ lo, inv, campo, valor, fotos = [] }) {
   const f = lo.fonte;
+  // o vencimento (018): só a coluna dele, no aporte do app ou no de antes do app
+  if (campo === 'vencimento') return { alvo: f.tipo, id: f.id, mudancas: { vencimento: valor }, antes: { vencimento: f.vencimento ?? null } };
   if (f.tipo === 'mov') {
     const mudancas = campo === 'data' ? { data: valor } : { valor_centavos: valor };
     const g = fotos.find((v) => !v.estimado && v.data === f.data && Number(v.valor_centavos) === f.valor) ?? null;

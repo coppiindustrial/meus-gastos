@@ -55,7 +55,8 @@ test('proximaEditavel: o Tab pula as calculadas e passa de linha', () => {
   assert.deepEqual(proximaEditavel(linhas, { id: 'i:i1', col: 'nome' }), { id: 'i:i1', col: 'resgate' });
   assert.deepEqual(proximaEditavel(linhas, { id: 'i:i1', col: 'resgate' }), { id: 'i:i1', col: 'vale' });
   assert.deepEqual(proximaEditavel(linhas, { id: 'i:i1', col: 'vale' }), { id: 'l:m1', col: 'nome' });
-  assert.deepEqual(proximaEditavel(linhas, { id: 'l:m1', col: 'nome' }), { id: 'l:m1', col: 'aplicado' });
+  assert.deepEqual(proximaEditavel(linhas, { id: 'l:m1', col: 'nome' }), { id: 'l:m1', col: 'resgate' }); // o vencimento do aporte
+  assert.deepEqual(proximaEditavel(linhas, { id: 'l:m1', col: 'resgate' }), { id: 'l:m1', col: 'aplicado' });
   assert.deepEqual(proximaEditavel(linhas, { id: 'l:m1', col: 'nome' }, -1), { id: 'i:i1', col: 'vale' });
   assert.deepEqual(proximaEditavel(linhas, { id: 'nq', col: 'nome' }), { id: 'nq', col: 'nome' }); // a última fica
 });
@@ -133,4 +134,25 @@ test('planoDoNovoAporte: a primeira foto, os valores de depois e o de antes dos 
   const deps = [{ investimento_id: 'i1', data: '2026-08-01', referencia: '2026-09-05' }];
   assert.match(planoDoNovoAporte({ inv, data: '2026-09-05', depositos: deps }).erro, /antes do app/);
   assert.equal(planoDoNovoAporte({ inv, data: '2026-09-06', depositos: deps }).erro, undefined);
+});
+
+test('o vencimento de cada aporte: digitado, vazio volta à regra, sem o ano é o próximo', () => {
+  assert.equal(modoDaCelula(linhas[2], 'resgate'), 'vencimento');
+  assert.equal(modoDaCelula({ ...linhas[2], lo: loteIni }, 'resgate'), null); // o do cadastro não tem onde guardar
+  assert.equal(modoDaCelula(linhas[3], 'resgate'), 'vencimento');
+  const hoje = '2026-11-06';
+  assert.deepEqual(lerCelula('vencimento', '', hoje), { ok: true, valor: null });
+  assert.deepEqual(lerCelula('vencimento', '02/09/2027', hoje), { ok: true, valor: '2027-09-02' });
+  assert.deepEqual(lerCelula('vencimento', '02/09', hoje), { ok: true, valor: '2027-09-02' }); // 02/09/2026 já passou
+  assert.deepEqual(lerCelula('vencimento', '10/12', hoje), { ok: true, valor: '2026-12-10' });
+  assert.equal(lerCelula('vencimento', '31/02', hoje).ok, false);
+  // o que a célula mostra ao abrir: o vencimento da linha (o digitado ou o da regra)
+  assert.equal(textoDaCelula({ ...linhas[2], vence: '2027-03-12' }, 'resgate'), '12/03/2027');
+  assert.equal(textoDaCelula(linhas[3], 'resgate', { venc: '2027-09-02' }), '02/09/2027');
+  // grava só a coluna dele, no aporte do app ou no de antes do app
+  assert.deepEqual(planoDoAporte({ lo: loteMov, inv, campo: 'vencimento', valor: '2027-03-12' }),
+    { alvo: 'mov', id: 'm1', mudancas: { vencimento: '2027-03-12' }, antes: { vencimento: null } });
+  const dep = { ...loteDep, fonte: { ...loteDep.fonte, vencimento: '2027-01-01' } };
+  assert.deepEqual(planoDoAporte({ lo: dep, inv, campo: 'vencimento', valor: null }),
+    { alvo: 'dep', id: 'd1', mudancas: { vencimento: null }, antes: { vencimento: '2027-01-01' } });
 });

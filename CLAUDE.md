@@ -331,6 +331,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     esquerda, 14px semibold, 46px), o INVESTIMENTO recuado em duas linhas (13px médio), o APORTE recuado de novo numa
     linha só (12,5px, 34px, mais claro) e pendurado num TRILHO que desce da seta do investimento (`Trilho`); os recuos em
     px inteiros (o texto em 30 · 55 · 80).
+    O "RENDEU" É BRUTO (o vale hoje − o aplicado, como a "Valorização" do banco); o balão dele traz também o "Depois do IR ≈"
+    (o líquido − o aplicado, se resgatasse hoje; "parcial" na instituição com algum sem estimativa).
     OS CENTAVOS (06/11/2026, a pedido): o interruptor "Centavos" no cabeçalho do bloco (o `Toggle` do "Só o que falta" do
     Importar, antes das abas; some no "%" do mês a mês) troca o formato das duas vistas — ligado, todo valor com os
     centavos; desligado (o padrão), em reais redondos, também o valor do aporte. `formatos(centavos)` no topo de
@@ -353,8 +355,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     resgate sai das mais antigas; com 'reaplica' o vencimento que passou anda mais um prazo, sem virar resgate. VENCE UM
     DIA ANTES (`vence_dia_anterior`, a migration 017; o "vence um dia antes" embaixo do prazo no cadastro): o RDB do Nubank
     de 03/06 com 6 meses vence em 02/12 (sem marcar, no mesmo dia do mês); reaplicando, a nova começa no dia seguinte. O
-    campo só vai ao banco quando marcado (ou já estava): sem a 017, o resto do cadastro salva igual. Um MESMO investimento
-    com PRAZOS DIFERENTES em cada aporte (datas livres) ainda não tem desenho: pensar quando aparecer (06/11/2026).
+    campo só vai ao banco quando marcado (ou já estava): sem a 017, o resto do cadastro salva igual.
+    O VENCIMENTO DE CADA APORTE (06/11/2026, a pedido: "coloco a data e ponto final" — cada instituição conta o prazo de um
+    jeito; migration 018, `vencimento` em `movimentos_investimento` e `depositos_investimento`): DIGITADO na célula Resgate
+    da linha do aporte (ou no "+ aporte", o Tab depois da data; "02/09" sem o ano é o próximo 02/09), vale como está — sem
+    a regra do prazo nem o reaplicar (`propria` em `aplicacoesComPrazo`, que também roda fora do "prazo por aplicação"
+    quando algum aporte tem o seu; os outros ficam com o vencimento do investimento). Vazio, volta à regra. O investimento
+    mostra o que vence primeiro; o painel e a ficha, cada um. As listas leem `*` (a coluna vem quando existe); gravar sem a
+    018 diz que ela falta. O `salvarDepositos` (o pop-up dos aportes de antes) leva o vencimento de mesma data adiante.
   · ATUALIZAR VALORES (`ModalAtualizarValores`): o rendimento FORA DO NORMAL para o tipo (`rendimentoForaDoNormal`:
     pós-fixado 2,5%/mês, marcado a mercado 5%, fundo 10%) vira "Foi uma aplicação de R$ X?", que lança o movimento
     junto com o salvar; Enter num campo vazio repete o valor de antes. APLICAR (`ModalMovimento`): o novo investimento

@@ -108,10 +108,10 @@ function Vence({ x }) {
   const v = x.venc;
   if (!v) return null;
   return (
-    <span className="inline-flex flex-col items-start" title={`Vence em ${formatDate(x.inv.vencimento)}`}>
-      {v.vencido ? <Etiqueta tom="ambar">venceu {formatDate(x.inv.vencimento)}</Etiqueta>
-        : v.perto ? <Etiqueta tom="ambar">{v.dias <= 45 ? `em ${v.dias} ${v.dias === 1 ? 'dia' : 'dias'}` : `em ${v.meses} meses`} · {dataCurtaV(x.inv.vencimento)}</Etiqueta>
-          : <span className="text-[12.5px] tabular-nums text-gray-700">vence {formatDate(x.inv.vencimento)}</span>}
+    <span className="inline-flex flex-col items-start" title={`Vence em ${formatDate(v.data)}`}>
+      {v.vencido ? <Etiqueta tom="ambar">venceu {formatDate(v.data)}</Etiqueta>
+        : v.perto ? <Etiqueta tom="ambar">{v.dias <= 45 ? `em ${v.dias} ${v.dias === 1 ? 'dia' : 'dias'}` : `em ${v.meses} meses`} · {dataCurtaV(v.data)}</Etiqueta>
+          : <span className="text-[12.5px] tabular-nums text-gray-700">vence {formatDate(v.data)}</span>}
       {v.frac !== null && (
         <span className="mt-1 block h-1 w-[84px] overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
           <span className="block h-full rounded-full" style={{ width: `${Math.max(4, v.frac * 100)}%`, background: 'var(--origem-fixo)' }} />
@@ -183,9 +183,9 @@ function EditorCelula({ ed, onTexto, onFim, alinha, recuo = 12 }) {
   };
   return (
     <input ref={ref} value={ed.texto} onKeyDown={teclas} onBlur={(e) => fim('blur', e.target.value)} onMouseDown={(e) => e.stopPropagation()}
-      onChange={(e) => onTexto(ed.modo === 'data' ? mascaraData(e.target.value) : e.target.value)}
-      inputMode={ed.modo === 'valor' ? 'decimal' : ed.modo === 'data' ? 'numeric' : undefined}
-      placeholder={ed.modo === 'data' ? 'dd/mm/aaaa' : ed.modo === 'valor' ? '0,00' : 'o nome'} aria-label="Editar a célula"
+      onChange={(e) => onTexto(ed.modo === 'data' || ed.modo === 'vencimento' ? mascaraData(e.target.value) : e.target.value)}
+      inputMode={ed.modo === 'valor' ? 'decimal' : ed.modo === 'data' || ed.modo === 'vencimento' ? 'numeric' : undefined}
+      placeholder={ed.modo === 'data' ? 'dd/mm/aaaa' : ed.modo === 'vencimento' ? 'vence em dd/mm/aaaa (vazio: a regra)' : ed.modo === 'valor' ? '0,00' : 'o nome'} aria-label="Editar a célula"
       className={`absolute inset-0 z-20 h-full w-full border-0 bg-white pr-3 text-[13px] text-gray-900 outline-none placeholder:text-gray-400 ${alinha === 'right' ? 'text-right tabular-nums' : ''}`}
       style={{ paddingLeft: recuo, boxShadow: 'inset 0 0 0 2px var(--grade-sel)' }} />
   );
@@ -228,7 +228,7 @@ function TabelaCarteira({
   const rascunhoDe = (l) => ({ data: hoje, valor: '', ...(rascunhos[l.x.inv.id] ?? {}) });
   // O RASCUNHO VAZIO NÃO FICA (06/11/2026, a pedido: o clique sem querer na linha deixava a data e o campo presos): sem
   // valor e com a data de hoje, ele não se guarda — sair da linha a devolve ao "Novo aporte". Esc, Delete e o ✕ desistem.
-  const vazioRasc = (r) => !r || (!String(r.valor ?? '').trim() && (!r.data || r.data === hoje));
+  const vazioRasc = (r) => !r || (!String(r.valor ?? '').trim() && (!r.data || r.data === hoje) && !r.venc);
   const guardarRasc = (invId, r) => setRascunhos((s) => { const n = { ...s }; if (vazioRasc(r)) delete n[invId]; else n[invId] = r; return n; });
   const desistir = (l) => {
     setRascunhos((s) => { const n = { ...s }; delete n[l.x.inv.id]; return n; });
@@ -266,14 +266,16 @@ function TabelaCarteira({
     const r = lerCelula(modo, texto, hoje);
     if (!r.ok) { toast.error(r.erro); return; }
     const k = chave(l.id, col);
-    comOtimista(k, modo === 'data' ? formatDate(r.valor) : modo === 'valor' ? formatBRL(r.valor) : r.valor);
+    comOtimista(k, modo === 'data' ? formatDate(r.valor) : modo === 'vencimento' ? (r.valor ? `vence ${dataCurta(r.valor)}` : 'a regra…') : modo === 'valor' ? formatBRL(r.valor) : r.valor);
     if (l.tipo === 'grupo') await edicao.renomearInstituicao(l.g.conta, r.valor);
     else if (l.tipo === 'inv') { await edicao.valeHoje(l.x, r.valor); focar(); }
-    else if (l.tipo === 'lote') await edicao.mudarAporte(l, col === 'nome' ? 'data' : 'valor', r.valor);
+    else if (l.tipo === 'lote') await edicao.mudarAporte(l, col === 'nome' ? 'data' : col === 'resgate' ? 'vencimento' : 'valor', r.valor);
     semOtimista(k);
   };
 
-  // A LINHA "+ APORTE": um rascunho só na tela até ter a data (hoje, se não mudar) e o valor; com os dois, vira o aporte.
+  // A LINHA "+ APORTE": um rascunho só na tela até ter a data (hoje, se não mudar) e o valor; com os dois, vira o aporte. O
+  // vencimento (o Tab depois da data) é opcional: vazio, a regra do investimento.
+  const irValor = (l, rasc) => { setAtiva({ id: l.id, col: 'aplicado' }); setEditor({ id: l.id, col: 'aplicado', modo: 'valor', texto: rasc.valor, digitado: true }); };
   const fimRascunho = async (l, col, como, texto) => {
     const invId = l.x.inv.id;
     const rasc = rascunhoDe(l);
@@ -284,14 +286,26 @@ function TabelaCarteira({
         rasc.data = r.valor;
       }
       guardarRasc(invId, rasc);
-      if (como === 'enter' || como === 'tab') { setAtiva({ id: l.id, col: 'aplicado' }); setEditor({ id: l.id, col: 'aplicado', modo: 'valor', texto: rasc.valor, digitado: true }); return; }
+      if (como === 'enter') { irValor(l, rasc); return; }
+      if (como === 'tab') { setAtiva({ id: l.id, col: 'resgate' }); setEditor({ id: l.id, col: 'resgate', modo: 'vencimento', texto: textoDaCelula(l, 'resgate', rasc), digitado: false }); return; }
+      andar(como, { id: l.id, col });
+      if (como !== 'blur') focar();
+      return;
+    }
+    if (col === 'resgate') { // o vencimento do aporte novo (vazio: a regra do investimento)
+      const r = lerCelula('vencimento', texto, hoje);
+      if (!r.ok) { toast.error(r.erro); focar(); return; }
+      rasc.venc = r.valor;
+      guardarRasc(invId, rasc);
+      if (como === 'enter' || como === 'tab') { irValor(l, rasc); return; }
+      if (como === 'tabAntes') { setAtiva({ id: l.id, col: 'nome' }); setEditor({ id: l.id, col: 'nome', modo: 'data', texto: textoDaCelula(l, 'nome', rasc), digitado: false }); return; }
       andar(como, { id: l.id, col });
       if (como !== 'blur') focar();
       return;
     }
     rasc.valor = texto;
     guardarRasc(invId, rasc);
-    if (como === 'tabAntes') { setAtiva({ id: l.id, col: 'nome' }); setEditor({ id: l.id, col: 'nome', modo: 'data', texto: textoDaCelula(l, 'nome', rasc), digitado: false }); return; }
+    if (como === 'tabAntes') { setAtiva({ id: l.id, col: 'resgate' }); setEditor({ id: l.id, col: 'resgate', modo: 'vencimento', texto: textoDaCelula(l, 'resgate', rasc), digitado: false }); return; }
     if (como !== 'enter') { andar(como, { id: l.id, col }); if (como !== 'blur') focar(); return; }
     focar();
     if (!String(texto).trim()) return;
@@ -299,7 +313,7 @@ function TabelaCarteira({
     if (!r.ok || !(r.valor > 0)) { toast.error(r.ok ? 'O aporte precisa de um valor.' : r.erro); return; }
     const k = chave(l.id, 'aplicado');
     comOtimista(k, formatBRL(r.valor));
-    const res = await edicao.novoAporte(l.x, rasc.data, r.valor);
+    const res = await edicao.novoAporte(l.x, rasc.data, r.valor, rasc.venc ?? null);
     semOtimista(k);
     if (res.ok) setRascunhos((s) => { const n = { ...s }; delete n[invId]; return n; });
     focar();
@@ -381,7 +395,7 @@ function TabelaCarteira({
     const mesma = ativa && ativa.id === l.id && ativa.col === col;
     if (ADICIONAR.includes(l.tipo)) {
       const naLinha = ativa && ativa.id === l.id;
-      const c = l.tipo === 'novoAporte' ? (naLinha && col === 'nome' ? 'nome' : 'aplicado') : 'nome';
+      const c = l.tipo === 'novoAporte' ? (naLinha && (col === 'nome' || col === 'resgate') ? col : 'aplicado') : 'nome';
       setAtiva({ id: l.id, col: c });
       focar();
       iniciar(l, c);
@@ -404,7 +418,7 @@ function TabelaCarteira({
       <td key={col} data-cel={k} onMouseDown={editavel ? clicar(l, col) : undefined} {...extra}
         className={`relative ${cls} ${modo ? 'cursor-cell' : ''} ${contorno}`}>
         {otimista[k] !== undefined ? <span className="text-gray-400">{otimista[k]}</span> : conteudo}
-        {ed && <EditorCelula ed={ed} onTexto={(t) => setEditor({ ...ed, texto: t })} onFim={fimEditor} alinha={col === 'nome' ? 'left' : 'right'}
+        {ed && <EditorCelula ed={ed} onTexto={(t) => setEditor({ ...ed, texto: t })} onFim={fimEditor} alinha={col === 'nome' || col === 'resgate' ? 'left' : 'right'}
           recuo={col !== 'nome' ? 12 : l.tipo === 'lote' || l.tipo === 'novoAporte' ? RECUO_APORTE : 32} />}
       </td>
     );
@@ -499,13 +513,17 @@ function TabelaCarteira({
     }
     const um = l.tipo === 'inv' ? l.x.ultimoMes : null;
     const cU = um ? cdiFechado(cdi, um.competencia) : undefined;
+    const liq = l.tipo === 'inv' ? (l.x.imposto && !l.x.imposto.isento ? l.x.imposto.liquido : null) : l.g.soConta ? null : l.g.liquido;
+    const depoisDoIR = liq === null || liq === undefined ? null : liq - item.aplicado;
     const rende = l.tipo === 'inv' ? rotuloRende(l.x.inv) : '';
     return {
       titulo: nome,
       itens: [
         { rotulo: 'Aplicado (do seu bolso)', valor: formatBRL(item.aplicado) },
         { rotulo: l.tipo === 'inv' && l.x.estimado ? `Vale hoje ≈ (${rotuloPeloIndice(l.x.inv)}, com o de hoje)` : `Vale hoje${item.data ? ` (foto de ${formatDate(item.data)})` : ''}`, valor: formatBRL(item.vale) },
-        { rotulo: l.tipo === 'inv' ? 'Rendeu desde o cadastro' : l.g.soConta ? 'Rendeu desde a primeira foto' : 'Rendeu (os investimentos)', valor: `${formatBRL(item.rendeu)} · ${pctTexto(item.pct, 1)}`, cor: COR_ENTRADAS },
+        { rotulo: l.tipo === 'inv' ? 'Rendeu desde o cadastro (bruto)' : l.g.soConta ? 'Rendeu desde a primeira foto' : 'Rendeu (os investimentos, bruto)', valor: `${formatBRL(item.rendeu)} · ${pctTexto(item.pct, 1)}`, cor: COR_ENTRADAS },
+        // DEPOIS DO IR (06/11/2026, a pedido): o líquido − o aplicado, se resgatasse hoje (o fundo e o sem as datas não estimam)
+        ...(depoisDoIR !== null ? [{ rotulo: `Depois do IR ≈${l.tipo === 'grupo' && l.g.incompleto ? ' (parcial)' : ''}`, valor: `${formatBRL(depoisDoIR)} · ${pctTexto(item.aplicado > 0 ? depoisDoIR / item.aplicado : null, 1)}`, cor: COR_ENTRADAS }] : []),
         ...(um ? [{ rotulo: `Em ${competenciaCurta(um.competencia)}`, valor: `${formatBRL(um.rendeu)} · ${pctTexto(um.pct)}`, cor: COR_ENTRADAS }] : []),
         ...(rende ? [{ rotulo: 'Contratado', valor: rende }] : []),
       ],
@@ -555,7 +573,10 @@ function TabelaCarteira({
               ) : rotulo('Novo aporte', RECUO_APORTE - 4)}
             </>
           ), { style: { paddingLeft: 0 } })}
-          {cel(l, 'resgate', `${base} px-3 ${movel ? 'hidden' : ''}`, comRascunho ? <span className="text-[11.5px] text-gray-400">a data e o valor · <Kbd>Enter</Kbd> grava · <Kbd>Esc</Kbd> desiste</span> : null)}
+          {cel(l, 'resgate', `${base} px-3 ${movel ? 'hidden' : ''}`, comRascunho ? (
+            r.venc ? <span className="text-[11.5px] text-gray-700">vence {dataCurta(r.venc)}</span>
+              : <span className="text-[11.5px] text-gray-400">vence em… <span className="text-gray-300">(Tab · vazio, a regra)</span></span>
+          ) : null)}
           {cel(l, 'aplicado', `${base} px-3 text-right tabular-nums ${movel ? 'hidden' : ''}`, comRascunho ? (
             r.valor ? <span className="text-gray-800">{r.valor}</span> : <span className="text-gray-400">valor</span>
           ) : null)}
@@ -639,7 +660,7 @@ function TabelaCarteira({
               const imp = l.x.imposto;
               const f = lo.fonte;
               const td = `h-[34px] border-b border-gray-100 py-0 text-[12.5px] ${aceso(l.id)}`;
-              const vence = l.x.inv.liquidez === 'por_aplicacao' ? l.x.prazos?.lotes?.find((p) => p.data === lo.data)?.vence : l.x.inv.vencimento || null;
+              const vence = l.vence;
               const exato = f?.exato && lo.inteiro;
               return (
                 <tr key={l.id} {...attrs} className="group/linha" onMouseEnter={() => setSobLinha(l.id)}>
@@ -659,7 +680,7 @@ function TabelaCarteira({
                         : imp.isento ? <Etiqueta tom="verde">isento</Etiqueta>
                           : <Etiqueta tom={TOM_ALIQUOTA[lo.aliquota] ?? 'cinza'}>IR {pctAliq(lo.aliquota)}</Etiqueta>}
                       <span className="text-[11.5px] text-gray-500">
-                        {vence ? `vence ${dataCurta(vence)}` : !imp.isento && !imp.semEstimativa ? (lo.proxima ? `→ ${pctAliq(lo.proxima.aliquota)} em ${dataCurta(lo.proxima.data)}` : 'já na menor') : ''}
+                        {vence ? <span className={l.vencePropria ? 'text-gray-700' : ''} title={l.vencePropria ? 'O vencimento digitado neste aporte' : 'Pela regra do investimento: digite a data para mudar'}>vence {dataCurta(vence)}</span> : !imp.isento && !imp.semEstimativa ? (lo.proxima ? `→ ${pctAliq(lo.proxima.aliquota)} em ${dataCurta(lo.proxima.data)}` : 'já na menor') : ''}
                       </span>
                     </span>
                   ))}
@@ -963,8 +984,13 @@ export default function BlocoInvestimentos({
         linhas.push({ id: `i:${x.inv.id}`, tipo: 'inv', g, x });
         const lotes = temAportes(x) ? x.imposto.lotes : [];
         const comNovo = editavel && x.inv.ativo !== false;
+        const vencDe = (lo) => {
+          const p = lo.fonte && x.prazos?.lotes?.find((q) => q.ref && q.ref.tipo === lo.fonte.tipo && (q.ref.id ?? null) === (lo.fonte.id ?? null));
+          return p ? { vence: p.vence, propria: !!p.propria } : { vence: x.inv.vencimento || null, propria: false };
+        };
         lotes.forEach((lo, k) => linhas.push({
           id: `l:${x.inv.id}:${lo.fonte ? `${lo.fonte.tipo}:${lo.fonte.id ?? 'ini'}` : k}`, tipo: 'lote', g, x, lo, ultimo: !comNovo && k === lotes.length - 1,
+          vence: vencDe(lo).vence, vencePropria: vencDe(lo).propria,
         }));
         if (comNovo) linhas.push({ id: `na:${x.inv.id}`, tipo: 'novoAporte', g, x });
       });

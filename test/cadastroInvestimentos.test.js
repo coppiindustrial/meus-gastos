@@ -132,3 +132,22 @@ test('o prazo por aplicação com os depósitos de antes do app e o vencimento n
   const re = aplicacoesComPrazo({ inv: { ...inv, ao_vencer: 'reaplica' }, depositos: [depositos[1]], hoje: '2026-12-10' });
   assert.deepEqual([re.lotes[0].vence, re.lotes[0].renovacoes], ['2027-06-02', 1]);
 });
+
+test('o vencimento digitado no aporte vale como está: sem a regra do prazo nem o reaplicar', () => {
+  // dados FICTÍCIOS: o prazo por aplicação de 6 meses, e o banco disse 02/09 para o de 03/09
+  const inv = { id: 'p', liquidez: 'por_aplicacao', prazo_meses: 6, ao_vencer: 'reaplica', aplicado_inicial_centavos: null };
+  const fotos = [{ data: '2026-09-03', valor_centavos: 100000 }];
+  const movimentos = [
+    { id: 'a', investimento_id: 'p', data: '2026-09-03', tipo: 'aporte', valor_centavos: 100000, vencimento: '2027-09-02' },
+    { id: 'b', investimento_id: 'p', data: '2026-10-11', tipo: 'aporte', valor_centavos: 50000 },
+  ];
+  const r = aplicacoesComPrazo({ inv, fotos, movimentos, hoje: '2026-11-06' });
+  assert.deepEqual(r.lotes.map((l) => [l.data, l.vence, !!l.propria]), [['2026-09-03', '2027-09-02', true], ['2026-10-11', '2027-04-11', false]]);
+  assert.equal(r.proximo.vence, '2027-04-11');
+  // o que já passou fica vencido (não reaplica sozinho: a data nova vem do banco)
+  const passou = aplicacoesComPrazo({ inv, fotos, movimentos: [{ ...movimentos[0], vencimento: '2026-10-01' }], hoje: '2026-11-06' });
+  assert.deepEqual([passou.lotes[0].vence, passou.lotes[0].vencida, passou.lotes[0].renovacoes], ['2026-10-01', true, 0]);
+  // fora do prazo por aplicação: o digitado, e os outros com o vencimento do investimento
+  const noVenc = aplicacoesComPrazo({ inv: { ...inv, liquidez: 'vencimento', vencimento: '2027-08-13', prazo_meses: null }, fotos, movimentos, hoje: '2026-11-06' });
+  assert.deepEqual(noVenc.lotes.map((l) => l.vence), ['2027-09-02', '2027-08-13']);
+});

@@ -86,7 +86,7 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   let corte;
   if (depositos.length) {
     depositos.forEach((d) => lotes.push({ data: d.data, ref: d.referencia, valorRef: Number(d.valor_centavos), origem: 'colado',
-      fonte: { tipo: 'dep', id: d.id, data: d.data, valor: Number(d.valor_centavos), referencia: d.referencia, exato: d.referencia === d.data } }));
+      fonte: { tipo: 'dep', id: d.id, data: d.data, valor: Number(d.valor_centavos), referencia: d.referencia, exato: d.referencia === d.data, vencimento: d.vencimento || null } }));
     corte = depositos.reduce((m, d) => (d.referencia > m ? d.referencia : m), depositos[0].referencia);
   } else if (abre) {
     // AS APLICAÇÕES PELO APP ATÉ A PRIMEIRA FOTO são depósitos EXATOS (06/11/2026: o "Cadastrar e aplicar" grava a foto e a
@@ -97,7 +97,7 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
     const somaIni = iniciais.reduce((s, m) => s + Number(m.valor_centavos), 0);
     const total = inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined ? Number(inv.aplicado_inicial_centavos) : iniciais.length ? somaIni : Number(abre.valor_centavos);
     const resto = total - somaIni;
-    iniciais.forEach((m) => lotes.push({ data: m.data, principal: Number(m.valor_centavos), origem: 'aporte', fonte: { tipo: 'mov', id: m.id, data: m.data, valor: Number(m.valor_centavos), exato: true } }));
+    iniciais.forEach((m) => lotes.push({ data: m.data, principal: Number(m.valor_centavos), origem: 'aporte', fonte: { tipo: 'mov', id: m.id, data: m.data, valor: Number(m.valor_centavos), exato: true, vencimento: m.vencimento || null } }));
     if (resto > 100) {
       lotes.push({ data: inv.aplicado_em || abre.data, dataAproximada: !inv.aplicado_em, principal: resto, origem: 'inicial',
         fonte: { tipo: 'inicial', data: inv.aplicado_em || abre.data, valor: resto, base: somaIni, exato: inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined } });
@@ -121,7 +121,7 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   };
   depois.forEach((m) => {
     const v = Number(m.valor_centavos);
-    if (m.tipo !== 'resgate') { lotes.push({ data: m.data, principal: v, origem: 'aporte', frac: 1, fonte: { tipo: 'mov', id: m.id, data: m.data, valor: v, exato: true } }); return; }
+    if (m.tipo !== 'resgate') { lotes.push({ data: m.data, principal: v, origem: 'aporte', frac: 1, fonte: { tipo: 'mov', id: m.id, data: m.data, valor: v, exato: true, vencimento: m.vencimento || null } }); return; }
     let falta = v;
     for (const l of [...lotes].sort((a, b) => (a.data < b.data ? -1 : 1))) {
       if (falta <= 0 || l.data > m.data) continue;
