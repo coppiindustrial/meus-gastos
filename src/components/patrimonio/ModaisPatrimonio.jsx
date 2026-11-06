@@ -378,16 +378,17 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
         {!movel && fora.map((f) => {
           const novos = valoresComOMovimento({ mov: f.mov, fotos: f.fotos, inv: x.inv, taxas });
           const aplic = f.mov.tipo !== 'resgate';
+          const semTaxas = andaSozinho(x.inv) && !taxas; // o CDI ainda não chegou: somar agora perderia o rendimento
           return (
             <div key={f.mov.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12.5px] text-amber-900">
               <span className="min-w-0 flex-1">
                 <b className="font-semibold">{aplic ? 'A aplicação' : 'O resgate'} de {formatDate(f.mov.data)} ({formatBRL(f.mov.valor_centavos)})</b> foi lançad{aplic ? 'a' : 'o'} depois
                 {f.fotos.length === 1 ? ` do valor de ${formatDate(f.fotos[0].data)} (${formatBRL(f.fotos[0].valor_centavos)})` : ` dos ${f.fotos.length} valores de depois dele`}, que não {f.fotos.length === 1 ? 'a tem' : 'a têm'}.
-                {novos.length === 1 && ` Somada${andaSozinho(x.inv) && taxas ? ` com o rendimento ${rotuloPeloIndice(x.inv)}` : ''}, ele fica ${formatBRL(novos[0].valor_centavos)}.`}
+                {novos.length === 1 && !semTaxas && ` Somada${andaSozinho(x.inv) ? ` com o rendimento ${rotuloPeloIndice(x.inv)}` : ''}, ele fica ${formatBRL(novos[0].valor_centavos)}.`}
               </span>
               <span className="flex gap-2">
                 <button type="button" className="btn-secondary !h-8 !text-[12.5px]" disabled={acertando} onClick={() => acertar(f, false)}>Já estava incluíd{aplic ? 'a' : 'o'}</button>
-                <button type="button" className="btn-primary !h-8 !text-[12.5px]" disabled={acertando} onClick={() => acertar(f, true)}>Somar aos valores de depois</button>
+                <button type="button" className="btn-primary !h-8 !text-[12.5px]" disabled={acertando || semTaxas} onClick={() => acertar(f, true)} title={semTaxas ? 'Esperando o CDI do Banco Central (para somar com o rendimento)' : undefined}>{semTaxas ? 'Carregando o CDI…' : 'Somar aos valores de depois'}</button>
               </span>
             </div>
           );

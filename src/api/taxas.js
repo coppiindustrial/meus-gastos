@@ -5,9 +5,13 @@
 // `desde` ('AAAA-MM-DD'), ou null sem rede (a tela segue com o valor da última foto, sem estimar).
 const SGS = (n) => `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${n}/dados`;
 const br = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+// SEMPRE COM A DATA FINAL (06/11/2026): sem o `dataFinal`, a API do Banco Central passou a responder 304 SEM CONTEÚDO (o
+// navegador não tem o que reaproveitar e a resposta vira erro) — as taxas sumiam, o valor parava de andar pelo CDI e o
+// "Somar aos valores de depois" somou sem o rendimento. Com o `dataFinal` (hoje), ela responde 200 com os dados.
+const hojeBR = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
 
 async function serie(n, desde) {
-  const r = await fetch(`${SGS(n)}?formato=json&dataInicial=${br(desde)}`);
+  const r = await fetch(`${SGS(n)}?formato=json&dataInicial=${br(desde)}&dataFinal=${hojeBR()}`);
   if (!r.ok) throw new Error(`SGS ${n}: ${r.status}`);
   const lista = await r.json();
   return lista
