@@ -29,6 +29,7 @@ const pct = (f) => `${f * 100}%`;
 
 export default function AmpliadoGrupos({ onClose, grupos, total, meses, comps = [], anterior = null }) {
   const balao = useBalao(250, 170);
+  const [naCurva, setNaCurva] = useState(false); // o cursor na curva: o balão é o dela
   const [cheio, setCheio] = useState(false);
   const [modo, setModo] = useState('grupos');
   const [aberto, setAberto] = useState(null);
@@ -160,7 +161,7 @@ export default function AmpliadoGrupos({ onClose, grupos, total, meses, comps = 
                           : it.desde ? `Gasto fixo: a média conta desde ${competenciaCurta(it.desde)} (${it.mesesMedia} ${it.mesesMedia === 1 ? 'mês' : 'meses'})` : undefined}>
                         {formatBRL(it.media)}<MarcaDesde desde={it.desde} meses={it.mesesMedia} />
                       </span>
-                      {comTendencia && <MiniCurva valores={comps.map((c) => it.meses?.[c] ?? 0)} cor={it.cor} largura={96} altura={20} />}
+                      {comTendencia && <MiniCurva valores={comps.map((c) => it.meses?.[c] ?? 0)} cor={it.cor} largura={96} altura={20} meses={comps} nome={it.nome} onFoco={setNaCurva} />}
                       {comVariacao && <span className="flex justify-end"><Variacao v={v} sobeBom={false} titulo="Contra o mesmo período do ano anterior" /></span>}
                     </button>
                   </li>
@@ -192,7 +193,7 @@ export default function AmpliadoGrupos({ onClose, grupos, total, meses, comps = 
         )}
       </div>
 
-      {ativo && (
+      {ativo && !naCurva && (
         <BalaoGrafico pos={balao.pos} largura={250} titulo={`${ativo.grupo && !grupo ? `${ativo.grupo.nome} · ` : ''}${ativo.nome} · ${meses}`}
           itens={ativo.categorias
             ? [...ativo.categorias.slice(0, 3).map((c) => ({ rotulo: c.nome, valor: formatBRL(c.total) })),

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import BalaoGrafico, { useBalao } from './BalaoGrafico.jsx';
+import BalaoGrafico, { posicaoBalao, useBalao } from './BalaoGrafico.jsx';
 import AbasPilula from '../AbasPilula.jsx';
 import Variacao from './Variacao.jsx';
 import { COR_ENTRADAS, COR_GASTOS } from './Graficos.jsx';
@@ -746,19 +746,58 @@ export function RoscaOrigem({ itens, marcadas = [], onClicar }) {
 // ------------------------------------------------------------ barras por grupo (e categorias)
 
 // A curva miúda dos meses de um grupo (a coluna "tendência"). O último ponto tem a bolinha.
-export function MiniCurva({ valores, cor, largura = 74, altura = 22 }) {
+// NAVEGÁVEL (06/11/2026, a pedido: a curva era um desenho parado): com `meses` (as competências de cada valor), o
+// cursor ao longo dela leva a GUIA tracejada e a BOLINHA ao mês mais perto, o trecho depois dele esmaece e o balão diz
+// o mês, o valor e a variação sobre o mês de antes. A caixa de alvo é mais alta que o desenho (a linha da lista tem
+// 30px e a curva 20). `onFoco(true | false)`: a linha que contém a curva esconde o balão dela enquanto a curva fala
+// (o movimento sobre a curva não chega à linha — `stopPropagation`).
+export function MiniCurva({ valores, cor, largura = 74, altura = 22, meses, nome, formatar = formatBRL, onFoco }) {
+  const [sob, setSob] = useState(null); // { i, pos }
   if (valores.length < 2) return <span style={{ width: largura }} />;
+  const n = valores.length;
   const max = Math.max(1, ...valores);
   const min = Math.min(...valores);
-  const x = (i) => 2 + (i / (valores.length - 1)) * (largura - 4);
+  const x = (i) => 2 + (i / (n - 1)) * (largura - 4);
   const y = (v) => altura - 3 - ((v - min) / (max - min || 1)) * (altura - 7);
   const pts = valores.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  return (
+  const navegavel = Array.isArray(meses) && meses.length === n;
+  const mover = (e) => {
+    e.stopPropagation();
+    const r = e.currentTarget.getBoundingClientRect();
+    const i = Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left - 2) / Math.max(1, r.width - 4)) * (n - 1))));
+    setSob({ i, pos: posicaoBalao(e, 230, 110) });
+    onFoco?.(true);
+  };
+  const sair = () => { setSob(null); onFoco?.(false); };
+  const i = sob?.i ?? null;
+  const v = i !== null ? variacao(valores[i], i > 0 ? valores[i - 1] : 0) : null;
+  const desenho = (
     <svg width={largura} height={altura} viewBox={`0 0 ${largura} ${altura}`} className="block overflow-visible" aria-hidden="true">
-      <polygon points={`${x(0)},${altura} ${pts} ${x(valores.length - 1)},${altura}`} fill={cor} fillOpacity=".14" />
+      <polygon points={`${x(0)},${altura} ${pts} ${x(n - 1)},${altura}`} fill={cor} fillOpacity=".14" />
       <polyline points={pts} fill="none" stroke={cor} strokeWidth="1.6" strokeLinejoin="round" />
-      <circle cx={x(valores.length - 1)} cy={y(valores[valores.length - 1])} r="2.5" fill={cor} />
+      {/* depois do mês sob o cursor, um véu na cor do fundo: o que vem antes fica em primeiro plano */}
+      {i !== null && i < n - 1 && (
+        <rect x={x(i)} y={-2} width={largura - x(i) + 2} height={altura + 2} fill="rgb(var(--tf-white, 255 255 255))" fillOpacity=".55" />
+      )}
+      {i !== null && <line x1={x(i)} x2={x(i)} y1={-2} y2={altura} stroke={cor} strokeOpacity=".55" strokeDasharray="2 2" />}
+      {i === null
+        ? <circle cx={x(n - 1)} cy={y(valores[n - 1])} r="2.5" fill={cor} />
+        : <circle cx={x(i)} cy={y(valores[i])} r="3.2" fill={cor} stroke="rgb(var(--tf-white, 255 255 255))" strokeWidth="1.5" />}
     </svg>
+  );
+  if (!navegavel) return desenho;
+  return (
+    <span className="-my-[5px] block cursor-crosshair py-[5px]" style={{ width: largura }} onMouseMove={mover} onMouseLeave={sair}>
+      {desenho}
+      {i !== null && (
+        <BalaoGrafico pos={sob.pos} largura={230} titulo={`${nome ? `${nome} · ` : ''}${nomeCompetencia(meses[i]).toLowerCase()}`}
+          itens={[{ rotulo: 'No mês', valor: formatar(valores[i]), cor }]}
+          nota={[
+            i > 0 && (v !== null ? `${v > 0 ? '+' : ''}${v}% sobre ${competenciaCurta(meses[i - 1])}` : `nada em ${competenciaCurta(meses[i - 1])}`),
+            valores[i] === max && max > 0 && 'o maior do período',
+          ].filter(Boolean).join(' · ') || undefined} />
+      )}
+    </span>
   );
 }
 
@@ -839,6 +878,7 @@ export function VoltarGrupos({ grupo, onVoltar }) {
 
 export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null, onAmpliar }) {
   const balao = useBalao(250, 170);
+  const [naCurva, setNaCurva] = useState(false); // o cursor na curva: o balão é o dela
   const caixaRef = useRef(null);
   const cabecalhoRef = useRef(null);
   const largura = useLargura(caixaRef);
@@ -915,7 +955,7 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
                   </span>
                   <span className="whitespace-nowrap text-right text-[12.5px] font-medium tabular-nums text-gray-900">{formatBRL(it.total)}</span>
                   <span className="text-right text-[11.5px] tabular-nums text-gray-500">{total ? Math.round((it.total / total) * 100) : 0}%</span>
-                  {comTendencia && <MiniCurva valores={comps.map((c) => it.meses?.[c] ?? 0)} cor={it.cor} />}
+                  {comTendencia && <MiniCurva valores={comps.map((c) => it.meses?.[c] ?? 0)} cor={it.cor} meses={comps} nome={it.nome} onFoco={setNaCurva} />}
                   {comVariacao && <span className="flex justify-end"><Variacao v={v} sobeBom={false} titulo="Contra o mesmo período do ano anterior" /></span>}
                 </button>
               </li>
@@ -951,7 +991,7 @@ export function BarrasGrupos({ grupos, total, meses, comps = [], anterior = null
             ...(resto.length > 5 ? [{ rotulo: `+ ${resto.length - 5} outros`, valor: formatBRL(resto.slice(5).reduce((s2, x) => s2 + x.total, 0)) }] : [])]}
           nota={nota} />
       )}
-      {ativo && (
+      {ativo && !naCurva && (
         <BalaoGrafico pos={balao.pos} largura={250} titulo={`${ativo.grupo && !grupo ? `${ativo.grupo.nome} · ` : ''}${ativo.nome} · ${meses}`}
           itens={ativo.categorias
             ? [...ativo.categorias.slice(0, 3).map((c) => ({ rotulo: c.nome, valor: formatBRL(c.total) })),
