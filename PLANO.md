@@ -30,7 +30,10 @@
 > valores com o aviso do aporte esquecido); o prazo de cada aplicação que reaplica sozinho; "Começar do zero".
 > **O IR em cascata (2026-11-06, migration 016)**: os depósitos de cada investimento (colados do banco ou feitos pelo
 > app), o IR e o IOF de cada um pela idade, estimados pelo CDI; a coluna "Líquido ≈" e os depósitos dentro do
-> investimento na carteira; a linha do tempo das quedas do IR na ficha.
+> investimento na carteira; a linha do tempo das quedas do IR na ficha. **A ficha e o cadastro (2026-11-06)**: o hover
+> nos números da ficha acende a coluna; as quedas do IR numa aba; editar e colar no cabeçalho; as moedas + e − de
+> aplicar e resgatar; os botões da linha no mesmo quadrado; o cadastro sem os valores (o dinheiro entra como depósito,
+> pelo Aplicar ou pelo Colar, com o "valor aplicado" do banco).
 > Próxima: 8.C (renda variável BR e exterior).
 > **Extrato da conta (2026-10-27)**: CSV do extrato do Nubank; entradas continuam à mão; fatura, investimentos e
 > transferências entre contas próprias (regra de ignorar) ficam de fora; pagamento de fixo vira o fixo do mês com o

@@ -5,8 +5,8 @@ import AbasPilula from '../AbasPilula.jsx';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { COR_ENTRADAS } from '../graficos/Graficos.jsx';
 import { COR_FALTOU, MiniCurva } from '../graficos/GraficosVisao.jsx';
-import { BotaoAcao, Etiqueta } from '../Comuns.jsx';
-import { IconExpandirTudo, IconLapis, IconMais, IconMaximize, IconMinimize, IconSetaOrdenacao } from '../icons.jsx';
+import { Etiqueta } from '../Comuns.jsx';
+import { IconAplicar, IconExpandirTudo, IconLapis, IconMais, IconMaximize, IconMinimize, IconResgatar, IconSetaOrdenacao } from '../icons.jsx';
 import useLinhasAnimadas, { atributosLinha } from '../../lib/useLinhasAnimadas.js';
 import { formatBRL } from '../../lib/dinheiro.js';
 import { competenciaCurta, formatDate, nomeCompetencia } from '../../lib/format.js';
@@ -15,7 +15,6 @@ import {
   impostoGarantia, linhaMesAMes, nomeTipoInvestimento, ordenarCarteira, proximaOrdemCarteira, rotuloLiquidez, rotuloRende,
 } from '../../lib/investimentos.js';
 import { COR_CDI, cdiFechado } from './GraficoPatrimonio.jsx';
-import { IcoDesce, IcoSobe } from './ModaisPatrimonio.jsx';
 
 // A TABELA DOS INVESTIMENTOS (05/11/2026, opção A do mockup "Patrimônio · a tabela", com a B como segunda vista):
 //   · CARTEIRA (A): a planilha agrupada das Categorias — a conta é o grupo (recolhe animado, `useLinhasAnimadas`), os
@@ -46,14 +45,27 @@ const IcoAmpliar = () => (
     <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
   </svg>
 );
-// As ações da linha com o NOME escrito (↑ Aplicar · ↓ Resgatar): antes eram "+", "−" e outro "+" (o do investimento novo).
-const ACAO_TEXTO = 'inline-flex h-7 items-center gap-1 rounded-[6px] border border-gray-300 bg-white px-2 text-[12px] font-semibold text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900';
+// AS AÇÕES DA LINHA (06/11/2026, a opção A do mockup "Ficha do investimento"): todas no MESMO quadrado do ✎ — 30px, a
+// mesma borda e o fundo mais escuro (o `bg-white`, que no escuro é o mais fundo), o nome no tooltip. No lugar:
+// + investimento novo · ✎ o lugar; no investimento: aplicar (moedas +) · resgatar (moedas −) · ✎ a ficha. Antes eram
+// três desenhos ("+ investimento" e "↑ Aplicar" escritos, o ✎ só ícone). O ícone vai numa caixa de PX INTEIROS com
+// `grid place-items-center`: o "+" fica no centro óptico (nunca o caractere "+", que não centra).
+const ACAO_ICONE = 'grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[7px] border border-gray-300 bg-white text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 active:bg-gray-200';
+const BotaoLinha = ({ titulo, onClick, children }) => (
+  <Tooltip label={titulo}>
+    <button type="button" onClick={onClick} aria-label={titulo} className={ACAO_ICONE}>{children}</button>
+  </Tooltip>
+);
 const IconChevron = ({ aberto }) => (
-  <svg viewBox="0 0 24 24" className={`h-3 w-3 shrink-0 text-gray-400 transition-transform duration-150 ${aberto ? 'rotate-90' : ''}`} fill="none"
+  <svg viewBox="0 0 24 24" className={`h-3 w-3 shrink-0 text-gray-400 transition-[transform,color] duration-150 group-hover/seta:text-gray-800 ${aberto ? 'rotate-90' : ''}`} fill="none"
     stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M9 6l6 6-6 6" />
   </svg>
 );
+// A SETA DE ABRIR com o QUADRADO no hover (o do Gestor, 06/11/2026, a pedido): 20px, o fundo cinza e a seta mais forte —
+// separa o clique dela (abre ou fecha) do clique no nome (a ficha). A margem negativa a deixa no lugar dos 12px de antes.
+const QUADRADO_SETA = 'group/seta -m-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200';
+const SetaAbre = ({ aberto }) => <span className={QUADRADO_SETA}><IconChevron aberto={aberto} /></span>;
 
 // A pílula da liquidez: azul (a cor dos gastos, que lê como "dinheiro à mão") na diária; cinza nas outras.
 function PilulaLiquidez({ x }) {
@@ -259,7 +271,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                   <td className={`h-10 border-b border-gray-100 bg-hx-f9fafb px-3 ${aceso(l.id)}`}>
                     <button type="button" onClick={() => temFilhos && alternar(g.conta.id)} aria-expanded={temFilhos ? aberto : undefined}
                       className={`flex max-w-[300px] items-center gap-2 text-left ${temFilhos ? '' : 'cursor-default'}`}>
-                      {temFilhos ? <IconChevron aberto={aberto} /> : <span className="w-3" />}
+                      {temFilhos ? <SetaAbre aberto={aberto} /> : <span className="w-3" />}
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: g.cor }} />
                       <span className={`truncate font-semibold ${g.conta.ativa === false ? 'text-gray-400' : 'text-gray-800'}`}>{g.conta.nome}</span>
                       <span className={`shrink-0 text-[11.5px] font-normal text-gray-400 ${movel ? 'hidden' : ''}`}>
@@ -267,13 +279,9 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                       </span>
                     </button>
                   </td>
-                  <td className={`border-b border-gray-100 bg-hx-f9fafb ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>
-                    {g.soConta && !movel && acoes?.podeInvestir && (
-                      <button type="button" onClick={() => acoes.novoInvestimento(g.conta)} className="px-3 text-[12px] font-medium text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline">
-                        Adicionar investimento
-                      </button>
-                    )}
-                  </td>
+                  {/* o lugar vazio também acrescenta pelo "+ investimento" do hover, como os outros (o "Adicionar investimento"
+                      escrito aqui era um segundo jeito, só nele) */}
+                  <td className={`border-b border-gray-100 bg-hx-f9fafb ${movel ? 'hidden' : ''} ${aceso(l.id)}`} />
                   <td className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums text-gray-700 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{reais(g.aplicado)}</td>
                   <td className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>{reais(g.vale)}</td>
                   {liquidoCel(l.id, g.liquido, g.incompleto ? 'parcial' : g.ir > 0 ? `IR ≈ ${reais(g.ir)}` : null, true, 'bg-hx-f9fafb')}
@@ -285,13 +293,11 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                   {!movel && (
                     <td className={`border-b border-gray-100 bg-hx-f9fafb px-2 ${aceso(l.id)}`}>
                       {acoes && (
-                        <span className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover/linha:opacity-100 focus-within:opacity-100">
-                          {acoes.podeInvestir && !g.soConta && (
-                            <button type="button" onClick={() => acoes.novoInvestimento(g.conta)} className={ACAO_TEXTO} title={`Adicionar investimento em ${g.conta.nome}`}>
-                              <IconMais className="h-[10px] w-[10px]" />investimento
-                            </button>
+                        <span className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/linha:opacity-100 focus-within:opacity-100">
+                          {acoes.podeInvestir && (
+                            <BotaoLinha titulo={`Novo investimento em ${g.conta.nome}`} onClick={() => acoes.novoInvestimento(g.conta)}><IconMais className="h-[14px] w-[14px]" /></BotaoLinha>
                           )}
-                          <BotaoAcao titulo={`Editar ${g.conta.nome}`} onClick={() => acoes.editarConta(g.conta)}><IconLapis className="h-[15px] w-[15px]" /></BotaoAcao>
+                          <BotaoLinha titulo={`Editar ${g.conta.nome}`} onClick={() => acoes.editarConta(g.conta)}><IconLapis className="h-[14px] w-[14px]" /></BotaoLinha>
                         </span>
                       )}
                     </td>
@@ -333,12 +339,14 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                   <span className="flex items-start gap-1.5">
                   {comDep ? (
                     <button type="button" onClick={() => alternarInv(x.inv.id)} aria-expanded={depAberto} title={depAberto ? 'Fechar os depósitos' : `Abrir os ${x.imposto.lotes.length} depósitos`}
-                      className="mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] hover:bg-gray-100"><IconChevron aberto={depAberto} /></button>
+                      className="group/seta -mx-0.5 mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200"><IconChevron aberto={depAberto} /></button>
                   ) : <span className="w-4 shrink-0" />}
                   {acoes ? (
                     <button type="button" onClick={() => acoes.ficha(x.inv)} className="block max-w-[262px] text-left">
                       <span className={`flex items-center gap-1.5 font-medium ${encerrado ? 'text-gray-400' : 'text-gray-800'}`}>
                         <span className="truncate hover:underline">{x.inv.nome}</span>{encerrado && <Etiqueta>encerrado</Etiqueta>}
+                        {/* cadastrado sem dinheiro ainda: entra pelo Aplicar (dinheiro novo) ou pelo Colar os depósitos (na ficha) */}
+                        {x.semValor && !encerrado && <span title="Ainda sem dinheiro: aplique (dinheiro novo) ou cole os depósitos do banco na ficha"><Etiqueta tom="ambar">sem valor</Etiqueta></span>}
                       </span>
                       <span className="block truncate text-[11.5px] text-gray-500">{sub}</span>
                     </button>
@@ -352,7 +360,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                 </td>
                 <td className={`border-b border-gray-100 px-3 py-2 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}><Resgate x={x} /></td>
                 <td className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{reais(x.aplicado)}</td>
-                <td className={`border-b border-gray-100 px-3 py-2 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>{reais(x.vale)}</td>
+                <td className={`border-b border-gray-100 px-3 py-2 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>{x.semValor ? <span className="font-normal text-gray-400">—</span> : reais(x.vale)}</td>
                 {liquidoCel(l.id, x.imposto && x.imposto.liquido === null && !x.imposto.isento ? null : x.imposto?.liquido ?? x.vale, subLiquido(x.imposto), true)}
                 {rendeuCel(l.id, x)}
                 <td className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{pctTexto(x.pctAno, 1)}</td>
@@ -360,10 +368,10 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                 {!movel && (
                   <td className={`border-b border-gray-100 px-2 py-2 ${aceso(l.id)}`}>
                     {acoes && (
-                      <span className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover/linha:opacity-100 focus-within:opacity-100">
-                        {!encerrado && <button type="button" className={ACAO_TEXTO} onClick={() => acoes.movimento({ inv: x.inv, tipo: 'aporte' })} title={`Aplicar em ${x.inv.nome}`}><IcoSobe />Aplicar</button>}
-                        {!encerrado && <button type="button" className={ACAO_TEXTO} onClick={() => acoes.movimento({ inv: x.inv, tipo: 'resgate' })} title={`Resgatar de ${x.inv.nome}`}><IcoDesce />Resgatar</button>}
-                        <BotaoAcao titulo="A ficha: as aplicações e o histórico" onClick={() => acoes.ficha(x.inv)}><IconLapis className="h-[15px] w-[15px]" /></BotaoAcao>
+                      <span className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/linha:opacity-100 focus-within:opacity-100">
+                        {!encerrado && <BotaoLinha titulo={`Aplicar em ${x.inv.nome}`} onClick={() => acoes.movimento({ inv: x.inv, tipo: 'aporte' })}><IconAplicar /></BotaoLinha>}
+                        {!encerrado && !x.semValor && <BotaoLinha titulo={`Resgatar de ${x.inv.nome}`} onClick={() => acoes.movimento({ inv: x.inv, tipo: 'resgate' })}><IconResgatar /></BotaoLinha>}
+                        <BotaoLinha titulo={`A ficha de ${x.inv.nome}: os depósitos, o IR e o histórico`} onClick={() => acoes.ficha(x.inv)}><IconLapis className="h-[14px] w-[14px]" /></BotaoLinha>
                       </span>
                     )}
                   </td>
@@ -506,7 +514,7 @@ function TabelaMesAMes({ todas, visiveis, recolhidas, alternar, meses, comps, cd
                   {grupo ? (
                     <button type="button" onClick={() => temFilhos && alternar(l.g.conta.id)} aria-expanded={temFilhos ? aberto : undefined}
                       className={`flex max-w-[230px] items-center gap-2 text-left ${temFilhos ? '' : 'cursor-default'}`}>
-                      {temFilhos ? <IconChevron aberto={aberto} /> : <span className="w-3" />}
+                      {temFilhos ? <SetaAbre aberto={aberto} /> : <span className="w-3" />}
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: l.g.cor }} />
                       <span className="truncate font-semibold text-gray-800">{l.g.conta.nome}</span>
                     </button>

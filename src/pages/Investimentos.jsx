@@ -7,7 +7,9 @@ import { IconLapis, IconSeta } from '../components/icons.jsx';
 import BlocoInvestimentos from '../components/patrimonio/TabelaInvestimentos.jsx';
 import CarteiraVazia from '../components/patrimonio/CarteiraVazia.jsx';
 import ModalCadastroInvestimentos from '../components/patrimonio/ModalCadastroInvestimentos.jsx';
-import { FichaInvestimento, ModalAtualizarValores, ModalLugar, ModalMovimento } from '../components/patrimonio/ModaisPatrimonio.jsx';
+import {
+  FichaInvestimento, ModalAtualizarValores, ModalColarDepositos, ModalComoEntrou, ModalLugar, ModalMovimento,
+} from '../components/patrimonio/ModaisPatrimonio.jsx';
 import useDadosPatrimonio from '../components/patrimonio/useDadosPatrimonio.js';
 import { useNoCelular } from '../lib/celular.js';
 import { useToast } from '../context/ToastContext.jsx';
@@ -21,11 +23,12 @@ import { competenciaCurta } from '../lib/format.js';
 // OS INVESTIMENTOS (06/11/2026, o mockup "Patrimônio do zero" e a separação pedida: o painel fica em /patrimonio, como a
 // Visão geral; aqui, a TABELA, como os Lançamentos). Três gestos só, sempre com o mesmo nome:
 //   · CADASTRAR — o ✎ do grupo do DRE abre a tabela de cadastro (`ModalCadastroInvestimentos`), como nos fixos;
-//   · APLICAR / RESGATAR — o ⇅ do grupo e o "↑ Aplicar · ↓ Resgatar" de cada linha (`ModalMovimento`);
+//   · APLICAR / RESGATAR — o ⇅ do grupo e as moedas + e − de cada linha (`ModalMovimento`);
 //   · ATUALIZAR VALORES — o botão de destaque, âmbar com o número quando o mês virou e falta o valor
 //     (`pendentesDeValor`; o mesmo número no menu).
-// O nome (ou o ✎) da linha abre a FICHA: as aplicações e quando cada uma vence, o histórico. No ▾: novo lugar, CSV, os
-// encerrados e "Começar do zero". No celular, só a tabela (ler).
+// O nome (ou o ✎) da linha abre a FICHA: os depósitos e o IR, as quedas, os vencimentos, o histórico. No ▾: novo lugar,
+// CSV, os encerrados e "Começar do zero". No celular, só a tabela (ler). O CADASTRO NÃO PEDE OS VALORES (06/11/2026): ao
+// salvar investimentos novos abre o "Como o dinheiro entrou?" (`ModalComoEntrou`) — Aplicar ou Colar os depósitos.
 const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
 const IcoTroca = () => (
   <svg viewBox="0 0 24 24" className="h-[15px] w-[15px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -44,6 +47,8 @@ export default function Investimentos() {
   const [ficha, setFicha] = useState(null); // o id do investimento
   const [atualizar, setAtualizar] = useState(false);
   const [lugar, setLugar] = useState(null); // { conta? }
+  const [comoEntrou, setComoEntrou] = useState(null); // { criados: [{ inv, lugar }], feitos: Set } — depois do cadastro
+  const [colar, setColar] = useState(null); // o investimento (do "Como o dinheiro entrou?") cujos depósitos se colam
   const [mais, setMais] = useState(null);
   const maisAberto = useRef(false);
 
@@ -54,6 +59,9 @@ export default function Investimentos() {
   const comps = mesesDaGrade(d.meses, d.hoje);
   const recarregar = () => d.carregar();
   const fichaX = ficha ? d.grupos.flatMap((g) => g.itens.map((x) => ({ x, g }))).find((y) => y.x.inv.id === ficha) : null;
+  const depositosPorInv = d.depositos.reduce((m, x) => ({ ...m, [x.investimento_id]: (m[x.investimento_id] ?? 0) + 1 }), {});
+  const itemDe = (id) => d.grupos.flatMap((g) => g.itens).find((x) => x.inv.id === id) ?? null;
+  const entrou = (id) => setComoEntrou((c) => (c ? { ...c, feitos: new Set([...c.feitos, id]) } : c));
 
   const acoes = movel ? null : {
     podeInvestir: d.comInvestimentos,
@@ -170,15 +178,16 @@ export default function Investimentos() {
             movel={movel} acoes={acoes} onExportar={exportar} encerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)} qtdEncerrados={qtdEncerrados} />
           <p className="mt-2 text-xs text-gray-500">
             {movel ? 'Aplicar, resgatar e atualizar ficam no computador.'
-              : 'Rendeu = vale hoje − aplicado (o "valor aplicado" do cadastro, ou o primeiro valor, + aplicações − resgates). Clique no nome para a ficha: as aplicações, quando cada uma vence e o histórico.'}
+              : 'Rendeu = vale hoje − aplicado (o "valor aplicado" do banco, ou o primeiro valor, + aplicações − resgates). Clique no nome para a ficha: os depósitos e o IR, as quedas, os vencimentos e o histórico.'}
           </p>
         </div>
       )}
 
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
       {cadastro && (
-        <ModalCadastroInvestimentos contas={d.contas} investimentos={d.investimentos} valesHoje={valesHoje} focoLugar={cadastro.foco}
-          onFechar={() => setCadastro(null)} onSalvo={() => { setCadastro(null); recarregar(); }} />
+        <ModalCadastroInvestimentos contas={d.contas} investimentos={d.investimentos} valesHoje={valesHoje} depositosPorInv={depositosPorInv} focoLugar={cadastro.foco}
+          onFechar={() => setCadastro(null)}
+          onSalvo={(criados) => { setCadastro(null); recarregar(); if (criados?.length) setComoEntrou({ criados, feitos: new Set() }); }} />
       )}
       {atualizar && (
         <ModalAtualizarValores grupos={d.grupos} valores={d.valores} movimentos={d.movimentos}
@@ -191,9 +200,18 @@ export default function Investimentos() {
           onFechar={() => setFicha(null)} onMudou={recarregar}
           onAplicar={(tipo) => setMov({ inv: fichaX.x.inv, tipo })} onCadastro={() => { setFicha(null); setCadastro({}); }} />
       )}
+      {comoEntrou && (
+        <ModalComoEntrou criados={comoEntrou.criados} feitos={comoEntrou.feitos} onFechar={() => setComoEntrou(null)}
+          onAplicar={(inv) => setMov({ inv, tipo: 'aporte', doComoEntrou: true })} onColar={(inv) => setColar(inv)} />
+      )}
+      {colar && (
+        <ModalColarDepositos inv={itemDe(colar.id)?.inv ?? colar} semValor={itemDe(colar.id)?.semValor ?? true} vale={itemDe(colar.id)?.vale ?? 0}
+          dataVale={itemDe(colar.id)?.data ?? null} depositos={d.depositos.filter((x) => x.investimento_id === colar.id)}
+          onFechar={() => setColar(null)} onSalvo={() => { entrou(colar.id); setColar(null); recarregar(); }} />
+      )}
       {mov && (
         <ModalMovimento inicial={mov} grupos={d.grupos} contas={d.contas} z="z-[65]"
-          onFechar={() => setMov(null)} onSalvo={() => { setMov(null); recarregar(); }} />
+          onFechar={() => setMov(null)} onSalvo={() => { if (mov.doComoEntrou) entrou(mov.inv.id); setMov(null); recarregar(); }} />
       )}
       {lugar && (
         <ModalLugar conta={lugar.conta} qtdInvestimentos={lugar.conta ? d.investimentos.filter((i) => i.conta_id === lugar.conta.id).length : 0}

@@ -39,8 +39,9 @@ export async function salvarDepositos(investimentoId, referencia, itens) {
   }
 }
 
-const CAMPOS = ['conta_id', 'nome', 'tipo', 'indexador', 'taxa', 'liquidez', 'liquidez_dias', 'carencia_ate', 'vencimento', 'emissor',
-  'aplicado_em', 'aplicado_inicial_centavos', 'observacao', 'ativo'];
+// `prazo_meses` e `ao_vencer` (a migration 015) faltavam aqui: o "prazo por aplicação" do cadastro não gravava (06/11/2026).
+const CAMPOS = ['conta_id', 'nome', 'tipo', 'indexador', 'taxa', 'liquidez', 'liquidez_dias', 'carencia_ate', 'vencimento', 'prazo_meses',
+  'ao_vencer', 'emissor', 'aplicado_em', 'aplicado_inicial_centavos', 'observacao', 'ativo'];
 const limpar = (inv) => {
   const d = {};
   CAMPOS.forEach((k) => { if (inv[k] !== undefined) d[k] = inv[k] === '' && !['nome', 'emissor', 'observacao'].includes(k) ? null : inv[k]; });
@@ -49,14 +50,17 @@ const limpar = (inv) => {
   if (d.observacao !== undefined) d.observacao = (d.observacao ?? '').trim();
   if (d.liquidez && d.liquidez !== 'dias') d.liquidez_dias = null;
   if (d.liquidez && d.liquidez !== 'carencia') d.carencia_ate = null;
+  if (d.liquidez && d.liquidez !== 'por_aplicacao') d.prazo_meses = null;
   if (d.indexador === null) d.taxa = null;
   return d;
 };
 
 // Cadastra o título com a primeira foto (o "vale hoje" em `data`). `comoAporte`: é uma aplicação nova — o valor
-// também vira um aporte na mesma data (conta no "aportado no ano"; o rendimento não muda, a foto já o tem).
-export async function criarInvestimento(inv, { valor_centavos, data, comoAporte = false }) {
+// também vira um aporte na mesma data (conta no "aportado no ano"; o rendimento não muda, a foto já o tem). SEM VALOR
+// (o cadastro em tabela, 06/11/2026): só o título — o dinheiro entra depois, pelo Aplicar ou pelo Colar os depósitos.
+export async function criarInvestimento(inv, { valor_centavos, data, comoAporte = false } = {}) {
   const novo = await exigir(supabase.from('investimentos').insert(limpar(inv)).select().single());
+  if (valor_centavos === undefined || valor_centavos === null) return novo;
   try {
     await exigir(supabase.from('valores_investimento').insert({ investimento_id: novo.id, data, valor_centavos }));
     if (comoAporte && valor_centavos > 0) {

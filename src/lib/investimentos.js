@@ -229,24 +229,24 @@ const PADRAO = {
 };
 export const padraoDoTipo = (tipo) => PADRAO[tipo] ?? PADRAO.outro;
 
-// Uma linha da tabela a partir do investimento gravado (`vale`: o valor de hoje, só para mostrar — ele muda pelo
-// "Atualizar valores"). Os números vão como TEXTO do campo (o que a pessoa digita).
-const campoDe = (c) => (c === null || c === undefined ? '' : (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+// Uma linha da tabela a partir do investimento gravado. Os números vão como TEXTO do campo (o que a pessoa digita).
 const taxaDe = (t) => (t === null || t === undefined || t === '' ? '' : String(Number(t)).replace('.', ','));
-export function linhaDoInvestimento(inv, vale = null) {
+// O CADASTRO NÃO PEDE OS VALORES (06/11/2026, a opção A do mockup "Ficha do investimento"): o dinheiro entra como
+// DEPÓSITO, com data — pelo Aplicar (dinheiro novo) ou pelo Colar os depósitos (o que já estava aplicado, com o "valor
+// aplicado" do banco). A linha guarda só o que o investimento É.
+export function linhaDoInvestimento(inv) {
   return {
     id: inv.id, novo: false, excluir: false, orig: inv, conta_id: inv.conta_id, nome: inv.nome, tipo: inv.tipo,
     indexador: inv.indexador ?? '', taxa: taxaDe(inv.taxa), liquidez: inv.liquidez ?? 'diaria',
     liquidez_dias: inv.liquidez_dias ? String(inv.liquidez_dias) : '', carencia_ate: inv.carencia_ate ?? '', vencimento: inv.vencimento ?? '',
     prazo_meses: inv.prazo_meses ? String(inv.prazo_meses) : '', ao_vencer: inv.ao_vencer ?? 'reaplica',
-    aplicado: campoDe(inv.aplicado_inicial_centavos), vale: vale === null ? '' : campoDe(vale),
     emissor: inv.emissor ?? '', observacao: inv.observacao ?? '', ativo: inv.ativo !== false,
   };
 }
 export function linhaNova(id, contaId) {
   return {
     id, novo: true, excluir: false, orig: null, conta_id: contaId, nome: '', tipo: 'cdb', ...padraoDoTipo('cdb'), liquidez_dias: '', carencia_ate: '',
-    vencimento: '', prazo_meses: '', ao_vencer: 'reaplica', aplicado: '', vale: '', emissor: '', observacao: '', ativo: true,
+    vencimento: '', prazo_meses: '', ao_vencer: 'reaplica', emissor: '', observacao: '', ativo: true,
   };
 }
 
@@ -255,29 +255,28 @@ const lerTaxaTexto = (t) => {
   const n = Number(String(t).replace(/\s|%/g, '').replace(',', '.'));
   return Number.isFinite(n) ? n : NaN;
 };
-// O que a linha grava (os campos da tabela `investimentos`), já normalizado. `lerValor`: o `parseValor` do app (texto →
-// centavos, null quando não lê).
-export function dadosDaLinha(l, lerValor) {
-  const ap = String(l.aplicado ?? '').trim() ? lerValor(l.aplicado) : null;
+// O que a linha grava (os campos da tabela `investimentos`), já normalizado. O "valor aplicado" não está aqui: vai
+// pelo Colar os depósitos (`planoDoColar`).
+export function dadosDaLinha(l) {
   return {
     conta_id: l.conta_id, nome: l.nome.trim(), tipo: l.tipo, indexador: l.indexador || null, taxa: l.indexador ? lerTaxaTexto(l.taxa) : null,
     liquidez: l.liquidez, liquidez_dias: l.liquidez === 'dias' ? Number(l.liquidez_dias) || null : null,
     carencia_ate: l.liquidez === 'carencia' ? l.carencia_ate || null : null,
     vencimento: l.liquidez === 'vencimento' || l.liquidez === 'diaria' ? l.vencimento || null : null,
     prazo_meses: l.liquidez === 'por_aplicacao' ? Number(l.prazo_meses) || null : null,
-    ao_vencer: l.ao_vencer ?? 'reaplica', aplicado_inicial_centavos: ap, emissor: (l.emissor ?? '').trim(),
+    ao_vencer: l.ao_vencer ?? 'reaplica', emissor: (l.emissor ?? '').trim(),
     observacao: (l.observacao ?? '').trim(), ativo: l.ativo !== false,
   };
 }
 // A diferença de uma linha gravada para o que está na tabela: { campo: valor novo } (vazio = nada mudou).
-export function diferencaInvestimento(l, lerValor) {
-  const d = dadosDaLinha(l, lerValor);
+export function diferencaInvestimento(l) {
+  const d = dadosDaLinha(l);
   if (l.novo) return d;
   const o = l.orig;
   const numero = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
   const igual = (k) => {
     const a = d[k]; const b = o[k] ?? null;
-    if (['taxa', 'aplicado_inicial_centavos', 'liquidez_dias', 'prazo_meses'].includes(k)) return numero(a) === numero(b);
+    if (['taxa', 'liquidez_dias', 'prazo_meses'].includes(k)) return numero(a) === numero(b);
     if (k === 'emissor' || k === 'observacao') return (a ?? '') === (b ?? '');
     if (k === 'ao_vencer') return a === (b ?? 'reaplica');
     if (k === 'ativo') return a === (b !== false);
@@ -285,10 +284,10 @@ export function diferencaInvestimento(l, lerValor) {
   };
   return Object.fromEntries(Object.keys(d).filter((k) => !igual(k)).map((k) => [k, d[k]]));
 }
-// A linha nova que ficou vazia (sem nome e sem valor) não conta: "Adicionar" sem preencher não atrapalha o salvar.
-export const linhaVazia = (l) => l.novo && !l.nome.trim() && !String(l.vale ?? '').trim();
+// A linha nova que ficou sem nome não conta: "Adicionar" sem preencher não atrapalha o salvar.
+export const linhaVazia = (l) => l.novo && !l.nome.trim();
 // O primeiro problema da tabela (o campo fica vermelho): { id, campo, motivo } ou null.
-export function validarCadastro(linhas, lerValor) {
+export function validarCadastro(linhas) {
   for (const l of linhas) {
     if (l.excluir || linhaVazia(l)) continue;
     const nome = l.nome.trim() || 'o investimento novo';
@@ -296,14 +295,6 @@ export function validarCadastro(linhas, lerValor) {
     if (l.indexador && Number.isNaN(lerTaxaTexto(l.taxa))) return { id: l.id, campo: 'taxa', motivo: `a taxa de "${nome}" não é um número` };
     if (l.liquidez === 'por_aplicacao' && !(Number(l.prazo_meses) > 0)) return { id: l.id, campo: 'prazo', motivo: `falta o prazo de cada aplicação de "${nome}"` };
     if (l.liquidez === 'dias' && !(Number(l.liquidez_dias) > 0)) return { id: l.id, campo: 'prazo', motivo: `falta em quantos dias o resgate de "${nome}" cai` };
-    if (String(l.aplicado ?? '').trim()) {
-      const v = lerValor(l.aplicado);
-      if (v === null || v < 0) return { id: l.id, campo: 'aplicado', motivo: `o valor aplicado de "${nome}" não é um valor` };
-    }
-    if (l.novo) {
-      const v = String(l.vale ?? '').trim() ? lerValor(l.vale) : null;
-      if (v === null || v < 0) return { id: l.id, campo: 'vale', motivo: `falta quanto "${nome}" vale hoje` };
-    }
   }
   return null;
 }

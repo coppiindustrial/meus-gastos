@@ -186,3 +186,21 @@ export function lerDepositos(texto, lerValor) {
   if (!itens.length && linhas.length) ignoradas.push(...linhas);
   return { itens, ignoradas };
 }
+
+// O QUE O "COLAR OS DEPÓSITOS" GRAVA além da lista (06/11/2026, o cadastro sem os valores): o VALOR APLICADO que o banco
+// mostra (`aplicado`, só quando mudou; `undefined` = não mexe) e, no investimento SEM VALOR ainda (o cadastrado agora), a
+// PRIMEIRA FOTO = a soma dos depósitos (`foto`). `erro` quando falta o aplicado no investimento sem valor (sem ele o
+// rendimento seria zero, e o IR também) ou quando ele não é um valor. `lerValor`: o `calcularValor` do app (centavos).
+export function planoDoColar({ semValor, soma, aplicadoTexto, aplicadoAntes, lerValor }) {
+  const txt = String(aplicadoTexto ?? '').trim();
+  const antes = aplicadoAntes === null || aplicadoAntes === undefined ? null : Number(aplicadoAntes);
+  let aplicado;
+  if (!txt) {
+    if (semValor) return { erro: 'Falta o valor aplicado que o banco mostra: sem ele, o rendimento e o IR ficam zerados.' };
+  } else {
+    const v = lerValor(txt);
+    if (v === null || !(v >= 0)) return { erro: 'O valor aplicado não é um valor.' };
+    if (v !== antes) aplicado = v;
+  }
+  return { aplicado, foto: semValor ? soma : null };
+}

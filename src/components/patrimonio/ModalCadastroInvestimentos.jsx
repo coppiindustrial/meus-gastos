@@ -12,32 +12,31 @@ import {
   AO_VENCER, INDEXADORES, LIQUIDEZ, TIPOS_INVESTIMENTO, dadosDaLinha, diferencaInvestimento, impostoGarantia, linhaDoInvestimento, linhaNova,
   linhaVazia, padraoDoTipo, validarCadastro,
 } from '../../lib/investimentos.js';
-import { calcularValor, formatBRL } from '../../lib/dinheiro.js';
-import { todayISO } from '../../lib/format.js';
+import { formatBRL } from '../../lib/dinheiro.js';
 
 // O CADASTRO DOS INVESTIMENTOS (06/11/2026, o mockup "Patrimônio do zero"): a TABELA DE FORMULÁRIO dos cadastros do app
 // (a dos fixos, a dos cartões) — todos os investimentos de uma vez, agrupados por ONDE estão (as `contas`), cada célula
-// um campo, "Adicionar investimento" no fim de cada lugar e "Novo lugar" no fim de tudo. Só nome, tipo e o valor de hoje
-// são obrigatórios; o tipo já preenche o "rende" e o prazo (`padraoDoTipo`). O "Valor hoje" só se digita na linha nova
-// (é a primeira foto); depois ele muda pelo "Atualizar valores". "Salvar alterações (N)" grava a diferença
-// (`diferencaInvestimento`, `validarCadastro` — lib/investimentos.js, testadas). Enter desce na mesma coluna.
-// `focoLugar`: a conta em que já abre uma linha nova (o "Adicionar investimento" da tela).
+// um campo, "Adicionar investimento" no fim de cada lugar e "Novo lugar" no fim de tudo. Só o nome é obrigatório; o tipo
+// já preenche o "rende" e o prazo (`padraoDoTipo`). SEM OS VALORES (06/11/2026, a opção A do mockup "Ficha do
+// investimento"): o cadastro diz o que o investimento É, e o dinheiro entra como DEPÓSITO — "Tem hoje" só informa; ao
+// salvar investimentos novos, `onSalvo(criados)` leva ao "Como o dinheiro entrou?" (Aplicar ou Colar os depósitos).
+// "Salvar alterações (N)" grava a diferença (`diferencaInvestimento`, `validarCadastro` — lib/investimentos.js,
+// testadas). Enter desce na mesma coluna. `focoLugar`: a conta em que já abre uma linha nova. `depositosPorInv`: quantos
+// depósitos cada um tem (o "Tem hoje").
 
 let seq = 0;
 const novoId = (p) => { seq += 1; return `${p}-${seq}`; };
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const MESES_PRAZO = [6, 12, 18, 24, 36, 48, 60].map((m) => ({ value: String(m), label: m % 12 === 0 ? `${m / 12} ${m === 12 ? 'ano' : 'anos'}` : `${m} meses` }));
-const lerValor = (t) => calcularValor(t);
 
-export default function ModalCadastroInvestimentos({ contas, investimentos, valesHoje = {}, focoLugar, onFechar, onSalvo }) {
+export default function ModalCadastroInvestimentos({ contas, investimentos, valesHoje = {}, depositosPorInv = {}, focoLugar, onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
-  const hoje = todayISO();
   // os lugares: as contas ativas e as que têm investimento
   const [lugares, setLugares] = useState(() => contas
     .filter((c) => c.ativa || investimentos.some((i) => i.conta_id === c.id))
     .map((c) => ({ id: c.id, nome: c.nome, orig: c.nome, novo: false })));
-  const [linhas, setLinhas] = useState(() => investimentos.map((i) => linhaDoInvestimento(i, valesHoje[i.id] ?? null)));
+  const [linhas, setLinhas] = useState(() => investimentos.map((i) => linhaDoInvestimento(i)));
   const [detalhe, setDetalhe] = useState(null); // a linha com o "⋯" aberto
   const [erro, setErro] = useState(null);
   const [salvando, setSalvando] = useState(false);
@@ -80,7 +79,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
   const mudaLugar = (id, nome) => { setLugares((ls) => ls.map((l) => (l.id === id ? { ...l, nome } : l))); setErro(null); };
 
   const conta = (l) => !(l.novo && (l.excluir || linhaVazia(l)));
-  const mudadas = linhas.filter((l) => conta(l) && (l.novo || l.excluir || Object.keys(diferencaInvestimento(l, lerValor)).length));
+  const mudadas = linhas.filter((l) => conta(l) && (l.novo || l.excluir || Object.keys(diferencaInvestimento(l)).length));
   const lugaresMudados = lugares.filter((l) => l.nome.trim() && (l.novo || l.nome.trim() !== l.orig));
   const nAlt = mudadas.length + lugaresMudados.length;
 
@@ -92,7 +91,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
   const salvar = async () => {
     const semNome = lugares.find((l) => l.novo && !l.nome.trim() && linhas.some((x) => x.conta_id === l.id && conta(x) && !x.excluir));
     if (semNome) { setErro({ id: semNome.id, campo: 'lugar' }); toast.error('Não salvou — falta o nome de um lugar.'); return; }
-    const problema = validarCadastro(linhas, lerValor);
+    const problema = validarCadastro(linhas);
     if (problema) { setErro(problema); toast.error(`Não salvou — ${problema.motivo}.`); return; }
     const sai = mudadas.filter((l) => l.excluir && !l.novo);
     if (sai.length && !(await confirmar({
@@ -100,6 +99,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
       texto: `Exclui ${sai.map((l) => `"${l.orig.nome}"`).join(', ')} com os valores e as aplicações registrados. Não se desfaz. Se só venceu ou foi resgatado, prefira desligar "Ativo".`,
     }))) return;
     setSalvando(true);
+    const criados = []; // os investimentos novos: o "Como o dinheiro entrou?" pergunta de cada um
     try {
       const ids = {};
       for (const l of lugaresMudados) {
@@ -110,9 +110,10 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
       for (const l of sai) await excluirInvestimento(l.id);
       for (const l of mudadas.filter((x) => !x.excluir)) {
         if (l.novo) {
-          await criarInvestimento({ ...dadosDaLinha(l, lerValor), conta_id: real(l.conta_id) }, { valor_centavos: lerValor(l.vale), data: hoje });
+          const inv = await criarInvestimento({ ...dadosDaLinha(l), conta_id: real(l.conta_id) });
+          criados.push({ inv, lugar: lugares.find((g) => g.id === l.conta_id)?.nome.trim() ?? '' });
         } else {
-          await atualizarInvestimento(l.id, diferencaInvestimento(l, lerValor));
+          await atualizarInvestimento(l.id, diferencaInvestimento(l));
         }
       }
       toast.success(nAlt === 1 ? 'Alteração salva.' : `${nAlt} alterações salvas.`);
@@ -120,7 +121,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
       toast.error(/duplicate|unique/i.test(err.message) ? 'Já existe um lugar com esse nome.' : err.message);
     }
     setSalvando(false);
-    onSalvo(); // parte pode ter gravado: a tela recarrega com o que ficou no banco
+    onSalvo(criados); // parte pode ter gravado: a tela recarrega com o que ficou no banco
   };
 
   // Enter desce na mesma coluna (como numa planilha)
@@ -161,22 +162,22 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
 
   return (
     <Modal open onClose={fechar} title="Cadastro dos investimentos" maxWidth="max-w-[1180px]" padding="p-0"
-      subtitulo={`${plural(ativos, 'ativo', 'ativos')} · o valor de hoje dos que já existem muda pelo "Atualizar valores"`}>
+      subtitulo={`${plural(ativos, 'ativo', 'ativos')} · o que cada um é; o dinheiro entra pelo Aplicar ou pelo Colar os depósitos`}>
       <div ref={caixaRef} className="max-h-[66vh] overflow-auto [scrollbar-gutter:stable]">
         <table className="w-full min-w-[1040px] table-fixed border-separate border-spacing-0 text-[12.5px]">
           <colgroup>
             <col /><col style={{ width: 150 }} /><col style={{ width: 190 }} /><col style={{ width: 250 }} />
-            <col style={{ width: 124 }} /><col style={{ width: 124 }} /><col style={{ width: 76 }} />
+            <col style={{ width: 170 }} /><col style={{ width: 76 }} />
           </colgroup>
           <thead className="sticky top-0 z-10"><tr>
             <th className={th}>Nome</th><th className={th}>Tipo</th><th className={th}>Rende</th><th className={th}>Prazo · resgate</th>
-            <th className={`${th} text-right`}>Valor aplicado</th><th className={`${th} text-right`}>Valor hoje</th><th className={th} />
+            <th className={`${th} text-right`}>Tem hoje</th><th className={th} />
           </tr></thead>
           <tbody>
             {porLugar.map(({ g, ls }) => (
               <Fragment key={g.id}>
                 <tr>
-                  <td colSpan={7} className="border-b border-gray-200 bg-hx-f9fafb px-2 py-1.5">
+                  <td colSpan={6} className="border-b border-gray-200 bg-hx-f9fafb px-2 py-1.5">
                     <span className="flex items-center gap-2">
                       <input data-cad-lugar={g.id} className={`input !h-7 !w-[260px] !bg-transparent text-[12.5px] font-semibold ${ver(g.id, 'lugar')}`}
                         value={g.nome} placeholder="Onde está (ex.: Nubank, XP)" onChange={(e) => mudaLugar(g.id, e.target.value)} aria-label="Nome do lugar" />
@@ -186,7 +187,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
                   </td>
                 </tr>
                 {ls.map((l) => {
-                  const mudou = l.novo ? !linhaVazia(l) : !l.excluir && Object.keys(diferencaInvestimento(l, lerValor)).length > 0;
+                  const mudou = l.novo ? !linhaVazia(l) : !l.excluir && Object.keys(diferencaInvestimento(l)).length > 0;
                   const aberto = detalhe === l.id;
                   const imposto = impostoGarantia(l.tipo);
                   return (
@@ -216,16 +217,17 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
                         </td>
                         <td className={td}>{celulaPrazo(l)}</td>
                         <td className={td}>
-                          <input data-cad-col="aplicado" onKeyDown={aoTeclar} className={`${inp} text-right tabular-nums ${ver(l.id, 'aplicado')}`} inputMode="decimal"
-                            value={l.aplicado} placeholder="—" disabled={l.excluir} onChange={(e) => muda(l.id, 'aplicado', e.target.value)}
-                            title='O "valor aplicado" do app do banco. Vazio: o rendimento conta a partir do cadastro.' aria-label={`Valor aplicado de ${l.nome || 'investimento'}`} />
-                        </td>
-                        <td className={td}>
+                          {/* TEM HOJE só informa: o dinheiro entra pelos depósitos (Aplicar ou Colar), o valor muda pelo "Atualizar valores" */}
                           {l.novo ? (
-                            <input data-cad-col="vale" onKeyDown={aoTeclar} className={`${inp} text-right tabular-nums ${ver(l.id, 'vale')}`} inputMode="decimal"
-                              value={l.vale} placeholder="0,00" onChange={(e) => muda(l.id, 'vale', e.target.value)} aria-label={`Valor hoje de ${l.nome || 'investimento'}`} />
+                            <span className="flex h-8 items-center justify-center rounded-[6px] border border-dashed border-gray-300 px-2 text-[11.5px] text-gray-400"
+                              title="Depois de salvar: Aplicar (dinheiro novo) ou Colar os depósitos do banco (o que já estava aplicado)">entra depois de salvar</span>
+                          ) : valesHoje[l.id] ? (
+                            <span className="block px-2 py-1 text-right leading-tight" title='Muda pelo "Atualizar valores"'>
+                              <span className="block tabular-nums text-gray-600">{formatBRL(valesHoje[l.id])}</span>
+                              {depositosPorInv[l.id] > 0 && <span className="block text-[10.5px] text-gray-400">{plural(depositosPorInv[l.id], 'depósito', 'depósitos')}</span>}
+                            </span>
                           ) : (
-                            <span className="flex h-8 items-center justify-end px-2 tabular-nums text-gray-500" title='Muda pelo "Atualizar valores"'>{valesHoje[l.id] !== undefined ? formatBRL(valesHoje[l.id]) : '—'}</span>
+                            <span className="flex h-8 items-center justify-end px-2 text-[12px] text-gray-400" title="Ainda sem dinheiro: aplique ou cole os depósitos, na ficha dele">sem valor</span>
                           )}
                         </td>
                         <td className={`${td} text-right`}>
@@ -244,7 +246,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
                       </tr>
                       {aberto && (
                         <tr>
-                          <td colSpan={7} className="border-b border-gray-100 bg-hx-f9fafb px-3 py-2">
+                          <td colSpan={6} className="border-b border-gray-100 bg-hx-f9fafb px-3 py-2">
                             <div className="flex flex-wrap items-center gap-3">
                               <label className="flex items-center gap-2 text-[12px] text-gray-600">Emissor
                                 <input className={`${inp} !w-[220px]`} value={l.emissor} placeholder="o banco que emitiu, se não for o lugar" onChange={(e) => muda(l.id, 'emissor', e.target.value)} /></label>
@@ -259,7 +261,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
                   );
                 })}
                 <tr>
-                  <td colSpan={7} className="px-2 py-1">
+                  <td colSpan={6} className="px-2 py-1">
                     <button type="button" onClick={() => adicionar(g.id)}
                       className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900">
                       <span className="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-400"><IconMais className="h-2 w-2" /></span>
@@ -270,7 +272,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
               </Fragment>
             ))}
             <tr>
-              <td colSpan={7} className="border-t border-gray-200 px-2 py-2">
+              <td colSpan={6} className="border-t border-gray-200 px-2 py-2">
                 <button type="button" onClick={novoLugar}
                   className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900">
                   <span className="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-500"><IconMais className="h-2 w-2" /></span>
@@ -285,7 +287,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-200 bg-hx-f9fafb px-4 py-3">
         <span className="text-[12px] text-gray-500">
           {nAlt ? <><b className="font-semibold text-hx-92400e">{plural(nAlt, 'alteração', 'alterações')}</b> · ainda não salvo</>
-            : 'Enter desce na mesma coluna · "Valor aplicado" vazio: o rendimento conta de hoje · aceita conta: =20000+14000'}
+            : 'Enter desce na mesma coluna · o dinheiro entra pelos depósitos: Aplicar (dinheiro novo) ou Colar os depósitos do banco (o que já estava aplicado)'}
         </span>
         <span className="flex-1" />
         <button type="button" className="btn-secondary" onClick={fechar} disabled={salvando}>Cancelar</button>

@@ -5,17 +5,19 @@ import SelectSimples from '../SelectSimples.jsx';
 import SelectBusca from '../SelectBusca.jsx';
 import Toggle from '../Toggle.jsx';
 import AbasPilula from '../AbasPilula.jsx';
+import Tooltip from '../Tooltip.jsx';
+import { IconAplicar, IconColar, IconLapis, IconResgatar } from '../icons.jsx';
 import { BotaoExcluir, Campo, Etiqueta, RodapeForm } from '../Comuns.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { excluirConta, excluirMovimento, salvarConta } from '../../api/patrimonio.js';
-import { criarInvestimento, excluirValor, lancarMovimento, registrarValores, salvarDepositos } from '../../api/investimentos.js';
-import { aliquotaIR, diasEntre as diasEntreIR, ehIsento, lerDepositos } from '../../lib/impostoInvestimento.js';
+import { atualizarInvestimento, criarInvestimento, excluirValor, lancarMovimento, registrarValores, salvarDepositos } from '../../api/investimentos.js';
+import { aliquotaIR, diasEntre as diasEntreIR, ehIsento, lerDepositos, planoDoColar } from '../../lib/impostoInvestimento.js';
 import {
   TIPOS_INVESTIMENTO, nomeTipoInvestimento, padraoDoTipo, rendimentoForaDoNormal, rotuloLiquidez, rotuloPrazo, rotuloRende,
 } from '../../lib/investimentos.js';
 import { calcularValor, formatBRL, parseValor } from '../../lib/dinheiro.js';
-import { addMeses, formatDate, todayISO } from '../../lib/format.js';
+import { addMeses, formatDate, nomeCompetencia, todayISO } from '../../lib/format.js';
 
 // OS POP-UPS DOS INVESTIMENTOS (06/11/2026, o mockup "Patrimônio do zero"): os dois gestos do dia a dia — APLICAR /
 // RESGATAR (o investimento, a data e o valor; o novo investimento nasce ali mesmo) e ATUALIZAR VALORES (quanto cada um
@@ -28,9 +30,6 @@ const ler = (t) => (vazio(t) ? null : calcularValor(t));
 const doisCampos = 'grid gap-3 sm:grid-cols-2';
 const ultimoDiaDoMes = (comp) => { const [y, m] = comp.split('-').map(Number); return `${comp}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`; };
 const diasEntre = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 86400000);
-const IcoSobe = () => <svg viewBox="0 0 24 24" className="h-[13px] w-[13px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" /></svg>;
-const IcoDesce = () => <svg viewBox="0 0 24 24" className="h-[13px] w-[13px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" /></svg>;
-export { IcoSobe, IcoDesce };
 
 // ------------------------------------------------------------ o lugar (a conta: o banco ou a corretora)
 export function ModalLugar({ conta, qtdInvestimentos = 0, onFechar, onSalvo }) {
@@ -95,7 +94,9 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
   const opcoes = useMemo(() => grupos.flatMap((g) => g.itens.filter((x) => x.inv.ativo !== false).map((x) => ({
     value: x.inv.id, label: [x.inv.nome, rotuloRende(x.inv)].filter(Boolean).join(' · '), grupo: { nome: g.conta.nome, cor: g.cor },
   }))), [grupos]);
-  const x = useMemo(() => grupos.flatMap((g) => g.itens).find((i) => i.inv.id === alvo) ?? null, [alvo, grupos]);
+  // o investimento que acabou de nascer pelo cadastro pode ainda não estar na carteira (a tela recarrega): vale o `inicial`
+  const x = useMemo(() => grupos.flatMap((g) => g.itens).find((i) => i.inv.id === alvo)
+    ?? (inicial?.inv && inicial.inv.id === alvo ? { inv: inicial.inv, vale: 0, aplicado: 0, semValor: true } : null), [alvo, grupos, inicial]);
   const v = ler(valor);
   const aplicando = tipo === 'aporte';
   const depois = x && v ? x.aplicado + (aplicando ? v : -v) : null;
@@ -107,6 +108,7 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
     if (novo && (!novo.nome.trim() || !novo.conta_id)) { setErro('Dê o nome e o lugar do investimento novo.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { setErro('Informe a data.'); return; }
     if (v === null || !(v > 0)) { setErro('Informe o valor.'); return; }
+    if (!novo && !aplicando && x.semValor) { setErro(`${x.inv.nome} ainda não tem dinheiro para resgatar.`); return; }
     setSalvando(true);
     try {
       if (novo) {
@@ -116,6 +118,8 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
         toast.success(`${novo.nome.trim()} cadastrado com a aplicação de ${formatBRL(v)}.`);
       } else {
         await lancarMovimento({ conta_id: x.inv.conta_id, investimento_id: x.inv.id, data, tipo, valor_centavos: v, descricao }, { encerrar: !aplicando && tudo });
+        // sem valor ainda: a aplicação é também o valor dele nesse dia (o mesmo que o "Cadastrar e aplicar" faz)
+        if (aplicando && x.semValor) await registrarValores(data, [{ investimento_id: x.inv.id, valor_centavos: v }]);
         toast.success(`${aplicando ? 'Aplicação' : 'Resgate'} de ${formatBRL(v)} ${aplicando ? 'em' : 'de'} ${x.inv.nome}${!aplicando && tudo ? ' · encerrado' : ''}.`);
       }
       onSalvo();
@@ -125,7 +129,7 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
   return (
     <Modal open onClose={onFechar} title={aplicando ? 'Aplicar' : 'Resgatar'} subtitulo={aplicando ? 'dinheiro que entrou num investimento' : 'dinheiro que saiu de um investimento'} maxWidth="max-w-md" z={z}>
       <form onSubmit={enviar} className="space-y-4">
-        <AbasPilula abas={[{ key: 'aporte', label: '↑ Aplicar' }, { key: 'resgate', label: '↓ Resgatar' }]} valor={tipo}
+        <AbasPilula abas={[{ key: 'aporte', label: 'Aplicar' }, { key: 'resgate', label: 'Resgatar' }]} valor={tipo}
           onChange={(t) => { setTipo(t); setErro(''); setTudo(false); if (t === 'resgate') setNovo(null); }} variante="claro" cheia altura={32} folga={2} />
         {novo ? (
           <div className="space-y-3 rounded-md border border-gray-200 p-3">
@@ -180,19 +184,108 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
 }
 
 // ------------------------------------------------------------ a ficha do investimento
-// O que ele é e os números (com o LÍQUIDO ≈), e as abas: DEPÓSITOS E IR (06/11/2026, o mockup "Depósitos em cascata": cada
-// depósito com a idade, o que vale, o depositado e o rendimento ≈, a alíquota de hoje e quando ela cai, e a LINHA DO
-// TEMPO das quedas do imposto; o "Colar os depósitos…" traz a lista do banco), VENCIMENTOS (no "prazo por aplicação") e o
-// HISTÓRICO (os valores e os movimentos, com o ✕ para corrigir).
+// O que ele é, os QUATRO NÚMEROS (com o LÍQUIDO ≈) e as abas — o mockup "Ficha do investimento" (06/11/2026, as opções
+// A): o hover num número ACENDE A COLUNA dele na lista dos depósitos (e o cabeçalho da coluna acende o número), e a
+// linha de baixo do número vira a conta; a lista ganha a altura da ficha; as QUEDAS DO IR têm ABA PRÓPRIA (o resumo, a
+// escada do imposto e as quedas por mês — antes ficavam embaixo da lista, que encolhia); EDITAR NO CADASTRO e COLAR OS
+// DEPÓSITOS são os ÍCONES do cabeçalho (o grupo do DRE, ao lado do ✕), e o rodapé fica com Resgatar e Aplicar (as moedas
+// − e +). Abas: DEPÓSITOS E IR, QUEDAS DO IR, VENCIMENTOS (no "prazo por aplicação") e o HISTÓRICO (os valores e os
+// movimentos, com o ✕ para corrigir). Sem dinheiro ainda (`semValor`, o cadastrado sem os valores): o convite para
+// aplicar (dinheiro novo) ou colar os depósitos (o que já estava aplicado).
 const TOM_ALIQ = { 0.225: 'vermelho', 0.2: 'ambar', 0.175: 'cinza', 0.15: 'verde' };
 const pctA = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+const MES3 = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const utcDe = (iso) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+const ICONE_CAB = 'flex h-8 w-[34px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 active:bg-gray-200';
+
+// AS QUEDAS DO IR: se não resgatar nada, o IR de hoje cai em cada data em que um depósito muda de faixa. A escada é o IR
+// de hoje menos cada queda (sem o rendimento que ainda vem, que soma IR de novo — a nota diz), e embaixo as quedas por mês.
+function QuedasDoIR({ imp, hoje }) {
+  const qs = imp.quedas;
+  const eco = qs.reduce((s, q) => s + q.menos, 0);
+  const ir = imp.ir ?? 0;
+  const fim = qs[qs.length - 1].data;
+  const W = 640; const H = 136; const E = 8; const D = 96; const TOP = 24; const BOT = 24;
+  const t0 = utcDe(hoje); const t1 = Math.max(utcDe(fim) + 12 * 86400000, t0 + 30 * 86400000);
+  const X = (iso) => E + ((utcDe(iso) - t0) / (t1 - t0)) * (W - E - D);
+  const pad = Math.max(1, eco * 0.18);
+  const Y = (v) => TOP + ((ir + pad - v) / (eco + 2 * pad)) * (H - TOP - BOT);
+  let v = ir;
+  const pts = [[X(hoje), Y(v)]];
+  const marcas = [];
+  qs.forEach((q) => { const x = X(q.data); pts.push([x, Y(v)]); v -= q.menos; pts.push([x, Y(v)]); marcas.push({ x, y: Y(v), q }); });
+  pts.push([W - D, Y(v)]);
+  const linha = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const area = `${linha} L${W - D} ${H - BOT} L${E} ${H - BOT} Z`;
+  // os meses embaixo: um a cada `passo` quando não cabem (cada rótulo pede ~44px)
+  const meses = [];
+  for (let y = +hoje.slice(0, 4), m = +hoje.slice(5, 7) + 1; ; m += 1) {
+    if (m > 12) { m = 1; y += 1; }
+    const iso = `${y}-${String(m).padStart(2, '0')}-01`;
+    if (utcDe(iso) > t1) break;
+    meses.push(iso);
+  }
+  const passo = Math.max(1, Math.ceil((meses.length * 44) / (W - E - D)));
+  const porMes = [];
+  qs.forEach((q) => { const m = q.data.slice(0, 7); let g = porMes[porMes.length - 1]; if (!g || g.m !== m) porMes.push(g = { m, qs: [] }); g.qs.push(q); });
+  const verde = { stroke: 'var(--serie-entradas)' };
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px] text-gray-600">
+        Sem resgatar nada, o IR de hoje (<b className="font-semibold text-gray-800">{formatBRL(ir)}</b>) cai{' '}
+        <b className="font-semibold text-green-700">{formatBRL(eco)}</b> em {qs.length} {qs.length === 1 ? 'queda' : 'quedas'}, até {formatDate(fim)}.
+        <span className="text-gray-400"> O rendimento que ainda vem soma IR de novo, um pouco.</span>
+      </p>
+      <div className="rounded-md border border-gray-200 px-3 pb-1 pt-2">
+        <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label={`O IR de hoje cai de ${formatBRL(ir)} para ${formatBRL(ir - eco)} até ${formatDate(fim)}`}>
+          <line x1={E} x2={W - D} y1={H - BOT} y2={H - BOT} className="stroke-current text-gray-200" />
+          <path d={area} style={{ fill: 'var(--serie-entradas)', fillOpacity: 0.1 }} />
+          <path d={linha} fill="none" strokeWidth="2" strokeLinejoin="round" style={verde} />
+          {marcas.map((p, i) => (
+            <circle key={i} cx={p.x} cy={p.y} r="3" strokeWidth="2" className="fill-current text-white" style={verde}>
+              <title>{`${formatDate(p.q.data)}: o depósito de ${formatDate(p.q.deposito)} passa de ${pctA(p.q.de)} para ${pctA(p.q.para)} · −${formatBRL(p.q.menos)}`}</title>
+            </circle>
+          ))}
+          <text x={E + 2} y={Y(ir) - 8} className="fill-current text-gray-800 text-[12px] font-semibold tabular-nums">{formatBRL(ir)}</text>
+          <text x={W - D + 8} y={Y(ir - eco) + 4} className="fill-current text-gray-800 text-[12px] font-semibold tabular-nums">{formatBRL(ir - eco)}</text>
+          <text x={E} y={H - 7} className="fill-current text-gray-400 text-[11px]">hoje</text>
+          {meses.map((m, i) => (meses.length - 1 - i) % passo === 0 && X(m) > E + 34 && (
+            <text key={m} x={X(m)} y={H - 7} textAnchor="middle" className="fill-current text-gray-400 text-[11px]">{MES3[+m.slice(5, 7) - 1]}/{m.slice(2, 4)}</text>
+          ))}
+        </svg>
+      </div>
+      {porMes.map((g) => (
+        <div key={g.m} className="overflow-hidden rounded-md border border-gray-200">
+          <div className="flex justify-between bg-hx-f9fafb px-3 py-1.5 text-[12px] font-semibold text-gray-600">
+            <span>{nomeCompetencia(g.m)}</span>
+            <span className="tabular-nums text-green-700">−{formatBRL(g.qs.reduce((s, q) => s + q.menos, 0))}</span>
+          </div>
+          <ul className="divide-y divide-dashed divide-gray-200">
+            {g.qs.map((q, i) => (
+              <li key={i} className="grid grid-cols-[88px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-1.5 text-[12.5px]">
+                <b className="font-semibold tabular-nums text-gray-800">{formatDate(q.data)}</b>
+                <span className="min-w-0 text-gray-600">o depósito de {formatDate(q.deposito)} ({formatBRL(q.vale)}) passa de{' '}
+                  <Etiqueta tom={TOM_ALIQ[q.de] ?? 'cinza'}>{pctA(q.de)}</Etiqueta> para <Etiqueta tom={TOM_ALIQ[q.para] ?? 'cinza'}>{pctA(q.para)}</Etiqueta></span>
+                <span className="whitespace-nowrap font-semibold tabular-nums text-green-700">−{formatBRL(q.menos)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [], comDepositos, movel, onFechar, onAplicar, onCadastro, onMudou }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
+  const hoje = todayISO();
   const imp = x.imposto;
-  const [aba, setAba] = useState(imp && !imp.semEstimativa ? 'depositos' : x.prazos ? 'aplicacoes' : 'historico');
+  const temDep = !x.semValor && !!imp && !imp.semEstimativa;
+  const temQuedas = temDep && !imp.semDatas && !imp.isento && imp.quedas.length > 0;
+  const [aba, setAba] = useState(temDep ? 'depositos' : x.prazos ? 'aplicacoes' : 'historico');
   const [colando, setColando] = useState(false);
+  const [foco, setFoco] = useState(null); // a coluna acesa pelo número (ou pelo cabeçalho dela)
   const inv = x.inv;
   const linhas = [
     ...valores.map((f) => ({ ...f, tipo: 'foto' })),
@@ -203,162 +296,213 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
     if (!await confirmar({ titulo: foto ? 'Excluir este valor?' : `Excluir est${h.tipo === 'aporte' ? 'a aplicação' : 'e resgate'}?`, texto: `${formatBRL(h.valor_centavos)} em ${formatDate(h.data)}.`, confirmar: 'Excluir', perigo: true })) return;
     try { await (foto ? excluirValor(h.id) : excluirMovimento(h.id)); toast.success('Excluído.'); onMudou(); } catch (err) { toast.error(err.message); }
   };
-  const num = 'text-[17px] font-semibold tabular-nums';
   const abas = [
-    ...(imp && !imp.semEstimativa ? [{ key: 'depositos', label: 'Depósitos e IR' }] : []),
+    ...(temDep ? [{ key: 'depositos', label: 'Depósitos e IR', qtd: imp.semDatas ? undefined : imp.lotes.length }] : []),
+    ...(temQuedas ? [{ key: 'quedas', label: 'Quedas do IR', qtd: imp.quedas.length }] : []),
     ...(x.prazos ? [{ key: 'aplicacoes', label: 'Vencimentos' }] : []),
     { key: 'historico', label: 'Histórico' },
   ];
   const ir = imp ? (imp.ir ?? 0) + (imp.iof ?? 0) : 0;
+  const podeColar = comDepositos && !imp?.semEstimativa;
+  const lotes = temDep && !imp.semDatas ? imp.lotes : [];
+  const soma = (k) => lotes.reduce((s, l) => s + (l[k] ?? 0), 0);
+  const naLista = aba === 'depositos' && lotes.length > 0;
+
+  // os quatro números: o valor, a linha de sempre e, no hover, a conta (e a coluna da lista que ele soma)
+  const numeros = [
+    { k: 'depositado', rotulo: 'Aplicado', valor: formatBRL(x.aplicado), cor: 'text-gray-800',
+      sub: 'o que foi depositado', conta: lotes.length ? `= o depositado ≈ dos ${lotes.length}` : '= o cadastro + aplicações − resgates' },
+    { k: 'vale', rotulo: 'Vale hoje', valor: x.semValor ? '—' : formatBRL(x.vale), cor: 'text-gray-900',
+      sub: x.data ? `bruto · foto de ${formatDate(x.data)}` : 'sem valor ainda', conta: lotes.length ? `= a soma dos ${lotes.length} depósitos` : 'o último valor registrado' },
+    { k: 'ganho', rotulo: 'Rendeu', valor: formatBRL(x.rendeu), cor: x.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700',
+      sub: x.pct !== null ? `${(x.pct * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% sobre o aplicado` : '', conta: '= vale hoje − aplicado' },
+    { k: 'ir', rotulo: 'Líquido ≈', valor: x.semValor || imp?.semEstimativa || imp?.semDatas ? '—' : formatBRL(imp?.liquido ?? x.vale), cor: 'text-gray-900',
+      sub: !imp || imp.semEstimativa ? 'sem estimativa' : imp.semDatas ? 'faltam as datas dos depósitos' : imp.isento ? 'isento de IR' : `IR ≈ ${formatBRL(ir)} se resgatar hoje`,
+      conta: imp?.isento ? 'isento: o líquido é o bruto' : '= vale hoje − o IR ≈ de cada depósito' },
+  ];
+  const acesa = (k) => (naLista && foco === k ? 'gm-acesa' : '');
   const th = 'border-b border-gray-200 bg-hx-f9fafb px-2.5 py-1.5 text-right text-[10.5px] font-semibold uppercase tracking-wide text-gray-500';
   const td = 'border-b border-gray-100 px-2.5 py-1.5 text-right tabular-nums';
+  const cab = (k, txt, esq) => (
+    <th className={`${th} ${esq ? 'text-left' : ''} ${acesa(k)} ${foco === k && naLista ? '!text-gray-800' : ''}`} onMouseEnter={() => setFoco(k)} onMouseLeave={() => setFoco(null)}>{txt}</th>
+  );
+  const acoesCab = !movel && (
+    <div className="inline-flex overflow-hidden rounded-md border border-gray-300 bg-white">
+      <Tooltip label="Editar no cadastro">
+        <button type="button" aria-label="Editar no cadastro" onClick={onCadastro} className={ICONE_CAB}><IconLapis className="h-3.5 w-3.5" /></button>
+      </Tooltip>
+      {podeColar && (
+        <Tooltip label={depositos.length ? `Colar os depósitos do banco de novo (${depositos.length})` : 'Colar os depósitos do banco'}>
+          <button type="button" aria-label="Colar os depósitos do banco" onClick={() => setColando(true)} className={`${ICONE_CAB} border-l border-gray-200`}><IconColar /></button>
+        </Tooltip>
+      )}
+    </div>
+  );
   return (
-    <Modal open onClose={onFechar} title={inv.nome} maxWidth="max-w-[860px]"
+    <Modal open onClose={onFechar} title={inv.nome} maxWidth="max-w-[900px]" acoes={acoesCab}
       subtitulo={[lugar, nomeTipoInvestimento(inv.tipo), rotuloRende(inv), rotuloLiquidez(inv) + (inv.liquidez === 'por_aplicacao' ? (inv.ao_vencer === 'volta' ? ' · volta ao vencer' : ' · reaplica sozinho') : '')].filter(Boolean).join(' · ')}>
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 rounded-md border border-gray-200 px-4 py-3 sm:grid-cols-4">
-          <div><div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Aplicado</div><div className={`${num} text-gray-800`}>{formatBRL(x.aplicado)}</div></div>
-          <div><div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Vale hoje</div><div className={`${num} text-gray-900`}>{formatBRL(x.vale)}</div>
-            {x.data && <div className="text-[11.5px] text-gray-400">bruto · foto de {formatDate(x.data)}</div>}</div>
-          <div><div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Rendeu</div>
-            <div className={`${num} ${x.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}`}>{formatBRL(x.rendeu)}</div>
-            {x.pct !== null && <div className="text-[11.5px] text-gray-400">{(x.pct * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% sobre o aplicado</div>}</div>
-          <div><div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Líquido ≈</div>
-            <div className={`${num} text-gray-900`}>{imp?.semEstimativa || imp?.semDatas ? '—' : formatBRL(imp?.liquido ?? x.vale)}</div>
-            <div className="text-[11.5px] text-gray-400">{!imp || imp.semEstimativa ? 'sem estimativa' : imp.semDatas ? 'faltam as datas dos depósitos' : imp.isento ? 'isento de IR' : `IR ≈ ${formatBRL(ir)} se resgatar hoje`}</div></div>
-        </div>
-        {abas.length > 1 && <AbasPilula abas={abas} valor={aba} onChange={setAba} variante="claro" altura={30} folga={2} />}
-
-        {aba === 'depositos' && imp?.semDatas && (
-          <div className="rounded-md border border-dashed border-gray-300 px-4 py-5 text-center">
-            <p className="text-[13.5px] font-semibold text-gray-800">Faltam as datas dos depósitos</p>
-            <p className="mx-auto mt-1 max-w-[520px] text-[12.5px] leading-relaxed text-gray-600">
-              O IR de cada depósito depende da idade dele (22,5% até 180 dias … 15% depois de 720). Cole a lista "Detalhes dos depósitos" do banco
-              — a data e o valor de cada um — e o app calcula o imposto e o líquido de cada um, e quando cada alíquota cai.
-            </p>
-            {!movel && comDepositos && <button type="button" className="btn-primary mt-3" onClick={() => setColando(true)}>Colar os depósitos do banco…</button>}
-            {!comDepositos && <p className="mt-2 text-[12px] text-amber-700">Falta aplicar a migration 016 (os depósitos).</p>}
-          </div>
-        )}
-        {aba === 'depositos' && imp && !imp.semDatas && (
-          <div className="space-y-3">
-            <div className="max-h-[300px] overflow-auto rounded-md border border-gray-200">
-              <table className="w-full border-separate border-spacing-0 text-[12.5px]">
-                <thead className="sticky top-0"><tr>
-                  <th className={`${th} text-left`}>Depósito</th><th className={th}>Vale hoje</th><th className={th}>Depositado ≈</th><th className={th}>Rendeu ≈</th>
-                  <th className={`${th} text-left`}>Alíquota</th><th className={`${th} text-left`}>Quando cai</th><th className={th}>IR ≈</th>
-                </tr></thead>
-                <tbody>
-                  {imp.lotes.map((l, i) => (
-                    <tr key={i}>
-                      <td className={`${td} text-left text-gray-700`}>{formatDate(l.data)}{l.dataAproximada && <span className="ml-1 text-gray-400" title="Sem a data da aplicação">≈</span>}
-                        <span className="block text-[11px] text-gray-400">{l.dias} {l.dias === 1 ? 'dia' : 'dias'}{l.origem === 'aporte' ? ' · pelo app' : ''}</span></td>
-                      <td className={`${td} font-medium text-gray-900`}>{formatBRL(l.vale)}</td>
-                      <td className={`${td} text-gray-600`}>{formatBRL(l.depositado)}</td>
-                      <td className={`${td} text-green-700`}>{formatBRL(l.ganho)}</td>
-                      <td className={`${td} text-left`}>{imp.isento ? <Etiqueta tom="verde">isento</Etiqueta> : <Etiqueta tom={TOM_ALIQ[l.aliquota] ?? 'cinza'}>{pctA(l.aliquota)}</Etiqueta>}</td>
-                      <td className={`${td} text-left text-gray-600`}>{imp.isento ? '—' : l.proxima ? <><b className="font-semibold text-gray-800">{formatDate(l.proxima.data)}</b> → {pctA(l.proxima.aliquota)}</> : <span className="text-gray-400">já na menor</span>}</td>
-                      <td className={`${td} text-gray-800`}>{formatBRL(l.ir + l.iof)}{l.iof > 0 && <span className="block text-[10.5px] text-gray-400">com IOF</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {numeros.map((n) => (
+            <div key={n.k} onMouseEnter={() => setFoco(n.k)} onMouseLeave={() => setFoco(null)}
+              className={`rounded-md border px-3 py-2 transition-[background-color,border-color,box-shadow] duration-150 ${foco === n.k ? 'border-gray-300 bg-hx-f9fafb shadow-sm' : 'border-gray-200'}`}>
+              <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{n.rotulo}</div>
+              <div className={`text-[17px] font-semibold tabular-nums ${n.cor}`}>{n.valor}</div>
+              <div className="min-h-[18px] truncate text-[11.5px] text-gray-400">{foco === n.k ? <span className="text-gray-600">{n.conta}</span> : n.sub}</div>
             </div>
-            {!imp.isento && imp.quedas.length > 0 && (
-              <div className="rounded-md border border-gray-200 px-3 py-2.5">
-                <div className="mb-1 text-[12.5px] font-semibold text-gray-800">As próximas quedas do IR <span className="font-normal text-gray-400">se você não resgatar nada</span></div>
-                <ul className="divide-y divide-dashed divide-gray-200">
-                  {imp.quedas.slice(0, 6).map((q, i) => (
-                    <li key={i} className="grid grid-cols-[88px_minmax(0,1fr)_auto] items-center gap-3 py-1.5 text-[12.5px]">
-                      <b className="font-semibold tabular-nums text-gray-800">{formatDate(q.data)}</b>
-                      <span className="min-w-0 text-gray-600">o depósito de {formatDate(q.deposito)} ({formatBRL(q.vale)}) passa de {pctA(q.de)} para {pctA(q.para)}</span>
-                      <span className="whitespace-nowrap font-semibold tabular-nums text-green-700">−{formatBRL(q.menos)}</span>
+          ))}
+        </div>
+
+        {x.semValor ? (
+          <div className="rounded-md border border-dashed border-gray-300 px-4 py-5 text-center">
+            <p className="text-[13.5px] font-semibold text-gray-800">Ainda sem dinheiro</p>
+            <p className="mx-auto mt-1 max-w-[520px] text-[12.5px] leading-relaxed text-gray-600">
+              O dinheiro entra como depósito, com data: pelo Aplicar, se é dinheiro novo, ou pela lista de depósitos do banco, se já estava aplicado.
+            </p>
+            {!movel && (
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                {podeColar && <button type="button" className="btn-secondary" onClick={() => setColando(true)}><IconColar />Colar os depósitos do banco</button>}
+                <button type="button" className="btn-primary" onClick={() => onAplicar('aporte')}><IconAplicar />Aplicar</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {abas.length > 1 && <AbasPilula abas={abas} valor={aba} onChange={setAba} variante="claro" altura={30} folga={2} qtdSolta />}
+
+            {aba === 'depositos' && imp?.semDatas && (
+              <div className="rounded-md border border-dashed border-gray-300 px-4 py-5 text-center">
+                <p className="text-[13.5px] font-semibold text-gray-800">Faltam as datas dos depósitos</p>
+                <p className="mx-auto mt-1 max-w-[520px] text-[12.5px] leading-relaxed text-gray-600">
+                  O IR de cada depósito depende da idade dele (22,5% até 180 dias … 15% depois de 720). Cole a lista "Detalhes dos depósitos" do banco
+                  — a data e o valor de cada um — e o app calcula o imposto e o líquido de cada um, e quando cada alíquota cai.
+                </p>
+                {!movel && podeColar && <button type="button" className="btn-primary mt-3" onClick={() => setColando(true)}><IconColar />Colar os depósitos do banco</button>}
+                {!comDepositos && <p className="mt-2 text-[12px] text-amber-700">Falta aplicar a migration 016 (os depósitos).</p>}
+              </div>
+            )}
+            {aba === 'depositos' && lotes.length > 0 && (
+              <div className="space-y-2">
+                {/* A LISTA COM A ALTURA DA FICHA: o que sobra de 90% da tela depois do cabeçalho, dos números, das abas e do rodapé */}
+                <div className="max-h-[calc(90vh-340px)] min-h-[200px] overflow-auto rounded-md border border-gray-200">
+                  <table className="w-full border-separate border-spacing-0 text-[12.5px]">
+                    <thead className="sticky top-0 z-[1]"><tr>
+                      {cab('data', 'Depósito', true)}{cab('vale', 'Vale hoje')}{cab('depositado', 'Depositado ≈')}{cab('ganho', 'Rendeu ≈')}
+                      {cab('aliquota', 'Alíquota', true)}{cab('cai', 'Quando cai', true)}{cab('ir', 'IR ≈')}
+                    </tr></thead>
+                    <tbody>
+                      {lotes.map((l, i) => (
+                        <tr key={i} className="hover:bg-hx-f9fafb">
+                          <td className={`${td} text-left text-gray-700 ${acesa('data')}`}>{formatDate(l.data)}{l.dataAproximada && <span className="ml-1 text-gray-400" title="Sem a data da aplicação">≈</span>}
+                            <span className="block text-[11px] text-gray-400">{l.dias} {l.dias === 1 ? 'dia' : 'dias'}{l.origem === 'aporte' ? ' · pelo app' : ''}</span></td>
+                          <td className={`${td} font-medium text-gray-900 ${acesa('vale')}`}>{formatBRL(l.vale)}</td>
+                          <td className={`${td} text-gray-600 ${acesa('depositado')}`}>{formatBRL(l.depositado)}</td>
+                          <td className={`${td} text-green-700 ${acesa('ganho')}`}>{formatBRL(l.ganho)}</td>
+                          <td className={`${td} text-left ${acesa('aliquota')}`}>{imp.isento ? <Etiqueta tom="verde">isento</Etiqueta> : <Etiqueta tom={TOM_ALIQ[l.aliquota] ?? 'cinza'}>{pctA(l.aliquota)}</Etiqueta>}</td>
+                          <td className={`${td} text-left text-gray-600 ${acesa('cai')}`}>{imp.isento ? '—' : l.proxima ? <><b className="font-semibold text-gray-800">{formatDate(l.proxima.data)}</b> → {pctA(l.proxima.aliquota)}</> : <span className="text-gray-400">já na menor</span>}</td>
+                          <td className={`${td} text-gray-800 ${acesa('ir')}`}>{formatBRL(l.ir + l.iof)}{l.iof > 0 && <span className="block text-[10.5px] text-gray-400">com IOF</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {lotes.length > 1 && (
+                      <tfoot className="sticky bottom-0 z-[1]"><tr className="font-semibold">
+                        <td className={`border-t border-gray-200 bg-hx-f9fafb px-2.5 py-1.5 text-left text-gray-800 ${acesa('data')}`}>{lotes.length} depósitos</td>
+                        <td className={`border-t border-gray-200 bg-hx-f9fafb px-2.5 py-1.5 text-right tabular-nums text-gray-900 ${acesa('vale')}`}>{formatBRL(soma('vale'))}</td>
+                        <td className={`border-t border-gray-200 bg-hx-f9fafb px-2.5 py-1.5 text-right tabular-nums text-gray-700 ${acesa('depositado')}`}>{formatBRL(soma('depositado'))}</td>
+                        <td className={`border-t border-gray-200 bg-hx-f9fafb px-2.5 py-1.5 text-right tabular-nums text-green-700 ${acesa('ganho')}`}>{formatBRL(soma('ganho'))}</td>
+                        <td colSpan={2} className={`border-t border-gray-200 bg-hx-f9fafb px-2.5 py-1.5 text-left text-[12px] font-normal text-gray-500 ${acesa('aliquota')}`}>
+                          {imp.isento ? 'isento' : imp.ganho > 0 ? `${pctA(imp.aliquotaMedia)} na média` : ''}</td>
+                        <td className={`border-t border-gray-200 bg-hx-f9fafb px-2.5 py-1.5 text-right tabular-nums text-gray-900 ${acesa('ir')}`}>{formatBRL(soma('ir') + soma('iof'))}</td>
+                      </tr></tfoot>
+                    )}
+                  </table>
+                </div>
+                <p className="text-xs text-gray-500">
+                  ≈ estimado: o rendimento de cada depósito sai do CDI desde a data dele, ajustado ao que o investimento vale e ao que foi aplicado.
+                  {lotes.some((l) => l.dataAproximada) && ' Sem a data das aplicações antigas, a idade conta do cadastro: cole a lista de depósitos do banco para o IR de cada um.'}
+                </p>
+              </div>
+            )}
+            {aba === 'quedas' && temQuedas && <QuedasDoIR imp={imp} hoje={hoje} />}
+            {aba === 'aplicacoes' && x.prazos && (
+              <div className="space-y-1.5">
+                {x.prazos.lotes.length === 0 && <p className="text-sm text-gray-500">Nada aplicado.</p>}
+                {x.prazos.lotes.map((l, i) => (
+                  <div key={i} className="grid grid-cols-[96px_1fr_110px_150px] items-center gap-3 rounded-md border border-gray-200 px-3 py-2 text-[13px]">
+                    <span className="tabular-nums text-gray-600">{l.data ? formatDate(l.data) : <span className="text-gray-400">sem data</span>}</span>
+                    <span className="h-1.5 overflow-hidden rounded-full bg-gray-100" title={l.frac !== null ? `${Math.round(l.frac * 100)}% do prazo já passou` : undefined}>
+                      {l.frac !== null && <span className="block h-full rounded-full" style={{ width: `${Math.max(3, l.frac * 100)}%`, background: 'var(--serie-sobrou)' }} />}
+                    </span>
+                    <span className="text-right tabular-nums text-gray-800">{formatBRL(l.valor)}</span>
+                    <span className="text-right text-gray-600">
+                      {l.vence ? <>{l.vencida ? 'venceu' : 'vence'} <b className="font-semibold text-gray-800">{formatDate(l.vence)}</b>{l.renovacoes > 0 && <span className="block text-[11px] text-gray-400">reaplicou {l.renovacoes}×</span>}</>
+                        : <span className="text-[12px] text-gray-400">{l.inicial ? 'sem a data da aplicação' : '—'}</span>}
+                    </span>
+                  </div>
+                ))}
+                <p className="text-xs text-gray-500">{`Cada aplicação fica ${rotuloPrazo(x.prazos.prazo)}; ${inv.ao_vencer === 'volta' ? 'ao vencer, o dinheiro volta para a conta (lance o resgate).' : 'ao vencer, reaplica sozinha por mais um prazo, sem virar resgate.'}`}</p>
+              </div>
+            )}
+            {aba === 'historico' && (
+              linhas.length === 0 ? <p className="text-sm text-gray-500">Nada registrado ainda.</p> : (
+                <ul className="max-h-[calc(90vh-340px)] min-h-[160px] divide-y divide-gray-100 overflow-auto rounded-md border border-gray-200">
+                  {linhas.map((h) => (
+                    <li key={`${h.tipo}${h.id}`} className="flex items-center gap-3 px-3 py-1 text-sm">
+                      <span className="w-[84px] shrink-0 tabular-nums text-gray-500">{formatDate(h.data)}</span>
+                      <span className="w-[88px] shrink-0">
+                        {h.tipo === 'foto' ? <Etiqueta>valor</Etiqueta> : <Etiqueta tom={h.tipo === 'aporte' ? 'verde' : 'ambar'}>{h.tipo === 'aporte' ? 'aplicação' : 'resgate'}</Etiqueta>}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate tabular-nums text-gray-800">
+                        {h.tipo === 'resgate' ? '− ' : h.tipo === 'aporte' ? '+ ' : ''}{formatBRL(h.valor_centavos)}
+                        {h.tipo !== 'foto' && h.descricao && <span className="ml-2 text-xs text-gray-400">{h.descricao}</span>}
+                      </span>
+                      {!movel && <BotaoExcluir titulo="Excluir" onClick={() => apagar(h)} />}
                     </li>
                   ))}
                 </ul>
-              </div>
+              )
             )}
-            <p className="text-xs text-gray-500">
-              ≈ estimado: o rendimento de cada depósito sai do CDI desde a data dele, ajustado ao que o investimento vale e ao que foi aplicado.
-              {imp.lotes.some((l) => l.dataAproximada) && ' Sem a data das aplicações antigas, a idade conta do cadastro: cole a lista de depósitos do banco para o IR de cada um.'}
-            </p>
-          </div>
+          </>
         )}
-        {aba === 'aplicacoes' && x.prazos && (
-          <div className="space-y-1.5">
-            {x.prazos.lotes.length === 0 && <p className="text-sm text-gray-500">Nada aplicado.</p>}
-            {x.prazos.lotes.map((l, i) => (
-              <div key={i} className="grid grid-cols-[96px_1fr_110px_150px] items-center gap-3 rounded-md border border-gray-200 px-3 py-2 text-[13px]">
-                <span className="tabular-nums text-gray-600">{l.data ? formatDate(l.data) : <span className="text-gray-400">sem data</span>}</span>
-                <span className="h-1.5 overflow-hidden rounded-full bg-gray-100" title={l.frac !== null ? `${Math.round(l.frac * 100)}% do prazo já passou` : undefined}>
-                  {l.frac !== null && <span className="block h-full rounded-full" style={{ width: `${Math.max(3, l.frac * 100)}%`, background: 'var(--serie-sobrou)' }} />}
-                </span>
-                <span className="text-right tabular-nums text-gray-800">{formatBRL(l.valor)}</span>
-                <span className="text-right text-gray-600">
-                  {l.vence ? <>{l.vencida ? 'venceu' : 'vence'} <b className="font-semibold text-gray-800">{formatDate(l.vence)}</b>{l.renovacoes > 0 && <span className="block text-[11px] text-gray-400">reaplicou {l.renovacoes}×</span>}</>
-                    : <span className="text-[12px] text-gray-400">{l.inicial ? 'sem a data da aplicação' : '—'}</span>}
-                </span>
-              </div>
-            ))}
-            <p className="text-xs text-gray-500">{`Cada aplicação fica ${rotuloPrazo(x.prazos.prazo)}; ${inv.ao_vencer === 'volta' ? 'ao vencer, o dinheiro volta para a conta (lance o resgate).' : 'ao vencer, reaplica sozinha por mais um prazo, sem virar resgate.'}`}</p>
-          </div>
-        )}
-        {aba === 'historico' && (
-          linhas.length === 0 ? <p className="text-sm text-gray-500">Nada registrado ainda.</p> : (
-            <ul className="max-h-[300px] divide-y divide-gray-100 overflow-auto rounded-md border border-gray-200">
-              {linhas.map((h) => (
-                <li key={`${h.tipo}${h.id}`} className="flex items-center gap-3 px-3 py-1 text-sm">
-                  <span className="w-[84px] shrink-0 tabular-nums text-gray-500">{formatDate(h.data)}</span>
-                  <span className="w-[88px] shrink-0">
-                    {h.tipo === 'foto' ? <Etiqueta>valor</Etiqueta> : <Etiqueta tom={h.tipo === 'aporte' ? 'verde' : 'ambar'}>{h.tipo === 'aporte' ? 'aplicação' : 'resgate'}</Etiqueta>}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate tabular-nums text-gray-800">
-                    {h.tipo === 'resgate' ? '− ' : h.tipo === 'aporte' ? '+ ' : ''}{formatBRL(h.valor_centavos)}
-                    {h.tipo !== 'foto' && h.descricao && <span className="ml-2 text-xs text-gray-400">{h.descricao}</span>}
-                  </span>
-                  {!movel && <BotaoExcluir titulo="Excluir" onClick={() => apagar(h)} />}
-                </li>
-              ))}
-            </ul>
-          )
-        )}
-        {!movel && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
-            <button type="button" className="text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:underline" onClick={onCadastro}>Editar no cadastro</button>
-            {comDepositos && !imp?.semEstimativa && (
-              <button type="button" className="text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:underline" onClick={() => setColando(true)}>
-                {depositos.length ? `Colar os depósitos de novo (${depositos.length})` : 'Colar os depósitos do banco…'}
-              </button>
-            )}
-            <span className="flex-1" />
-            {inv.ativo !== false && <button type="button" className="btn-secondary" onClick={() => onAplicar('resgate')}><IcoDesce />Resgatar</button>}
-            {inv.ativo !== false && <button type="button" className="btn-primary" onClick={() => onAplicar('aporte')}><IcoSobe />Aplicar</button>}
+        {!movel && inv.ativo !== false && !x.semValor && (
+          <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+            <button type="button" className="btn-secondary" onClick={() => onAplicar('resgate')}><IconResgatar />Resgatar</button>
+            <button type="button" className="btn-primary" onClick={() => onAplicar('aporte')}><IconAplicar />Aplicar</button>
           </div>
         )}
       </div>
-      {colando && <ModalColarDepositos inv={inv} vale={x.vale} dataVale={x.data} depositos={depositos} onFechar={() => setColando(false)} onSalvo={() => { setColando(false); onMudou(); }} />}
+      {colando && <ModalColarDepositos inv={inv} semValor={x.semValor} vale={x.vale} dataVale={x.data} depositos={depositos} onFechar={() => setColando(false)} onSalvo={() => { setColando(false); onMudou(); }} />}
     </Modal>
   );
 }
 
 // ------------------------------------------------------------ colar os depósitos do banco
-// Uma vez só, para o que já estava aplicado antes do cadastro: a lista "Detalhes dos depósitos" do banco (a data e o
-// valor de hoje de cada um), colada como texto (`lerDepositos`). O app mostra o que leu e CONFERE A SOMA com o valor do
-// investimento; o depositado de cada um ele estima pelo CDI. Salvar substitui a lista anterior.
-function ModalColarDepositos({ inv, vale, dataVale, depositos, onFechar, onSalvo }) {
+// Para o que já estava aplicado antes do cadastro: a lista "Detalhes dos depósitos" do banco (a data e o valor de hoje
+// de cada um), colada como texto (`lerDepositos`), e o VALOR APLICADO que o banco mostra (06/11/2026: saiu do cadastro —
+// é ele que ajusta a estimativa do depositado e do IR de cada um). O app mostra o que leu e CONFERE A SOMA com o valor
+// do investimento; no investimento SEM VALOR ainda (o cadastrado agora), a soma VIRA o valor de hoje (`planoDoColar`,
+// testada). Salvar substitui a lista anterior.
+export function ModalColarDepositos({ inv, semValor = false, vale, dataVale, depositos, onFechar, onSalvo }) {
   const toast = useToast();
   const hoje = todayISO();
   const [texto, setTexto] = useState('');
+  const [aplicado, setAplicado] = useState(inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined
+    ? (Number(inv.aplicado_inicial_centavos) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '');
   const [referencia, setReferencia] = useState(depositos[0]?.referencia ?? (dataVale && dataVale > addMeses(hoje.slice(0, 7), -1) ? dataVale : hoje));
+  const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const { itens } = useMemo(() => lerDepositos(texto, parseValor), [texto]);
   const soma = itens.reduce((s, i) => s + i.valor_centavos, 0);
-  const bate = vale > 0 && Math.abs(soma - vale) <= Math.max(100, vale * 0.005);
+  const bate = !semValor && vale > 0 && Math.abs(soma - vale) <= Math.max(100, vale * 0.005);
   const salvar = async (lista) => {
+    const plano = lista.length ? planoDoColar({ semValor, soma, aplicadoTexto: aplicado, aplicadoAntes: inv.aplicado_inicial_centavos, lerValor: calcularValor }) : {};
+    if (plano.erro) { setErro(plano.erro); return; }
     setSalvando(true);
     try {
       await salvarDepositos(inv.id, referencia, lista);
-      toast.success(lista.length ? `${lista.length} depósitos de ${inv.nome} salvos.` : 'A lista de depósitos foi apagada.');
+      if (plano.aplicado !== undefined) await atualizarInvestimento(inv.id, { aplicado_inicial_centavos: plano.aplicado });
+      if (plano.foto) await registrarValores(referencia, [{ investimento_id: inv.id, valor_centavos: plano.foto }]);
+      toast.success(lista.length ? `${lista.length} depósitos de ${inv.nome} salvos${plano.foto ? ` · vale ${formatBRL(plano.foto)}` : ''}.` : 'A lista de depósitos foi apagada.');
       onSalvo();
     } catch (err) {
       toast.error(/depositos_investimento|schema cache|does not exist/i.test(err.message) ? 'Falta aplicar a migration 016 (os depósitos).' : err.message);
@@ -367,15 +511,21 @@ function ModalColarDepositos({ inv, vale, dataVale, depositos, onFechar, onSalvo
   };
   const th = 'border-b border-gray-200 bg-hx-f9fafb px-2.5 py-1.5 text-right text-[10.5px] font-semibold uppercase tracking-wide text-gray-500';
   return (
-    <Modal open onClose={onFechar} title="Depósitos de antes do cadastro" subtitulo={`${inv.nome} · o valor de hoje de cada um, como o banco mostra`} maxWidth="max-w-[880px]" z="z-[70]">
+    <Modal open onClose={onFechar} title={semValor ? 'O que já estava aplicado' : 'Depósitos de antes do cadastro'} subtitulo={`${inv.nome} · a lista de depósitos do banco, com o valor de hoje de cada um`} maxWidth="max-w-[880px]" z="z-[70]">
       <div className="space-y-3">
         <div className="grid gap-4 md:grid-cols-[1fr_1.15fr]">
           <div>
             <span className="label">Cole aqui a lista do banco</span>
-            <textarea className="input !h-[240px] w-full resize-y py-2 font-mono text-[12.5px] leading-relaxed" autoFocus value={texto} onChange={(e) => setTexto(e.target.value)}
+            <textarea className="input !h-[220px] w-full resize-y py-2 font-mono text-[12.5px] leading-relaxed" autoFocus value={texto} onChange={(e) => { setTexto(e.target.value); setErro(''); }}
               placeholder={'Feito em 05 SET 2026  R$ 4.165,28\nFeito em 04 SET 2026  R$ 17.204,90\n…'} />
             <p className="mt-1 text-xs text-gray-500">Aceita "05 SET 2026", "05/09/2026" ou "2026-09-05" e o valor com ou sem R$; uma por linha (ou a data e o valor em linhas seguidas).</p>
-            <div className="mt-2 w-[220px]"><Campo rotulo="Os valores são de"><CampoData value={referencia} onChange={setReferencia} max={hoje} /></Campo></div>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <Campo rotulo="Os valores são de"><CampoData value={referencia} onChange={setReferencia} max={hoje} /></Campo>
+              <Campo rotulo="Valor aplicado (o do banco)">
+                <input className={`input text-right tabular-nums ${erro ? '!border-hx-e5484d' : ''}`} inputMode="decimal" value={aplicado} placeholder="0,00"
+                  onChange={(e) => { setAplicado(e.target.value); setErro(''); }} title='O "valor aplicado" que o app do banco mostra: o total depositado, sem o rendimento' />
+              </Campo>
+            </div>
           </div>
           <div>
             <span className="label">O que o app leu</span>
@@ -399,18 +549,65 @@ function ModalColarDepositos({ inv, vale, dataVale, depositos, onFechar, onSalvo
               </div>
             )}
             {itens.length > 0 && (
-              <p className={`mt-2 rounded-md px-3 py-2 text-[12.5px] ${bate ? 'bg-hx-f0fdf4 text-hx-166534' : 'bg-amber-50 text-amber-800'}`}>
-                {bate ? '✓ ' : ''}{itens.length} depósitos somam <b className="font-semibold">{formatBRL(soma)}</b>
-                {bate ? `, o valor de hoje de ${inv.nome}.` : ` e ${inv.nome} vale ${formatBRL(vale)}: confira se a lista está completa (ou atualize o valor dele).`}
+              <p className={`mt-2 rounded-md px-3 py-2 text-[12.5px] ${bate || semValor ? 'bg-hx-f0fdf4 text-hx-166534' : 'bg-amber-50 text-amber-800'}`}>
+                {bate || semValor ? '✓ ' : ''}{itens.length} depósitos somam <b className="font-semibold">{formatBRL(soma)}</b>
+                {semValor ? `: vira o valor de hoje de ${inv.nome} (em ${formatDate(referencia)}).`
+                  : bate ? `, o valor de hoje de ${inv.nome}.` : ` e ${inv.nome} vale ${formatBRL(vale)}: confira se a lista está completa (ou atualize o valor dele).`}
               </p>
             )}
           </div>
         </div>
+        {erro && <p className="text-sm font-medium text-hx-dc2626">{erro}</p>}
         <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
           {depositos.length > 0 && <button type="button" className="text-[13px] font-medium text-hx-c0393d hover:underline" onClick={() => salvar([])} disabled={salvando}>Apagar a lista ({depositos.length})</button>}
-          <span className="flex-1 text-xs text-gray-500">{depositos.length ? `Substitui os ${depositos.length} depósitos colados antes.` : 'Substitui o bloco "sem data" do cadastro no cálculo do IR.'}</span>
+          <span className="flex-1 text-xs text-gray-500">{depositos.length ? `Substitui os ${depositos.length} depósitos colados antes.` : semValor ? 'Cada depósito entra com a sua data: o IR de cada um sai da idade dele.' : 'Substitui o bloco "sem data" do cadastro no cálculo do IR.'}</span>
           <button type="button" className="btn-secondary" onClick={onFechar}>Cancelar</button>
           <button type="button" className="btn-primary" disabled={salvando || !itens.length} onClick={() => salvar(itens)}>{salvando ? 'Salvando…' : `Salvar os ${itens.length || ''} depósitos`}</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ------------------------------------------------------------ como o dinheiro entrou?
+// Depois de cadastrar investimentos NOVOS (o cadastro não pede mais os valores, 06/11/2026, a opção A do mockup "Ficha do
+// investimento"): para cada um, o dinheiro entra como depósito — "É dinheiro novo" abre o Aplicar (a data e o valor) e
+// "Já estava aplicado" o Colar os depósitos do banco. `feitos`: os que já receberam o dinheiro nesta vez.
+export function ModalComoEntrou({ criados, feitos, onAplicar, onColar, onFechar }) {
+  const um = criados.length === 1;
+  const falta = criados.filter((c) => !feitos.has(c.inv.id)).length;
+  return (
+    <Modal open onClose={onFechar} title="Como o dinheiro entrou?" maxWidth="max-w-[640px]"
+      subtitulo={um ? `${criados[0].inv.nome} está cadastrado` : `${criados.length} investimentos cadastrados`}>
+      <div className="space-y-3">
+        {criados.map(({ inv, lugar }) => {
+          const feito = feitos.has(inv.id);
+          return (
+            <div key={inv.id} className="rounded-md border border-gray-200 px-3 py-2.5">
+              {!um && <div className="mb-2 flex items-baseline gap-2"><b className="text-[13px] font-semibold text-gray-800">{inv.nome}</b><span className="text-[12px] text-gray-400">{lugar}</span>
+                {feito && <span className="ml-auto"><Etiqueta tom="verde">o dinheiro entrou</Etiqueta></span>}</div>}
+              {feito && um ? <p className="text-[13px] text-hx-166534">✓ O dinheiro entrou.</p> : !feito && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button type="button" onClick={() => onAplicar(inv)}
+                    className="flex items-start gap-2.5 rounded-md border border-gray-300 bg-hx-f9fafb px-3 py-2.5 text-left transition-colors hover:border-gray-400 hover:bg-gray-50">
+                    <span className="mt-0.5 text-gray-600"><IconAplicar className="h-[18px] w-[18px]" /></span>
+                    <span><b className="block text-[13px] font-semibold text-gray-800">É dinheiro novo</b>
+                      <span className="block text-[12px] text-gray-500">Aplicar: a data e o valor. Entra como um depósito exato.</span></span>
+                  </button>
+                  <button type="button" onClick={() => onColar(inv)}
+                    className="flex items-start gap-2.5 rounded-md border border-gray-300 bg-hx-f9fafb px-3 py-2.5 text-left transition-colors hover:border-gray-400 hover:bg-gray-50">
+                    <span className="mt-0.5 text-gray-600"><IconColar className="h-[18px] w-[18px]" /></span>
+                    <span><b className="block text-[13px] font-semibold text-gray-800">Já estava aplicado</b>
+                      <span className="block text-[12px] text-gray-500">Colar os depósitos do banco e o "valor aplicado" que ele mostra.</span></span>
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <p className="text-xs text-gray-500">Sem nenhum depósito, o investimento fica na carteira como "sem valor", e o "Atualizar valores" não o cobra. O dinheiro pode entrar depois, pela ficha dele.</p>
+        <div className="flex justify-end border-t border-gray-100 pt-3">
+          <button type="button" className={falta ? 'btn-secondary' : 'btn-primary'} onClick={onFechar}>{falta ? 'Depois' : 'Pronto'}</button>
         </div>
       </div>
     </Modal>

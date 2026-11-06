@@ -544,3 +544,24 @@ export const IconDesativar = ({ className = 'h-4 w-4' }) => (
 export const IconReativar = ({ className = 'h-4 w-4' }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8z" /><circle cx="12" cy="12" r="3" /></svg>
 );
+
+// APLICAR e RESGATAR (06/11/2026, a opção A do mockup "Ficha do investimento"): a pilha de moedas com "+" e com "−" — diz
+// "dinheiro" e é um par só; as setas ↑ ↓ de antes eram genéricas, e o ↓ já é o "importar" do app. O "+" sozinho fica
+// para o investimento NOVO. Traço 2, o do resto do arquivo.
+const MOEDAS = (
+  <>
+    <ellipse cx="9" cy="6.5" rx="6" ry="2.6" />
+    <path d="M3 6.5V11c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6V6.5" />
+    <path d="M3 11v4.5c0 1.4 2.7 2.6 6 2.6.8 0 1.6-.1 2.3-.2" />
+  </>
+);
+export const IconAplicar = ({ className = 'h-[15px] w-[15px]' }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{MOEDAS}<path d="M18.5 14v7M15 17.5h7" /></svg>
+);
+export const IconResgatar = ({ className = 'h-[15px] w-[15px]' }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{MOEDAS}<path d="M15 17.5h7" /></svg>
+);
+// A PRANCHETA: "colar" (os depósitos do banco, na ficha do investimento).
+export const IconColar = ({ className = 'h-[15px] w-[15px]' }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="M9 12h6M9 16h4" /></svg>
+);

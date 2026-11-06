@@ -292,13 +292,24 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     `apagarPatrimonio`, apaga os lugares e tudo em cascata, com confirmação; só a pessoa clica) + o destaque "Atualizar
     valores", âmbar com o número dos que pedem o valor do fim do mês passado (`pendentesDeValor`; o mesmo número no
     menu, `useContadores` 'investimentos'); vazio, "Montar a carteira". A coluna RESGATE junta liquidez e vencimento
-    (no "cada aplicação vence": "próxima 03/2027 · reaplica"); na linha, ↑ Aplicar · ↓ Resgatar com o nome e ✎ a FICHA
-    (os dois "+" de antes confundiam). Os dados das duas telas: `components/patrimonio/useDadosPatrimonio.js`.
+    (no "cada aplicação vence": "próxima 03/2027 · reaplica"). AS AÇÕES DA LINHA (06/11/2026, opção A do mockup "Ficha
+    do investimento"): todas no MESMO quadrado (`BotaoLinha`, 30px, borda e o fundo `bg-white`, o mais escuro no tema
+    escuro; o nome no tooltip) — no lugar, + investimento novo · ✎ o lugar (também no lugar vazio: o "Adicionar
+    investimento" escrito saiu); no investimento, APLICAR e RESGATAR com as MOEDAS + e − (`IconAplicar`/`IconResgatar`
+    em icons.jsx; as setas ↑ ↓ eram genéricas e o ↓ é o importar do app) · ✎ a FICHA. A SETA de abrir tem o QUADRADO no
+    hover (`QUADRADO_SETA`, a do Gestor), separada do clique no nome. Os dados das duas telas:
+    `components/patrimonio/useDadosPatrimonio.js`.
   · O CADASTRO EM TABELA (`ModalCadastroInvestimentos.jsx`, a dos fixos/cartões): agrupado por lugar, "Adicionar
-    investimento" em cada um e "Novo lugar" no fim; nome, tipo, rende + taxa, prazo · resgate, valor aplicado e (só na
-    linha nova) valor hoje; ⋯ = emissor, observação, ativo. O tipo preenche o resto (`padraoDoTipo`); Enter desce na
+    investimento" em cada um e "Novo lugar" no fim; nome, tipo, rende + taxa, prazo · resgate e "TEM HOJE" (só informa:
+    o valor e quantos depósitos); ⋯ = emissor, observação, ativo. O tipo preenche o resto (`padraoDoTipo`); Enter desce na
     coluna; "Salvar alterações (N)" (`diferencaInvestimento`, `validarCadastro`; testadas em
-    `test/cadastroInvestimentos.test.js`). O formulário longo de um investimento saiu.
+    `test/cadastroInvestimentos.test.js`). SEM OS VALORES (06/11/2026, opção A do mockup "Ficha do investimento"): o
+    cadastro diz o que o investimento É; o dinheiro entra como DEPÓSITO. Salvar investimentos novos abre o "COMO O
+    DINHEIRO ENTROU?" (`ModalComoEntrou`): "É dinheiro novo" = o Aplicar (no investimento SEM VALOR, a aplicação grava
+    também a primeira foto) e "Já estava aplicado" = o Colar os depósitos, que pede o VALOR APLICADO do banco (saiu do
+    cadastro) e, sem valor ainda, faz da soma o valor de hoje (`planoDoColar`, testada). O cadastrado sem dinheiro fica
+    na carteira com "sem valor" (fora do "Atualizar valores"). `criarInvestimento` sem `valor_centavos` grava só o título.
+    O `prazo_meses`/`ao_vencer` não gravavam (faltavam no `CAMPOS` da api) — corrigido em 06/11/2026.
   · O PRAZO DE CADA APLICAÇÃO (liquidez `por_aplicacao` + `prazo_meses` + `ao_vencer` 'reaplica' | 'volta', a 015): o
     CDB em que cada aporte vence N meses depois dele. `aplicacoesComPrazo` (testada): a 1ª aplicação é o "valor
     aplicado" do cadastro (com a "data da aplicação", se houver; sem ela, sem vencimento), as outras os aportes; o
@@ -320,9 +331,16 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     aplicação) o IR NÃO se estima — "— faltam as datas", nunca "R$ 0". Na carteira, a coluna "Líquido ≈" (o balão: IR,
     IOF, a próxima queda) e o título com mais de um depósito ABRE nos depósitos (a seta antes do nome; `abertosInv`,
     lembrado em `patrimonio_depositos_abertos`): a data e a idade, a alíquota de hoje e quando cai, o depositado ≈, o
-    líquido e o rendimento. Na ficha, a aba "Depósitos e IR" (a cascata e "as próximas quedas do IR") e "Colar os
-    depósitos do banco…" (`ModalColarDepositos`: confere a soma com o valor de hoje; salvar substitui a lista). O
-    painel diz o líquido no cartão do Patrimônio. O CDI é lido desde o depósito mais antigo (`useDadosPatrimonio`).
+    líquido e o rendimento. "Colar os depósitos do banco…" (`ModalColarDepositos`: confere a soma com o valor de hoje;
+    salvar substitui a lista). O painel diz o líquido no cartão do Patrimônio. O CDI é lido desde o depósito mais
+    antigo (`useDadosPatrimonio`).
+  · A FICHA DO INVESTIMENTO (06/11/2026, as opções A do mockup "Ficha do investimento"; `FichaInvestimento`): os QUATRO
+    NÚMEROS são cartões com HOVER — o cartão acende, a linha de baixo vira a CONTA ("= vale hoje − aplicado") e a COLUNA
+    dele na lista acende (`gm-acesa`; o cabeçalho da coluna acende o cartão). A lista dos depósitos tem a ALTURA DA
+    FICHA (`calc(90vh−340px)`) e o total preso embaixo. As QUEDAS DO IR têm ABA PRÓPRIA (`QuedasDoIR`: o resumo, a
+    escada do IR de hoje até a última queda e as quedas por mês). Editar no cadastro e colar os depósitos são os ÍCONES do
+    cabeçalho (o grupo do DRE, ao lado do ✕, pelo `acoes` do `Modal`); o rodapé tem só Resgatar e Aplicar (as moedas).
+    Sem dinheiro ainda: o convite para aplicar ou colar.
 
 ## Gastos fixos (fase 5)
 

@@ -4,6 +4,7 @@ import {
   aplicacoesComPrazo, diferencaInvestimento, impostoGarantia, linhaDoInvestimento, linhaNova, padraoDoTipo, pendentesDeValor,
   rendimentoForaDoNormal, rotuloLiquidez, rotuloPrazo, validarCadastro,
 } from '../src/lib/investimentos.js';
+import { planoDoColar } from '../src/lib/impostoInvestimento.js';
 import { parseValor } from '../src/lib/dinheiro.js';
 
 // Dados FICTÍCIOS (06/11/2026, o Patrimônio "do zero").
@@ -62,17 +63,30 @@ test('o cadastro em tabela: o padrão do tipo, a diferença do que mudou e o pri
   assert.deepEqual(padraoDoTipo('tesouro_selic'), { indexador: 'selic_mais', taxa: '', liquidez: 'diaria' });
   const inv = { id: 'a', conta_id: 'nu', nome: 'CDB 2 anos', tipo: 'cdb', indexador: 'cdi_pct', taxa: '102.0000', liquidez: 'diaria', liquidez_dias: null,
     carencia_ate: null, vencimento: null, prazo_meses: null, ao_vencer: 'reaplica', aplicado_inicial_centavos: '4400000', emissor: '', observacao: '', ativo: true };
-  const l = linhaDoInvestimento(inv, 4830000);
+  const l = linhaDoInvestimento(inv);
   assert.equal(l.taxa, '102');
-  assert.equal(l.aplicado, '44.000,00');
-  assert.deepEqual(diferencaInvestimento(l, parseValor), {});
+  assert.equal('aplicado' in l, false); // o cadastro não pede mais os valores: o dinheiro entra pelos depósitos
+  assert.deepEqual(diferencaInvestimento(l), {});
   const mudou = { ...l, liquidez: 'por_aplicacao', prazo_meses: '24' };
-  assert.deepEqual(diferencaInvestimento(mudou, parseValor), { liquidez: 'por_aplicacao', prazo_meses: 24 });
-  assert.equal(validarCadastro([mudou, { ...mudou, id: 'b', prazo_meses: '' }], parseValor).campo, 'prazo');
+  assert.deepEqual(diferencaInvestimento(mudou), { liquidez: 'por_aplicacao', prazo_meses: 24 });
+  assert.equal(validarCadastro([mudou, { ...mudou, id: 'b', prazo_meses: '' }]).campo, 'prazo');
   const nova = linhaNova('n1', 'nu');
-  assert.equal(validarCadastro([nova], parseValor), null); // vazia: não atrapalha
-  assert.equal(validarCadastro([{ ...nova, nome: 'LCI' }], parseValor).campo, 'vale');
-  assert.equal(validarCadastro([{ ...nova, nome: 'LCI', vale: '15.900,00' }], parseValor), null);
+  assert.equal(validarCadastro([nova]), null); // vazia: não atrapalha
+  // a linha nova com o nome já salva (sem "valor hoje"); o que grava não leva o aplicado
+  assert.equal(validarCadastro([{ ...nova, nome: 'LCI' }]), null);
+  assert.equal('aplicado_inicial_centavos' in diferencaInvestimento({ ...nova, nome: 'LCI' }), false);
+});
+
+test('colar os depósitos: o valor aplicado do banco e, no investimento sem valor, a primeira foto', () => {
+  // o investimento cadastrado agora (sem valor): a soma vira o valor de hoje, e o aplicado é obrigatório
+  assert.deepEqual(planoDoColar({ semValor: true, soma: 8812519, aplicadoTexto: '82.094,56', aplicadoAntes: null, lerValor: parseValor }),
+    { aplicado: 8209456, foto: 8812519 });
+  assert.match(planoDoColar({ semValor: true, soma: 8812519, aplicadoTexto: '', aplicadoAntes: null, lerValor: parseValor }).erro, /valor aplicado/);
+  // o que já tem valor: o aplicado só grava se mudou; vazio não mexe
+  assert.deepEqual(planoDoColar({ semValor: false, soma: 100, aplicadoTexto: '820,94', aplicadoAntes: '82094', lerValor: parseValor }), { aplicado: undefined, foto: null });
+  assert.deepEqual(planoDoColar({ semValor: false, soma: 100, aplicadoTexto: '', aplicadoAntes: 82094, lerValor: parseValor }), { aplicado: undefined, foto: null });
+  assert.equal(planoDoColar({ semValor: false, soma: 100, aplicadoTexto: '900,00', aplicadoAntes: 82094, lerValor: parseValor }).aplicado, 90000);
+  assert.match(planoDoColar({ semValor: false, soma: 100, aplicadoTexto: 'abc', aplicadoAntes: null, lerValor: parseValor }).erro, /não é um valor/);
 });
 
 test('os rótulos novos e os que pedem o valor do mês', () => {
