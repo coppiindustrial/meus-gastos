@@ -14,8 +14,9 @@ import { excluirConta, excluirMovimento, salvarConta } from '../../api/patrimoni
 import { atualizarInvestimento, criarInvestimento, excluirValor, lancarMovimento, registrarValores, salvarDepositos } from '../../api/investimentos.js';
 import { aliquotaIR, diasEntre as diasEntreIR, ehIsento, lerDepositos, planoDoColar } from '../../lib/impostoInvestimento.js';
 import {
-  TIPOS_INVESTIMENTO, nomeTipoInvestimento, padraoDoTipo, rendimentoForaDoNormal, rotuloLiquidez, rotuloPrazo, rotuloRende,
+  TIPOS_INVESTIMENTO, nomeTipoInvestimento, padraoDoTipo, pendentesDeValor, rendimentoForaDoNormal, rotuloLiquidez, rotuloPrazo, rotuloRende,
 } from '../../lib/investimentos.js';
+import { andaSozinho, rotuloPeloIndice } from '../../lib/valorEstimado.js';
 import { calcularValor, formatBRL, parseValor } from '../../lib/dinheiro.js';
 import { addMeses, formatDate, nomeCompetencia, todayISO } from '../../lib/format.js';
 
@@ -45,26 +46,26 @@ export function ModalLugar({ conta, qtdInvestimentos = 0, onFechar, onSalvo }) {
     setSalvando(true);
     try {
       await salvarConta(conta?.id ? { ...conta, nome, ativa } : { nome, tipo: 'investimento', instituicao: '', ativa: true });
-      toast.success(conta?.id ? 'Lugar atualizado.' : 'Lugar criado.');
+      toast.success(conta?.id ? 'Instituição atualizada.' : 'Instituição criada.');
       onSalvo();
-    } catch (err) { setErro(/duplicate|unique/i.test(err.message) ? 'Já existe um lugar com esse nome.' : err.message); setSalvando(false); }
+    } catch (err) { setErro(/duplicate|unique/i.test(err.message) ? 'Já existe uma instituição com esse nome.' : err.message); setSalvando(false); }
   };
   const excluir = async () => {
     if (!await confirmar({
       titulo: `Excluir "${conta.nome}"?`, perigo: true, confirmar: 'Excluir',
-      texto: qtdInvestimentos ? `Os ${qtdInvestimentos} investimento(s) dele, com os valores e as aplicações, também são apagados. Não se desfaz.` : 'Não se desfaz.',
+      texto: qtdInvestimentos ? `Os ${qtdInvestimentos} investimento(s) dela, com os valores e as aplicações, também são apagados. Não se desfaz.` : 'Não se desfaz.',
     })) return;
-    try { await excluirConta(conta.id); toast.success('Lugar excluído.'); onSalvo(); } catch (err) { toast.error(err.message); }
+    try { await excluirConta(conta.id); toast.success('Instituição excluída.'); onSalvo(); } catch (err) { toast.error(err.message); }
   };
   return (
-    <Modal open onClose={onFechar} title={conta?.id ? 'Editar lugar' : 'Novo lugar'} subtitulo="o banco ou a corretora onde estão os investimentos" maxWidth="max-w-md">
+    <Modal open onClose={onFechar} title={conta?.id ? 'Editar instituição' : 'Nova instituição'} subtitulo="o banco ou a corretora onde estão os investimentos" maxWidth="max-w-md">
       <form onSubmit={enviar} className="space-y-4">
         <Campo rotulo="Nome" erro={erro}>
           <input className="input" autoFocus value={nome} placeholder="Ex.: Nubank, XP, Inter" onChange={(e) => { setNome(e.target.value); setErro(''); }} />
         </Campo>
         {conta?.id && <Toggle checked={ativa} onChange={setAtiva} rotulo="Ativo (desligue quando não tiver mais nada lá)" />}
         <div className="mt-5 flex items-center gap-2">
-          {conta?.id && <button type="button" className="text-[13px] font-medium text-hx-c0393d hover:underline" onClick={excluir}>Excluir lugar</button>}
+          {conta?.id && <button type="button" className="text-[13px] font-medium text-hx-c0393d hover:underline" onClick={excluir}>Excluir instituição</button>}
           <span className="flex-1" />
           <button type="button" className="btn-secondary" onClick={onFechar}>Cancelar</button>
           <button type="submit" className="btn-primary" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</button>
@@ -105,7 +106,7 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
   const enviar = async (e) => {
     e.preventDefault();
     if (!novo && !x) { setErro('Escolha o investimento.'); return; }
-    if (novo && (!novo.nome.trim() || !novo.conta_id)) { setErro('Dê o nome e o lugar do investimento novo.'); return; }
+    if (novo && (!novo.nome.trim() || !novo.conta_id)) { setErro('Dê o nome e a instituição do investimento novo.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { setErro('Informe a data.'); return; }
     if (v === null || !(v > 0)) { setErro('Informe o valor.'); return; }
     if (!novo && !aplicando && x.semValor) { setErro(`${x.inv.nome} ainda não tem dinheiro para resgatar.`); return; }
@@ -137,7 +138,7 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
               <button type="button" className="ml-auto text-[12px] text-gray-500 hover:text-gray-800 hover:underline" onClick={() => setNovo(null)}>escolher um que já existe</button></div>
             <input className="input" autoFocus value={novo.nome} placeholder="Nome (ex.: CDB 2 anos)" onChange={(e) => setNovo({ ...novo, nome: e.target.value })} />
             <div className={doisCampos}>
-              <SelectSimples value={novo.conta_id} onChange={(c) => setNovo({ ...novo, conta_id: c })} opcoes={ativas.map((c) => ({ value: c.id, label: c.nome }))} placeholder="Onde está" />
+              <SelectSimples value={novo.conta_id} onChange={(c) => setNovo({ ...novo, conta_id: c })} opcoes={ativas.map((c) => ({ value: c.id, label: c.nome }))} placeholder="Instituição" />
               <SelectSimples value={novo.tipo} onChange={(t) => setNovo({ ...novo, tipo: t })} opcoes={TIPOS_INVESTIMENTO.map((t) => ({ value: t.value, label: t.label }))} />
             </div>
             <p className="text-xs text-gray-500">O "rende" e o prazo vêm pelo tipo; ajuste depois no cadastro (✎).</p>
@@ -313,7 +314,8 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
     { k: 'depositado', rotulo: 'Aplicado', valor: formatBRL(x.aplicado), cor: 'text-gray-800',
       sub: 'o que foi depositado', conta: lotes.length ? `= o depositado ≈ dos ${lotes.length}` : '= o cadastro + aplicações − resgates' },
     { k: 'vale', rotulo: 'Vale hoje', valor: x.semValor ? '—' : formatBRL(x.vale), cor: 'text-gray-900',
-      sub: x.data ? `bruto · foto de ${formatDate(x.data)}` : 'sem valor ainda', conta: lotes.length ? `= a soma dos ${lotes.length} depósitos` : 'o último valor registrado' },
+      sub: x.estimado ? `≈ ${rotuloPeloIndice(inv)} até ${formatDate(x.estimado.ate).slice(0, 5)} · foto real de ${formatDate(x.estimado.base.data).slice(0, 5)}` : x.data ? `bruto · foto de ${formatDate(x.data)}` : 'sem valor ainda',
+      conta: x.estimado ? `= a foto real + o que rendeu ${rotuloPeloIndice(inv)} de cada dia` : lotes.length ? `= a soma dos ${lotes.length} depósitos` : 'o último valor registrado' },
     { k: 'ganho', rotulo: 'Rendeu', valor: formatBRL(x.rendeu), cor: x.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700',
       sub: x.pct !== null ? `${(x.pct * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% sobre o aplicado` : '', conta: '= vale hoje − aplicado' },
     { k: 'ir', rotulo: 'Líquido ≈', valor: x.semValor || imp?.semEstimativa || imp?.semDatas ? '—' : formatBRL(imp?.liquido ?? x.vale), cor: 'text-gray-900',
@@ -618,8 +620,11 @@ export function ModalComoEntrou({ criados, feitos, onAplicar, onColar, onFechar 
 // Uma linha por investimento ativo (agrupados por lugar): o valor de antes, as aplicações − resgates desde ele, o
 // valor de hoje e o "Rendeu" na hora. O RENDIMENTO FORA DO NORMAL para o tipo (`rendimentoForaDoNormal`) vira o aviso
 // "Foi uma aplicação de R$ X?": aceitar lança a aplicação junto com o salvar (e o rendimento se acerta). Enter num
-// campo vazio repete o valor de antes ("igual ao anterior") e desce.
-export function ModalAtualizarValores({ grupos, valores, movimentos, onFechar, onSalvo }) {
+// campo vazio repete o valor de antes ("igual ao anterior") e desce. OS QUE ANDAM SOZINHOS pela taxa (06/11/2026, a opção C
+// do mockup "Valor pelo CDI"): o campo vazio mostra a ESTIMATIVA da data (a foto estimada — `estimados`) e o Enter a usa;
+// eles pedem a conferência a cada 3 meses (`pendentesDeValor`), e o "Rendeu" conta desde a última foto REAL, então a
+// aplicação esquecida aparece no aviso de sempre. `valores`: só as fotos reais.
+export function ModalAtualizarValores({ grupos, valores, movimentos, estimados = [], onFechar, onSalvo }) {
   const toast = useToast();
   const hoje = todayISO();
   const caixaRef = useRef(null);
@@ -645,13 +650,18 @@ export function ModalAtualizarValores({ grupos, valores, movimentos, onFechar, o
     const a = antes ? Number(antes.valor_centavos) : null;
     const rendeu = novo !== null && a !== null ? novo - a - liq : null;
     const fora = !ex && a !== null && novo !== null ? rendimentoForaDoNormal({ tipo: x.inv.tipo, antes: a, novo, liquido: liq, dias: Math.max(1, diasEntre(antes.data, data)) }) : null;
-    return { antes, liq, n: ms.length, novo, rendeu, fora, ex };
+    // a estimativa da data: a foto estimada mais nova até ela (depois da última real)
+    const est = estimados.filter((e) => e.investimento_id === x.inv.id && e.data <= data && (!antes || e.data > antes.data))
+      .reduce((m, e) => (!m || e.data > m.data ? e : m), null);
+    return { antes, liq, n: ms.length, novo, rendeu, fora, ex, est };
   };
+  const campoDe = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  const pedem = useMemo(() => new Set(pendentesDeValor({ investimentos: linhas.flatMap((l) => l.itens.map((x) => x.inv)), valores, hoje }).map((i) => i.id)), [linhas, valores, hoje]);
   const muda = (id, t) => { setCampos((c) => ({ ...c, [id]: t })); setErro(''); };
   const aoTeclar = (x) => (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    if (vazio(campos[x.inv.id])) { const c = calc(x); if (c.antes) muda(x.inv.id, (Number(c.antes.valor_centavos) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })); }
+    if (vazio(campos[x.inv.id])) { const c = calc(x); if (c.est) muda(x.inv.id, campoDe(c.est.valor_centavos)); else if (c.antes) muda(x.inv.id, campoDe(c.antes.valor_centavos)); }
     const todos = [...caixaRef.current.querySelectorAll('[data-valor-hoje]')];
     todos[todos.indexOf(e.currentTarget) + 1]?.focus();
   };
@@ -689,7 +699,7 @@ export function ModalAtualizarValores({ grupos, valores, movimentos, onFechar, o
       <form onSubmit={enviar} className="space-y-4">
         <div className="flex flex-wrap items-end gap-4">
           <Campo rotulo="Data dos valores" className="w-[200px]"><CampoData value={data} onChange={setData} max={hoje} /></Campo>
-          <p className="min-w-[240px] flex-1 pb-2 text-xs text-gray-500">O que ficar em branco não muda. Enter num campo vazio repete o valor de antes. Aceita conta: =20000+14000.</p>
+          <p className="min-w-[240px] flex-1 pb-2 text-xs text-gray-500">O que ficar em branco não muda. Enter num campo vazio usa o valor estimado (os que andam pelo CDI) ou repete o de antes. Os do CDI pedem a conferência a cada 3 meses. Aceita conta: =20000+14000.</p>
         </div>
         <div ref={caixaRef} className="max-h-[56vh] overflow-auto rounded-md border border-gray-200">
           <table className="w-full border-separate border-spacing-0 text-[13px]">
@@ -709,7 +719,10 @@ export function ModalAtualizarValores({ grupos, valores, movimentos, onFechar, o
                       <Fragment key={x.inv.id}>
                         <tr className="align-top">
                           <td className="border-b border-gray-100 py-2 pl-7 pr-3"><span className="block max-w-[260px] truncate font-medium text-gray-800">{x.inv.nome}</span>
-                            <span className="block text-[11.5px] text-gray-400">{nomeTipoInvestimento(x.inv.tipo)}</span></td>
+                            <span className="block text-[11.5px] text-gray-400">{nomeTipoInvestimento(x.inv.tipo)}
+                              {andaSozinho(x.inv) && (pedem.has(x.inv.id)
+                                ? <span className="font-semibold text-amber-700"> · conferir: a última foto real tem mais de 3 meses</span>
+                                : <span> · anda sozinho {rotuloPeloIndice(x.inv)}</span>)}</span></td>
                           <td className="border-b border-gray-100 px-3 py-2 text-right tabular-nums text-gray-600">
                             {c.antes ? <>{formatBRL(c.antes.valor_centavos)}<span className="block text-[11.5px] text-gray-400">{formatDate(c.antes.data)}</span></> : <span className="text-gray-400">—</span>}
                           </td>
@@ -723,7 +736,8 @@ export function ModalAtualizarValores({ grupos, valores, movimentos, onFechar, o
                             )}
                           </td>
                           <td className="border-b border-gray-100 px-3 py-1.5 text-right">
-                            <input data-valor-hoje="" onKeyDown={aoTeclar(x)} className="input !h-8 !w-36 text-right tabular-nums" inputMode="decimal" placeholder="igual ao anterior"
+                            <input data-valor-hoje="" onKeyDown={aoTeclar(x)} className="input !h-8 !w-36 text-right tabular-nums" inputMode="decimal" placeholder={c.est ? `≈ ${campoDe(c.est.valor_centavos)}` : 'igual ao anterior'}
+                              title={c.est ? `Estimado ${rotuloPeloIndice(x.inv)} desde a foto real. Enter usa a estimativa; corrija se o banco mostrar outro número.` : undefined}
                               value={campos[x.inv.id] ?? ''} onChange={(e) => muda(x.inv.id, e.target.value)} aria-label={`Valor de hoje de ${x.inv.nome}`} />
                           </td>
                           <td className={`whitespace-nowrap border-b border-gray-100 px-3 py-2 text-right tabular-nums ${c.rendeu === null ? 'text-gray-400' : c.fora ? 'text-hx-c0393d' : c.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}`}>

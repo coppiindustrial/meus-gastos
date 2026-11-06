@@ -565,3 +565,12 @@ export const IconResgatar = ({ className = 'h-[15px] w-[15px]' }) => (
 export const IconColar = ({ className = 'h-[15px] w-[15px]' }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="M9 12h6M9 16h4" /></svg>
 );
+
+// O "+" NO CÍRCULO TRACEJADO (o "Adicionar …" das tabelas de cadastro e o "+ Criar" das listas), em PX INTEIROS
+// (06/11/2026): o círculo de 16 e o "+" de 8 ficam a 3px de cada borda; o `grande`, 18 e 10. Com o h-4/h-2 do rem de 14px
+// (14 e 7 px) o "+" ficava meio pixel fora do centro. `className`: a cor da borda (e a do "+").
+export const CirculoMais = ({ className = 'border-gray-400', grande = false }) => (
+  <span className={`flex ${grande ? 'h-[18px] w-[18px]' : 'h-[16px] w-[16px]'} shrink-0 items-center justify-center rounded-full border border-dashed ${className}`}>
+    <IconMais className={grande ? 'h-[10px] w-[10px]' : 'h-[8px] w-[8px]'} />
+  </span>
+);

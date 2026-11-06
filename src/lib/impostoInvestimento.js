@@ -7,9 +7,12 @@
 // OS DEPÓSITOS de um título: os colados da lista do banco (`depositos_investimento`: a data e quanto vale numa data de
 // referência) — ou, sem eles, o bloco do cadastro (o "valor aplicado" na data da aplicação) — e as aplicações feitas
 // depois pelo app (os movimentos, com o valor exato). O resgate sai dos mais antigos.
-// A ESTIMATIVA: quanto cada depósito rende sai do CDI de cada mês (o do Banco Central) desde a data dele, vezes a taxa
-// contratada (100% do CDI → 1); sem o CDI (IPCA+, prefixado), uma taxa média. Depois tudo é AJUSTADO ao que o
+// A ESTIMATIVA: quanto cada depósito rende sai do CDI de CADA DIA (a série 12, `taxas` — `fatorDiario` de
+// lib/valorEstimado.js, 06/11/2026) desde a data dele, vezes a taxa contratada; sem a série diária, do CDI de cada mês;
+// sem o CDI (IPCA+, prefixado), uma taxa média. Depois tudo é AJUSTADO ao que o
 // investimento vale e ao que foi aplicado (o que o banco mostra): a soma dos depósitos fecha com os dois.
+
+import { fatorDiario } from './valorEstimado.js';
 
 export const FAIXAS_IR = [
   { ate: 180, aliquota: 0.225 },
@@ -52,8 +55,9 @@ function taxaDoMes(c, cdi, inv, mesDeHoje) {
 const diasNoMes = (c) => new Date(Date.UTC(+c.slice(0, 4), +c.slice(5, 7), 0)).getUTCDate();
 const proximoMes = (c) => { const [y, m] = c.split('-').map(Number); return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`; };
 // O quanto R$ 1 aplicado em `de` vale em `ate`: os meses inteiros e a fração dos meses da ponta pelos dias corridos.
-export function fatorDeCrescimento(de, ate, { cdi, inv, hoje }) {
+export function fatorDeCrescimento(de, ate, { cdi, inv, hoje, taxas = null }) {
   if (!de || !ate || ate <= de) return 1;
+  if (taxas) { const d = fatorDiario(inv, de, ate, taxas); if (d !== null) return d; } // pelo dia, quando a série cobre
   const mesDeHoje = hoje.slice(0, 7);
   let f = 1;
   for (let c = de.slice(0, 7); c <= ate.slice(0, 7); c = proximoMes(c)) {
@@ -69,12 +73,12 @@ export function fatorDeCrescimento(de, ate, { cdi, inv, hoje }) {
 // final fecha com eles). Devolve { lotes: [{ data, dataAproximada, origem, depositado, vale, ganho, aliquota, ir, iof,
 // liquido, proxima }], ganho, ir, iof, liquido, aliquotaMedia, isento, semEstimativa, proximaQueda } — `lotes` do mais
 // novo ao mais antigo; `proximaQueda`: a primeira data em que o imposto cai, com o depósito e quanto cai.
-export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [], cdi = null, hoje, vale, aplicado }) {
+export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [], cdi = null, taxas = null, hoje, vale, aplicado }) {
   const isento = ehIsento(inv.tipo) || inv.tipo === 'saldo';
   const semEstimativa = SEM_ESTIMATIVA.includes(inv.tipo);
   const fs = [...fotos].sort((a, b) => (a.data < b.data ? -1 : 1));
   const abre = fs[0];
-  const ctx = { cdi, inv, hoje };
+  const ctx = { cdi, inv, hoje, taxas };
   const f = (de, ate) => fatorDeCrescimento(de, ate, ctx);
 
   // os depósitos que formam o título

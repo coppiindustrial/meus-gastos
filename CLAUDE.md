@@ -275,21 +275,23 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   prazo), aplicado, vale hoje, rendeu, % do ano e a curva de 12 meses (balão no Rendeu e ao longo da curva), + aporte ·
   − resgate · ✎ no hover, a SETA do cabeçalho ordena dentro de cada conta (`patrimonio_ordem`); MÊS A MÊS = a
   Grupo × mês (cruz, R$ | %, o tom mais forte é o melhor mês da linha). Vista e recolhidas lembradas
-  (`patrimonio_vista`, `patrimonio_recolhidas`); ⇕ · ⬇ CSV · ⤢ ampliado. Os pop-ups em `ModaisPatrimonio.jsx`:
+  (`patrimonio_vista`, `patrimonio_recolhidas`); no canto só o ⇕ (06/11/2026: o ⬇ CSV foi para o ▾ da tela, com o mês a
+  mês, e o ⤢ ampliado saiu — não acrescentava nada). Os pop-ups em `ModaisPatrimonio.jsx`:
   conta (com o histórico dela), investimento (o cadastro + histórico + excluir), aporte/resgate (a lista agrupada por
   conta, "Novo investimento" no pé, "fica com R$ X aplicados") e "Registrar o mês" POR TÍTULO (a conta sem títulos é
   uma linha; "+ aporte" na linha, por cima). Sem a 014, `listarInvestimentos` devolve null, a tabela mostra só as
   contas e avisa (a leitura dos movimentos cai para a sem `investimento_id`).
 - O PATRIMÔNIO "DO ZERO" (06/11/2026, o mockup aprovado "Patrimônio do zero", e a SEPARAÇÃO pedida — o painel e a
   tabela, como a Visão geral e os Lançamentos; migration 015). TRÊS GESTOS, sempre com o mesmo nome: CADASTRAR,
-  APLICAR / RESGATAR e ATUALIZAR VALORES ("aporte" e "registrar o mês" saíram da tela). A conta virou LUGAR (o banco ou
-  a corretora); a conta corrente é o tipo `saldo` ("Saldo em conta").
+  APLICAR / RESGATAR e ATUALIZAR VALORES ("aporte" e "registrar o mês" saíram da tela). A conta virou INSTITUIÇÃO (o banco ou
+  a corretora; 06/11/2026: "lugar" saiu da tela — no código ainda é `conta`/`lugar`, `ModalLugar`); a conta corrente é o
+  tipo `saldo` ("Saldo em conta"). A INSTITUIÇÃO NOVA nasce só no cadastro ("Nova instituição", no fim da tabela).
   · `/patrimonio` (`pages/Patrimonio.jsx`) = o PAINEL, só de ler: os 4 `CartaoKpi` (com o "desde out/26" no começo
     curto), o `GraficoPatrimonio` (do 2º mês em diante), "Onde está o dinheiro" (lugar | tipo | resgate) e "Próximos
     vencimentos" (com data e cada aplicação, reaplica / volta), e a faixa âmbar do que pede o valor do mês.
   · `/investimentos` (`pages/Investimentos.jsx`) = a TABELA (`BlocoInvestimentos`, Carteira | Mês a mês). O topo é o
-    grupo do DRE: ✎ o cadastro · ⇅ aplicar ou resgatar · ▾ (novo lugar, CSV, encerrados, COMEÇAR DO ZERO —
-    `apagarPatrimonio`, apaga os lugares e tudo em cascata, com confirmação; só a pessoa clica) + o destaque "Atualizar
+    grupo do DRE: ✎ o cadastro · ⇅ aplicar ou resgatar · ▾ (o CSV da carteira e o do mês a mês, encerrados, COMEÇAR DO
+    ZERO — `apagarPatrimonio`, apaga as instituições e tudo em cascata, com confirmação; só a pessoa clica) + o destaque "Atualizar
     valores", âmbar com o número dos que pedem o valor do fim do mês passado (`pendentesDeValor`; o mesmo número no
     menu, `useContadores` 'investimentos'); vazio, "Montar a carteira". A coluna RESGATE junta liquidez e vencimento
     (no "cada aplicação vence": "próxima 03/2027 · reaplica"). AS AÇÕES DA LINHA (06/11/2026, opção A do mockup "Ficha
@@ -341,6 +343,20 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     escada do IR de hoje até a última queda e as quedas por mês). Editar no cadastro e colar os depósitos são os ÍCONES do
     cabeçalho (o grupo do DRE, ao lado do ✕, pelo `acoes` do `Modal`); o rodapé tem só Resgatar e Aplicar (as moedas).
     Sem dinheiro ainda: o convite para aplicar ou colar.
+  · O VALOR QUE ANDA SOZINHO (06/11/2026, o mockup aprovado "Valor pelo CDI": carteira A, conferir C, Tesouro A;
+    `lib/valorEstimado.js`, testada em `test/valorEstimado.test.js`): as séries DIÁRIAS do SGS do Banco Central
+    (`api/taxas.js`: CDI 12 e Selic 11, % ao dia útil, até ontem; IPCA 433 ao mês — abertas ao navegador) fazem o valor de
+    quem rende por taxa pública (`andaSozinho`: % do CDI, CDI +, Selic +, IPCA +, prefixado; NUNCA Tesouro IPCA+/prefixado,
+    fundo, debênture, poupança, saldo) andar DIA ÚTIL A DIA ÚTIL desde a última FOTO REAL: (valor + o que entrou − o que
+    saiu) × (1 + CDI do dia × %) — a mudança do CDI vale dali em diante sobre o que já rendeu. `estimarValores` faz FOTOS
+    ESTIMADAS (`estimado: true`): no fim de cada mês entre duas reais (o caminho AJUSTADO à real seguinte) e depois da última
+    (fins de mês + o dia seguinte ao último publicado, `ultimo`), que entram nas séries (`useDadosPatrimonio`:
+    `valoresSerie`) — o mês a mês, o painel e o líquido seguem sem a foto de todo mês. A DATA DA FOTO é o dia em que o banco
+    mostrou o valor (já tem os dias úteis antes dela). Na carteira, "≈ pelo CDI até 05/11" embaixo do valor e o balão com a
+    conta; na ficha, o "Vale hoje". CONFERIR (`pendentesDeValor`, pela última foto REAL): os que andam sozinhos a cada 3
+    meses, os de preço de mercado todo mês; no "Atualizar valores" o campo vazio mostra a estimativa e o Enter a usa.
+    O IR de cada depósito também passou ao CDI de cada dia (`fatorDiario`; o do mês fica de reserva): o RDB real deu IR ≈
+    R$ 1.149,38 contra os R$ 1.149,32 do banco (antes, R$ 1.150,38).
 
 ## Gastos fixos (fase 5)
 
@@ -620,6 +636,10 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
 - Repositório é **público**: nada de segredo no código (só a chave publishable).
 - Edição de código com `$`, crase ou barra invertida: por script em ARQUIVO (no scratchpad), nunca `node -e`/`sed` inline.
 - Git: oferecer commit, mas nunca commitar ou dar push sem o usuário pedir.
+- **Ícone pequeno numa caixa = PX INTEIROS** (06/11/2026): o rem do app é 14px, então `h-3`/`h-4`/`h-5` dão 10,5 / 14 /
+  17,5 px, e um ícone de traço fino centrado num desses fica meio pixel fora do lugar (borrado, "esquisito"). O "+" no
+  círculo tracejado é o `CirculoMais` (icons.jsx: 16 e 8 px, ou 18 e 10 no `grande`); a seta de abrir dos investimentos, o
+  `QUADRADO_SETA` (20 e 12 px). Caixa e ícone em `h-[Npx]` com a diferença PAR.
 - **Ícone** (barras e tendência, 27/10/2026): `public/icon.svg` é a fonte, no MESMO desenho do Coppi Gains (fundo em
   degradê #343434 → #101010, símbolo branco recortado por máscara, a mesma sombra). Os PNGs, o maskable e o
   `favicon.ico` (48px) saem dele nos tamanhos do preset minimal-2023 do `@vite-pwa/assets-generator`, sem padding

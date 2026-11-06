@@ -4,7 +4,7 @@ import MenuContexto from '../MenuContexto.jsx';
 import BordaCopia, { bordaDaCopia, medirCopia } from './BordaCopia.jsx';
 import ModalCategoria from '../ModalCategoria.jsx';
 import { Etiqueta } from '../Comuns.jsx';
-import { IconMais, IconSetaOrdenacao } from '../icons.jsx';
+import { CirculoMais, IconSetaOrdenacao } from '../icons.jsx';
 import { opcoesCategoria } from '../SelectBusca.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
@@ -1105,7 +1105,7 @@ function ListaCategorias({ ancora, opcoes, ativo, onAtivo, texto, onEscolher, on
       <div className="mt-1 border-t border-gray-100 pt-1">
         <button type="button" onClick={onCriar}
           className="flex w-full items-center gap-2 rounded-[2px] px-2.5 py-[6px] text-left text-[12.5px] font-medium text-gray-700 hover:bg-gray-100">
-          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-dashed border-gray-400 text-gray-500"><IconMais className="h-2 w-2" /></span>
+          <CirculoMais className="border-gray-400 text-gray-500" />
           <span className="truncate">{texto.trim() ? `Criar categoria “${texto.trim()}”` : 'Criar categoria nova'}</span>
         </button>
       </div>

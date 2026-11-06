@@ -8,7 +8,7 @@ import { atualizarRecorrencia, excluirRecorrencia, salvarRecorrencia } from '../
 import { formatBRL, parseValor, valorParaCampo } from '../lib/dinheiro.js';
 import { competenciaAtual, competenciaCurta } from '../lib/format.js';
 import { useListaArrastavel } from '../lib/useListaArrastavel.js';
-import { IconGrip, IconMais } from './icons.jsx';
+import { CirculoMais, IconGrip } from './icons.jsx';
 
 // O CADASTRO DOS GASTOS FIXOS NUM POP-UP (a opção A do mockup, aberto pelo ✎ do cabeçalho): todos os fixos
 // numa tabela de FORMULÁRIO — cada célula é um campo de verdade, sem jeito de planilha. Mexe-se em vários
@@ -255,7 +255,7 @@ export default function ModalCadastroFixos({ recs, categorias, ultimos, onFechar
               <td colSpan={9} className="px-4 py-2">
                 <button type="button" onClick={adicionar}
                   className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-400"><IconMais className="h-2 w-2" /></span>
+                  <CirculoMais />
                   Adicionar gasto fixo
                 </button>
               </td>

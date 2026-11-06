@@ -3,7 +3,7 @@ import Modal from '../Modal.jsx';
 import SelectSimples from '../SelectSimples.jsx';
 import CampoData from '../CampoData.jsx';
 import Toggle from '../Toggle.jsx';
-import { IconMais } from '../icons.jsx';
+import { CirculoMais } from '../icons.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { salvarConta } from '../../api/patrimonio.js';
@@ -90,7 +90,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
 
   const salvar = async () => {
     const semNome = lugares.find((l) => l.novo && !l.nome.trim() && linhas.some((x) => x.conta_id === l.id && conta(x) && !x.excluir));
-    if (semNome) { setErro({ id: semNome.id, campo: 'lugar' }); toast.error('Não salvou — falta o nome de um lugar.'); return; }
+    if (semNome) { setErro({ id: semNome.id, campo: 'lugar' }); toast.error('Não salvou — falta o nome de uma instituição.'); return; }
     const problema = validarCadastro(linhas);
     if (problema) { setErro(problema); toast.error(`Não salvou — ${problema.motivo}.`); return; }
     const sai = mudadas.filter((l) => l.excluir && !l.novo);
@@ -118,7 +118,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
       }
       toast.success(nAlt === 1 ? 'Alteração salva.' : `${nAlt} alterações salvas.`);
     } catch (err) {
-      toast.error(/duplicate|unique/i.test(err.message) ? 'Já existe um lugar com esse nome.' : err.message);
+      toast.error(/duplicate|unique/i.test(err.message) ? 'Já existe uma instituição com esse nome.' : err.message);
     }
     setSalvando(false);
     onSalvo(criados); // parte pode ter gravado: a tela recarrega com o que ficou no banco
@@ -180,8 +180,8 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
                   <td colSpan={6} className="border-b border-gray-200 bg-hx-f9fafb px-2 py-1.5">
                     <span className="flex items-center gap-2">
                       <input data-cad-lugar={g.id} className={`input !h-7 !w-[260px] !bg-transparent text-[12.5px] font-semibold ${ver(g.id, 'lugar')}`}
-                        value={g.nome} placeholder="Onde está (ex.: Nubank, XP)" onChange={(e) => mudaLugar(g.id, e.target.value)} aria-label="Nome do lugar" />
-                      {g.novo && <span className="shrink-0 rounded-[4px] bg-hx-dcfce7 px-1.5 py-0.5 text-[11px] font-semibold text-hx-166534">novo lugar</span>}
+                        value={g.nome} placeholder="Instituição (ex.: Nubank, XP)" onChange={(e) => mudaLugar(g.id, e.target.value)} aria-label="Nome da instituição" />
+                      {g.novo && <span className="shrink-0 rounded-[4px] bg-hx-dcfce7 px-1.5 py-0.5 text-[11px] font-semibold text-hx-166534">nova instituição</span>}
                       <span className="text-[11.5px] font-normal text-gray-400">{plural(ls.filter((l) => !linhaVazia(l)).length, 'investimento', 'investimentos')}</span>
                     </span>
                   </td>
@@ -249,7 +249,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
                           <td colSpan={6} className="border-b border-gray-100 bg-hx-f9fafb px-3 py-2">
                             <div className="flex flex-wrap items-center gap-3">
                               <label className="flex items-center gap-2 text-[12px] text-gray-600">Emissor
-                                <input className={`${inp} !w-[220px]`} value={l.emissor} placeholder="o banco que emitiu, se não for o lugar" onChange={(e) => muda(l.id, 'emissor', e.target.value)} /></label>
+                                <input className={`${inp} !w-[220px]`} value={l.emissor} placeholder="o banco que emitiu, se não for a instituição" onChange={(e) => muda(l.id, 'emissor', e.target.value)} /></label>
                               <label className="flex min-w-[240px] flex-1 items-center gap-2 text-[12px] text-gray-600">Observação
                                 <input className={inp} value={l.observacao} placeholder="ex.: reserva de emergência" onChange={(e) => muda(l.id, 'observacao', e.target.value)} /></label>
                               {!l.novo && <Toggle compacto checked={l.ativo} onChange={(v) => muda(l.id, 'ativo', v)} rotulo="Ativo (desligue quando vencer ou for resgatado inteiro)" />}
@@ -264,7 +264,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
                   <td colSpan={6} className="px-2 py-1">
                     <button type="button" onClick={() => adicionar(g.id)}
                       className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900">
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-400"><IconMais className="h-2 w-2" /></span>
+                      <CirculoMais />
                       Adicionar investimento{g.nome.trim() ? ` em ${g.nome.trim()}` : ''}
                     </button>
                   </td>
@@ -275,8 +275,8 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
               <td colSpan={6} className="border-t border-gray-200 px-2 py-2">
                 <button type="button" onClick={novoLugar}
                   className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-500"><IconMais className="h-2 w-2" /></span>
-                  Novo lugar
+                  <CirculoMais className="border-gray-500" />
+                  Nova instituição
                 </button>
                 <span className="ml-2 text-[12px] text-gray-400">o banco ou a corretora (Nubank, XP, Inter…)</span>
               </td>

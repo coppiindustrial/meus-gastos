@@ -86,8 +86,8 @@ export default function CarteiraVazia({ contas, saldos, movel, podeCadastrar, on
   return (
     <div className="mt-4">
       <div className="grid gap-3 md:grid-cols-3">
-        <Passo n={1} estado={temLugar ? 'feito' : 'atual'} rotulo="Passo 1 · onde" titulo="Os lugares">
-          <span className="text-[12.5px] leading-relaxed text-gray-600">O banco ou a corretora de cada investimento.{temLugar ? ` Você já tem ${contas.length === 1 ? 'um' : contas.length}:` : ' No cadastro, comece pelo "Novo lugar" (Nubank, XP…).'}</span>
+        <Passo n={1} estado={temLugar ? 'feito' : 'atual'} rotulo="Passo 1 · onde" titulo="As instituições">
+          <span className="text-[12.5px] leading-relaxed text-gray-600">O banco ou a corretora de cada investimento.{temLugar ? ` Você já tem ${contas.length === 1 ? 'um' : contas.length}:` : ' No cadastro, comece pela "Nova instituição" (Nubank, XP…).'}</span>
           {temLugar && (
             <span className="flex flex-wrap gap-1.5">
               {contas.map((c) => <span key={c.id} className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[12px] font-semibold text-gray-600">{c.nome}</span>)}
@@ -102,7 +102,7 @@ export default function CarteiraVazia({ contas, saldos, movel, podeCadastrar, on
           {!temLugar && botao('Montar a carteira')}
         </Passo>
         <Passo n={2} estado={temLugar ? 'atual' : 'depois'} rotulo="Passo 2 · o quê" titulo="Os investimentos">
-          <span className="text-[12.5px] leading-relaxed text-gray-600">Uma linha por investimento: nome, tipo e quanto vale hoje, olhando o app do banco. O resto o tipo já preenche.</span>
+          <span className="text-[12.5px] leading-relaxed text-gray-600">Uma linha por investimento: o nome e o tipo (o resto o tipo já preenche). O dinheiro entra depois: Aplicar, se é novo, ou colar os depósitos do banco, se já estava aplicado.</span>
           {temLugar && botao('Montar a carteira')}
         </Passo>
         <Passo n={3} estado="depois" rotulo="Passo 3 · todo mês" titulo="Atualizar valores">

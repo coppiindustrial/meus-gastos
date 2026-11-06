@@ -74,11 +74,11 @@ export default function Investimentos() {
   const exportar = (vista, modo) => {
     if (vista === 'mes') {
       const linhas = d.grupos.flatMap((g) => [
-        { nome: g.conta.nome, nivel: 'lugar', l: linhaMesAMes(d.meses, comps, (m) => m.porConta[g.conta.id]) },
+        { nome: g.conta.nome, nivel: 'instituição', l: linhaMesAMes(d.meses, comps, (m) => m.porConta[g.conta.id]) },
         ...g.itens.map((x) => ({ nome: x.inv.nome, nivel: g.conta.nome, l: linhaMesAMes(d.meses, comps, (m) => m.porSerie[`i:${x.inv.id}`]) })),
       ]);
       exportCsv(`rendimento-mes-a-mes-${modo === 'pct' ? 'pct' : 'reais'}`, linhas, [
-        { key: 'nome', label: 'Investimento' }, { key: 'nivel', label: 'Lugar' },
+        { key: 'nome', label: 'Investimento' }, { key: 'nivel', label: 'Instituição' },
         ...comps.map((c) => ({ key: c, label: competenciaCurta(c), tipo: modo === 'pct' ? 'numero' : 'dinheiro', map: (r) => (r.l.porMes[c] ? (modo === 'pct' ? (r.l.porMes[c].pct ?? 0) * 100 : r.l.porMes[c].rendeu / 100) : null) })),
         { key: 'total', label: modo === 'pct' ? 'No período (%)' : 'Total', tipo: modo === 'pct' ? 'numero' : 'dinheiro', map: (r) => (r.l.total === null ? null : modo === 'pct' ? r.l.pct * 100 : r.l.total / 100) },
       ]);
@@ -86,7 +86,7 @@ export default function Investimentos() {
     }
     const linhas = d.grupos.flatMap((g) => g.itens.map((x) => ({ g, x })));
     exportCsv('investimentos', linhas, [
-      { key: 'lugar', label: 'Lugar', map: (r) => r.g.conta.nome },
+      { key: 'lugar', label: 'Instituição', map: (r) => r.g.conta.nome },
       { key: 'nome', label: 'Investimento', map: (r) => r.x.inv.nome },
       { key: 'tipo', label: 'Tipo', map: (r) => nomeTipoInvestimento(r.x.inv.tipo) },
       { key: 'rende', label: 'Rende', map: (r) => rotuloRende(r.x.inv) },
@@ -102,7 +102,7 @@ export default function Investimentos() {
     const n = d.investimentos.length;
     const ok = await confirmar({
       titulo: 'Começar do zero?', perigo: true, confirmar: 'Apagar tudo',
-      texto: `Apaga os ${d.contas.length} lugar(es), ${n} investimento(s) e todos os valores, aplicações, resgates e fotos antigas do Patrimônio. Não se desfaz. Os lançamentos, as faturas e o resto do app não mudam.`,
+      texto: `Apaga as ${d.contas.length} instituição(ões), ${n} investimento(s) e todos os valores, aplicações, resgates e fotos antigas do Patrimônio. Não se desfaz. Os lançamentos, as faturas e o resto do app não mudam.`,
     });
     if (!ok) return;
     try { await apagarPatrimonio(); toast.success('Patrimônio apagado. Comece pelo "Montar a carteira".'); recarregar(); } catch (err) { toast.error(err.message); }
@@ -110,11 +110,11 @@ export default function Investimentos() {
   const abrirMais = (el) => {
     const r = el.getBoundingClientRect();
     setMais({ x: r.right - 260, y: r.bottom + 4, titulo: 'Mais ações', itens: [
-      { rotulo: 'Novo lugar', sub: 'o banco ou a corretora (Nubank, XP…)', onEscolher: () => setLugar({}) },
       { rotulo: 'Exportar a carteira (CSV)', sub: 'cada investimento, aplicado, vale e rendeu', desabilitado: !ativos.length, motivo: !ativos.length ? 'nada cadastrado' : undefined, onEscolher: () => exportar('carteira') },
+      { rotulo: 'Exportar o mês a mês (CSV)', sub: 'o que cada um rendeu em cada mês, em reais', desabilitado: !ativos.length, motivo: !ativos.length ? 'nada cadastrado' : undefined, onEscolher: () => exportar('mes', 'rs') },
       { rotulo: encerrados ? 'Esconder os encerrados' : 'Mostrar os encerrados', sub: 'os que você resgatou inteiros', desabilitado: !qtdEncerrados, motivo: !qtdEncerrados ? 'nenhum encerrado' : undefined, onEscolher: () => setEncerrados((e) => !e) },
       { sep: true },
-      { rotulo: 'Começar do zero', sub: 'apaga lugares, investimentos e valores', perigo: true, desabilitado: !d.contas.length, onEscolher: comecarDoZero },
+      { rotulo: 'Começar do zero', sub: 'apaga instituições, investimentos e valores', perigo: true, desabilitado: !d.contas.length, onEscolher: comecarDoZero },
     ] });
   };
 
@@ -135,7 +135,7 @@ export default function Investimentos() {
   return (
     <div>
       <CabecalhoPagina titulo="Investimentos"
-        acessorio={!vazio && <span className="text-sm text-gray-500">{ativos.length} em {d.grupos.filter((g) => g.itens.length).length} {d.grupos.filter((g) => g.itens.length).length === 1 ? 'lugar' : 'lugares'} · {formatBRL(d.total.vale)}</span>}
+        acessorio={!vazio && <span className="text-sm text-gray-500">{ativos.length} em {d.grupos.filter((g) => g.itens.length).length} {d.grupos.filter((g) => g.itens.length).length === 1 ? 'instituição' : 'instituições'} · {formatBRL(d.total.vale)}</span>}
         acoes={<>
           {/* O GRUPO DO DRE: ✎ o cadastro · ⇅ aplicar ou resgatar · ▾ mais ações (o nome no tooltip), e o destaque ao lado. */}
           <div className="inline-flex overflow-hidden rounded-md border border-gray-300 bg-white">
@@ -175,7 +175,7 @@ export default function Investimentos() {
       ) : (
         <div className="mt-4">
           <BlocoInvestimentos grupos={d.grupos.filter((g) => g.itens.length || !g.soConta || g.conta.ativa)} total={d.total} meses={d.meses} comps={comps} cdi={d.cdi} ano={d.ano}
-            movel={movel} acoes={acoes} onExportar={exportar} encerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)} qtdEncerrados={qtdEncerrados} />
+            movel={movel} acoes={acoes} encerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)} qtdEncerrados={qtdEncerrados} />
           <p className="mt-2 text-xs text-gray-500">
             {movel ? 'Aplicar, resgatar e atualizar ficam no computador.'
               : 'Rendeu = vale hoje − aplicado (o "valor aplicado" do banco, ou o primeiro valor, + aplicações − resgates). Clique no nome para a ficha: os depósitos e o IR, as quedas, os vencimentos e o histórico.'}
@@ -190,7 +190,7 @@ export default function Investimentos() {
           onSalvo={(criados) => { setCadastro(null); recarregar(); if (criados?.length) setComoEntrou({ criados, feitos: new Set() }); }} />
       )}
       {atualizar && (
-        <ModalAtualizarValores grupos={d.grupos} valores={d.valores} movimentos={d.movimentos}
+        <ModalAtualizarValores grupos={d.grupos} valores={d.valores} movimentos={d.movimentos} estimados={d.estimados}
           onFechar={() => setAtualizar(false)} onSalvo={() => { setAtualizar(false); recarregar(); }} />
       )}
       {fichaX && (

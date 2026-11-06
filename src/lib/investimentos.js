@@ -1,4 +1,5 @@
 import { addMeses } from './format.js';
+import { andaSozinho } from './valorEstimado.js';
 
 // OS INVESTIMENTOS (05/11/2026, fase 8.B do plano "Patrimônio e rentabilidade"; migration 014): cada título (o CDB, a
 // LCI, o Tesouro…) cadastrado dentro de uma conta. Aqui, as contas puras (test/investimentos.test.js): os nomes do que
@@ -363,12 +364,15 @@ export function rendimentoForaDoNormal({ tipo, antes, novo, liquido = 0, dias })
   return null;
 }
 
-// Os investimentos que pedem o valor do mês (o número do "Atualizar valores" e do menu): os ativos cuja última foto é
-// de antes do fim do mês passado — virou o mês, todos pedem o valor do fim do mês que acabou.
+// Os investimentos que pedem o valor (o número do "Atualizar valores" e do menu), pela última foto REAL (a estimada não
+// conta como conferida): os de preço de mercado, quando ela é de antes do fim do mês passado (virou o mês, pedem o valor
+// do fim do mês que acabou); os que ANDAM SOZINHOS pela taxa (`andaSozinho`, 06/11/2026, a opção C do mockup "Valor pelo
+// CDI"), quando ela tem mais de 3 meses — a conferência com o banco que pega a aplicação ou o resgate esquecido.
 export function pendentesDeValor({ investimentos = [], valores = [], hoje }) {
   const [y, m] = hoje.split('-').map(Number);
   const fimPassado = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
+  const tresMeses = somaMeses(hoje, -3);
   const ultima = new Map();
-  valores.forEach((v) => { if (!ultima.has(v.investimento_id) || v.data > ultima.get(v.investimento_id)) ultima.set(v.investimento_id, v.data); });
-  return investimentos.filter((i) => i.ativo !== false && ultima.has(i.id) && ultima.get(i.id) < fimPassado);
+  valores.forEach((v) => { if (!v.estimado && (!ultima.has(v.investimento_id) || v.data > ultima.get(v.investimento_id))) ultima.set(v.investimento_id, v.data); });
+  return investimentos.filter((i) => i.ativo !== false && ultima.has(i.id) && ultima.get(i.id) < (andaSozinho(i) ? tresMeses : fimPassado));
 }

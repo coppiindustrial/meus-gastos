@@ -1,12 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
-import Modal from '../Modal.jsx';
 import Tooltip from '../Tooltip.jsx';
 import AbasPilula from '../AbasPilula.jsx';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { COR_ENTRADAS } from '../graficos/Graficos.jsx';
 import { COR_FALTOU, MiniCurva } from '../graficos/GraficosVisao.jsx';
 import { Etiqueta } from '../Comuns.jsx';
-import { IconAplicar, IconExpandirTudo, IconLapis, IconMais, IconMaximize, IconMinimize, IconResgatar, IconSetaOrdenacao } from '../icons.jsx';
+import { IconAplicar, IconExpandirTudo, IconLapis, IconMais, IconResgatar, IconSetaOrdenacao } from '../icons.jsx';
 import useLinhasAnimadas, { atributosLinha } from '../../lib/useLinhasAnimadas.js';
 import { formatBRL } from '../../lib/dinheiro.js';
 import { competenciaCurta, formatDate, nomeCompetencia } from '../../lib/format.js';
@@ -14,6 +13,7 @@ import { lsGet, lsSet } from '../../lib/storage.js';
 import {
   impostoGarantia, linhaMesAMes, nomeTipoInvestimento, ordenarCarteira, proximaOrdemCarteira, rotuloLiquidez, rotuloRende,
 } from '../../lib/investimentos.js';
+import { rotuloPeloIndice } from '../../lib/valorEstimado.js';
 import { COR_CDI, cdiFechado } from './GraficoPatrimonio.jsx';
 
 // A TABELA DOS INVESTIMENTOS (05/11/2026, opção A do mockup "Patrimônio · a tabela", com a B como segunda vista):
@@ -23,8 +23,9 @@ import { COR_CDI, cdiFechado } from './GraficoPatrimonio.jsx';
 //     curva, e "+ aporte · − resgate · ✎" aparecem no fim da linha. A seta do cabeçalho ordena DENTRO de cada conta.
 //   · MÊS A MÊS (B): a Grupo × mês da Visão geral — o que cada título rendeu em cada mês (R$ ou %), o tom mais forte é
 //     o melhor mês da linha, o hover é a CRUZ (célula com contorno, linha e coluna acesas) e o balão traz o CDI.
-// No canto, o grupo de ícones do DRE: ⇕ expandir / recolher tudo, ⬇ CSV, ⤢ ampliar. A vista, as contas recolhidas e a
-// ordem ficam lembradas no navegador (só a preferência, nunca valor).
+// No canto, o ⇕ expandir / recolher tudo (06/11/2026: o ⬇ CSV e o ⤢ ampliar saíram, a pedido — o CSV está no ▾ da tela e o
+// ampliado não acrescentava nada a esta tabela). A vista, as contas recolhidas e a ordem ficam lembradas no navegador
+// (só a preferência, nunca valor).
 
 export const CORES_CONTA = ['var(--serie-gastos)', 'var(--origem-fixo)', 'var(--serie-sobrou)', 'var(--serie-entradas)', 'var(--origem-manual)', 'var(--origem-cartao)'];
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -35,16 +36,6 @@ const sinal = (c) => (c > 0 ? '+' : c < 0 ? '−' : '');
 const BTN = 'flex h-7 w-[30px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
 const lerJson = (k, padrao) => { try { const v = JSON.parse(lsGet(k) ?? 'null'); return v ?? padrao; } catch { return padrao; } };
 
-const IcoBaixar = () => (
-  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12 4v10M7.5 9.5 12 14l4.5-4.5" /><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-  </svg>
-);
-const IcoAmpliar = () => (
-  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-  </svg>
-);
 // AS AÇÕES DA LINHA (06/11/2026, a opção A do mockup "Ficha do investimento"): todas no MESMO quadrado do ✎ — 30px, a
 // mesma borda e o fundo mais escuro (o `bg-white`, que no escuro é o mais fundo), o nome no tooltip. No lugar:
 // + investimento novo · ✎ o lugar; no investimento: aplicar (moedas +) · resgatar (moedas −) · ✎ a ficha. Antes eram
@@ -57,14 +48,16 @@ const BotaoLinha = ({ titulo, onClick, children }) => (
   </Tooltip>
 );
 const IconChevron = ({ aberto }) => (
-  <svg viewBox="0 0 24 24" className={`h-3 w-3 shrink-0 text-gray-400 transition-[transform,color] duration-150 group-hover/seta:text-gray-800 ${aberto ? 'rotate-90' : ''}`} fill="none"
-    stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg viewBox="0 0 24 24" className={`h-[12px] w-[12px] shrink-0 text-gray-500 transition-[transform,color] duration-150 group-hover/seta:text-gray-800 ${aberto ? 'rotate-90' : ''}`} fill="none"
+    stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M9 6l6 6-6 6" />
   </svg>
 );
 // A SETA DE ABRIR com o QUADRADO no hover (o do Gestor, 06/11/2026, a pedido): 20px, o fundo cinza e a seta mais forte —
-// separa o clique dela (abre ou fecha) do clique no nome (a ficha). A margem negativa a deixa no lugar dos 12px de antes.
-const QUADRADO_SETA = 'group/seta -m-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200';
+// separa o clique dela (abre ou fecha) do clique no nome (a ficha). TUDO EM PX INTEIROS (o quadrado de 20, a seta de 12,
+// a margem de −4): com o `h-3`/`h-5` do rem de 14px eram 10,5 e 17,5 px, e a seta de traço fino saía borrada, meio
+// pixel fora do lugar. A margem negativa a deixa ocupando só os 12px da seta.
+const QUADRADO_SETA = 'group/seta -m-[4px] inline-flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200';
 const SetaAbre = ({ aberto }) => <span className={QUADRADO_SETA}><IconChevron aberto={aberto} /></span>;
 
 // A pílula da liquidez: azul (a cor dos gastos, que lê como "dinheiro à mão") na diária; cinza nas outras.
@@ -198,6 +191,21 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
         ].filter(Boolean).join(' · '),
       };
     }
+    // O VALOR QUE ANDOU SOZINHO (06/11/2026, a opção A do mockup "Valor pelo CDI"): a foto real e o que rendeu pela taxa de cada dia
+    if (a.col === 'vale' && l.tipo === 'inv' && l.x.estimado) {
+      const e = l.x.estimado;
+      const rendeuEst = e.valor_centavos - e.base.valor - (e.liquido ?? 0);
+      return {
+        titulo: `${nome} · vale hoje ≈`,
+        itens: [
+          { rotulo: `Foto real (o banco) em ${formatDate(e.base.data)}`, valor: formatBRL(e.base.valor) },
+          ...(e.liquido ? [{ rotulo: 'Aplicações − resgates depois', valor: `${e.liquido > 0 ? '+' : '−'}${formatBRL(Math.abs(e.liquido))}` }] : []),
+          { rotulo: `${e.dias} ${e.dias === 1 ? 'dia útil' : 'dias úteis'} · ${rotuloRende(l.x.inv)}`, valor: `${rendeuEst >= 0 ? '+' : '−'}${formatBRL(Math.abs(rendeuEst))}`, cor: COR_ENTRADAS },
+          { rotulo: `Vale hoje ≈ (até ${formatDate(e.ate)})`, valor: formatBRL(e.valor_centavos) },
+        ],
+        nota: `A taxa de cada dia vem do Banco Central; quando ela muda, a nova vale sobre o que já rendeu. Confira com o banco no "Atualizar valores" a cada 3 meses.`,
+      };
+    }
     if (a.col === 'curva') {
       const p = item.curva[a.i];
       if (!p) return null;
@@ -219,7 +227,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
       titulo: nome,
       itens: [
         { rotulo: 'Aplicado (do seu bolso)', valor: formatBRL(item.aplicado) },
-        { rotulo: `Vale hoje${item.data ? ` (foto de ${formatDate(item.data)})` : ''}`, valor: formatBRL(item.vale) },
+        { rotulo: l.tipo === 'inv' && l.x.estimado ? `Vale hoje ≈ (${rotuloPeloIndice(l.x.inv)} até ${formatDate(l.x.estimado.ate)})` : `Vale hoje${item.data ? ` (foto de ${formatDate(item.data)})` : ''}`, valor: formatBRL(item.vale) },
         { rotulo: l.tipo === 'inv' ? 'Rendeu desde o cadastro' : l.g.soConta ? 'Rendeu desde a primeira foto' : 'Rendeu (os investimentos)', valor: `${formatBRL(item.rendeu)} · ${pctTexto(item.pct, 1)}`, cor: COR_ENTRADAS },
         ...(um ? [{ rotulo: `Em ${competenciaCurta(um.competencia)}`, valor: `${formatBRL(um.rendeu)} · ${pctTexto(um.pct)}`, cor: COR_ENTRADAS }] : []),
         ...(rende ? [{ rotulo: 'Contratado', valor: rende }] : []),
@@ -271,7 +279,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                   <td className={`h-10 border-b border-gray-100 bg-hx-f9fafb px-3 ${aceso(l.id)}`}>
                     <button type="button" onClick={() => temFilhos && alternar(g.conta.id)} aria-expanded={temFilhos ? aberto : undefined}
                       className={`flex max-w-[300px] items-center gap-2 text-left ${temFilhos ? '' : 'cursor-default'}`}>
-                      {temFilhos ? <SetaAbre aberto={aberto} /> : <span className="w-3" />}
+                      {temFilhos ? <SetaAbre aberto={aberto} /> : <span className="w-[12px] shrink-0" />}
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: g.cor }} />
                       <span className={`truncate font-semibold ${g.conta.ativa === false ? 'text-gray-400' : 'text-gray-800'}`}>{g.conta.nome}</span>
                       <span className={`shrink-0 text-[11.5px] font-normal text-gray-400 ${movel ? 'hidden' : ''}`}>
@@ -339,8 +347,8 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                   <span className="flex items-start gap-1.5">
                   {comDep ? (
                     <button type="button" onClick={() => alternarInv(x.inv.id)} aria-expanded={depAberto} title={depAberto ? 'Fechar os depósitos' : `Abrir os ${x.imposto.lotes.length} depósitos`}
-                      className="group/seta -mx-0.5 mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200"><IconChevron aberto={depAberto} /></button>
-                  ) : <span className="w-4 shrink-0" />}
+                      className="group/seta -mx-[2px] mt-px flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200"><IconChevron aberto={depAberto} /></button>
+                  ) : <span className="w-[16px] shrink-0" />}
                   {acoes ? (
                     <button type="button" onClick={() => acoes.ficha(x.inv)} className="block max-w-[262px] text-left">
                       <span className={`flex items-center gap-1.5 font-medium ${encerrado ? 'text-gray-400' : 'text-gray-800'}`}>
@@ -360,7 +368,11 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                 </td>
                 <td className={`border-b border-gray-100 px-3 py-2 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}><Resgate x={x} /></td>
                 <td className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{reais(x.aplicado)}</td>
-                <td className={`border-b border-gray-100 px-3 py-2 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>{x.semValor ? <span className="font-normal text-gray-400">—</span> : reais(x.vale)}</td>
+                <td onMouseMove={x.estimado ? balao.aoMover({ id: l.id, col: 'vale' }) : undefined}
+                  className={`border-b border-gray-100 px-3 py-2 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>
+                  {x.semValor ? <span className="font-normal text-gray-400">—</span> : reais(x.vale)}
+                  {x.estimado && <span className="block whitespace-nowrap text-[11.5px] font-normal text-gray-500">≈ {rotuloPeloIndice(x.inv)} até {formatDate(x.estimado.ate).slice(0, 5)}</span>}
+                </td>
                 {liquidoCel(l.id, x.imposto && x.imposto.liquido === null && !x.imposto.isento ? null : x.imposto?.liquido ?? x.vale, subLiquido(x.imposto), true)}
                 {rendeuCel(l.id, x)}
                 <td className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{pctTexto(x.pctAno, 1)}</td>
@@ -514,7 +526,7 @@ function TabelaMesAMes({ todas, visiveis, recolhidas, alternar, meses, comps, cd
                   {grupo ? (
                     <button type="button" onClick={() => temFilhos && alternar(l.g.conta.id)} aria-expanded={temFilhos ? aberto : undefined}
                       className={`flex max-w-[230px] items-center gap-2 text-left ${temFilhos ? '' : 'cursor-default'}`}>
-                      {temFilhos ? <SetaAbre aberto={aberto} /> : <span className="w-3" />}
+                      {temFilhos ? <SetaAbre aberto={aberto} /> : <span className="w-[12px] shrink-0" />}
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: l.g.cor }} />
                       <span className="truncate font-semibold text-gray-800">{l.g.conta.nome}</span>
                     </button>
@@ -553,7 +565,7 @@ function TabelaMesAMes({ todas, visiveis, recolhidas, alternar, meses, comps, cd
 // `grupos`: o `carteira` (com `cor` por conta). `total`: { aplicado, vale, rendeu, pctAno }. `acoes`: { movimento,
 // novoInvestimento, editarInvestimento, editarConta } (sem elas — o celular —, a tabela só mostra).
 export default function BlocoInvestimentos({
-  grupos, total, meses, comps, cdi, ano, movel, acoes, onExportar, encerrados, onEncerrados, qtdEncerrados, aviso,
+  grupos, total, meses, comps, cdi, ano, movel, acoes, encerrados, onEncerrados, qtdEncerrados, aviso,
 }) {
   const [vista, setVistaEstado] = useState(() => (lsGet('patrimonio_vista') === 'mes' ? 'mes' : 'carteira'));
   const [modo, setModo] = useState('rs');
@@ -562,8 +574,6 @@ export default function BlocoInvestimentos({
   // os investimentos com os depósitos abertos (lembrado no navegador)
   const [abertosInv, setAbertosInvEstado] = useState(() => new Set(lerJson('patrimonio_depositos_abertos', [])));
   const alternarInv = (id) => setAbertosInvEstado((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); lsSet('patrimonio_depositos_abertos', JSON.stringify([...n])); return n; });
-  const [ampliado, setAmpliado] = useState(false);
-  const [cheio, setCheio] = useState(false);
   const setVista = (v) => { setVistaEstado(v); lsSet('patrimonio_vista', v); };
   const setRecolhidas = (fn) => setRecolhidasEstado((s) => { const n = fn(s); lsSet('patrimonio_recolhidas', JSON.stringify([...n])); return n; });
   const onOrdenar = (col) => setOrdemEstado((o) => { const n = proximaOrdemCarteira(o, col); lsSet('patrimonio_ordem', JSON.stringify(n)); return n; });
@@ -585,30 +595,18 @@ export default function BlocoInvestimentos({
   const visiveisB = useMemo(() => visiveis.filter((l) => l.tipo !== 'lote'), [visiveis]);
   const qtd = grupos.reduce((s, g) => s + g.itens.length, 0);
   const comum = { todas, visiveis, recolhidas, alternar };
-  const corpo = (ampl) => (verVista === 'mes'
-    ? <TabelaMesAMes key={ampl ? 'b-a' : 'b'} {...comum} todas={todasB} visiveis={visiveisB} meses={meses} comps={comps} cdi={cdi} pct={modo === 'pct'} />
-    : <TabelaCarteira key={ampl ? 'a-a' : 'a'} {...comum} ordem={ordem} onOrdenar={onOrdenar} total={total} ano={ano} movel={movel} acoes={acoes} cdi={cdi} abertosInv={abertosInv} alternarInv={alternarInv} />);
+  const corpo = verVista === 'mes'
+    ? <TabelaMesAMes key="b" {...comum} todas={todasB} visiveis={visiveisB} meses={meses} comps={comps} cdi={cdi} pct={modo === 'pct'} />
+    : <TabelaCarteira key="a" {...comum} ordem={ordem} onOrdenar={onOrdenar} total={total} ano={ano} movel={movel} acoes={acoes} cdi={cdi} abertosInv={abertosInv} alternarInv={alternarInv} />;
 
-  const icones = (classe = BTN) => (
-    <span className="inline-flex shrink-0 overflow-hidden rounded-md border border-gray-300 bg-white [&>*+*]:border-l [&>*+*]:border-gray-200">
-      {comFilhos.length > 0 && (
-        <Tooltip label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}>
-          <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'} className={classe}
-            onClick={() => setRecolhidas(() => (tudoAberto ? new Set(comFilhos.map((g) => g.conta.id)) : new Set()))}>
-            <IconExpandirTudo fechar={tudoAberto} />
-          </button>
-        </Tooltip>
-      )}
-      {!ampliado && (
-        <Tooltip label="Exportar CSV">
-          <button type="button" aria-label="Exportar CSV" onClick={() => onExportar(verVista, modo)} className={classe}><IcoBaixar /></button>
-        </Tooltip>
-      )}
-      {!ampliado && (
-        <Tooltip label="Ampliar">
-          <button type="button" aria-label="Ampliar" onClick={() => setAmpliado(true)} className={classe}><IcoAmpliar /></button>
-        </Tooltip>
-      )}
+  const icones = comFilhos.length > 0 && (
+    <span className="inline-flex shrink-0 overflow-hidden rounded-md border border-gray-300 bg-white">
+      <Tooltip label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}>
+        <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'} className={BTN}
+          onClick={() => setRecolhidas(() => (tudoAberto ? new Set(comFilhos.map((g) => g.conta.id)) : new Set()))}>
+          <IconExpandirTudo fechar={tudoAberto} />
+        </button>
+      </Tooltip>
     </span>
   );
   const trocas = (
@@ -619,7 +617,7 @@ export default function BlocoInvestimentos({
   );
   const legenda = verVista === 'mes'
     ? `o que rendeu em cada mês ${modo === 'pct' ? 'em %' : 'em reais'} · o tom mais forte é o melhor mês de cada linha`
-    : `${qtd} ${qtd === 1 ? 'investimento' : 'investimentos'} em ${grupos.length} ${grupos.length === 1 ? 'lugar' : 'lugares'}`;
+    : `${qtd} ${qtd === 1 ? 'investimento' : 'investimentos'} em ${grupos.length} ${grupos.length === 1 ? 'instituição' : 'instituições'}`;
   const rodape = qtdEncerrados > 0 && verVista === 'carteira' && (
     <button type="button" onClick={onEncerrados} className="text-[12px] font-medium text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline">
       {encerrados ? 'Esconder os encerrados' : `Mostrar ${qtdEncerrados === 1 ? 'o encerrado' : `os ${qtdEncerrados} encerrados`}`}
@@ -633,36 +631,11 @@ export default function BlocoInvestimentos({
         <span className="text-[11px] text-gray-400">{legenda}</span>
         <span className="flex-1" />
         {!movel && trocas}
-        {!movel && icones()}
+        {!movel && icones}
       </div>
       {aviso}
-      <div className="min-h-0 overflow-x-auto">{corpo(false)}</div>
+      <div className="min-h-0 overflow-x-auto">{corpo}</div>
       {rodape && <div className="border-t border-gray-100 px-4 py-2">{rodape}</div>}
-      {ampliado && (
-        <Modal open onClose={() => setAmpliado(false)} title="Investimentos" subtitulo={`${formatBRL(total.vale)} · ${legenda}`}
-          acoes={(
-            <>
-              <button type="button" className="btn-secondary !h-[30px] !px-3 !text-[12.5px]" onClick={() => onExportar(verVista, modo)}>Exportar CSV</button>
-              <Tooltip label={cheio ? 'Sair da tela cheia' : 'Tela cheia'}>
-                <button type="button" onClick={() => setCheio((c) => !c)} aria-label={cheio ? 'Sair da tela cheia' : 'Tela cheia'}
-                  className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">
-                  {cheio ? <IconMinimize className="h-3.5 w-3.5" /> : <IconMaximize className="h-3.5 w-3.5" />}
-                </button>
-              </Tooltip>
-            </>
-          )}
-          alturaCheia animarTamanho padding="p-0" maxWidth={cheio ? 'max-w-[96vw]' : 'max-w-[min(1280px,95vw)]'} altura={cheio ? 'h-[94vh]' : 'h-[90vh]'}>
-          <div className="flex h-full flex-col">
-            <div className="flex shrink-0 flex-wrap items-center gap-2.5 px-5 pb-3 pt-4">
-              {trocas}
-              {comFilhos.length > 0 && icones(`${BTN} !h-[30px]`)}
-              <span className="flex-1" />
-              {rodape}
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto border-t border-gray-100 [scrollbar-gutter:stable]">{corpo(true)}</div>
-          </div>
-        </Modal>
-      )}
     </section>
   );
 }

@@ -56,7 +56,7 @@ function OndeEsta({ grupos, total }) {
         <span className="text-[13px] font-semibold text-gray-800">Onde está o dinheiro</span>
         <span className="text-[11px] text-gray-400">{formatBRL(total)}</span>
         <div className="ml-auto self-center">
-          <AbasPilula abas={[{ key: 'lugar', label: 'Lugar' }, { key: 'tipo', label: 'Tipo' }, { key: 'resgate', label: 'Resgate' }]} valor={por} onChange={setPor} variante="claro" altura={30} folga={2} />
+          <AbasPilula abas={[{ key: 'lugar', label: 'Instituição' }, { key: 'tipo', label: 'Tipo' }, { key: 'resgate', label: 'Resgate' }]} valor={por} onChange={setPor} variante="claro" altura={30} folga={2} />
         </div>
       </div>
       {itens.length === 0 ? <p className="py-6 text-center text-sm text-gray-400">Nenhum investimento com valor.</p> : (
@@ -143,7 +143,7 @@ export default function Patrimonio() {
         <CabecalhoPagina titulo="Patrimônio" acoes={<button type="button" className="btn-primary" onClick={ir}>Montar a carteira</button>} />
         <div className="mt-6 max-w-2xl">
           <ListaVazia>
-            O painel do patrimônio aparece quando houver investimentos. Cadastre onde você investe e o que tem em cada lugar na tela
+            O painel do patrimônio aparece quando houver investimentos. Cadastre onde você investe e o que tem em cada instituição na tela
             Investimentos; depois, atualize os valores uma vez por mês e o app separa o que você aplicou do que rendeu.
           </ListaVazia>
         </div>
