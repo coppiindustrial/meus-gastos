@@ -88,8 +88,14 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
     depositos.forEach((d) => lotes.push({ data: d.data, ref: d.referencia, valorRef: Number(d.valor_centavos), origem: 'colado' }));
     corte = depositos.reduce((m, d) => (d.referencia > m ? d.referencia : m), depositos[0].referencia);
   } else if (abre) {
-    const principal = inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined ? Number(inv.aplicado_inicial_centavos) : Number(abre.valor_centavos);
-    if (principal > 0) lotes.push({ data: inv.aplicado_em || abre.data, dataAproximada: !inv.aplicado_em, principal, origem: 'inicial' });
+    // AS APLICAÇÕES PELO APP ATÉ A PRIMEIRA FOTO são depósitos EXATOS (06/11/2026: o "Cadastrar e aplicar" grava a foto e a
+    // aplicação no MESMO dia, e ela ficava de fora — o título feito pelo app caía em "faltam as datas"); o bloco do cadastro
+    // (o "valor aplicado", ou a primeira foto) só leva o que SOBRA sem elas, e só ele pode ficar sem data.
+    const iniciais = movimentos.filter((m) => m.investimento_id === inv.id && m.tipo !== 'resgate' && m.data <= abre.data);
+    const total = inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined ? Number(inv.aplicado_inicial_centavos) : Number(abre.valor_centavos);
+    const resto = total - iniciais.reduce((s, m) => s + Number(m.valor_centavos), 0);
+    iniciais.forEach((m) => lotes.push({ data: m.data, principal: Number(m.valor_centavos), origem: 'aporte' }));
+    if (resto > 100) lotes.push({ data: inv.aplicado_em || abre.data, dataAproximada: !inv.aplicado_em, principal: resto, origem: 'inicial' });
     corte = abre.data;
   }
   const depois = movimentos.filter((m) => m.investimento_id === inv.id && corte && m.data > corte).sort((a, b) => (a.data < b.data ? -1 : 1));
@@ -191,20 +197,54 @@ export function lerDepositos(texto, lerValor) {
   return { itens, ignoradas };
 }
 
-// O QUE O "COLAR OS DEPÓSITOS" GRAVA além da lista (06/11/2026, o cadastro sem os valores): o VALOR APLICADO que o banco
-// mostra (`aplicado`, só quando mudou; `undefined` = não mexe) e, no investimento SEM VALOR ainda (o cadastrado agora), a
-// PRIMEIRA FOTO = a soma dos depósitos (`foto`). `erro` quando falta o aplicado no investimento sem valor (sem ele o
-// rendimento seria zero, e o IR também) ou quando ele não é um valor. `lerValor`: o `calcularValor` do app (centavos).
-export function planoDoColar({ semValor, soma, aplicadoTexto, aplicadoAntes, lerValor }) {
-  const txt = String(aplicadoTexto ?? '').trim();
+// OS DEPÓSITOS DE ANTES DO APP (06/11/2026, o mockup aprovado "Depósitos de antes": a TABELA digitada — o colar do banco
+// só a preenche). `modo`: 'depositado' (o valor do dia de cada depósito: a `referencia` dele é a própria data, e o
+// principal é o próprio valor) | 'hoje' (o que cada um vale em `referencia`, como a tela "Detalhes dos depósitos" do
+// banco). `linhas`: [{ data, valor }] (o valor em texto; a linha vazia não conta). Devolve { itens: [{ data,
+// valor_centavos, referencia }], soma, aplicado (o "valor aplicado" do título; `undefined` = não muda), foto ({ data, valor }
+// — só no investimento SEM VALOR ainda: no 'hoje', a soma na data dos valores; no 'depositado', o "vale hoje" digitado, ou a
+// `estimativa` pelo CDI, ou a própria soma) } ou { erro }. No 'depositado' o aplicado é a soma; no 'hoje', o que o banco
+// mostra (`aplicadoTexto`, obrigatório no sem valor: sem ele o rendimento e o IR ficam zerados).
+export function planoDosDepositos({ modo, linhas = [], referencia, hoje, semValor = false, aplicadoTexto, aplicadoAntes, valeTexto, estimativa = null, lerValor }) {
+  const itens = [];
+  for (let i = 0; i < linhas.length; i += 1) {
+    const l = linhas[i];
+    const temValor = String(l.valor ?? '').trim() !== '';
+    if (!l.data && !temValor) continue;
+    const n = `${i + 1}º depósito`;
+    if (!l.data) return { erro: `Falta a data do ${n}.` };
+    if (!temValor) return { erro: `Falta o valor do ${n}.` };
+    if (l.data > hoje) return { erro: `A data do ${n} ainda não chegou.` };
+    const v = lerValor(l.valor);
+    if (v === null || !(v > 0)) return { erro: `O valor do ${n} não é um valor.` };
+    if (modo === 'hoje' && referencia && l.data > referencia) return { erro: `O ${n} é depois da data dos valores (${referencia.split('-').reverse().join('/')}).` };
+    itens.push({ data: l.data, valor_centavos: v, referencia: modo === 'hoje' ? referencia : l.data });
+  }
+  if (modo === 'hoje' && itens.length && !/^\d{4}-\d{2}-\d{2}$/.test(referencia ?? '')) return { erro: 'Informe a data dos valores.' };
+  const soma = itens.reduce((t, x) => t + x.valor_centavos, 0);
   const antes = aplicadoAntes === null || aplicadoAntes === undefined ? null : Number(aplicadoAntes);
   let aplicado;
-  if (!txt) {
-    if (semValor) return { erro: 'Falta o valor aplicado que o banco mostra: sem ele, o rendimento e o IR ficam zerados.' };
+  if (modo === 'depositado') {
+    if (itens.length && soma !== antes) aplicado = soma;
   } else {
-    const v = lerValor(txt);
-    if (v === null || !(v >= 0)) return { erro: 'O valor aplicado não é um valor.' };
-    if (v !== antes) aplicado = v;
+    const txt = String(aplicadoTexto ?? '').trim();
+    if (!txt) {
+      if (semValor && itens.length) return { erro: 'Falta o valor aplicado que o banco mostra: sem ele, o rendimento e o IR ficam zerados.' };
+    } else {
+      const v = lerValor(txt);
+      if (v === null || !(v >= 0)) return { erro: 'O valor aplicado não é um valor.' };
+      if (v !== antes) aplicado = v;
+    }
   }
-  return { aplicado, foto: semValor ? soma : null };
+  let foto = null;
+  if (semValor && itens.length) {
+    if (modo === 'hoje') foto = { data: referencia, valor: soma };
+    else {
+      const txt = String(valeTexto ?? '').trim();
+      const v = txt ? lerValor(txt) : null;
+      if (txt && (v === null || v < 0)) return { erro: 'O "vale hoje" não é um valor.' };
+      foto = { data: hoje, valor: v ?? (estimativa ? Math.round(estimativa) : soma) };
+    }
+  }
+  return { itens, soma, aplicado, foto };
 }

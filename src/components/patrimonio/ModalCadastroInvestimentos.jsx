@@ -275,7 +275,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
               <td colSpan={6} className="border-t border-gray-200 px-2 py-2">
                 <button type="button" onClick={novoLugar}
                   className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900">
-                  <CirculoMais className="border-gray-500" />
+                  <CirculoMais borda="text-gray-500" />
                   Nova instituição
                 </button>
                 <span className="ml-2 text-[12px] text-gray-400">o banco ou a corretora (Nubank, XP, Inter…)</span>

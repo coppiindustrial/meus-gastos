@@ -154,7 +154,7 @@ export default function SelectBusca({
             <div className="mt-1.5 border-t border-gray-100 pt-1.5">
               <button type="button" onClick={() => { setAberto(false); acao.onClick(q.trim()); }}
                 className="flex w-full items-center gap-2.5 rounded-[3px] px-3 py-2 text-left text-[13.5px] font-medium text-gray-800 transition-colors hover:bg-gray-100">
-                <CirculoMais grande className="border-gray-400 text-gray-500" />
+                <CirculoMais grande cor="text-gray-500" />
                 <span className="min-w-0 flex-1 truncate">{acao.rotulo(q.trim())}</span>
               </button>
             </div>

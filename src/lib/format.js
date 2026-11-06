@@ -64,3 +64,18 @@ export function competenciaCurta(comp) {
   const [y, m] = comp.split('-').map(Number);
   return `${MESES[m - 1].slice(0, 3)}/${String(y).slice(2)}`;
 }
+
+// O CAMPO DE DATA QUE SE DIGITA (`CampoData`, 06/11/2026). As barras do que se digita: os dígitos de cada parte (dia 2, mês 2, ano 4); a barra digitada fecha a parte ("1/4/27").
+export function mascaraData(t) {
+  const segs = String(t ?? '').replace(/[^\d/.-]/g, '').split(/[/.-]/);
+  const lims = [2, 2, 4];
+  const partes = []; let resto = '';
+  segs.forEach((seg, i) => {
+    let junto = resto + seg;
+    while (partes.length < 2 && junto.length > lims[partes.length]) { partes.push(junto.slice(0, lims[partes.length])); junto = junto.slice(lims[partes.length - 1]); }
+    if (i < segs.length - 1 && junto && partes.length < 2) { partes.push(junto); resto = ''; } else resto = junto;
+  });
+  if (resto) partes.push(resto.slice(0, lims[partes.length] ?? 4));
+  const fim = /[/.-]$/.test(String(t ?? '')) && partes.length > 0 && partes.length < 3 ? '/' : '';
+  return partes.join('/') + fim;
+}

@@ -35,7 +35,8 @@ export async function listarInvestimentos() {
 export async function salvarDepositos(investimentoId, referencia, itens) {
   await exigir(supabase.from('depositos_investimento').delete().eq('investimento_id', investimentoId));
   if (itens.length) {
-    await exigir(supabase.from('depositos_investimento').insert(itens.map((i) => ({ investimento_id: investimentoId, data: i.data, valor_centavos: i.valor_centavos, referencia }))));
+    // cada item pode ter a sua referência (o digitado como "o que foi depositado" leva a própria data — `planoDosDepositos`)
+    await exigir(supabase.from('depositos_investimento').insert(itens.map((i) => ({ investimento_id: investimentoId, data: i.data, valor_centavos: i.valor_centavos, referencia: i.referencia ?? referencia }))));
   }
 }
 

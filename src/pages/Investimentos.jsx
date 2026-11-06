@@ -8,7 +8,7 @@ import BlocoInvestimentos from '../components/patrimonio/TabelaInvestimentos.jsx
 import CarteiraVazia from '../components/patrimonio/CarteiraVazia.jsx';
 import ModalCadastroInvestimentos from '../components/patrimonio/ModalCadastroInvestimentos.jsx';
 import {
-  FichaInvestimento, ModalAtualizarValores, ModalColarDepositos, ModalComoEntrou, ModalLugar, ModalMovimento,
+  FichaInvestimento, ModalAtualizarValores, ModalComoEntrou, ModalDepositos, ModalLugar, ModalMovimento,
 } from '../components/patrimonio/ModaisPatrimonio.jsx';
 import useDadosPatrimonio from '../components/patrimonio/useDadosPatrimonio.js';
 import { useNoCelular } from '../lib/celular.js';
@@ -196,7 +196,7 @@ export default function Investimentos() {
       {fichaX && (
         <FichaInvestimento x={fichaX.x} lugar={fichaX.g.conta.nome} movel={movel}
           valores={d.valores.filter((v) => v.investimento_id === ficha)} movimentos={d.movimentos.filter((m) => m.investimento_id === ficha)}
-          depositos={d.depositos.filter((x) => x.investimento_id === ficha)} comDepositos={d.comDepositos}
+          depositos={d.depositos.filter((x) => x.investimento_id === ficha)} comDepositos={d.comDepositos} taxas={d.taxas}
           onFechar={() => setFicha(null)} onMudou={recarregar}
           onAplicar={(tipo) => setMov({ inv: fichaX.x.inv, tipo })} onCadastro={() => { setFicha(null); setCadastro({}); }} />
       )}
@@ -205,7 +205,7 @@ export default function Investimentos() {
           onAplicar={(inv) => setMov({ inv, tipo: 'aporte', doComoEntrou: true })} onColar={(inv) => setColar(inv)} />
       )}
       {colar && (
-        <ModalColarDepositos inv={itemDe(colar.id)?.inv ?? colar} semValor={itemDe(colar.id)?.semValor ?? true} vale={itemDe(colar.id)?.vale ?? 0}
+        <ModalDepositos inv={itemDe(colar.id)?.inv ?? colar} taxas={d.taxas} semValor={itemDe(colar.id)?.semValor ?? true} vale={itemDe(colar.id)?.vale ?? 0}
           dataVale={itemDe(colar.id)?.data ?? null} depositos={d.depositos.filter((x) => x.investimento_id === colar.id)}
           onFechar={() => setColar(null)} onSalvo={() => { entrou(colar.id); setColar(null); recarregar(); }} />
       )}

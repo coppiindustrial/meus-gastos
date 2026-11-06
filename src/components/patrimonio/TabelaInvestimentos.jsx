@@ -34,6 +34,11 @@ const inteiro = (c) => Math.round(c / 100).toLocaleString('pt-BR');
 const pctTexto = (f, casas = 2) => (f === null || f === undefined ? '—' : `${f >= 0 ? '' : '−'}${Math.abs(f * 100).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`);
 const sinal = (c) => (c > 0 ? '+' : c < 0 ? '−' : '');
 const BTN = 'flex h-7 w-[30px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
+// O BALÃO SAI quando o cursor passa a uma célula SEM balão (06/11/2026: ele ficava preso — o da linha do investimento
+// seguia aceso sobre os depósitos, que não têm balão — e só saía ao deixar a tabela). Todo `aoMover` vai pelo `mover`, que
+// MARCA o evento; a caixa da tabela, no fim da bolha, fecha o balão quando ninguém marcou.
+const comMarca = (balao) => (chave) => (e) => { e.nativeEvent.comBalao = true; balao.aoMover(chave)(e); };
+const fecharFora = (balao) => (e) => { if (!e.nativeEvent.comBalao && balao.ativo) balao.aoSair(); };
 const lerJson = (k, padrao) => { try { const v = JSON.parse(lsGet(k) ?? 'null'); return v ?? padrao; } catch { return padrao; } };
 
 // AS AÇÕES DA LINHA (06/11/2026, a opção A do mockup "Ficha do investimento"): todas no MESMO quadrado do ✎ — 30px, a
@@ -123,12 +128,15 @@ const COLUNAS_A = [
 // vale, o líquido e o rendimento (≈), a ALÍQUOTA de hoje na coluna Resgate e quando ela cai (`estimarImposto`).
 const TOM_ALIQUOTA = { 0.225: 'vermelho', 0.2: 'ambar', 0.175: 'cinza', 0.15: 'verde' };
 const pctAliq = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
-export const temDepositos = (x) => !!x.imposto && (x.imposto.lotes.length > 1 || x.imposto.lotes.some((l) => l.origem === 'colado'));
+// OS DEPÓSITOS SEMPRE DENTRO (06/11/2026, a pedido): todo investimento com dinheiro abre nos depósitos dele, mesmo quando
+// é um só — o mesmo jeito para todos (antes só abria com mais de um, ou com a lista colada do banco).
+export const temDepositos = (x) => !!x.imposto && !x.imposto.semEstimativa && x.imposto.lotes.length > 0;
 
 function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdenar, total, ano, movel, acoes, cdi, abertosInv = new Set(), alternarInv = () => {} }) {
   const caixaRef = useRef(null);
   const desenhadas = useLinhasAnimadas(todas, visiveis, caixaRef);
   const balao = useBalao(280, 170);
+  const mover = comMarca(balao);
   const [sobLinha, setSobLinha] = useState(null);
   const desk = (c) => (c.desk && movel ? 'hidden' : '');
   const th0 = 'sticky top-0 z-20 whitespace-nowrap border-b border-gray-200 bg-hx-f9fafb px-3 py-2 text-[10.5px] font-semibold uppercase tracking-wide';
@@ -159,7 +167,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
   const sobCurva = (id, curva) => (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     const i = Math.max(0, Math.min(curva.length - 1, Math.round(((e.clientX - r.left) / r.width) * (curva.length - 1))));
-    balao.aoMover({ id, col: 'curva', i })(e);
+    mover({ id, col: 'curva', i })(e);
   };
   const info = (() => {
     const a = balao.ativo;
@@ -241,13 +249,13 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
   })();
 
   const rendeuCel = (id, item) => (
-    <td onMouseMove={balao.aoMover({ id, col: 'rendeu' })} className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums ${aceso(id)}`}>
+    <td onMouseMove={mover({ id, col: 'rendeu' })} className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums ${aceso(id)}`}>
       <span className={item.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(item.rendeu)}{reais(Math.abs(item.rendeu))}</span>
       <span className="block text-[11.5px] text-gray-500">{pctTexto(item.pct, 1)}</span>
     </td>
   );
   const liquidoCel = (id, valor, sub, forte, extra = '') => (
-    <td onMouseMove={balao.aoMover({ id, col: 'liquido' })} className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums ${forte ? 'font-semibold text-gray-900' : 'text-gray-800'} ${extra} ${aceso(id)}`}>
+    <td onMouseMove={mover({ id, col: 'liquido' })} className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums ${forte ? 'font-semibold text-gray-900' : 'text-gray-800'} ${extra} ${aceso(id)}`}>
       {valor === null ? <span className="text-gray-400">—</span> : reais(valor)}
       {sub && <span className="block text-[11.5px] font-normal text-gray-500">{sub}</span>}
     </td>
@@ -264,7 +272,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
   );
 
   return (
-    <div ref={caixaRef} onMouseLeave={() => { balao.aoSair(); setSobLinha(null); }}>
+    <div ref={caixaRef} onMouseMove={fecharFora(balao)} onMouseLeave={() => { balao.aoSair(); setSobLinha(null); }}>
       <table className="w-full border-separate border-spacing-0 text-[13px]" style={{ minWidth: movel ? 0 : 960 }}>
         <thead><tr>{COLUNAS_A.map(cabecalho)}{!movel && <th className={`${th0} w-[210px]`} aria-label="Ações" />}</tr></thead>
         <tbody>
@@ -293,7 +301,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                   <td className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums text-gray-700 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{reais(g.aplicado)}</td>
                   <td className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>{reais(g.vale)}</td>
                   {liquidoCel(l.id, g.liquido, g.incompleto ? 'parcial' : g.ir > 0 ? `IR ≈ ${reais(g.ir)}` : null, true, 'bg-hx-f9fafb')}
-                  <td onMouseMove={balao.aoMover({ id: l.id, col: 'rendeu' })} className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums ${aceso(l.id)}`}>
+                  <td onMouseMove={mover({ id: l.id, col: 'rendeu' })} className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums ${aceso(l.id)}`}>
                     <span className={g.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(g.rendeu)}{reais(Math.abs(g.rendeu))}</span>
                   </td>
                   <td className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{pctTexto(g.pctAno, 1)}</td>
@@ -368,7 +376,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                 </td>
                 <td className={`border-b border-gray-100 px-3 py-2 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}><Resgate x={x} /></td>
                 <td className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{reais(x.aplicado)}</td>
-                <td onMouseMove={x.estimado ? balao.aoMover({ id: l.id, col: 'vale' }) : undefined}
+                <td onMouseMove={x.estimado ? mover({ id: l.id, col: 'vale' }) : undefined}
                   className={`border-b border-gray-100 px-3 py-2 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>
                   {x.semValor ? <span className="font-normal text-gray-400">—</span> : reais(x.vale)}
                   {x.estimado && <span className="block whitespace-nowrap text-[11.5px] font-normal text-gray-500">≈ {rotuloPeloIndice(x.inv)} até {formatDate(x.estimado.ate).slice(0, 5)}</span>}
@@ -417,6 +425,7 @@ function TabelaMesAMes({ todas, visiveis, recolhidas, alternar, meses, comps, cd
   const caixaRef = useRef(null);
   const desenhadas = useLinhasAnimadas(todas, visiveis, caixaRef);
   const balao = useBalao(270, 160);
+  const mover = comMarca(balao);
   const linhas = useMemo(() => {
     const m = new Map();
     todas.forEach((l) => {
@@ -432,7 +441,7 @@ function TabelaMesAMes({ todas, visiveis, recolhidas, alternar, meses, comps, cd
   const naLinha = (id) => ativo?.linha === id;
   const naColuna = (c) => ativo?.col === c;
   const classe = (id, c) => `${naLinha(id) || naColuna(c) ? 'gm-acesa' : ''} ${naLinha(id) && naColuna(c) ? 'shadow-[inset_0_0_0_1.5px_var(--contorno-celula)]' : ''}`;
-  const sob = (linha, col) => ({ onMouseMove: balao.aoMover({ linha, col }) });
+  const sob = (linha, col) => ({ onMouseMove: mover({ linha, col }) });
   const valorDe = (v) => (pct ? v.pct : v.rendeu);
   const texto = (v) => (v === null || v === undefined ? '' : pct ? (v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : inteiro(v));
   const fundo = (v, max) => {
@@ -501,7 +510,7 @@ function TabelaMesAMes({ todas, visiveis, recolhidas, alternar, meses, comps, cd
   );
 
   return (
-    <div ref={caixaRef} onMouseLeave={balao.aoSair}>
+    <div ref={caixaRef} onMouseMove={fecharFora(balao)} onMouseLeave={balao.aoSair}>
       <table className="w-full border-separate border-spacing-0 text-[12.5px]" style={{ minWidth: 320 + comps.length * 74 }}>
         <thead>
           <tr>

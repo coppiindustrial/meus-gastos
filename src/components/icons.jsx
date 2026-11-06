@@ -561,16 +561,26 @@ export const IconAplicar = ({ className = 'h-[15px] w-[15px]' }) => (
 export const IconResgatar = ({ className = 'h-[15px] w-[15px]' }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{MOEDAS}<path d="M15 17.5h7" /></svg>
 );
+// OS DEPÓSITOS de um investimento: a pilha de moedas, sem o "+" e o "−" do aplicar e do resgatar.
+export const IconDepositos = ({ className = 'h-[15px] w-[15px]' }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{MOEDAS}</svg>
+);
 // A PRANCHETA: "colar" (os depósitos do banco, na ficha do investimento).
 export const IconColar = ({ className = 'h-[15px] w-[15px]' }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="M9 12h6M9 16h4" /></svg>
 );
 
-// O "+" NO CÍRCULO TRACEJADO (o "Adicionar …" das tabelas de cadastro e o "+ Criar" das listas), em PX INTEIROS
-// (06/11/2026): o círculo de 16 e o "+" de 8 ficam a 3px de cada borda; o `grande`, 18 e 10. Com o h-4/h-2 do rem de 14px
-// (14 e 7 px) o "+" ficava meio pixel fora do centro. `className`: a cor da borda (e a do "+").
-export const CirculoMais = ({ className = 'border-gray-400', grande = false }) => (
-  <span className={`flex ${grande ? 'h-[18px] w-[18px]' : 'h-[16px] w-[16px]'} shrink-0 items-center justify-center rounded-full border border-dashed ${className}`}>
-    <IconMais className={grande ? 'h-[10px] w-[10px]' : 'h-[8px] w-[8px]'} />
-  </span>
-);
+// O "+" NO CÍRCULO TRACEJADO (o "Adicionar …" das tabelas de cadastro e o "+ Criar" das listas): o círculo e o "+" num SVG
+// SÓ (06/11/2026). Antes era uma borda CSS tracejada com o ícone dentro: quando a caixa caía em meio pixel (507,25 × 743,88),
+// o navegador encaixava a BORDA no pixel e o "+" não, e ele parecia fora do centro mesmo com as contas certas. No mesmo
+// SVG os dois andam juntos. 16px (o "+" de 8) ou o `grande`, 18 (o de 10). `borda`: a cor do círculo; `cor`: a do "+"
+// (sem ela, a do texto do botão).
+export const CirculoMais = ({ borda = 'text-gray-400', cor = '', grande = false }) => {
+  const t = grande ? 18 : 16; const m = t / 2; const p = grande ? 5 : 4;
+  return (
+    <svg viewBox={`0 0 ${t} ${t}`} width={t} height={t} className={`shrink-0 ${cor}`} fill="none" aria-hidden="true">
+      <circle cx={m} cy={m} r={m - 0.5} className={borda} stroke="currentColor" strokeWidth="1" strokeDasharray="2.2 1.6" />
+      <path d={`M${m} ${m - p}v${2 * p}M${m - p} ${m}h${2 * p}`} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+};

@@ -257,7 +257,7 @@ const lerTaxaTexto = (t) => {
   return Number.isFinite(n) ? n : NaN;
 };
 // O que a linha grava (os campos da tabela `investimentos`), já normalizado. O "valor aplicado" não está aqui: vai
-// pelo Colar os depósitos (`planoDoColar`).
+// pelos depósitos de antes (`planoDosDepositos`).
 export function dadosDaLinha(l) {
   return {
     conta_id: l.conta_id, nome: l.nome.trim(), tipo: l.tipo, indexador: l.indexador || null, taxa: l.indexador ? lerTaxaTexto(l.taxa) : null,

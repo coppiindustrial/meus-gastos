@@ -1105,7 +1105,7 @@ function ListaCategorias({ ancora, opcoes, ativo, onAtivo, texto, onEscolher, on
       <div className="mt-1 border-t border-gray-100 pt-1">
         <button type="button" onClick={onCriar}
           className="flex w-full items-center gap-2 rounded-[2px] px-2.5 py-[6px] text-left text-[12.5px] font-medium text-gray-700 hover:bg-gray-100">
-          <CirculoMais className="border-gray-400 text-gray-500" />
+          <CirculoMais cor="text-gray-500" />
           <span className="truncate">{texto.trim() ? `Criar categoria “${texto.trim()}”` : 'Criar categoria nova'}</span>
         </button>
       </div>

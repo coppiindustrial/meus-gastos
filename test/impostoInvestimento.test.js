@@ -90,3 +90,19 @@ test('a lista colada do banco: "Feito em 05 SET 2026 R$ 4.165,28", com a data e 
   ]);
   assert.equal(lerDepositos('nada aqui', parseValor).itens.length, 0);
 });
+
+test('o investimento feito pelo app: a aplicação do dia da primeira foto é o depósito (com a data), não "faltam as datas"', () => {
+  // o "Cadastrar e aplicar": a foto e a aplicação no mesmo dia, sem "valor aplicado" nem "data da aplicação" no cadastro
+  const novo = { ...inv, aplicado_inicial_centavos: null, aplicado_em: null };
+  const fotos = [{ data: '2026-10-11', valor_centavos: 2200000 }];
+  const movimentos = [{ investimento_id: 'rdb', data: '2026-10-11', tipo: 'aporte', valor_centavos: 2200000 }];
+  const r = estimarImposto({ inv: novo, fotos, movimentos, cdi, hoje, vale: 2219551, aplicado: 2200000 });
+  assert.equal(r.semDatas, false);
+  assert.equal(r.lotes.length, 1);
+  assert.equal(r.lotes[0].origem, 'aporte');
+  assert.equal(r.lotes[0].data, '2026-10-11');
+  assert.ok(r.iof > 0); // 26 dias: ainda paga o IOF
+  assert.ok(Math.abs(r.ir - (19551 - r.iof) * 0.225) <= 1);
+  // sem a aplicação no app, o mesmo cadastro continua sem as datas
+  assert.equal(estimarImposto({ inv: novo, fotos, movimentos: [], cdi, hoje, vale: 2219551, aplicado: 2200000 }).semDatas, true);
+});

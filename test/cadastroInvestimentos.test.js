@@ -4,8 +4,8 @@ import {
   aplicacoesComPrazo, diferencaInvestimento, impostoGarantia, linhaDoInvestimento, linhaNova, padraoDoTipo, pendentesDeValor,
   rendimentoForaDoNormal, rotuloLiquidez, rotuloPrazo, validarCadastro,
 } from '../src/lib/investimentos.js';
-import { planoDoColar } from '../src/lib/impostoInvestimento.js';
-import { parseValor } from '../src/lib/dinheiro.js';
+import { planoDosDepositos } from '../src/lib/impostoInvestimento.js';
+import { calcularValor, parseValor } from '../src/lib/dinheiro.js';
 
 // Dados FICTÍCIOS (06/11/2026, o Patrimônio "do zero").
 
@@ -77,16 +77,26 @@ test('o cadastro em tabela: o padrão do tipo, a diferença do que mudou e o pri
   assert.equal('aplicado_inicial_centavos' in diferencaInvestimento({ ...nova, nome: 'LCI' }), false);
 });
 
-test('colar os depósitos: o valor aplicado do banco e, no investimento sem valor, a primeira foto', () => {
-  // o investimento cadastrado agora (sem valor): a soma vira o valor de hoje, e o aplicado é obrigatório
-  assert.deepEqual(planoDoColar({ semValor: true, soma: 8812519, aplicadoTexto: '82.094,56', aplicadoAntes: null, lerValor: parseValor }),
-    { aplicado: 8209456, foto: 8812519 });
-  assert.match(planoDoColar({ semValor: true, soma: 8812519, aplicadoTexto: '', aplicadoAntes: null, lerValor: parseValor }).erro, /valor aplicado/);
-  // o que já tem valor: o aplicado só grava se mudou; vazio não mexe
-  assert.deepEqual(planoDoColar({ semValor: false, soma: 100, aplicadoTexto: '820,94', aplicadoAntes: '82094', lerValor: parseValor }), { aplicado: undefined, foto: null });
-  assert.deepEqual(planoDoColar({ semValor: false, soma: 100, aplicadoTexto: '', aplicadoAntes: 82094, lerValor: parseValor }), { aplicado: undefined, foto: null });
-  assert.equal(planoDoColar({ semValor: false, soma: 100, aplicadoTexto: '900,00', aplicadoAntes: 82094, lerValor: parseValor }).aplicado, 90000);
-  assert.match(planoDoColar({ semValor: false, soma: 100, aplicadoTexto: 'abc', aplicadoAntes: null, lerValor: parseValor }).erro, /não é um valor/);
+test('os depósitos de antes: digitados (o depositado) ou colados (o que vale hoje), e o que mais gravam', () => {
+  const comum = { hoje: '2026-11-06', lerValor: calcularValor };
+  // DIGITADOS: cada um com a própria data como referência; o aplicado é a soma; no sem valor, a foto de hoje
+  const d = planoDosDepositos({ ...comum, modo: 'depositado', semValor: true, linhas: [{ data: '2025-04-22', valor: '5.000,00' }, { data: '2025-09-10', valor: '=3000+200' }, { data: '', valor: '' }], estimativa: 894730 });
+  assert.deepEqual(d.itens, [{ data: '2025-04-22', valor_centavos: 500000, referencia: '2025-04-22' }, { data: '2025-09-10', valor_centavos: 320000, referencia: '2025-09-10' }]);
+  assert.equal(d.aplicado, 820000);
+  assert.deepEqual(d.foto, { data: '2026-11-06', valor: 894730 }); // sem o "vale hoje": a estimativa pelo CDI
+  assert.equal(planoDosDepositos({ ...comum, modo: 'depositado', semValor: true, linhas: [{ data: '2025-04-22', valor: '5.000,00' }], valeTexto: '5.400,00' }).foto.valor, 540000);
+  // o que já tem valor não ganha foto; o aplicado só muda se mudou
+  assert.equal(planoDosDepositos({ ...comum, modo: 'depositado', linhas: [{ data: '2025-04-22', valor: '5.000,00' }], aplicadoAntes: 500000 }).aplicado, undefined);
+  // COLADOS (o que vale hoje): a referência é a data dos valores; o aplicado é o do banco, obrigatório no sem valor
+  const h = planoDosDepositos({ ...comum, modo: 'hoje', referencia: '2026-11-05', semValor: true, linhas: [{ data: '2026-09-05', valor: '4.165,28' }], aplicadoTexto: '4.076,16' });
+  assert.deepEqual(h.itens, [{ data: '2026-09-05', valor_centavos: 416528, referencia: '2026-11-05' }]);
+  assert.deepEqual([h.aplicado, h.foto], [407616, { data: '2026-11-05', valor: 416528 }]);
+  assert.match(planoDosDepositos({ ...comum, modo: 'hoje', referencia: '2026-11-05', semValor: true, linhas: [{ data: '2026-09-05', valor: '1,00' }] }).erro, /valor aplicado/);
+  // os erros de cada linha
+  assert.match(planoDosDepositos({ ...comum, modo: 'depositado', linhas: [{ data: '2025-04-22', valor: '' }] }).erro, /Falta o valor do 1º/);
+  assert.match(planoDosDepositos({ ...comum, modo: 'depositado', linhas: [{ data: '', valor: '10' }] }).erro, /Falta a data do 1º/);
+  assert.match(planoDosDepositos({ ...comum, modo: 'depositado', linhas: [{ data: '2025-04-22', valor: 'abc' }] }).erro, /não é um valor/);
+  assert.match(planoDosDepositos({ ...comum, modo: 'hoje', referencia: '2026-08-01', linhas: [{ data: '2026-09-05', valor: '1,00' }], aplicadoTexto: '1,00' }).erro, /depois da data dos valores/);
 });
 
 test('os rótulos novos e os que pedem o valor do mês', () => {

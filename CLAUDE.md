@@ -333,9 +333,19 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     aplicação) o IR NÃO se estima — "— faltam as datas", nunca "R$ 0". Na carteira, a coluna "Líquido ≈" (o balão: IR,
     IOF, a próxima queda) e o título com mais de um depósito ABRE nos depósitos (a seta antes do nome; `abertosInv`,
     lembrado em `patrimonio_depositos_abertos`): a data e a idade, a alíquota de hoje e quando cai, o depositado ≈, o
-    líquido e o rendimento. "Colar os depósitos do banco…" (`ModalColarDepositos`: confere a soma com o valor de hoje;
-    salvar substitui a lista). O painel diz o líquido no cartão do Patrimônio. O CDI é lido desde o depósito mais
-    antigo (`useDadosPatrimonio`).
+    líquido e o rendimento. O painel diz o líquido no cartão do Patrimônio. O CDI é lido desde o depósito mais antigo
+    (`useDadosPatrimonio`).
+  · OS DEPÓSITOS SEMPRE DENTRO (06/11/2026, a pedido, e o mockup aprovado "Depósitos de antes", opções A): todo
+    investimento com dinheiro ABRE nos depósitos dele, mesmo com um só (`temDepositos`). A aplicação feita pelo app até a
+    primeira foto (o "Cadastrar e aplicar" grava a foto e a aplicação no mesmo dia) JÁ É o depósito, com a data — ela
+    ficava de fora e o título caía em "faltam as datas" (o bloco "sem data" agora só leva o que sobra sem elas). O DINHEIRO
+    DE ANTES DO APP é DIGITADO (`ModalDepositos`: a tabela data · valor · IR hoje, Enter desce, "Adicionar depósito", ✕);
+    "Colar do banco" é um ATALHO que preenche a mesma tabela (ao colar, ou "Preencher a tabela"). Em cima, o que os valores
+    são: "o que foi depositado" (a `referencia` de cada um é a própria data — o principal é o valor) ou "o que vale hoje"
+    (numa data, como a tela do banco; colar passa a ele). Embaixo, o valor aplicado (a soma, ou o do banco) e, no sem
+    valor, o "vale hoje" (vazio: a estimativa pelo CDI). A conta é `planoDosDepositos` (testada); salvar substitui a
+    lista (`salvarDepositos` aceita a referência de cada item). Abre pelo ícone das moedas no cabeçalho da ficha, pelo
+    "Informar os depósitos" e pelo "Já estava aplicado" do "Como o dinheiro entrou?".
   · A FICHA DO INVESTIMENTO (06/11/2026, as opções A do mockup "Ficha do investimento"; `FichaInvestimento`): os QUATRO
     NÚMEROS são cartões com HOVER — o cartão acende, a linha de baixo vira a CONTA ("= vale hoje − aplicado") e a COLUNA
     dele na lista acende (`gm-acesa`; o cabeçalho da coluna acende o cartão). A lista dos depósitos tem a ALTURA DA
@@ -619,6 +629,9 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
   `CampoMes` — os dois em `components/CampoData.jsx`, o calendário COPIADO do Gestor (`CalendarioData` +
   `calendario/CabecalhoCalendario.jsx`, sem os feriados) e o `CalendarioMes` no mesmo desenho. O calendário vai
   PORTADO ao body (lá era `absolute`). `min`/`max` hachuram o que não vale; `compacto` = altura de tabela.
+  O CampoData SE DIGITA (06/11/2026, a pedido): "11042027" (as barras entram sozinhas — `mascaraData`, lib/format.js),
+  "11/4/27" ou "11/04" (o ano de agora; a régua é a `lerData` da grade); clicar ou a seta abre o calendário; vale ao
+  completar, no Enter ou ao sair; o inválido volta ao de antes; apagar limpa.
 - **Barra de rolagem não empurra a tela** (29/10/2026): `scrollbar-gutter: stable` no `<html>` (index.css; o
   `travarRolagem` não compensa mais o padding) e na caixa que rola por dentro e muda de altura (a "Grupo × mês").
   Caixa nova que abre/recolhe linhas e rola por dentro: `[scrollbar-gutter:stable]`.
