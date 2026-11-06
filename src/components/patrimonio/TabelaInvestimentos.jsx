@@ -149,6 +149,9 @@ const Trilho = ({ ultimo }) => (
     <span aria-hidden="true" className="pointer-events-none absolute left-[40px] top-1/2 h-px w-[30px] bg-gray-300" />
   </>
 );
+const IconX = () => (
+  <svg viewBox="0 0 24 24" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+);
 const Kbd = ({ children }) => (
   <kbd className="rounded-[4px] border border-b-2 border-gray-300 bg-white px-1 font-mono text-[10.5px] leading-[16px] text-gray-600">{children}</kbd>
 );
@@ -216,6 +219,16 @@ function TabelaCarteira({
   const focar = () => caixaRef.current?.focus({ preventScroll: true });
   const celulaEl = (id, col) => caixaRef.current?.querySelector(`[data-cel="${chave(id, col)}"]`);
   const rascunhoDe = (l) => ({ data: hoje, valor: '', ...(rascunhos[l.x.inv.id] ?? {}) });
+  // O RASCUNHO VAZIO NÃO FICA (06/11/2026, a pedido: o clique sem querer na linha deixava a data e o campo presos): sem
+  // valor e com a data de hoje, ele não se guarda — sair da linha a devolve ao "Novo aporte". Esc, Delete e o ✕ desistem.
+  const vazioRasc = (r) => !r || (!String(r.valor ?? '').trim() && (!r.data || r.data === hoje));
+  const guardarRasc = (invId, r) => setRascunhos((s) => { const n = { ...s }; if (vazioRasc(r)) delete n[invId]; else n[invId] = r; return n; });
+  const desistir = (l) => {
+    setRascunhos((s) => { const n = { ...s }; delete n[l.x.inv.id]; return n; });
+    if (editorRef.current?.id === l.id) setEditor(null);
+    setAtiva(null);
+    focar();
+  };
   const comOtimista = (k, txt) => setOtimista((o) => ({ ...o, [k]: txt }));
   const semOtimista = (k) => setOtimista((o) => { const n = { ...o }; delete n[k]; return n; });
 
@@ -263,14 +276,14 @@ function TabelaCarteira({
         if (!r.ok) { toast.error(r.erro); focar(); return; }
         rasc.data = r.valor;
       }
-      setRascunhos((s) => ({ ...s, [invId]: rasc }));
+      guardarRasc(invId, rasc);
       if (como === 'enter' || como === 'tab') { setAtiva({ id: l.id, col: 'aplicado' }); setEditor({ id: l.id, col: 'aplicado', modo: 'valor', texto: rasc.valor, digitado: true }); return; }
       andar(como, { id: l.id, col });
       if (como !== 'blur') focar();
       return;
     }
     rasc.valor = texto;
-    setRascunhos((s) => ({ ...s, [invId]: rasc }));
+    guardarRasc(invId, rasc);
     if (como === 'tabAntes') { setAtiva({ id: l.id, col: 'nome' }); setEditor({ id: l.id, col: 'nome', modo: 'data', texto: textoDaCelula(l, 'nome', rasc), digitado: false }); return; }
     if (como !== 'enter') { andar(como, { id: l.id, col }); if (como !== 'blur') focar(); return; }
     focar();
@@ -290,6 +303,7 @@ function TabelaCarteira({
     if (!ed) return;
     setEditor(null);
     const l = porId.get(ed.id);
+    if (como === 'esc' && l?.tipo === 'novoAporte') { desistir(l); return; } // Esc na linha "+ aporte": desiste dele
     if (como === 'esc' || !l) { focar(); return; }
     if (l.tipo === 'novoAporte') { fimRascunho(l, ed.col, como, texto); return; }
     if (l.tipo === 'novaInst') {
@@ -337,12 +351,12 @@ function TabelaCarteira({
     const l = porId.get(ativa.id);
     if (setas[e.key]) { e.preventDefault(); setAtiva(moverAtiva(visiveis, ativa, ...setas[e.key])); return; }
     if (e.key === 'Tab') { e.preventDefault(); setAtiva(proximaEditavel(visiveis, ativa, e.shiftKey ? -1 : 1)); return; }
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAtiva(null); return; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (l?.tipo === 'novoAporte') desistir(l); else setAtiva(null); return; }
     if (!l) return;
     if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); iniciar(l, ativa.col); return; }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (l.tipo === 'lote' && l.lo.fonte && l.lo.fonte.tipo !== 'inicial') { e.preventDefault(); excluir(l); }
-      else if (l.tipo === 'novoAporte') { e.preventDefault(); setRascunhos((s) => { const n = { ...s }; delete n[l.x.inv.id]; return n; }); }
+      else if (l.tipo === 'novoAporte') { e.preventDefault(); desistir(l); }
       return;
     }
     if (e.key.length === 1 && !ctrl && !e.altKey && modoDaCelula(l, ativa.col)) { e.preventDefault(); iniciar(l, ativa.col, e.key); }
@@ -520,7 +534,7 @@ function TabelaCarteira({
     );
     if (l.tipo === 'novoAporte') {
       const r = rascunhoDe(l);
-      const comRascunho = ativoAqui || rascunhos[l.x.inv.id];
+      const comRascunho = ativoAqui || !vazioRasc(rascunhos[l.x.inv.id]);
       return (
         <tr key={l.id} {...attrs} className="group/add">
           {cel(l, 'nome', `${base} pr-3`, (
@@ -534,12 +548,21 @@ function TabelaCarteira({
               ) : rotulo('Novo aporte', RECUO_APORTE - 4)}
             </>
           ), { style: { paddingLeft: 0 } })}
-          {cel(l, 'resgate', `${base} px-3 ${movel ? 'hidden' : ''}`, comRascunho ? <span className="text-[11.5px] text-gray-400">a data e o valor · <Kbd>Enter</Kbd> grava</span> : null)}
+          {cel(l, 'resgate', `${base} px-3 ${movel ? 'hidden' : ''}`, comRascunho ? <span className="text-[11.5px] text-gray-400">a data e o valor · <Kbd>Enter</Kbd> grava · <Kbd>Esc</Kbd> desiste</span> : null)}
           {cel(l, 'aplicado', `${base} px-3 text-right tabular-nums ${movel ? 'hidden' : ''}`, comRascunho ? (
             r.valor ? <span className="text-gray-800">{r.valor}</span> : <span className="text-gray-400">valor</span>
           ) : null)}
           {vazioTds(l, ['vale', 'liquido', 'rendeu', 'ano', 'curva'], base)}
-          {acoesTd(base)}
+          {/* o ✕ no fim da linha, À VISTA enquanto o rascunho aparece (as ações das outras linhas são de hover) */}
+          {!movel && (
+            <td className={`${base} px-2`}>
+              {comRascunho && (
+                <span className="flex justify-end">
+                  <BotaoLinha titulo="Desistir deste aporte (Esc)" onClick={() => desistir(l)}><IconX /></BotaoLinha>
+                </span>
+              )}
+            </td>
+          )}
         </tr>
       );
     }

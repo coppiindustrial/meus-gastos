@@ -315,7 +315,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     campos do cadastro: `linhaDoInvestimento`/`diferencaInvestimento`), o RESGATE (o pop-up da liquidez e do prazo) e o
     "VALE HOJE" (a foto de hoje; fora do normal para o tipo pergunta "Foi um aporte?" e o lança junto); no aporte a DATA
     e o VALOR. As calculadas só se selecionam (contorno cinza). As linhas de ACRESCENTAR: "+ aporte" no fim dos aportes
-    de cada investimento (um RASCUNHO até ter data — hoje, se não mudar — e valor; o clique já vai ao valor; sem valor
+    de cada investimento (um RASCUNHO até ter data — hoje, se não mudar — e valor; o clique já vai ao valor; o rascunho
+    VAZIO não se guarda — sair da linha a devolve ao "Novo aporte" — e Esc, Delete e o ✕ à vista no fim dela desistem; sem valor
     ainda, o aporte é também o primeiro valor; com valores registrados depois da data, pergunta se eles já o têm e
     "Somar" os cresce pela taxa — `valoresComOMovimento`), "+ investimento" no fim de cada instituição (o pop-up inteiro;
     criado, ele abre na linha "+ aporte") e "+ instituição" no fim. O que cada edição de aporte grava é pela ORIGEM dele
