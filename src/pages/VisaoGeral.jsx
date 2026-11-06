@@ -1,10 +1,10 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GridPersonalizavel from '../components/dashboard/GridPersonalizavel.jsx';
 import CardAutoAltura from '../components/dashboard/CardAutoAltura.jsx';
 import AvisoAgora from '../components/dashboard/AvisoAgora.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
-import SegmentoFiltro, { OpcaoMenu } from '../components/filtros/SegmentoFiltro.jsx';
+import SegPeriodoFiltro from '../components/filtros/SegPeriodoFiltro.jsx';
 import { SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import { CartaoKpi, CORES_KPI, variacaoSaldo } from '../components/graficos/CartoesResumo.jsx';
 import { COR_ENTRADAS, COR_GASTOS } from '../components/graficos/Graficos.jsx';
@@ -24,7 +24,7 @@ import { lancarFixo, listarLancamentosDeFixos, listarPulados, listarRecorrencias
 import { comprometidoPorMes } from '../lib/resumo.js';
 import { matrizDoAno, pendentesPorMes } from '../lib/fixos.js';
 import {
-  anoAnterior, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaPorMes, periodo, resumoPeriodo, variacao,
+  anoAnterior, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaPorMes, resumoPeriodo, variacao,
 } from '../lib/visaoGeral.js';
 import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
@@ -35,6 +35,7 @@ import { useNoCelular } from '../lib/celular.js';
 import FiltrosMovel from '../components/movel/FiltrosMovel.jsx';
 import { IconOlho } from '../components/icons.jsx';
 import { varCor } from '../lib/varCor.js';
+import { compsDoPeriodo, ehPadrao, mesesDoPeriodo, periodoDeAnosMeses, periodoPadrao, textoDoPeriodo } from '../lib/periodoFiltro.js';
 
 // A VISÃO GERAL (tela inicial) — o Dashboard da planilha refeito no estilo do Gestor: não é a foto de
 // um mês, é o retrato do período que os filtros escolhem. ANO e MESES funcionam como as segmentações
@@ -46,104 +47,15 @@ import { varCor } from '../lib/varCor.js';
 // até o mês atual, sem os "não teve") e o que já está comprometido em parcelas — sempre do mês ATUAL, sem
 // depender dos filtros.
 
-const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-const MESES_LONGOS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const ORIGENS = [['cartao', 'Cartão (faturas)'], ['fixo', 'Gastos fixos'], ['manual', 'Avulsos']];
 const OPCOES_TIPO = [{ value: '', label: 'Todos' }, { value: 'saida', label: 'Gastos' }, { value: 'entrada', label: 'Entradas' }];
 const OPCOES_ORIGEM = [...ORIGENS, ['entrada', 'Entradas']].map(([value, label]) => ({ value, label }));
 const OPCOES_COMPARAR = [{ value: 'anterior', label: 'Ano anterior', chip: 'Comparar: ano anterior' }, { value: 'nada', label: 'Sem comparação', chip: 'Sem comparação' }];
 const LS_COMPARAR = 'visao_comparar';
 const LS_OCULTAR = 'visao_ocultar';
-const ATALHOS = [['O ano todo', []], ['1º tri', [1, 2, 3]], ['2º tri', [4, 5, 6]], ['3º tri', [7, 8, 9]], ['4º tri', [10, 11, 12]]];
 
-// "jan a out de 2026", "jul, set e nov de 2026", "2025 e 2026".
-function textoPeriodo(anos, meses) {
-  const a = [...anos].sort();
-  const anosTxt = a.length > 1 ? `${a.slice(0, -1).join(', ')} e ${a[a.length - 1]}` : String(a[0]);
-  if (!meses.length) return anosTxt;
-  const m = [...meses].sort((x, y) => x - y);
-  const seguidos = m.every((v, i) => i === 0 || v === m[i - 1] + 1);
-  const nome = (v) => MESES_CURTOS[v - 1].toLowerCase();
-  if (m.length === 1) return `${MESES_LONGOS[m[0] - 1]} de ${anosTxt}`;
-  if (seguidos) return `${nome(m[0])} a ${nome(m[m.length - 1])} de ${anosTxt}`;
-  return `${m.slice(0, -1).map(nome).join(', ')} e ${nome(m[m.length - 1])} de ${anosTxt}`;
-}
-
-// ------------------------------------------------------------ os segmentos de período
-
-// ANO: vários, como a segmentação da planilha. No ano atual o segmento fica quieto (diz o ano).
-function SegAnos({ anos, opcoes, onChange }) {
-  const atual = Number(competenciaAtual().slice(0, 4));
-  const padrao = anos.length === 1 && anos[0] === atual;
-  const texto = [...anos].sort().join(', ');
-  return (
-    <SegmentoFiltro id="ano" rotulo="Ano" valor={padrao ? '' : `Ano: ${texto}`} textoQuieto={padrao ? `Ano: ${texto}` : undefined}
-      largura={170} onLimpar={padrao ? undefined : () => onChange([atual])}>
-      <div className="max-h-[300px] overflow-y-auto scrollbar-thin">
-        {opcoes.map((a) => (
-          <OpcaoMenu key={a} multi selecionada={anos.includes(a)}
-            onClick={() => { const n = anos.includes(a) ? anos.filter((x) => x !== a) : [...anos, a]; if (n.length) onChange(n); }}>
-            {String(a)}
-          </OpcaoMenu>
-        ))}
-      </div>
-      <p className="mx-[9px] mb-1 mt-1.5 text-[10.5px] leading-[14px] text-gray-400">Marque mais de um ano para somar os dois.</p>
-    </SegmentoFiltro>
-  );
-}
-
-// MESES: a grade de 12 botões da segmentação MÊS da planilha. Clique liga/desliga um mês, Shift+clique
-// marca o intervalo desde o último clicado; nenhum marcado = o ano todo.
-function MenuMeses({ meses, onChange, ultimo }) {
-  const alternar = (m, e) => {
-    if (e.shiftKey && ultimo.current) {
-      const [a, b] = [Math.min(ultimo.current, m), Math.max(ultimo.current, m)];
-      onChange([...new Set([...meses, ...Array.from({ length: b - a + 1 }, (_, i) => a + i)])]);
-    } else onChange(meses.includes(m) ? meses.filter((x) => x !== m) : [...meses, m]);
-    ultimo.current = m;
-  };
-  const igual = (lista) => lista.length === meses.length && lista.every((x) => meses.includes(x));
-  return (
-    <div className="p-1">
-      <div className="mb-2 flex items-center justify-between text-[12px]">
-        <span className="font-semibold text-gray-800">Meses</span>
-        <span className="text-[11px] text-gray-400">Shift+clique: um intervalo</span>
-      </div>
-      <div className="grid grid-cols-4 gap-1">
-        {MESES_CURTOS.map((nome, i) => {
-          const sel = meses.includes(i + 1);
-          return (
-            <button key={nome} type="button" onClick={(e) => alternar(i + 1, e)} aria-pressed={sel}
-              className={`rounded-[3px] border py-[7px] text-[12px] transition-colors ${sel ? 'border-gray-800 bg-gray-800 font-semibold text-white'
-                : 'border-gray-200 text-gray-700 hover:bg-gray-100'}`}>
-              {nome}
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1">
-        {ATALHOS.map(([rotulo, lista]) => (
-          <button key={rotulo} type="button" onClick={() => onChange(lista)}
-            className={`rounded-[3px] px-2 py-1 text-[11.5px] transition-colors ${igual(lista) ? 'bg-chip-ativo font-semibold text-chip-ativo' : 'bg-hx-f4f5f7 text-gray-600 hover:bg-gray-200'}`}>
-            {rotulo}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SegMeses({ meses, onChange }) {
-  const ultimo = useRef(null);
-  const valor = !meses.length ? '' : meses.length === 1 ? MESES_LONGOS[meses[0] - 1].replace(/^./, (c) => c.toUpperCase())
-    : textoPeriodo([0], meses).replace(/ de 0$/, '').replace(/^./, (c) => c.toUpperCase());
-  return (
-    <SegmentoFiltro id="meses" rotulo="Meses" valor={valor} textoQuieto="Meses: o ano todo" largura={260} alturaMenu={230}
-      onLimpar={() => onChange([])}>
-      <MenuMeses meses={meses} onChange={onChange} ultimo={ultimo} />
-    </SegmentoFiltro>
-  );
-}
+// O PERÍODO (06/11/2026, opção B do mockup "O filtro de período"): o segmento `SegPeriodoFiltro` (components/filtros) no
+// lugar do Ano + Meses de antes — mês, trimestre, semestre, acumulado, ano e 12 meses; as contas em lib/periodoFiltro.js.
 
 // ------------------------------------------------------------ peças da tela
 
@@ -207,8 +119,9 @@ export default function VisaoGeral() {
   const [cartoes, setCartoes] = useState([]); // os nomes da fatia de cada cartão no "Gastos por origem"
   const [pendencias, setPendencias] = useState(0);
   const [fixos, setFixos] = useState({ recs: [], lancs: [], pulados: [] });
-  const [anos, setAnos] = useState([anoAtual]);
-  const [meses, setMeses] = useState([]);
+  const [per, setPer] = useState(() => periodoPadrao(competenciaAtual()));
+  const anos = per.anos;
+  const meses = useMemo(() => mesesDoPeriodo(per) ?? [], [per]);
   const [tipo, setTipo] = useState('');
   const [origens, setOrigens] = useState([]);
   const [cats, setCats] = useState([]);
@@ -247,7 +160,8 @@ export default function VisaoGeral() {
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
 
-  const comps = useMemo(() => periodo(anos, meses), [anos, meses]);
+  const comps = useMemo(() => compsDoPeriodo(per), [per]);
+  const compsComDado = useMemo(() => new Set((linhas ?? []).map((l) => l.competencia)), [linhas]);
   const filtradas = useMemo(() => filtrar(linhas ?? [], { tipo, origens, cats }), [linhas, tipo, origens, cats]);
   const r = useMemo(() => resumoPeriodo(filtradas, comps), [filtradas, comps]);
   const compsAnt = useMemo(() => anoAnterior(comps), [comps]);
@@ -302,12 +216,12 @@ export default function VisaoGeral() {
     return mediaPorMes(resumoPeriodo(linhas ?? [], doze).porMes, 'gastos').media;
   }, [linhas, hoje]);
 
-  const filtrando = Boolean(!(anos.length === 1 && anos[0] === anoAtual) || meses.length || tipo || origens.length || cats.length);
-  const limpar = () => { setAnos([anoAtual]); setMeses([]); setTipo(''); setOrigens([]); setCats([]); };
+  const filtrando = Boolean(!ehPadrao(per, competenciaAtual()) || tipo || origens.length || cats.length);
+  const limpar = () => { setPer(periodoPadrao(competenciaAtual())); setTipo(''); setOrigens([]); setCats([]); };
   const abrirMes = (comp) => { lsSet('lancamentos_mes', comp); navigate('/lancamentos'); };
   const alternarOrigem = (k) => setOrigens((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
 
-  const textoPer = textoPeriodo(anos, meses);
+  const textoPer = textoDoPeriodo(per);
   // "UM ANO ANTES" SÓ COM DADO (05/11/2026): sem o ano anterior no app, a série era uma linha colada no zero e a legenda
   // a mostrava à toa.
   const anterior = rAnt && rAnt.porMes.some((m) => m.gastos > 0) ? Object.fromEntries(comps.map((c, i) => [c, rAnt.porMes[i].gastos])) : null;
@@ -536,9 +450,7 @@ export default function VisaoGeral() {
     <FaixaProvider>
       <div className="flex flex-wrap items-center gap-2">
         <Trilho>
-          <SegAnos anos={anos} opcoes={opcoesAnos} onChange={setAnos} />
-          <DivisorFaixa />
-          <SegMeses meses={meses} onChange={setMeses} />
+          <SegPeriodoFiltro per={per} onChange={setPer} hoje={competenciaAtual()} anos={opcoesAnos} comDado={compsComDado} />
           <DivisorFaixa />
           <SegUnico id="tipo" rotulo="Tipo" opcoes={OPCOES_TIPO} value={tipo} onChange={setTipo} padrao="" largura={160} />
           <DivisorFaixa />
@@ -567,7 +479,7 @@ export default function VisaoGeral() {
             <button type="button" onClick={() => setFiltrosMovel(true)}
               className="toque flex h-[36px] min-w-0 items-center gap-2 rounded-[10px] border border-gray-300 bg-white px-3 text-[13.5px] font-semibold text-gray-800">
               <svg viewBox="0 0 24 24" className="h-[15px] w-[15px] shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
-              <span className="truncate">{meses.length ? textoPer : `${textoPer} · ano todo`}</span>
+              <span className="truncate">{per.modo === 'ano' ? `${textoPer} · ano todo` : textoPer}</span>
               {extras > 0 && <span className="shrink-0 rounded-full bg-gray-800 px-1.5 text-[11px] leading-[18px] text-white inverte-no-escuro">+{extras}</span>}
             </button>
             <span className="flex-1" />
@@ -591,7 +503,7 @@ export default function VisaoGeral() {
         </div>
         <FiltrosMovel aberto={filtrosMovel} onFechar={() => setFiltrosMovel(false)}
           valor={{ anos, meses, tipo, origens, cats }} vazio={{ anos: [anoAtual], meses: [], tipo: '', origens: [], cats: [] }}
-          onAplicar={(v) => { setAnos(v.anos); setMeses(v.meses); setTipo(v.tipo); setOrigens(v.origens); setCats(v.cats); }}
+          onAplicar={(v) => { setPer(periodoDeAnosMeses(per, v.anos, v.meses)); setTipo(v.tipo); setOrigens(v.origens); setCats(v.cats); }}
           mais={2} campos={[
             { tipo: 'pilulas', campo: 'anos', rotulo: 'Ano', multi: true, minimo: 1, opcoes: opcoesAnos.map((a) => ({ value: a, label: String(a) })) },
             { tipo: 'meses', campo: 'meses', rotulo: 'Meses' },

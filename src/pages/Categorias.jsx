@@ -9,7 +9,9 @@ import Tooltip from '../components/Tooltip.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { Bolinha, BotaoAcao, BotaoEditar, BotaoExcluir, Campo, Etiqueta, RodapeForm } from '../components/Comuns.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
-import { BuscaFaixa, SegMes, SegUnico } from '../components/filtros/Segmentos.jsx';
+import { BuscaFaixa, SegUnico } from '../components/filtros/Segmentos.jsx';
+import SegPeriodoFiltro from '../components/filtros/SegPeriodoFiltro.jsx';
+import { compsDoPeriodo, ehPadrao, periodoPadrao, textoDoPeriodo } from '../lib/periodoFiltro.js';
 import { IconExpandirTudo, IconLapis, IconMais, IconSeta } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
@@ -150,7 +152,9 @@ export default function Categorias() {
   const [busca, setBusca] = useState('');
   const [tipo, setTipo] = useState('');
   const [situacao, setSituacao] = useState('');
-  const [comp, setComp] = useState(competenciaAtual);
+  // O PERÍODO (06/11/2026, o filtro novo, opção B): abre no ANO TODO, como a Visão geral; antes era o mês de hoje.
+  const [per, setPer] = useState(() => periodoPadrao(competenciaAtual()));
+  const comps = useMemo(() => compsDoPeriodo(per), [per]);
   const [recolhidos, setRecolhidosEstado] = useState(lerRecolhidos);
   const setRecolhidos = (s) => { setRecolhidosEstado(s); lsSet(LS_RECOLHIDOS, JSON.stringify([...s])); };
 
@@ -169,7 +173,7 @@ export default function Categorias() {
   const carregarResumo = useCallback(() => listarResumoMensal().then(setResumo).catch((err) => toast.error(err.message)), [toast]);
   useEffect(() => { carregarResumo(); }, [carregarResumo]);
 
-  const { uso } = useMemo(() => usoPorCategoria(resumo, comp, 12, competenciaAtual()), [resumo, comp]);
+  const { uso } = useMemo(() => usoPorCategoria(resumo, comps, 12, competenciaAtual()), [resumo, comps]);
 
   // Os grupos com as categorias que passam nos filtros. Buscando, o grupo cujo NOME casa vem inteiro.
   const blocos = useMemo(() => {
@@ -189,8 +193,8 @@ export default function Categorias() {
   }, [grupos, categorias, uso, busca, tipo, situacao]);
 
   const maximo = useMemo(() => Math.max(1, ...categorias.map((c) => uso.get(c.id)?.noMes ?? 0)), [categorias, uso]);
-  const filtrando = Boolean(busca || tipo || situacao || comp !== competenciaAtual());
-  const limpar = () => { setBusca(''); setTipo(''); setSituacao(''); setComp(competenciaAtual()); };
+  const filtrando = Boolean(busca || tipo || situacao || !ehPadrao(per, competenciaAtual()));
+  const limpar = () => { setBusca(''); setTipo(''); setSituacao(''); setPer(periodoPadrao(competenciaAtual())); };
   // Buscando, tudo aparece aberto (o que casou não pode ficar escondido num grupo recolhido).
   const aberto = (g) => !!busca.trim() || !recolhidos.has(g.id);
   const tudoAberto = blocos.every((b) => !recolhidos.has(b.grupo.id));
@@ -240,7 +244,9 @@ export default function Categorias() {
   };
 
   const vazio = grupos && grupos.length === 0;
-  const mesCurto = competenciaCurta(comp);
+  const textoPer = textoDoPeriodo(per);
+  const comDado = useMemo(() => new Set(resumo.map((l) => l.competencia)), [resumo]);
+  const opcoesAnos = useMemo(() => [...new Set([...resumo.map((l) => Number(l.competencia.slice(0, 4))), Number(competenciaAtual().slice(0, 4))])].sort((a, b) => b - a), [resumo]);
 
   // O CADASTRO EM POP-UP (✎): os lançamentos de cada categoria em TODO o histórico (da `resumo_mensal`) e as
   // regras de cada uma (lidas ao abrir).
@@ -265,7 +271,7 @@ export default function Categorias() {
     const r = el.getBoundingClientRect();
     setMais({ x: r.right - 250, y: r.bottom + 4, titulo: 'Mais ações', itens: [
       { rotulo: 'Novo grupo', sub: 'nome, tipo e cor', onEscolher: () => setModal({ tipo: 'grupo' }) },
-      { rotulo: 'Exportar categorias (CSV)', sub: `grupo, categoria e o uso até ${mesCurto}`, onEscolher: exportar },
+      { rotulo: 'Exportar categorias (CSV)', sub: `grupo, categoria e o uso em ${textoPer}`, onEscolher: exportar },
     ] });
   };
   const exportar = () => exportCsv('categorias', categorias, [
@@ -273,7 +279,8 @@ export default function Categorias() {
     { key: 'tipo', label: 'Tipo', map: (c) => (c.grupo?.tipo === 'entrada' ? 'Entrada' : 'Gasto') },
     { key: 'nome', label: 'Categoria' },
     { key: 'ativa', label: 'Ativa', map: (c) => (c.ativa ? 'sim' : 'não') },
-    { key: 'qtd', label: 'Lançamentos (12 meses)', map: (c) => uso.get(c.id)?.qtd ?? 0 },
+    { key: 'total', label: `Total (${textoPer})`, tipo: 'dinheiro', map: (c) => (uso.get(c.id)?.noMes ?? 0) / 100 },
+    { key: 'qtd', label: `Lançamentos (${textoPer})`, map: (c) => uso.get(c.id)?.qtd ?? 0 },
     { key: 'media', label: 'Média por mês', tipo: 'dinheiro', map: (c) => (uso.get(c.id)?.media ?? 0) / 100 },
     { key: 'ultimo', label: 'Último uso', map: (c) => uso.get(c.id)?.ultimo ?? '' },
   ]);
@@ -320,7 +327,7 @@ export default function Categorias() {
                 <DivisorFaixa />
                 <SegUnico id="situacao" rotulo="Situação" opcoes={OPCOES_SITUACAO} value={situacao} onChange={setSituacao} padrao="" largura={180} />
                 <DivisorFaixa />
-                <SegMes value={comp} onChange={setComp} />
+                <SegPeriodoFiltro per={per} onChange={setPer} hoje={competenciaAtual()} anos={opcoesAnos} comDado={comDado} />
               </Trilho>
               <LimparFiltros ativo={filtrando} onClick={limpar} />
               <span className="flex-1" />
@@ -341,7 +348,7 @@ export default function Categorias() {
                 <tr className="bg-hx-f9fafb">
                   <th className="table-th border-b border-gray-200">Categoria</th>
                   <th className="table-th border-b border-gray-200 text-right">Lançamentos</th>
-                  <th className="table-th border-b border-gray-200 text-right">Total em {mesCurto}</th>
+                  <th className="table-th border-b border-gray-200 text-right">Total · {textoPer}</th>
                   <th className="table-th border-b border-gray-200 text-right">Média / mês<span className="inline-block w-4" aria-hidden="true" /></th>
                   <th className="table-th border-b border-gray-200 text-right">Último uso</th>
                   <th className="table-th border-b border-gray-200" aria-label="Ações" />
@@ -427,7 +434,7 @@ export default function Categorias() {
             </table>
           </div>
           <p className="mt-2 text-right text-xs text-gray-500">
-            Lançamentos e média contam os 12 meses até {mesCurto} (a média, só os meses que têm algum lançamento, sem o mês atual, que está em andamento).
+            Total, lançamentos e média contam {textoPer} (a média, só os meses que têm algum lançamento, sem o mês atual, que está em andamento).
           </p>
         </>
       )}

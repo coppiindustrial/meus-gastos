@@ -11,8 +11,11 @@ import { mediaDaCategoria } from './visaoGeral.js';
 // histórico, não mês sem gasto), sem o mês EM ANDAMENTO (`emAndamento`, o atual) quando há outros —
 // a regra de `mediaPorMes` em lib/visaoGeral.js. A categoria de GASTO FIXO só divide a partir do 1º mês em que
 // aparece (`mediaDaCategoria`, 02/11/2026): o condomínio de quem se mudou em maio não divide desde janeiro.
+// O PERÍODO (06/11/2026, o filtro novo das Categorias): `comp` pode ser a LISTA das competências do período — aí
+// `noMes` é o total no período inteiro e a janela da média e dos lançamentos é o próprio período.
 export function usoPorCategoria(linhas, comp, n = 12, emAndamento) {
-  const janela = new Set(mesesAte(comp, n));
+  const noPeriodo = Array.isArray(comp) ? new Set(comp) : null;
+  const janela = noPeriodo ?? new Set(mesesAte(comp, n));
   let comDado = new Set(linhas.filter((l) => janela.has(l.competencia)).map((l) => l.competencia));
   if (comDado.size > 1 && comDado.has(emAndamento)) comDado = new Set([...comDado].filter((x) => x !== emAndamento));
   const uso = new Map();
@@ -20,7 +23,7 @@ export function usoPorCategoria(linhas, comp, n = 12, emAndamento) {
     if (!l.categoria_id) return;
     const u = uso.get(l.categoria_id) ?? { noMes: 0, qtd: 0, soma: 0, media: 0, ultimo: null, somaMedia: 0, fixo: 0, meses: {} };
     const v = Number(l.total_centavos);
-    if (l.competencia === comp) u.noMes += v;
+    if (noPeriodo ? noPeriodo.has(l.competencia) : l.competencia === comp) u.noMes += v;
     if (janela.has(l.competencia)) { u.qtd += Number(l.qtd); u.soma += v; }
     if (comDado.has(l.competencia)) {
       u.somaMedia += v;
