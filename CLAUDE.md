@@ -416,10 +416,19 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     fundo, debênture, poupança, saldo) andar DIA ÚTIL A DIA ÚTIL desde a última FOTO REAL: (valor + o que entrou − o que
     saiu) × (1 + CDI do dia × %) — a mudança do CDI vale dali em diante sobre o que já rendeu. `estimarValores` faz FOTOS
     ESTIMADAS (`estimado: true`): no fim de cada mês entre duas reais (o caminho AJUSTADO à real seguinte) e depois da última
-    (fins de mês + o dia seguinte ao último publicado, `ultimo`), que entram nas séries (`useDadosPatrimonio`:
-    `valoresSerie`) — o mês a mês, o painel e o líquido seguem sem a foto de todo mês. A DATA DA FOTO é o dia em que o banco
-    mostrou o valor (já tem os dias úteis antes dela). Na carteira, "≈ pelo CDI até 05/11" embaixo do valor e o balão com a
-    conta; na ficha, o "Vale hoje". CONFERIR (`pendentesDeValor`, pela última foto REAL): os que andam sozinhos a cada 3
+    (fins de mês + HOJE, `ultimo`), que entram nas séries (`useDadosPatrimonio`:
+    `valoresSerie`) — o mês a mês, o painel e o líquido seguem sem a foto de todo mês. O DIA INTEIRO (06/11/2026, conferido
+    com o banco: o aporte de sábado 12/09 no RDB a 102,5% do CDI tinha R$ 360,18 de rendimento às 19h16 de sexta, 06/11, e o
+    app dava R$ 350 — um dia a menos): o valor de uma data JÁ TEM o rendimento dela, como o banco mostra — a foto de uma
+    data tem o rendimento até ela (inclusive), o aporte rende desde o próprio dia e o de HOJE já entra, com a taxa do último
+    dia publicado (o Banco Central publica um dia depois; `projetados`, os dias de semana depois dele — `comProjetados` no
+    `caminhar`; `fatorAteOFim` no IR de cada aporte e no "Somar aos valores"). Depois disso: R$ 360,02 contra R$ 360,18. Na
+    carteira, "≈ pelo CDI até hoje" embaixo do valor e o balão com a conta (e de que dia é a taxa de hoje); na ficha, o
+    "Vale hoje". SEM O BANCO CENTRAL (a API respondeu 502 por horas no mesmo dia): as taxas que já vieram ficam; sem
+    nenhuma, a faixa âmbar `AvisoSemTaxas` (Investimentos e Patrimônio) explica que o valor para na última foto e tem o
+    "Tentar agora"; o app tenta sozinho a cada minuto (`semTaxas`, `tentarTaxas` do `useDadosPatrimonio`). O VENCIMENTO À
+    VISTA (a pedido): o aporte mostra "vence dd/mm/aa" — o do prazo por aplicação ou o do investimento —, e o investimento
+    perto de vencer, "em 10 meses · 02/09/27" (longe, "vence dd/mm/aaaa"). CONFERIR (`pendentesDeValor`, pela última foto REAL): os que andam sozinhos a cada 3
     meses, os de preço de mercado todo mês; no "Atualizar valores" o campo vazio mostra a estimativa e o Enter a usa.
     O IR de cada depósito também passou ao CDI de cada dia (`fatorDiario`; o do mês fica de reserva): o RDB real deu IR ≈
     R$ 1.149,38 contra os R$ 1.149,32 do banco (antes, R$ 1.150,38).

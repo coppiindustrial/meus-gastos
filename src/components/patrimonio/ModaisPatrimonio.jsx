@@ -16,7 +16,7 @@ import { aliquotaIR, diasEntre as diasEntreIR, ehIsento, lerDepositos, planoDosD
 import {
   TIPOS_INVESTIMENTO, nomeTipoInvestimento, padraoDoTipo, pendentesDeValor, rendimentoForaDoNormal, rotuloLiquidez, rotuloPrazo, rotuloRende,
 } from '../../lib/investimentos.js';
-import { andaSozinho, fatorDiario, movimentosForaDosValores, rotuloPeloIndice, valoresComOMovimento } from '../../lib/valorEstimado.js';
+import { andaSozinho, fatorAteOFim, movimentosForaDosValores, rotuloPeloIndice, valoresComOMovimento } from '../../lib/valorEstimado.js';
 import { calcularValor, formatBRL, parseValor } from '../../lib/dinheiro.js';
 import { addMeses, formatDate, nomeCompetencia, todayISO } from '../../lib/format.js';
 
@@ -345,7 +345,7 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
     { k: 'depositado', rotulo: 'Aplicado', valor: formatBRL(x.aplicado), cor: 'text-gray-800',
       sub: 'o que foi depositado', conta: lotes.length ? `= o depositado ≈ dos ${lotes.length}` : '= o cadastro + aplicações − resgates' },
     { k: 'vale', rotulo: 'Vale hoje', valor: x.semValor ? '—' : formatBRL(x.vale), cor: 'text-gray-900',
-      sub: x.estimado ? `≈ ${rotuloPeloIndice(inv)} até ${formatDate(x.estimado.ate).slice(0, 5)} · foto real de ${formatDate(x.estimado.base.data).slice(0, 5)}` : x.data ? `bruto · foto de ${formatDate(x.data)}` : 'sem valor ainda',
+      sub: x.estimado ? `≈ ${rotuloPeloIndice(inv)} até hoje · foto real de ${formatDate(x.estimado.base.data).slice(0, 5)}` : x.data ? `bruto · foto de ${formatDate(x.data)}` : 'sem valor ainda',
       conta: x.estimado ? `= a foto real + o que rendeu ${rotuloPeloIndice(inv)} de cada dia` : lotes.length ? `= a soma dos ${lotes.length} aportes` : 'o último valor registrado' },
     { k: 'ganho', rotulo: 'Rendeu', valor: formatBRL(x.rendeu), cor: x.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700',
       sub: x.pct !== null ? `${(x.pct * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% sobre o aplicado` : '', conta: '= vale hoje − aplicado' },
@@ -649,7 +649,7 @@ export function ModalDepositos({ inv, semValor = false, vale, dataVale, deposito
     let s = 0;
     for (const l of lidas) {
       if (!(l.data && l.v > 0)) continue;
-      const f = fatorDiario(inv, l.data, hoje, taxas);
+      const f = fatorAteOFim(inv, l.data, hoje, taxas); // com o rendimento de hoje, como o banco
       if (f === null) return null;
       s += l.v * f;
     }

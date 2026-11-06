@@ -101,16 +101,17 @@ function Resgate({ x }) {
   );
 }
 
-// O vencimento: perto (até 12 meses) ou vencido em âmbar; senão mm/aaaa — e a barrinha do tempo que já passou.
+// O vencimento: perto (até 12 meses) ou vencido em âmbar, com a data (06/11/2026, a pedido: "vai de 03/09 até 02/09"); senão
+// a data inteira — e a barrinha do tempo que já passou.
+const dataCurtaV = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`;
 function Vence({ x }) {
   const v = x.venc;
   if (!v) return null;
-  const mesAno = `${x.inv.vencimento.slice(5, 7)}/${x.inv.vencimento.slice(0, 4)}`;
   return (
     <span className="inline-flex flex-col items-start" title={`Vence em ${formatDate(x.inv.vencimento)}`}>
       {v.vencido ? <Etiqueta tom="ambar">venceu {formatDate(x.inv.vencimento)}</Etiqueta>
-        : v.perto ? <Etiqueta tom="ambar">{v.dias <= 45 ? `em ${v.dias} ${v.dias === 1 ? 'dia' : 'dias'}` : `em ${v.meses} meses`}</Etiqueta>
-          : <span className="text-[12.5px] tabular-nums text-gray-700">{mesAno}</span>}
+        : v.perto ? <Etiqueta tom="ambar">{v.dias <= 45 ? `em ${v.dias} ${v.dias === 1 ? 'dia' : 'dias'}` : `em ${v.meses} meses`} · {dataCurtaV(x.inv.vencimento)}</Etiqueta>
+          : <span className="text-[12.5px] tabular-nums text-gray-700">vence {formatDate(x.inv.vencimento)}</span>}
       {v.frac !== null && (
         <span className="mt-1 block h-1 w-[84px] overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
           <span className="block h-full rounded-full" style={{ width: `${Math.max(4, v.frac * 100)}%`, background: 'var(--origem-fixo)' }} />
@@ -477,9 +478,9 @@ function TabelaCarteira({
           { rotulo: `Foto real (o banco) em ${formatDate(e.base.data)}`, valor: formatBRL(e.base.valor) },
           ...(e.liquido ? [{ rotulo: 'Aportes − resgates depois', valor: `${e.liquido > 0 ? '+' : '−'}${formatBRL(Math.abs(e.liquido))}` }] : []),
           { rotulo: `${e.dias} ${e.dias === 1 ? 'dia útil' : 'dias úteis'} · ${rotuloRende(l.x.inv)}`, valor: `${rendeuEst >= 0 ? '+' : '−'}${formatBRL(Math.abs(rendeuEst))}`, cor: COR_ENTRADAS },
-          { rotulo: `Vale hoje ≈ (até ${formatDate(e.ate)})`, valor: formatBRL(e.valor_centavos) },
+          { rotulo: 'Vale hoje ≈ (com o rendimento de hoje)', valor: formatBRL(e.valor_centavos) },
         ],
-        nota: 'A taxa de cada dia vem do Banco Central; quando ela muda, a nova vale sobre o que já rendeu. Para conferir com o banco, digite o valor dele nesta célula.',
+        nota: `A taxa de cada dia vem do Banco Central; quando ela muda, a nova vale sobre o que já rendeu.${e.projetados ? ` O Banco Central publica a taxa no dia seguinte: ${e.projetados === 1 ? 'hoje vai' : `os últimos ${e.projetados} dias vão`} com a de ${formatDate(e.ate)}.` : ''} Para conferir com o banco, digite o valor dele nesta célula.`,
       };
     }
     if (a.col === 'curva') {
@@ -503,7 +504,7 @@ function TabelaCarteira({
       titulo: nome,
       itens: [
         { rotulo: 'Aplicado (do seu bolso)', valor: formatBRL(item.aplicado) },
-        { rotulo: l.tipo === 'inv' && l.x.estimado ? `Vale hoje ≈ (${rotuloPeloIndice(l.x.inv)} até ${formatDate(l.x.estimado.ate)})` : `Vale hoje${item.data ? ` (foto de ${formatDate(item.data)})` : ''}`, valor: formatBRL(item.vale) },
+        { rotulo: l.tipo === 'inv' && l.x.estimado ? `Vale hoje ≈ (${rotuloPeloIndice(l.x.inv)}, com o de hoje)` : `Vale hoje${item.data ? ` (foto de ${formatDate(item.data)})` : ''}`, valor: formatBRL(item.vale) },
         { rotulo: l.tipo === 'inv' ? 'Rendeu desde o cadastro' : l.g.soConta ? 'Rendeu desde a primeira foto' : 'Rendeu (os investimentos)', valor: `${formatBRL(item.rendeu)} · ${pctTexto(item.pct, 1)}`, cor: COR_ENTRADAS },
         ...(um ? [{ rotulo: `Em ${competenciaCurta(um.competencia)}`, valor: `${formatBRL(um.rendeu)} · ${pctTexto(um.pct)}`, cor: COR_ENTRADAS }] : []),
         ...(rende ? [{ rotulo: 'Contratado', valor: rende }] : []),
@@ -638,7 +639,7 @@ function TabelaCarteira({
               const imp = l.x.imposto;
               const f = lo.fonte;
               const td = `h-[34px] border-b border-gray-100 py-0 text-[12.5px] ${aceso(l.id)}`;
-              const vence = l.x.inv.liquidez === 'por_aplicacao' ? l.x.prazos?.lotes?.find((p) => p.data === lo.data)?.vence : null;
+              const vence = l.x.inv.liquidez === 'por_aplicacao' ? l.x.prazos?.lotes?.find((p) => p.data === lo.data)?.vence : l.x.inv.vencimento || null;
               const exato = f?.exato && lo.inteiro;
               return (
                 <tr key={l.id} {...attrs} className="group/linha" onMouseEnter={() => setSobLinha(l.id)}>
@@ -710,7 +711,7 @@ function TabelaCarteira({
                 {cel(l, 'vale', `${td} px-3 text-right font-semibold tabular-nums text-gray-900`, (
                   <>
                     {x.semValor ? <span className="font-normal text-gray-400">—</span> : reais(x.vale)}
-                    {x.estimado && <span className="block whitespace-nowrap text-[11.5px] font-normal text-gray-500">≈ {rotuloPeloIndice(x.inv)} até {formatDate(x.estimado.ate).slice(0, 5)}</span>}
+                    {x.estimado && <span className="block whitespace-nowrap text-[11.5px] font-normal text-gray-500">≈ {rotuloPeloIndice(x.inv)} até hoje</span>}
                   </>
                 ), { onMouseMove: x.estimado ? mover({ id: l.id, col: 'vale' }) : undefined })}
                 {cel(l, 'liquido', `${td} px-3 text-right font-semibold tabular-nums text-gray-900`, (() => {

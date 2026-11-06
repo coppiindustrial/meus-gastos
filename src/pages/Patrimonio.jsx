@@ -9,6 +9,7 @@ import { COR_ENTRADAS } from '../components/graficos/Graficos.jsx';
 import BalaoGrafico, { useBalao } from '../components/graficos/BalaoGrafico.jsx';
 import GraficoPatrimonio, { cdiFechado } from '../components/patrimonio/GraficoPatrimonio.jsx';
 import useDadosPatrimonio from '../components/patrimonio/useDadosPatrimonio.js';
+import AvisoSemTaxas from '../components/patrimonio/AvisoSemTaxas.jsx';
 import { useNoCelular } from '../lib/celular.js';
 import { varCor } from '../lib/varCor.js';
 import { nomeTipoInvestimento } from '../lib/investimentos.js';
@@ -170,6 +171,7 @@ export default function Patrimonio() {
           <span className="ml-auto font-semibold">Atualizar →</span>
         </button>
       )}
+      {d.semTaxas && <AvisoSemTaxas onTentar={d.tentarTaxas} className="mt-4" />}
       <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <CartaoKpi compacto icone="patrimonio" cor="var(--serie-gastos)" rotulo="Patrimônio" valor={formatBRL(atual?.total ?? 0)} valorCurto={brlCurto(atual?.total ?? 0)}
           variacao={anterior && Math.abs(novo) < 100 ? variacao(atual.total, anterior.total) : null} tituloVariacao="sobre o mês anterior"

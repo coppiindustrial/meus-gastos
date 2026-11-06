@@ -12,8 +12,11 @@
 // última foto real, no fim de cada mês e no dia seguinte ao último dia publicado (`ultimo: true` — "≈ pelo CDI até
 // 05/11"). Com elas o mês a mês, o gráfico, o líquido e o painel seguem sem a foto de todo mês; a conferência com o banco
 // é a cada 3 meses (`pendentesDeValor`).
-// A DATA DE UMA FOTO é o dia em que o banco mostrou o valor: ele já tem o rendimento dos dias úteis ANTES dela. O
-// movimento no dia da foto já está nela; o de um dia útil rende desde aquele dia.
+// O DIA INTEIRO (06/11/2026, conferido com o banco: o aporte de 12/09 no RDB a 102,5% do CDI, R$ 360,18 de rendimento às
+// 19h16 de 06/11, e o app dava R$ 350 — um dia a menos): o valor de um dia JÁ TEM o rendimento daquele dia, como o banco
+// mostra. A FOTO de uma data tem o rendimento até ela (inclusive); o aporte rende desde o próprio dia; e o valor de HOJE
+// já leva o rendimento de hoje — com a taxa do último dia publicado (o Banco Central publica o CDI de um dia no dia útil
+// seguinte), como os dias de semana depois dele (`projetados`). O movimento no dia da foto já está nela.
 
 // o que nunca anda sozinho: preço de mercado, regra própria ou sem rendimento
 export const MANUAIS = ['tesouro_ipca', 'tesouro_prefixado', 'fundo', 'debenture', 'outro', 'poupanca', 'saldo'];
@@ -71,30 +74,48 @@ function preparar(inv, taxas) {
 }
 const sinalDe = (m) => (m.tipo === 'resgate' ? -1 : 1) * Number(m.valor_centavos);
 
-// O caminho de `base` ({ data, valor }) até cada uma das `paradas` (datas), com os movimentos depois da base. Devolve
-// { [parada]: { valor, dias, liq } } (`dias`: os dias úteis que renderam desde a base; `liq`: aplicações − resgates).
+// O calendário com os dias de semana DEPOIS do último publicado, até `ate`, com a taxa dele (`[d, r, true]`: projetado).
+function comProjetados(cal, ate) {
+  if (!cal.length || !ate || ate <= cal[cal.length - 1][0]) return cal;
+  const [ult, r] = cal[cal.length - 1];
+  const extra = [];
+  for (let d = maisDias(ult, 1); d <= ate; d = maisDias(d, 1)) {
+    const sem = new Date(utc(d)).getUTCDay();
+    if (sem !== 0 && sem !== 6) extra.push([d, r, true]);
+  }
+  return [...cal, ...extra];
+}
+
+// O caminho de `base` ({ data, valor }: o valor no FIM do dia, já com o rendimento dele) até o FIM de cada uma das
+// `paradas` (datas), com os movimentos depois da base (o aporte rende desde o próprio dia). Devolve { [parada]: { valor,
+// dias, liq, proj } } (`dias`: os dias úteis que renderam desde a base; `liq`: aplicações − resgates; `proj`: quantos dos
+// dias foram com a taxa do último publicado).
 function caminhar(inv, base, paradas, movs, taxas) {
-  const { cal, du, mesAberto } = preparar(inv, taxas);
+  const { cal: serie, du, mesAberto } = preparar(inv, taxas);
+  const ordem = [...paradas].sort();
+  const cal = comProjetados(serie, ordem[ordem.length - 1]);
   const ms = movs.filter((m) => m.data > base.data).sort((a, b) => (a.data < b.data ? -1 : 1));
-  let v = base.valor; let dias = 0; let j = 0; let liq = 0;
-  let i = cal.findIndex(([d]) => d >= base.data);
+  let v = base.valor; let dias = 0; let j = 0; let liq = 0; let proj = 0;
+  let i = cal.findIndex(([d]) => d > base.data);
   if (i < 0) i = cal.length;
   const out = {};
-  for (const p of [...paradas].sort()) {
-    while (i < cal.length && cal[i][0] < p) {
+  for (const p of ordem) {
+    while (i < cal.length && cal[i][0] <= p) {
       while (j < ms.length && ms[j].data <= cal[i][0]) { v += sinalDe(ms[j]); liq += sinalDe(ms[j]); j += 1; }
       v *= fatorDoDia(inv, cal[i], taxas, du, mesAberto);
+      if (cal[i][2]) proj += 1;
       i += 1; dias += 1;
     }
-    while (j < ms.length && ms[j].data <= p) { v += sinalDe(ms[j]); liq += sinalDe(ms[j]); j += 1; } // o do dia da parada já está nela
-    out[p] = { valor: v, dias, liq };
+    while (j < ms.length && ms[j].data <= p) { v += sinalDe(ms[j]); liq += sinalDe(ms[j]); j += 1; } // o de um dia sem taxa (sábado)
+    out[p] = { valor: v, dias, liq, proj };
   }
   return out;
 }
 
-// AS FOTOS ESTIMADAS de todos os títulos que andam sozinhos. `valores`: as fotos REAIS; `hoje`: a estimativa não passa
-// dele. A última de cada título (`ultimo: true`) leva { base: { data, valor }, ate (o último dia com a taxa), dias,
-// liquido (aplicações − resgates depois da base) }.
+// AS FOTOS ESTIMADAS de todos os títulos que andam sozinhos. `valores`: as fotos REAIS; `hoje`: a estimativa vai até ele
+// (o fim do dia). A última de cada título (`ultimo: true`, na data de hoje) leva { base: { data, valor }, ate (o último dia
+// publicado), projetados (os dias depois dele, com a taxa dele — hoje, ao menos), dias, liquido (aplicações − resgates
+// depois da base) }.
 export function estimarValores({ investimentos = [], valores = [], movimentos = [], taxas, hoje }) {
   if (!taxas?.cdi?.length) return [];
   const out = [];
@@ -117,20 +138,27 @@ export function estimarValores({ investimentos = [], valores = [], movimentos = 
       const total = c[b.data].dias;
       fins.forEach((f) => out.push({ investimento_id: inv.id, data: f, valor_centavos: Math.round(c[f].valor * ajuste ** (total ? c[f].dias / total : 1)), estimado: true }));
     }
-    // depois da última foto real: o fim de cada mês e o dia seguinte ao último dia com a taxa
+    // depois da última foto real: o fim de cada mês e HOJE (com o rendimento de hoje, pela taxa do último publicado)
     const u = foto(fotos[fotos.length - 1]);
     const ate = cal[cal.length - 1][0];
     if (ate < u.data) continue;
-    const fim = maisDias(ate, 1) < hoje ? maisDias(ate, 1) : hoje;
+    const fim = hoje;
     if (fim <= u.data) continue;
     const fins = finsDeMes(u.data, fim);
     const c = caminhar(inv, u, [...fins, fim], movs, taxas);
     if (!c[fim].dias) continue;
     fins.forEach((f) => out.push({ investimento_id: inv.id, data: f, valor_centavos: Math.round(c[f].valor), estimado: true }));
-    out.push({ investimento_id: inv.id, data: fim, valor_centavos: Math.round(c[fim].valor), estimado: true, ultimo: true, base: u, ate, dias: c[fim].dias, liquido: c[fim].liq });
+    out.push({
+      investimento_id: inv.id, data: fim, valor_centavos: Math.round(c[fim].valor), estimado: true, ultimo: true, base: u, ate,
+      projetados: c[fim].proj, dias: c[fim].dias, liquido: c[fim].liq,
+    });
   }
   return out;
 }
+
+// Do COMEÇO do dia `de` ao FIM do dia `dia` (o aporte de `de` visto em `dia`, com o rendimento dos dois): o `fatorDiario`
+// até o dia seguinte.
+export const fatorAteOFim = (inv, de, dia, taxas) => fatorDiario(inv, de, maisDias(dia, 1), taxas);
 
 // O quanto R$ 1 em `de` vale em `ate` pelas taxas de CADA DIA (a estimativa do IR de cada depósito): os dias úteis de `de`
 // a antes de `ate`; depois do último dia publicado, o último fator em cada dia de semana. null quando a série não cobre
@@ -176,7 +204,7 @@ export function movimentosForaDosValores({ valores = [], movimentos = [] }) {
 // não anda sozinho, o valor puro); o resgate, tirado. Devolve [{ id, data, antes, valor_centavos }].
 export function valoresComOMovimento({ mov, fotos, inv, taxas = null }) {
   return fotos.map((f) => {
-    const fator = (taxas && andaSozinho(inv) ? fatorDiario(inv, mov.data, f.data, taxas) : null) ?? 1;
+    const fator = (taxas && andaSozinho(inv) ? fatorAteOFim(inv, mov.data, f.data, taxas) : null) ?? 1; // até o fim do dia da foto
     const delta = (mov.tipo === 'resgate' ? -1 : 1) * Number(mov.valor_centavos) * fator;
     return { id: f.id, data: f.data, antes: Number(f.valor_centavos), valor_centavos: Math.max(0, Math.round(Number(f.valor_centavos) + delta)) };
   });

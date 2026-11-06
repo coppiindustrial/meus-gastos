@@ -12,6 +12,7 @@ import {
 } from '../components/patrimonio/ModaisPatrimonio.jsx';
 import useDadosPatrimonio from '../components/patrimonio/useDadosPatrimonio.js';
 import useEdicaoCarteira from '../components/patrimonio/useEdicaoCarteira.js';
+import AvisoSemTaxas from '../components/patrimonio/AvisoSemTaxas.jsx';
 import { useNoCelular } from '../lib/celular.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
@@ -180,7 +181,8 @@ export default function Investimentos() {
         <div className="mt-4">
           <BlocoInvestimentos grupos={d.grupos.filter((g) => g.itens.length || !g.soConta || g.conta.ativa)} total={d.total} meses={d.meses} comps={comps} cdi={d.cdi} ano={d.ano} hoje={d.hojeISO}
             edicao={movel || !d.comInvestimentos ? null : edicao}
-            movel={movel} acoes={acoes} encerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)} qtdEncerrados={qtdEncerrados} />
+            movel={movel} acoes={acoes} encerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)} qtdEncerrados={qtdEncerrados}
+            aviso={d.semTaxas && <AvisoSemTaxas onTentar={d.tentarTaxas} className="mx-4 mb-2.5" />} />
           <p className="mt-2 text-xs text-gray-500">
             {movel ? 'Aplicar, resgatar e atualizar ficam no computador.'
               : 'Rendeu = vale hoje − aplicado (os aportes − os resgates). A seta abre os aportes de cada investimento; clique numa célula para editar, e a ficha (no fim da linha) traz o IR, as quedas, os vencimentos e o histórico.'}

@@ -50,7 +50,22 @@ export default function useDadosPatrimonio({ encerrados = false } = {}) {
     return [...valores.filter((v) => auto.has(v.investimento_id)).map((v) => v.data), ...depositos.map((x) => x.data), ...investimentos.map((i) => i.aplicado_em)]
       .filter(Boolean).sort()[0] ?? null;
   }, [investimentos, valores, depositos]);
-  useEffect(() => { if (desdeDiario) taxasDiarias(desdeDiario).then(setTaxas); }, [desdeDiario]);
+  // SEM O BANCO CENTRAL (06/11/2026: a API dele respondeu 502 por horas): as taxas que já vieram ficam; sem nenhuma, a tela
+  // avisa (`semTaxas`) e tenta de novo sozinha a cada minuto — ou no "Tentar agora" (`tentarTaxas`).
+  const [tentativa, setTentativa] = useState(0);
+  const [falhou, setFalhou] = useState(false);
+  useEffect(() => {
+    if (!desdeDiario) return undefined;
+    let vivo = true;
+    taxasDiarias(desdeDiario).then((t) => { if (!vivo) return; if (t) setTaxas(t); setFalhou(!t); });
+    return () => { vivo = false; };
+  }, [desdeDiario, tentativa]);
+  useEffect(() => {
+    if (!falhou) return undefined;
+    const id = setTimeout(() => setTentativa((n) => n + 1), 60000);
+    return () => clearTimeout(id);
+  }, [falhou, tentativa]);
+  const tentarTaxas = useCallback(() => setTentativa((n) => n + 1), []);
   const estimados = useMemo(() => estimarValores({ investimentos, valores, movimentos: movs, taxas, hoje: hojeISO }), [investimentos, valores, movs, taxas, hojeISO]);
   const valoresSerie = useMemo(() => (estimados.length ? [...valores, ...estimados] : valores), [valores, estimados]);
   const meses = useMemo(() => rendimentoDasSeries(seriesDoPatrimonio({ saldos, movimentos: movs, investimentos, valores: valoresSerie }), hoje),
@@ -94,5 +109,7 @@ export default function useDadosPatrimonio({ encerrados = false } = {}) {
     carregar, contas, saldos, movimentos: movs, comMovimentos, investimentos, valores, depositos, comDepositos: !!dadosInv?.comDepositos, comInvestimentos: dadosInv !== null,
     sem015: investimentos.length > 0 && !('prazo_meses' in investimentos[0]),
     cdi, taxas, estimados, meses, grupos, pendentes, total, doAno, totalAno, hoje, hojeISO, ano,
+    // sem as taxas e com algum que anda sozinho: os valores param na última foto
+    semTaxas: falhou && !taxas && investimentos.some((i) => i.ativo !== false && andaSozinho(i)), tentarTaxas,
   };
 }

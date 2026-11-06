@@ -106,11 +106,19 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   }
   const depois = movimentos.filter((m) => m.investimento_id === inv.id && corte && m.data > corte).sort((a, b) => (a.data < b.data ? -1 : 1));
   // o principal e o valor de cada um numa data
+  // O DIA INTEIRO (06/11/2026, conferido com o banco — lib/valorEstimado.js): o valor numa data já tem o rendimento dela. O
+  // aporte rende desde o próprio dia: no fim de `t` vale principal × o fator do começo do dia dele ao fim de `t`. O colado é o
+  // que o banco mostrou no fim da referência (já com o rendimento dela); o digitado como "o que foi depositado" (a
+  // referência é a própria data) é o principal, como o aporte.
+  const fim = (t) => maisDias(t, 1);
   lotes.forEach((l) => {
     l.frac = 1;
-    if (l.origem === 'colado') l.principal = l.valorRef / f(l.data, l.ref);
+    if (l.origem === 'colado') l.principal = l.ref === l.data ? l.valorRef : l.valorRef / f(l.data, fim(l.ref));
   });
-  const valorEm = (l, t) => (l.origem === 'colado' ? (t >= l.ref ? l.valorRef * f(l.ref, t) : l.valorRef / f(t, l.ref)) : l.principal * f(l.data, t));
+  const valorEm = (l, t) => {
+    if (l.origem !== 'colado' || l.ref === l.data) return l.principal * f(l.data, fim(t));
+    return t >= l.ref ? l.valorRef * f(fim(l.ref), fim(t)) : l.valorRef / f(fim(t), fim(l.ref));
+  };
   depois.forEach((m) => {
     const v = Number(m.valor_centavos);
     if (m.tipo !== 'resgate') { lotes.push({ data: m.data, principal: v, origem: 'aporte', frac: 1, fonte: { tipo: 'mov', id: m.id, data: m.data, valor: v, exato: true } }); return; }
