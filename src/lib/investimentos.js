@@ -37,7 +37,8 @@ export const LIQUIDEZ = [
   { value: 'dias', label: 'Em alguns dias (D+N)' },
   { value: 'carencia', label: 'Carência até uma data' },
   // cada aplicação vence `prazo_meses` depois da data dela; `ao_vencer` 'reaplica' | 'volta' (migration 015)
-  { value: 'por_aplicacao', label: 'Cada aplicação vence depois de…' },
+  // o nome curto: "Cada aplicação vence depois de…" era cortado na lista da célula (06/11/2026)
+  { value: 'por_aplicacao', label: 'Prazo por aplicação' },
 ];
 export const AO_VENCER = [
   { value: 'reaplica', label: 'Reaplica sozinho' },

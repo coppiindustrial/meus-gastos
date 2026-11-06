@@ -531,7 +531,7 @@ export default function BlocoInvestimentos({
   );
   const legenda = verVista === 'mes'
     ? `o que rendeu em cada mês ${modo === 'pct' ? 'em %' : 'em reais'} · o tom mais forte é o melhor mês de cada linha`
-    : `${qtd} ${qtd === 1 ? 'investimento' : 'investimentos'} em ${grupos.length} ${grupos.length === 1 ? 'conta' : 'contas'}`;
+    : `${qtd} ${qtd === 1 ? 'investimento' : 'investimentos'} em ${grupos.length} ${grupos.length === 1 ? 'lugar' : 'lugares'}`;
   const rodape = qtdEncerrados > 0 && verVista === 'carteira' && (
     <button type="button" onClick={onEncerrados} className="text-[12px] font-medium text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline">
       {encerrados ? 'Esconder os encerrados' : `Mostrar ${qtdEncerrados === 1 ? 'o encerrado' : `os ${qtdEncerrados} encerrados`}`}

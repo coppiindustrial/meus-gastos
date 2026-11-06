@@ -5,6 +5,7 @@ import MenuContexto from '../components/MenuContexto.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { IconLapis, IconSeta } from '../components/icons.jsx';
 import BlocoInvestimentos from '../components/patrimonio/TabelaInvestimentos.jsx';
+import CarteiraVazia from '../components/patrimonio/CarteiraVazia.jsx';
 import ModalCadastroInvestimentos from '../components/patrimonio/ModalCadastroInvestimentos.jsx';
 import { FichaInvestimento, ModalAtualizarValores, ModalLugar, ModalMovimento } from '../components/patrimonio/ModaisPatrimonio.jsx';
 import useDadosPatrimonio from '../components/patrimonio/useDadosPatrimonio.js';
@@ -161,15 +162,8 @@ export default function Investimentos() {
       )}
 
       {vazio ? (
-        <div className="card mt-4 max-w-3xl px-6 py-6">
-          <h2 className="text-[15px] font-semibold text-gray-800">Monte a carteira</h2>
-          <p className="mt-1 text-[13.5px] leading-relaxed text-gray-600">
-            Com o app do banco aberto ao lado, cadastre <b className="font-semibold text-gray-800">onde</b> você investe (Nubank, XP…) e <b className="font-semibold text-gray-800">o que</b> tem em cada lugar:
-            uma linha por investimento, com o nome, o tipo e quanto vale hoje. O "valor aplicado" (o que saiu do seu bolso) é opcional.
-            Depois, é só aplicar e resgatar quando acontecer, e atualizar os valores uma vez por mês.
-          </p>
-          {!movel && <p className="mt-3 text-[12.5px] text-gray-500">Comece pelo <b className="font-semibold text-gray-700">Montar a carteira</b>, no alto. {d.contas.length > 0 && 'Para apagar o que já existe (os lugares e as fotos antigas), use o ▾ → Começar do zero.'}</p>}
-        </div>
+        <CarteiraVazia contas={d.contas} saldos={d.saldos} movel={movel} podeCadastrar={d.comInvestimentos}
+          onMontar={() => setCadastro({})} onComecarDoZero={comecarDoZero} />
       ) : (
         <div className="mt-4">
           <BlocoInvestimentos grupos={d.grupos.filter((g) => g.itens.length || !g.soConta || g.conta.ativa)} total={d.total} meses={d.meses} comps={comps} cdi={d.cdi} ano={d.ano}
