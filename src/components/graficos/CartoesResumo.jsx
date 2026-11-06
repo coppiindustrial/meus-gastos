@@ -29,6 +29,11 @@ export const ICONES = {
   patrimonio: <path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6" />,
   tendencia: <path d="M4 18l6-6 4 4 6-8" />,
   liquidez: <><circle cx="12" cy="12" r="8" /><path d="M12 8v8" /></>,
+  // os dos Indicadores (06/11/2026): os juros (%), a inflação (a seta que sobe), o dólar e o euro
+  juros: <><path d="M19 5 5 19" /><circle cx="7" cy="7" r="2" /><circle cx="17" cy="17" r="2" /></>,
+  inflacao: <path d="M4 18l6-6 4 4 6-8M15 8h5v5" />,
+  dolar: <path d="M12 3v18M16 7.5C15.3 6 13.8 5 12 5c-2.4 0-4 1.3-4 3.2s1.8 2.7 4 3.3 4 1.4 4 3.4-1.6 3.1-4 3.1c-1.9 0-3.5-1-4.2-2.5" />,
+  euro: <path d="M17.5 6.5A6.5 6.5 0 1 0 17.5 17.5M4.5 10h9M4.5 14h9" />,
 };
 export const CORES_KPI = { entradas: COR_ENTRADAS, gastos: COR_GASTOS, saldo: COR_SALDO };
 // O ícone em PIXEL INTEIRO (caixa de 26, desenho de 14; 22 e 12 no compacto): com o `h-3.5` (0,875rem

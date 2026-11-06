@@ -35,7 +35,9 @@
 > aplicar e resgatar; os botões da linha no mesmo quadrado; o cadastro sem os valores (o dinheiro entra como depósito,
 > pelo Aplicar ou pelo Colar, com o "valor aplicado" do banco). **O valor que anda sozinho (2026-11-06)**: pelo CDI (e Selic,
 > IPCA, prefixado) de cada dia útil do Banco Central, desde a última foto real; fotos estimadas no fim de cada mês; a
-> conferência com o banco a cada 3 meses (os de preço de mercado, todo mês); o IR pelo CDI de cada dia.
+> conferência com o banco a cada 3 meses (os de preço de mercado, todo mês); o IR pelo CDI de cada dia. **Indicadores (2026-11-06)**: a tela
+> própria em Análises (Selic, CDI, IPCA, dólar, euro, a Focus e a carteira × CDI × IPCA), pelo Banco Central; o Tesouro IPCA+
+> fica de fora (pediria um servidor).
 > Próxima: 8.C (renda variável BR e exterior).
 > **Extrato da conta (2026-10-27)**: CSV do extrato do Nubank; entradas continuam à mão; fatura, investimentos e
 > transferências entre contas próprias (regra de ignorar) ficam de fora; pagamento de fixo vira o fixo do mês com o

@@ -97,6 +97,11 @@ export function registrarValores(data, itens) {
     .upsert(itens.map((i) => ({ investimento_id: i.investimento_id, data, valor_centavos: i.valor_centavos })), { onConflict: 'investimento_id,data' }));
 }
 
+// Muda um valor (a data e quanto valia). Mesmo título e mesma data de outro valor: o banco recusa (o índice único).
+export function atualizarValor(id, { data, valor_centavos }) {
+  return exigir(supabase.from('valores_investimento').update({ data, valor_centavos }).eq('id', id).select().single());
+}
+
 export function excluirValor(id) {
   return exigir(supabase.from('valores_investimento').delete().eq('id', id));
 }

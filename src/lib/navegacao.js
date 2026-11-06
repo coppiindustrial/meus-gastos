@@ -43,6 +43,8 @@ export const GRUPOS = [
       // dos que pedem o valor do mês.
       { to: '/patrimonio', label: 'Patrimônio' },
       { to: '/investimentos', label: 'Investimentos', contador: 'investimentos', dica: 'a atualizar' },
+      // o do MERCADO (06/11/2026, o mockup "Indicadores e importações", opção A): Selic, CDI, IPCA, dólar, euro e a Focus
+      { to: '/indicadores', label: 'Indicadores' },
     ],
   },
 ];

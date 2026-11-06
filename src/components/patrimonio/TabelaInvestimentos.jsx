@@ -147,7 +147,9 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
     return (
       <th key={c.id} aria-sort={ordenada ? (ordem.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
         className={`group/th ${th0} ${c.alinha === 'left' ? 'text-left' : 'text-right'} ${ordenada ? 'text-gray-800' : 'text-gray-500'} ${desk(c)}`}
-        style={c.id === 'nome' && !movel ? { width: 280, minWidth: 240 } : undefined}>
+        // LARGURAS FIXAS no Investimento e no Resgate (06/11/2026): com a largura pelo conteúdo, abrir os depósitos (o "cai
+        // para 20% em 10/04/2027" é mais largo que a pílula do título) alargava a coluna e a tabela toda andava para o lado
+        style={movel ? undefined : c.id === 'nome' ? { width: 280, minWidth: 240 } : c.id === 'resgate' ? { width: 210, minWidth: 210 } : undefined}>
         <span className={`inline-flex items-center gap-1 ${c.alinha === 'left' ? '' : 'flex-row-reverse'}`}>
           <span>{c.id === 'ano' ? `Em ${ano}` : c.rotulo}</span>
           {!c.semOrdem && !movel && (
@@ -332,7 +334,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                   </td>
                   <td className={`${td} ${movel ? 'hidden' : ''}`}>
                     {l.x.imposto.isento ? <Etiqueta tom="verde">isento</Etiqueta> : <Etiqueta tom={TOM_ALIQUOTA[lo.aliquota] ?? 'cinza'}>IR {pctAliq(lo.aliquota)}</Etiqueta>}
-                    {!l.x.imposto.isento && <span className="block text-[11px] text-gray-500">{lo.proxima ? `cai para ${pctAliq(lo.proxima.aliquota)} em ${formatDate(lo.proxima.data)}` : 'já na menor'}</span>}
+                    {!l.x.imposto.isento && <span className="block whitespace-nowrap text-[11px] text-gray-500">{lo.proxima ? `cai para ${pctAliq(lo.proxima.aliquota)} em ${formatDate(lo.proxima.data)}` : 'já na menor'}</span>}
                   </td>
                   <td className={`${td} text-right tabular-nums text-gray-500 ${movel ? 'hidden' : ''}`}>{lo.origem !== 'aporte' && <span className="text-gray-400">≈ </span>}{reais(lo.depositado)}</td>
                   <td className={`${td} text-right tabular-nums text-gray-800`}>{reais(lo.vale)}</td>

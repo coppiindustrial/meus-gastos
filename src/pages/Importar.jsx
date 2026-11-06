@@ -12,6 +12,7 @@ import { DivisorFaixa, FaixaProvider, Trilho } from '../components/filtros/Faixa
 import { SegUnico } from '../components/filtros/Segmentos.jsx';
 import ImportarArquivos from '../components/ImportarArquivos.jsx';
 import ModalPlanilha from '../components/ModalPlanilha.jsx';
+import ModalImportacao from '../components/ModalImportacao.jsx';
 import ImportarFatura from './ImportarFatura.jsx';
 import ImportarExtrato from './ImportarExtrato.jsx';
 import { useToast } from '../context/ToastContext.jsx';
@@ -247,6 +248,7 @@ export default function Importar() {
   const [desfazendo, setDesfazendo] = useState(null);
   const [menu, setMenu] = useState(null);
   const [planilha, setPlanilha] = useState(null); // a linha do histórico da planilha aberta no pop-up
+  const [vendo, setVendo] = useState(null); // a linha (fatura ou extrato) aberta no "Ver"
   const menuAbertoNoClique = useRef(false);
 
   const carregar = useCallback(async () => {
@@ -332,21 +334,24 @@ export default function Importar() {
     setDesfazendo(null);
   };
 
+  // O "VER" EM TODA LINHA (06/11/2026, o mockup "Indicadores e importações", opção A): a fatura e o extrato abrem o pop-up
+  // da importação (`ModalImportacao`), a planilha o dela; o "Excluir" continua ao lado.
+  const ver = (i) => (
+    <button type="button" onClick={() => (i.tipo === 'planilha' ? setPlanilha(i) : setVendo(i))}
+      className="inline-flex items-center gap-1 rounded-[5px] border border-gray-200 bg-white px-2.5 py-1 text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50">
+      Ver <IconSeta className="-rotate-90" />
+    </button>
+  );
   const acaoHistorico = (i) => {
     if (i.tipo === 'fatura') {
       return i.fatura_id
-        ? <button type="button" className="btn-secondary !px-2.5 !py-1 !text-[12px]" disabled={desfazendo === i.id} onClick={() => desfazer(i)} title="Apaga a fatura e os lançamentos dela">Excluir</button>
+        ? <span className="inline-flex gap-1.5">{ver(i)}<button type="button" className="btn-secondary !px-2.5 !py-1 !text-[12px]" disabled={desfazendo === i.id} onClick={() => desfazer(i)} title="Apaga a fatura e os lançamentos dela">Excluir</button></span>
         : <span className="text-[11.5px] text-gray-400" title="A fatura foi substituída por outra importação ou excluída">substituída ou excluída</span>;
     }
     if (i.tipo === 'extrato') {
-      return <button type="button" className="btn-secondary !px-2.5 !py-1 !text-[12px]" disabled={desfazendo === i.id} onClick={() => desfazer(i)} title="Apaga os lançamentos que este extrato criou (para importar de novo)">Excluir</button>;
+      return <span className="inline-flex gap-1.5">{ver(i)}<button type="button" className="btn-secondary !px-2.5 !py-1 !text-[12px]" disabled={desfazendo === i.id} onClick={() => desfazer(i)} title="Apaga os lançamentos que este extrato criou (para importar de novo)">Excluir</button></span>;
     }
-    return (
-      <button type="button" onClick={() => setPlanilha(i)}
-        className="inline-flex items-center gap-1 rounded-[5px] border border-gray-200 bg-white px-2.5 py-1 text-[12px] font-medium text-gray-700 transition-colors hover:bg-gray-50">
-        Ver <IconSeta className="-rotate-90" />
-      </button>
-    );
+    return ver(i);
   };
 
   const depois = async (extrato) => {
@@ -496,6 +501,11 @@ export default function Importar() {
       )}
 
       <Dica dica={dica} />
+      {vendo && (
+        <ModalImportacao imp={vendo} oque={descrever(vendo).oque} onFechar={() => setVendo(null)}
+          onExcluir={() => { const i = vendo; setVendo(null); desfazer(i); }}
+          onAbrirMes={(mes) => navigate(`/lancamentos?mes=${mes}`)} onPendencias={() => navigate('/pendencias')} />
+      )}
       {planilha && <ModalPlanilha imp={planilha} onMudou={carregar} onFechar={() => setPlanilha(null)} onDesfeito={() => { setPlanilha(null); carregar(); }} />}
       <MenuContexto menu={menu} onFechar={() => setMenu(null)} />
       {fatura && (

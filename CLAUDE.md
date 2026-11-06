@@ -148,6 +148,12 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - ÁREA DE ARRASTAR (`components/AreaArrastar.jsx`, a da Importação do Gestor) nos três importadores — nunca um
   botão "Escolher arquivo".
 
+- O "VER" EM TODA IMPORTAÇÃO (06/11/2026, o mockup "Indicadores e importações", opção A): a fatura e o extrato do
+  Histórico abrem `components/ModalImportacao.jsx` (o da planilha segue o `ModalPlanilha`): os números (a fatura: compras,
+  total, sem categoria, a maior categoria; o extrato: o que entrou, o que ainda está no app, os fixos corrigidos, o sem
+  categoria), a lista do que entrou (`lancamentosDaImportacao` em `api/importacoes.js`: os da fatura pelo `fatura_id`; os
+  do extrato pelo `desfazer`) e no pé: excluir, revisar pendências e abrir o mês nos Lançamentos. O "Excluir" fica ao lado.
+
 ## Revisar pendências (30/10/2026, opção A do mockup "Revisar pendências · a tabela")
 
 - `pages/Pendencias.jsx`: os importados sem categoria, UMA LINHA POR ESTABELECIMENTO, com a categoria escolhida NA
@@ -346,6 +352,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     valor, o "vale hoje" (vazio: a estimativa pelo CDI). A conta é `planoDosDepositos` (testada); salvar substitui a
     lista (`salvarDepositos` aceita a referência de cada item). Abre pelo ícone das moedas no cabeçalho da ficha, pelo
     "Informar os depósitos" e pelo "Já estava aplicado" do "Como o dinheiro entrou?".
+  · O PAINEL CONTA O QUE RENDEU ANTES DO APP (06/11/2026, a pedido): o cartão "Rendeu até hoje" é o `rendimentoAcum` (o que
+    vale − o aplicado, também o que o título já tinha rendido ao entrar) — antes somava só o rendimento mês a mês desde a
+    primeira foto (o RDB com R$ 6.031 de antes ficava de fora); o do app vai na linha de baixo, com o % do CDI. A variação do
+    cartão Patrimônio só aparece no mês SEM dinheiro novo (o "▲398%" do mês em que o RDB entrou).
+  · EDITAR o que já foi lançado (06/11/2026): o ✎ de cada linha do Histórico da ficha (`ModalEditarRegistro`) muda a data, o
+    valor e — no movimento — o tipo e a observação (`atualizarMovimento`, `atualizarValor`); a aplicação feita junto com a
+    primeira foto (o mesmo dia e o mesmo valor) leva a foto junto. Na carteira, as colunas Investimento e RESGATE têm
+    largura FIXA: abrir os depósitos não empurra a tabela.
   · A FICHA DO INVESTIMENTO (06/11/2026, as opções A do mockup "Ficha do investimento"; `FichaInvestimento`): os QUATRO
     NÚMEROS são cartões com HOVER — o cartão acende, a linha de baixo vira a CONTA ("= vale hoje − aplicado") e a COLUNA
     dele na lista acende (`gm-acesa`; o cabeçalho da coluna acende o cartão). A lista dos depósitos tem a ALTURA DA
@@ -367,6 +381,21 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     meses, os de preço de mercado todo mês; no "Atualizar valores" o campo vazio mostra a estimativa e o Enter a usa.
     O IR de cada depósito também passou ao CDI de cada dia (`fatorDiario`; o do mês fica de reserva): o RDB real deu IR ≈
     R$ 1.149,38 contra os R$ 1.149,32 do banco (antes, R$ 1.150,38).
+
+## Indicadores (06/11/2026, o mockup aprovado "Indicadores e importações", opção A)
+
+- `pages/Indicadores.jsx` (/indicadores, em Análises, depois de Patrimônio e Investimentos): o MERCADO, à parte do seu
+  dinheiro. O grid da Visão geral (`GridPersonalizavel`, escopo `indicadores_v1`): os cinco números (Selic meta, CDI, IPCA
+  de 12 meses, dólar e euro PTAX, com a variação no dia e em 12 meses), "Selic, IPCA e o juro real" (a Selic em degraus, o
+  IPCA de 12 meses e a área entre os dois), "O que o mercado espera" (a Focus: IPCA, Selic e dólar do ano e dos dois
+  seguintes), "Dólar e euro" (30 dias | 12 meses, lembrado em `indicadores_moeda`), "IPCA de cada mês" e "Sua carteira ×
+  CDI × IPCA" (cada mês fechado do Patrimônio: o rendimento, o % do CDI e o juro real). No celular, os blocos em pilha.
+- Os dados: `api/indicadores.js` — o SGS do Banco Central (432, 4389, 433, 13522, 1, 21619) e a Focus no Olinda, públicos e
+  abertos ao navegador (CORS); cada parte que falha volta null e o bloco avisa. A Selic meta vem com datas futuras (vale até a
+  próxima reunião): corta-se em hoje. As contas em `lib/indicadores.js` (testada). Os gráficos em
+  `components/indicadores/GraficosIndicadores.jsx` (`GraficoLinhas`, `ColunasMes`: SVG na largura MEDIDA, o balão do app).
+- A TAXA DO TESOURO IPCA+ de hoje ficou DE FORA (opção A): o CSV do Tesouro Transparente só abre para o site deles e o JSON
+  antigo do Tesouro Direto saiu do ar (410). Trazer pediria um servidor (uma função no Supabase).
 
 ## Gastos fixos (fase 5)
 

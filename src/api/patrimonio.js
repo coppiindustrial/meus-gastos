@@ -72,6 +72,11 @@ export function salvarMovimentos(itens) {
   return exigir(supabase.from('movimentos_investimento').insert(itens.map((m) => ({ ...m, origem: 'manual' }))).select('id'));
 }
 
+// Muda uma aplicação ou um resgate (a data, o valor, o tipo, a observação — 06/11/2026: antes só se excluía).
+export function atualizarMovimento(id, mudancas) {
+  return exigir(supabase.from('movimentos_investimento').update(mudancas).eq('id', id).select().single());
+}
+
 export function excluirMovimento(id) {
   return exigir(supabase.from('movimentos_investimento').delete().eq('id', id));
 }

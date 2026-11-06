@@ -135,6 +135,14 @@ export default function Patrimonio() {
   const liquidas = d.grupos.flatMap((g) => g.itens.filter((x) => x.diaria).map((x) => `i:${x.inv.id}`));
   const liquidez = (m) => liquidas.reduce((s, id) => s + (m?.porSerie[id]?.presente ? m.porSerie[id].saldo : 0), 0);
   const ativos = d.investimentos.filter((i) => i.ativo !== false).length;
+  // O QUE RENDEU ATÉ HOJE (06/11/2026, a pedido): o que cada investimento vale a mais do que foi aplicado — também o que ele
+  // rendeu ANTES de entrar no app (o RDB cadastrado com R$ 6.031 de rendimento ficava de fora: o card somava só o rendimento
+  // de mês a mês, desde a primeira foto de cada um). O do app (mês a mês, com o % do CDI) vai na linha de baixo.
+  const rendeuTotal = atual ? atual.rendimentoAcum : null;
+  const rendeuAntes = rendeuTotal !== null && d.totalAno.rendeu !== null ? rendeuTotal - d.totalAno.rendeu : null;
+  // O DINHEIRO NOVO no mês (aplicações e investimentos que entraram): a variação do patrimônio só aparece sem ele — com ele,
+  // o "▲398%" do mês em que um investimento entra diria que o patrimônio rendeu o que só mudou de lugar.
+  const novo = atual && anterior ? atual.aportado - anterior.aportado : 0;
   const ir = () => navigate('/investimentos');
 
   if (!ativos && !meses.length) {
@@ -164,7 +172,7 @@ export default function Patrimonio() {
       )}
       <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <CartaoKpi compacto icone="patrimonio" cor="var(--serie-gastos)" rotulo="Patrimônio" valor={formatBRL(atual?.total ?? 0)} valorCurto={brlCurto(atual?.total ?? 0)}
-          variacao={anterior ? variacao(atual.total, anterior.total) : null} tituloVariacao="sobre o mês anterior"
+          variacao={anterior && Math.abs(novo) < 100 ? variacao(atual.total, anterior.total) : null} tituloVariacao="sobre o mês anterior"
           sub={d.total.ir > 0 ? `≈ ${brlCurto(d.total.liquido)} líquido · IR ≈ ${brlCurto(d.total.ir)}`
             : anterior ? `${atual.total - anterior.total >= 0 ? '+' : '−'}${brlCurto(Math.abs(atual.total - anterior.total))} no mês` : desde ? `desde ${desde}` : '—'}
           serie={grafico.map((m) => ({ competencia: m.competencia, valor: m.total }))} />
@@ -173,11 +181,15 @@ export default function Patrimonio() {
           sub={ref ? [pctTexto(ref.pct), doCdi(ref.pct, cdiFechado(cdi, ref.competencia))].filter(Boolean).join(' · ') : 'no 2º valor de cada investimento'}
           serie={comMovimentos ? grafico.map((m) => ({ competencia: m.competencia, valor: m.rendeu ?? 0 })) : []}
           nota={(i) => (grafico[i]?.pct !== null && grafico[i]?.pct !== undefined ? pctTexto(grafico[i].pct) : 'sem duas fotos')} />
-        <CartaoKpi compacto icone="tendencia" cor={COR_ENTRADAS} rotulo={desde ? `Rendeu desde ${desde}` : `Rendeu em ${ano}`}
-          valor={d.totalAno.rendeu !== null ? formatBRL(d.totalAno.rendeu) : '—'} valorCurto={d.totalAno.rendeu !== null ? brlCurto(d.totalAno.rendeu) : '—'}
-          corValor={d.totalAno.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}
-          sub={d.totalAno.rendeu !== null ? [pctTexto(d.totalAno.pct), cdiAno ? doCdi(pctAnoFechado, cdiAno) : null, `${d.totalAno.meses} ${d.totalAno.meses === 1 ? 'mês' : 'meses'}`].filter(Boolean).join(' · ') : 'no 2º valor de cada investimento'}
-          serie={d.doAno.map((m, i) => ({ competencia: m.competencia, valor: d.doAno.slice(0, i + 1).reduce((s, x) => s + (x.rendeu ?? 0), 0) }))} />
+        <CartaoKpi compacto icone="tendencia" cor={COR_ENTRADAS} rotulo="Rendeu até hoje"
+          valor={rendeuTotal !== null ? formatBRL(rendeuTotal) : '—'} valorCurto={rendeuTotal !== null ? brlCurto(rendeuTotal) : '—'}
+          corValor={rendeuTotal < 0 ? 'text-hx-c0393d' : 'text-green-700'}
+          sub={rendeuTotal === null ? '—' : [
+            atual.aportado > 0 ? `${pctTexto(rendeuTotal / atual.aportado)} sobre o aplicado` : null,
+            d.totalAno.rendeu !== null && rendeuAntes > 100 ? `${brlCurto(d.totalAno.rendeu)} ${desde ? `desde ${desde}` : `em ${ano}`}${cdiAno ? ` (${doCdi(pctAnoFechado, cdiAno)})` : ''}` : (cdiAno ? doCdi(pctAnoFechado, cdiAno) : null),
+          ].filter(Boolean).join(' · ')}
+          titulo={rendeuAntes > 100 ? `${formatBRL(rendeuAntes)} do que já tinha rendido antes de entrar no app e ${formatBRL(d.totalAno.rendeu ?? 0)} ${desde ? `desde ${desde}` : `em ${ano}`}.` : undefined}
+          serie={grafico.map((m) => ({ competencia: m.competencia, valor: m.rendimentoAcum }))} />
         <CartaoKpi compacto icone="liquidez" cor={COR_LIQUIDEZ} rotulo="Liquidez diária" valor={formatBRL(liquidez(atual))} valorCurto={brlCurto(liquidez(atual))}
           sub={atual?.total ? `${Math.round((liquidez(atual) / atual.total) * 100)}% do patrimônio · resgata quando quiser` : '—'}
           serie={grafico.map((m) => ({ competencia: m.competencia, valor: liquidez(m) }))} />

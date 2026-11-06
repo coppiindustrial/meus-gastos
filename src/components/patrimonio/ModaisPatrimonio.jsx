@@ -7,11 +7,11 @@ import Toggle from '../Toggle.jsx';
 import AbasPilula from '../AbasPilula.jsx';
 import Tooltip from '../Tooltip.jsx';
 import { CirculoMais, IconAplicar, IconColar, IconDepositos, IconLapis, IconResgatar } from '../icons.jsx';
-import { BotaoExcluir, Campo, Etiqueta, RodapeForm } from '../Comuns.jsx';
+import { BotaoEditar, BotaoExcluir, Campo, Etiqueta, RodapeForm } from '../Comuns.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
-import { excluirConta, excluirMovimento, salvarConta } from '../../api/patrimonio.js';
-import { atualizarInvestimento, criarInvestimento, excluirValor, lancarMovimento, registrarValores, salvarDepositos } from '../../api/investimentos.js';
+import { atualizarMovimento, excluirConta, excluirMovimento, salvarConta } from '../../api/patrimonio.js';
+import { atualizarInvestimento, atualizarValor, criarInvestimento, excluirValor, lancarMovimento, registrarValores, salvarDepositos } from '../../api/investimentos.js';
 import { aliquotaIR, diasEntre as diasEntreIR, ehIsento, lerDepositos, planoDosDepositos } from '../../lib/impostoInvestimento.js';
 import {
   TIPOS_INVESTIMENTO, nomeTipoInvestimento, padraoDoTipo, pendentesDeValor, rendimentoForaDoNormal, rotuloLiquidez, rotuloPrazo, rotuloRende,
@@ -29,6 +29,7 @@ import { addMeses, formatDate, nomeCompetencia, todayISO } from '../../lib/forma
 const vazio = (t) => !String(t ?? '').trim();
 const ler = (t) => (vazio(t) ? null : calcularValor(t));
 const doisCampos = 'grid gap-3 sm:grid-cols-2';
+const campoValor = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 const ultimoDiaDoMes = (comp) => { const [y, m] = comp.split('-').map(Number); return `${comp}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`; };
 const diasEntre = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 86400000);
 
@@ -286,6 +287,7 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
   const temQuedas = temDep && !imp.semDatas && !imp.isento && imp.quedas.length > 0;
   const [aba, setAba] = useState(temDep ? 'depositos' : x.prazos ? 'aplicacoes' : 'historico');
   const [colando, setColando] = useState(false);
+  const [editando, setEditando] = useState(null); // a linha do histórico aberta no ✎
   const [foco, setFoco] = useState(null); // a coluna acesa pelo número (ou pelo cabeçalho dela)
   const inv = x.inv;
   const linhas = [
@@ -458,6 +460,7 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
                         {h.tipo === 'resgate' ? '− ' : h.tipo === 'aporte' ? '+ ' : ''}{formatBRL(h.valor_centavos)}
                         {h.tipo !== 'foto' && h.descricao && <span className="ml-2 text-xs text-gray-400">{h.descricao}</span>}
                       </span>
+                      {!movel && <BotaoEditar titulo={h.tipo === 'foto' ? 'Editar este valor' : `Editar est${h.tipo === 'aporte' ? 'a aplicação' : 'e resgate'}`} onClick={() => setEditando(h)} />}
                       {!movel && <BotaoExcluir titulo="Excluir" onClick={() => apagar(h)} />}
                     </li>
                   ))}
@@ -473,7 +476,66 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
           </div>
         )}
       </div>
+      {editando && <ModalEditarRegistro h={editando} valores={valores} onFechar={() => setEditando(null)} onSalvo={() => { setEditando(null); onMudou(); }} />}
       {colando && <ModalDepositos inv={inv} semValor={x.semValor} vale={x.vale} dataVale={x.data} depositos={depositos} taxas={taxas} onFechar={() => setColando(false)} onSalvo={() => { setColando(false); onMudou(); }} />}
+    </Modal>
+  );
+}
+
+// ------------------------------------------------------------ editar uma linha do histórico
+// EDITAR UMA APLICAÇÃO, UM RESGATE OU UM VALOR (06/11/2026, a pedido: antes só se excluía). A data, o valor e — no
+// movimento — o tipo e a observação. A APLICAÇÃO FEITA JUNTO COM A PRIMEIRA FOTO (o "Cadastrar e aplicar": a foto e a
+// aplicação no mesmo dia e com o mesmo valor) leva a foto junto, para os dois continuarem iguais.
+export function ModalEditarRegistro({ h, valores = [], onFechar, onSalvo }) {
+  const toast = useToast();
+  const hoje = todayISO();
+  const foto = h.tipo === 'foto';
+  const [data, setData] = useState(h.data);
+  const [tipo, setTipo] = useState(foto ? 'foto' : h.tipo);
+  const [valor, setValor] = useState(campoValor(h.valor_centavos));
+  const [descricao, setDescricao] = useState(h.descricao ?? '');
+  const [erro, setErro] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  // a foto que nasceu junto com esta aplicação (o mesmo dia e o mesmo valor)
+  const gemea = !foto && h.tipo === 'aporte' ? valores.find((f) => f.data === h.data && Number(f.valor_centavos) === Number(h.valor_centavos)) : null;
+  const enviar = async (e) => {
+    e.preventDefault();
+    const v = calcularValor(valor);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { setErro('Informe a data.'); return; }
+    if (v === null || !(foto ? v >= 0 : v > 0)) { setErro('Informe o valor.'); return; }
+    setSalvando(true);
+    try {
+      if (foto) await atualizarValor(h.id, { data, valor_centavos: v });
+      else {
+        await atualizarMovimento(h.id, { data, valor_centavos: v, tipo, descricao: descricao.trim() });
+        if (gemea && tipo === 'aporte') await atualizarValor(gemea.id, { data, valor_centavos: v });
+      }
+      toast.success(foto ? 'Valor corrigido.' : `${tipo === 'aporte' ? 'Aplicação' : 'Resgate'} corrigid${tipo === 'aporte' ? 'a' : 'o'}${gemea && tipo === 'aporte' ? ' (e o valor do mesmo dia)' : ''}.`);
+      onSalvo();
+    } catch (err) {
+      setErro(/duplicate|unique/i.test(err.message) ? 'Já existe um valor nessa data: mude a data ou exclua o outro.' : err.message);
+      setSalvando(false);
+    }
+  };
+  return (
+    <Modal open onClose={onFechar} title={foto ? 'Editar o valor' : `Editar ${h.tipo === 'aporte' ? 'a aplicação' : 'o resgate'}`} subtitulo={`de ${formatDate(h.data)} · ${formatBRL(h.valor_centavos)}`} maxWidth="max-w-md" z="z-[70]">
+      <form onSubmit={enviar} className="space-y-4">
+        {!foto && (
+          <AbasPilula abas={[{ key: 'aporte', label: 'Aplicação' }, { key: 'resgate', label: 'Resgate' }]} valor={tipo} onChange={(x) => { setTipo(x); setErro(''); }} variante="claro" cheia altura={32} folga={2} />
+        )}
+        <div className={doisCampos}>
+          <Campo rotulo="Data"><CampoData value={data} onChange={(x) => { setData(x); setErro(''); }} max={hoje} /></Campo>
+          <Campo rotulo={foto ? 'Valia' : 'Valor'}>
+            <input className="input text-right tabular-nums" inputMode="decimal" autoFocus value={valor} onChange={(e) => { setValor(e.target.value); setErro(''); }} />
+          </Campo>
+        </div>
+        {!foto && (
+          <Campo rotulo="Observação (opcional)"><input className="input" value={descricao} onChange={(e) => setDescricao(e.target.value)} /></Campo>
+        )}
+        {gemea && tipo === 'aporte' && <p className="rounded-md bg-hx-f9fafb px-3 py-2 text-[12.5px] text-gray-600">É a aplicação do dia em que o investimento começou: o valor desse dia muda junto.</p>}
+        {erro && <p className="text-sm font-medium text-hx-dc2626">{erro}</p>}
+        <RodapeForm onCancelar={onFechar} salvando={salvando} rotulo="Salvar" />
+      </form>
     </Modal>
   );
 }
@@ -487,7 +549,6 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
 // colar passa a ele sozinho). Embaixo, o "valor aplicado" (a soma, no depositado; o do banco, no "vale hoje") e, no
 // investimento sem valor ainda, o "vale hoje" (vazio: a estimativa pelo CDI). A conta é `planoDosDepositos` (testada).
 // Salvar substitui a lista anterior.
-const campoValor = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 let seqDep = 0;
 const linhaDep = (data = '', valor = '') => { seqDep += 1; return { k: `d${seqDep}`, data, valor }; };
 
