@@ -107,12 +107,20 @@ const COLUNAS_A = [
   { id: 'resgate', rotulo: 'Resgate', alinha: 'left', desk: true },
   { id: 'aplicado', rotulo: 'Aplicado', desk: true },
   { id: 'vale', rotulo: 'Vale hoje' },
+  { id: 'liquido', rotulo: 'Líquido ≈' },
   { id: 'rendeu', rotulo: 'Rendeu' },
   { id: 'ano', rotulo: 'Em ', desk: true },
   { id: 'curva', rotulo: '12 meses', semOrdem: true, desk: true },
 ];
 
-function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdenar, total, ano, movel, acoes, cdi }) {
+// OS DEPÓSITOS DENTRO DO INVESTIMENTO (06/11/2026, o mockup "Depósitos em cascata"): o título com mais de um depósito
+// (ou com a lista colada do banco) ganha a seta e abre nos depósitos, do mais novo ao mais antigo — o depositado, o que
+// vale, o líquido e o rendimento (≈), a ALÍQUOTA de hoje na coluna Resgate e quando ela cai (`estimarImposto`).
+const TOM_ALIQUOTA = { 0.225: 'vermelho', 0.2: 'ambar', 0.175: 'cinza', 0.15: 'verde' };
+const pctAliq = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+export const temDepositos = (x) => !!x.imposto && (x.imposto.lotes.length > 1 || x.imposto.lotes.some((l) => l.origem === 'colado'));
+
+function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdenar, total, ano, movel, acoes, cdi, abertosInv = new Set(), alternarInv = () => {} }) {
   const caixaRef = useRef(null);
   const desenhadas = useLinhasAnimadas(todas, visiveis, caixaRef);
   const balao = useBalao(280, 170);
@@ -153,8 +161,31 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
     if (!a) return null;
     const l = todas.find((t) => t.id === a.id);
     if (!l) return null;
+    if (l.tipo === 'lote') return null;
     const item = l.tipo === 'inv' ? l.x : l.g;
     const nome = l.tipo === 'inv' ? l.x.inv.nome : l.g.conta.nome;
+    if (a.col === 'liquido') {
+      const imp = l.tipo === 'inv' ? l.x.imposto : null;
+      if (imp?.semEstimativa) return { titulo: nome, itens: [{ rotulo: 'Vale hoje (bruto)', valor: formatBRL(item.vale) }], nota: 'Fundo: o come-cotas e o IR dele não são estimados.' };
+      if (imp?.semDatas) return { titulo: nome, itens: [{ rotulo: 'Vale hoje (bruto)', valor: formatBRL(item.vale) }, { rotulo: 'Rendeu', valor: formatBRL(imp.ganho), cor: COR_ENTRADAS }], nota: 'Faltam as datas dos depósitos: sem elas não dá para saber a alíquota de cada um. Na ficha, cole a lista de depósitos do banco (ou ponha a data da aplicação no cadastro).' };
+      if (l.tipo === 'grupo' && item.incompleto) return { titulo: `${nome} · se resgatar hoje`, itens: [{ rotulo: 'Vale hoje (bruto)', valor: formatBRL(item.vale) }, { rotulo: 'IR ≈ (dos que têm as datas)', valor: formatBRL(item.ir) }], nota: 'Parcial: algum investimento daqui está sem as datas dos depósitos (ou é fundo) e entra pelo bruto.' };
+      const ir = l.tipo === 'inv' ? (imp?.ir ?? 0) : item.ir;
+      const iof = l.tipo === 'inv' ? (imp?.iof ?? 0) : 0;
+      const q = imp?.proximaQueda;
+      return {
+        titulo: `${nome} · se resgatar hoje`,
+        itens: [
+          { rotulo: 'Vale hoje (bruto)', valor: formatBRL(item.vale) },
+          { rotulo: imp?.isento ? 'IR (isento)' : `IR ≈${imp && imp.ganho > 0 ? ` (${pctAliq(imp.aliquotaMedia)} do rendimento)` : ''}`, valor: formatBRL(ir) },
+          ...(iof > 0 ? [{ rotulo: 'IOF ≈ (menos de 30 dias)', valor: formatBRL(iof) }] : []),
+          { rotulo: 'Líquido ≈', valor: formatBRL(l.tipo === 'inv' ? imp?.liquido ?? item.vale : item.liquido), cor: COR_ENTRADAS },
+        ],
+        nota: [
+          q ? `Em ${formatDate(q.data)} o depósito de ${formatDate(q.deposito)} cai de ${pctAliq(q.de)} para ${pctAliq(q.para)} (−${formatBRL(q.menos)})` : null,
+          'Estimado pelo CDI desde a data de cada depósito',
+        ].filter(Boolean).join(' · '),
+      };
+    }
     if (a.col === 'curva') {
       const p = item.curva[a.i];
       if (!p) return null;
@@ -195,6 +226,13 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
       <span className="block text-[11.5px] text-gray-500">{pctTexto(item.pct, 1)}</span>
     </td>
   );
+  const liquidoCel = (id, valor, sub, forte, extra = '') => (
+    <td onMouseMove={balao.aoMover({ id, col: 'liquido' })} className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums ${forte ? 'font-semibold text-gray-900' : 'text-gray-800'} ${extra} ${aceso(id)}`}>
+      {valor === null ? <span className="text-gray-400">—</span> : reais(valor)}
+      {sub && <span className="block text-[11.5px] font-normal text-gray-500">{sub}</span>}
+    </td>
+  );
+  const subLiquido = (imp) => (!imp ? null : imp.semEstimativa ? 'sem estimativa' : imp.semDatas ? 'faltam as datas' : imp.isento ? 'isento' : `IR ≈ ${reais((imp.ir ?? 0) + (imp.iof ?? 0))}`);
   const curvaCel = (id, item, cor) => (
     <td className={`border-b border-gray-100 px-3 py-2 ${movel ? 'hidden' : ''} ${aceso(id)}`}>
       {item.curva.length > 1 ? (
@@ -238,6 +276,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                   </td>
                   <td className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums text-gray-700 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{reais(g.aplicado)}</td>
                   <td className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>{reais(g.vale)}</td>
+                  {liquidoCel(l.id, g.liquido, g.incompleto ? 'parcial' : g.ir > 0 ? `IR ≈ ${reais(g.ir)}` : null, true, 'bg-hx-f9fafb')}
                   <td onMouseMove={balao.aoMover({ id: l.id, col: 'rendeu' })} className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums ${aceso(l.id)}`}>
                     <span className={g.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(g.rendeu)}{reais(Math.abs(g.rendeu))}</span>
                   </td>
@@ -260,12 +299,42 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                 </tr>
               );
             }
+            if (l.tipo === 'lote') {
+              const lo = l.lo;
+              const td = `border-b border-gray-100 px-3 py-1.5 text-[12.5px] ${aceso(l.id)}`;
+              return (
+                <tr key={l.id} {...attrs} onMouseEnter={() => setSobLinha(l.id)}>
+                  <td className={`${td} pl-[62px] text-gray-600`}>
+                    {formatDate(lo.data)}{lo.dataAproximada && <span className="ml-1 text-gray-400" title="Sem a data da aplicação: a idade conta da data do cadastro">≈</span>}
+                    <span className="block text-[11px] text-gray-400">{lo.dias} {lo.dias === 1 ? 'dia' : 'dias'}{lo.origem === 'aporte' ? ' · pelo app' : ''}</span>
+                  </td>
+                  <td className={`${td} ${movel ? 'hidden' : ''}`}>
+                    {l.x.imposto.isento ? <Etiqueta tom="verde">isento</Etiqueta> : <Etiqueta tom={TOM_ALIQUOTA[lo.aliquota] ?? 'cinza'}>IR {pctAliq(lo.aliquota)}</Etiqueta>}
+                    {!l.x.imposto.isento && <span className="block text-[11px] text-gray-500">{lo.proxima ? `cai para ${pctAliq(lo.proxima.aliquota)} em ${formatDate(lo.proxima.data)}` : 'já na menor'}</span>}
+                  </td>
+                  <td className={`${td} text-right tabular-nums text-gray-500 ${movel ? 'hidden' : ''}`}>{lo.origem !== 'aporte' && <span className="text-gray-400">≈ </span>}{reais(lo.depositado)}</td>
+                  <td className={`${td} text-right tabular-nums text-gray-800`}>{reais(lo.vale)}</td>
+                  <td className={`${td} text-right tabular-nums text-gray-800`}>{reais(lo.liquido)}{(lo.ir + lo.iof) > 0 && <span className="block text-[11px] text-gray-500">IR ≈ {reais(lo.ir + lo.iof)}</span>}</td>
+                  <td className={`${td} text-right tabular-nums text-green-700`}>{sinal(lo.ganho)}{reais(Math.abs(lo.ganho))}</td>
+                  <td className={`${td} ${movel ? 'hidden' : ''}`} />
+                  <td className={`${td} ${movel ? 'hidden' : ''}`} />
+                  {!movel && <td className={td} />}
+                </tr>
+              );
+            }
             const x = l.x;
             const encerrado = x.inv.ativo === false;
+            const comDep = temDepositos(x);
+            const depAberto = abertosInv.has(x.inv.id);
             const sub = [nomeTipoInvestimento(x.inv.tipo), rotuloRende(x.inv), x.inv.emissor].filter(Boolean).join(' · ');
             return (
               <tr key={l.id} {...attrs} className="group/linha" onMouseEnter={() => setSobLinha(l.id)}>
-                <td className={`border-b border-gray-100 py-2 pl-[38px] pr-3 ${aceso(l.id)}`}>
+                <td className={`border-b border-gray-100 py-2 pl-[20px] pr-3 ${aceso(l.id)}`}>
+                  <span className="flex items-start gap-1.5">
+                  {comDep ? (
+                    <button type="button" onClick={() => alternarInv(x.inv.id)} aria-expanded={depAberto} title={depAberto ? 'Fechar os depósitos' : `Abrir os ${x.imposto.lotes.length} depósitos`}
+                      className="mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] hover:bg-gray-100"><IconChevron aberto={depAberto} /></button>
+                  ) : <span className="w-4 shrink-0" />}
                   {acoes ? (
                     <button type="button" onClick={() => acoes.ficha(x.inv)} className="block max-w-[262px] text-left">
                       <span className={`flex items-center gap-1.5 font-medium ${encerrado ? 'text-gray-400' : 'text-gray-800'}`}>
@@ -279,10 +348,12 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
                       <span className="block truncate text-[11.5px] text-gray-500">{sub}</span>
                     </span>
                   )}
+                  </span>
                 </td>
                 <td className={`border-b border-gray-100 px-3 py-2 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}><Resgate x={x} /></td>
                 <td className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{reais(x.aplicado)}</td>
                 <td className={`border-b border-gray-100 px-3 py-2 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>{reais(x.vale)}</td>
+                {liquidoCel(l.id, x.imposto && x.imposto.liquido === null && !x.imposto.isento ? null : x.imposto?.liquido ?? x.vale, subLiquido(x.imposto), true)}
                 {rendeuCel(l.id, x)}
                 <td className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{pctTexto(x.pctAno, 1)}</td>
                 {curvaCel(l.id, x, l.g.cor)}
@@ -305,6 +376,7 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
             <td className={`border-t border-gray-200 bg-hx-f9fafb ${movel ? 'hidden' : ''}`} />
             <td className={`border-t border-gray-200 bg-hx-f9fafb px-3 text-right tabular-nums text-gray-700 ${movel ? 'hidden' : ''}`}>{reais(total.aplicado)}</td>
             <td className="border-t border-gray-200 bg-hx-f9fafb px-3 text-right tabular-nums text-gray-900">{reais(total.vale)}</td>
+            <td className="border-t border-gray-200 bg-hx-f9fafb px-3 text-right tabular-nums text-gray-900">{reais(total.liquido ?? total.vale)}{(total.incompleto || total.ir > 0) && <span className="block text-[11.5px] font-normal text-gray-500">{total.incompleto ? 'parcial' : `IR ≈ ${reais(total.ir)}`}</span>}</td>
             <td className="border-t border-gray-200 bg-hx-f9fafb px-3 text-right tabular-nums">
               <span className={total.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(total.rendeu)}{reais(Math.abs(total.rendeu))}</span>
               <span className="block text-[11.5px] font-normal text-gray-500">{pctTexto(total.aplicado > 0 ? total.rendeu / total.aplicado : null, 1)}</span>
@@ -479,6 +551,9 @@ export default function BlocoInvestimentos({
   const [modo, setModo] = useState('rs');
   const [recolhidas, setRecolhidasEstado] = useState(() => new Set(lerJson('patrimonio_recolhidas', [])));
   const [ordem, setOrdemEstado] = useState(() => lerJson('patrimonio_ordem', null));
+  // os investimentos com os depósitos abertos (lembrado no navegador)
+  const [abertosInv, setAbertosInvEstado] = useState(() => new Set(lerJson('patrimonio_depositos_abertos', [])));
+  const alternarInv = (id) => setAbertosInvEstado((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); lsSet('patrimonio_depositos_abertos', JSON.stringify([...n])); return n; });
   const [ampliado, setAmpliado] = useState(false);
   const [cheio, setCheio] = useState(false);
   const setVista = (v) => { setVistaEstado(v); lsSet('patrimonio_vista', v); };
@@ -492,14 +567,19 @@ export default function BlocoInvestimentos({
   const ordenados = useMemo(() => ordenarCarteira(grupos, ordem), [grupos, ordem]);
   const todas = useMemo(() => ordenados.flatMap((g) => [
     { id: `g:${g.conta.id}`, tipo: 'grupo', g },
-    ...g.itens.map((x) => ({ id: `i:${x.inv.id}`, tipo: 'inv', g, x })),
+    ...g.itens.flatMap((x) => [
+      { id: `i:${x.inv.id}`, tipo: 'inv', g, x },
+      ...(temDepositos(x) ? x.imposto.lotes.map((lo, k) => ({ id: `l:${x.inv.id}:${k}`, tipo: 'lote', g, x, lo })) : []),
+    ]),
   ]), [ordenados]);
-  const visiveis = useMemo(() => todas.filter((l) => l.tipo === 'grupo' || !recolhidas.has(l.g.conta.id)), [todas, recolhidas]);
+  const visiveis = useMemo(() => todas.filter((l) => l.tipo === 'grupo' || (!recolhidas.has(l.g.conta.id) && (l.tipo === 'inv' || abertosInv.has(l.x.inv.id)))), [todas, recolhidas, abertosInv]);
+  const todasB = useMemo(() => todas.filter((l) => l.tipo !== 'lote'), [todas]);
+  const visiveisB = useMemo(() => visiveis.filter((l) => l.tipo !== 'lote'), [visiveis]);
   const qtd = grupos.reduce((s, g) => s + g.itens.length, 0);
   const comum = { todas, visiveis, recolhidas, alternar };
   const corpo = (ampl) => (verVista === 'mes'
-    ? <TabelaMesAMes key={ampl ? 'b-a' : 'b'} {...comum} meses={meses} comps={comps} cdi={cdi} pct={modo === 'pct'} />
-    : <TabelaCarteira key={ampl ? 'a-a' : 'a'} {...comum} ordem={ordem} onOrdenar={onOrdenar} total={total} ano={ano} movel={movel} acoes={acoes} cdi={cdi} />);
+    ? <TabelaMesAMes key={ampl ? 'b-a' : 'b'} {...comum} todas={todasB} visiveis={visiveisB} meses={meses} comps={comps} cdi={cdi} pct={modo === 'pct'} />
+    : <TabelaCarteira key={ampl ? 'a-a' : 'a'} {...comum} ordem={ordem} onOrdenar={onOrdenar} total={total} ano={ano} movel={movel} acoes={acoes} cdi={cdi} abertosInv={abertosInv} alternarInv={alternarInv} />);
 
   const icones = (classe = BTN) => (
     <span className="inline-flex shrink-0 overflow-hidden rounded-md border border-gray-300 bg-white [&>*+*]:border-l [&>*+*]:border-gray-200">

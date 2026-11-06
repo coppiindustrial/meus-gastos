@@ -308,6 +308,21 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     junto com o salvar; Enter num campo vazio repete o valor de antes. APLICAR (`ModalMovimento`): o novo investimento
     nasce ali (nome, lugar, tipo; o valor entra como a aplicação), "Resgatar tudo · R$ X" encerra. Os valores aceitam
     conta (`calcularValor`).
+  · O IR EM CASCATA E O LÍQUIDO (06/11/2026, o mockup aprovado "Depósitos em cascata e o valor líquido", opção A;
+    migration 016 `depositos_investimento`): o IR da renda fixa vai sobre o rendimento de CADA DEPÓSITO pela idade dele
+    (22,5% · 20% · 17,5% · 15%, e o IOF nos 30 primeiros dias). `estimarImposto` (`lib/impostoInvestimento.js`, testada):
+    os depósitos são a lista COLADA do banco ("Detalhes dos depósitos": a data e o valor numa `referencia` —
+    `lerDepositos` lê "Feito em / 05 SET 2026 / R$ 4.165,28") ou, sem ela, o bloco do cadastro (com a "data da
+    aplicação"), mais as aplicações feitas pelo app (exatas); o resgate sai dos mais antigos. O rendimento de cada um sai
+    do CDI de cada mês (`fatorDeCrescimento`, × o % contratado) desde a data, AJUSTADO ao que o título vale e ao que foi
+    aplicado. Conferido com o RDB real: IR ≈ R$ 1.150,38 contra R$ 1.149,32 do banco. Isentos (LCI, LCA, CRI/CRA,
+    poupança, saldo) = líquido igual ao bruto; fundo = sem estimativa; SEM AS DATAS (o bloco do cadastro sem a data da
+    aplicação) o IR NÃO se estima — "— faltam as datas", nunca "R$ 0". Na carteira, a coluna "Líquido ≈" (o balão: IR,
+    IOF, a próxima queda) e o título com mais de um depósito ABRE nos depósitos (a seta antes do nome; `abertosInv`,
+    lembrado em `patrimonio_depositos_abertos`): a data e a idade, a alíquota de hoje e quando cai, o depositado ≈, o
+    líquido e o rendimento. Na ficha, a aba "Depósitos e IR" (a cascata e "as próximas quedas do IR") e "Colar os
+    depósitos do banco…" (`ModalColarDepositos`: confere a soma com o valor de hoje; salvar substitui a lista). O
+    painel diz o líquido no cartão do Patrimônio. O CDI é lido desde o depósito mais antigo (`useDadosPatrimonio`).
 
 ## Gastos fixos (fase 5)
 

@@ -165,7 +165,8 @@ export default function Patrimonio() {
       <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <CartaoKpi compacto icone="patrimonio" cor="var(--serie-gastos)" rotulo="Patrimônio" valor={formatBRL(atual?.total ?? 0)} valorCurto={brlCurto(atual?.total ?? 0)}
           variacao={anterior ? variacao(atual.total, anterior.total) : null} tituloVariacao="sobre o mês anterior"
-          sub={anterior ? `${atual.total - anterior.total >= 0 ? '+' : '−'}${brlCurto(Math.abs(atual.total - anterior.total))} no mês` : desde ? `desde ${desde}` : '—'}
+          sub={d.total.ir > 0 ? `≈ ${brlCurto(d.total.liquido)} líquido · IR ≈ ${brlCurto(d.total.ir)}`
+            : anterior ? `${atual.total - anterior.total >= 0 ? '+' : '−'}${brlCurto(Math.abs(atual.total - anterior.total))} no mês` : desde ? `desde ${desde}` : '—'}
           serie={grafico.map((m) => ({ competencia: m.competencia, valor: m.total }))} />
         <CartaoKpi compacto icone="entradas" cor={COR_ENTRADAS} rotulo={ref ? `Rendeu em ${competenciaCurta(ref.competencia)}` : 'Rendeu no mês'}
           valor={ref ? formatBRL(ref.rendeu) : '—'} valorCurto={ref ? brlCurto(ref.rendeu) : '—'} corValor={ref?.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}

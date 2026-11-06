@@ -9,11 +9,12 @@ import { BotaoExcluir, Campo, Etiqueta, RodapeForm } from '../Comuns.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { excluirConta, excluirMovimento, salvarConta } from '../../api/patrimonio.js';
-import { criarInvestimento, excluirValor, lancarMovimento, registrarValores } from '../../api/investimentos.js';
+import { criarInvestimento, excluirValor, lancarMovimento, registrarValores, salvarDepositos } from '../../api/investimentos.js';
+import { aliquotaIR, diasEntre as diasEntreIR, ehIsento, lerDepositos } from '../../lib/impostoInvestimento.js';
 import {
   TIPOS_INVESTIMENTO, nomeTipoInvestimento, padraoDoTipo, rendimentoForaDoNormal, rotuloLiquidez, rotuloPrazo, rotuloRende,
 } from '../../lib/investimentos.js';
-import { calcularValor, formatBRL } from '../../lib/dinheiro.js';
+import { calcularValor, formatBRL, parseValor } from '../../lib/dinheiro.js';
 import { addMeses, formatDate, todayISO } from '../../lib/format.js';
 
 // OS POP-UPS DOS INVESTIMENTOS (06/11/2026, o mockup "Patrimônio do zero"): os dois gestos do dia a dia — APLICAR /
@@ -179,12 +180,19 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
 }
 
 // ------------------------------------------------------------ a ficha do investimento
-// O que ele é, os números, as APLICAÇÕES (no "cada aplicação vence": quando cada uma vence, a barrinha do prazo e
-// "reaplica") e o HISTÓRICO (os valores e os movimentos, com o ✕ para corrigir).
-export function FichaInvestimento({ x, lugar, valores, movimentos, movel, onFechar, onAplicar, onCadastro, onMudou }) {
+// O que ele é e os números (com o LÍQUIDO ≈), e as abas: DEPÓSITOS E IR (06/11/2026, o mockup "Depósitos em cascata": cada
+// depósito com a idade, o que vale, o depositado e o rendimento ≈, a alíquota de hoje e quando ela cai, e a LINHA DO
+// TEMPO das quedas do imposto; o "Colar os depósitos…" traz a lista do banco), VENCIMENTOS (no "prazo por aplicação") e o
+// HISTÓRICO (os valores e os movimentos, com o ✕ para corrigir).
+const TOM_ALIQ = { 0.225: 'vermelho', 0.2: 'ambar', 0.175: 'cinza', 0.15: 'verde' };
+const pctA = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+
+export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [], comDepositos, movel, onFechar, onAplicar, onCadastro, onMudou }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
-  const [aba, setAba] = useState(x.prazos ? 'aplicacoes' : 'historico');
+  const imp = x.imposto;
+  const [aba, setAba] = useState(imp && !imp.semEstimativa ? 'depositos' : x.prazos ? 'aplicacoes' : 'historico');
+  const [colando, setColando] = useState(false);
   const inv = x.inv;
   const linhas = [
     ...valores.map((f) => ({ ...f, tipo: 'foto' })),
@@ -196,20 +204,87 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, movel, onFech
     try { await (foto ? excluirValor(h.id) : excluirMovimento(h.id)); toast.success('Excluído.'); onMudou(); } catch (err) { toast.error(err.message); }
   };
   const num = 'text-[17px] font-semibold tabular-nums';
+  const abas = [
+    ...(imp && !imp.semEstimativa ? [{ key: 'depositos', label: 'Depósitos e IR' }] : []),
+    ...(x.prazos ? [{ key: 'aplicacoes', label: 'Vencimentos' }] : []),
+    { key: 'historico', label: 'Histórico' },
+  ];
+  const ir = imp ? (imp.ir ?? 0) + (imp.iof ?? 0) : 0;
+  const th = 'border-b border-gray-200 bg-hx-f9fafb px-2.5 py-1.5 text-right text-[10.5px] font-semibold uppercase tracking-wide text-gray-500';
+  const td = 'border-b border-gray-100 px-2.5 py-1.5 text-right tabular-nums';
   return (
-    <Modal open onClose={onFechar} title={inv.nome} maxWidth="max-w-[760px]"
+    <Modal open onClose={onFechar} title={inv.nome} maxWidth="max-w-[860px]"
       subtitulo={[lugar, nomeTipoInvestimento(inv.tipo), rotuloRende(inv), rotuloLiquidez(inv) + (inv.liquidez === 'por_aplicacao' ? (inv.ao_vencer === 'volta' ? ' · volta ao vencer' : ' · reaplica sozinho') : '')].filter(Boolean).join(' · ')}>
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-3 rounded-md border border-gray-200 px-4 py-3">
+        <div className="grid grid-cols-2 gap-3 rounded-md border border-gray-200 px-4 py-3 sm:grid-cols-4">
           <div><div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Aplicado</div><div className={`${num} text-gray-800`}>{formatBRL(x.aplicado)}</div></div>
           <div><div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Vale hoje</div><div className={`${num} text-gray-900`}>{formatBRL(x.vale)}</div>
-            {x.data && <div className="text-[11.5px] text-gray-400">foto de {formatDate(x.data)}</div>}</div>
+            {x.data && <div className="text-[11.5px] text-gray-400">bruto · foto de {formatDate(x.data)}</div>}</div>
           <div><div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Rendeu</div>
             <div className={`${num} ${x.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}`}>{formatBRL(x.rendeu)}</div>
             {x.pct !== null && <div className="text-[11.5px] text-gray-400">{(x.pct * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% sobre o aplicado</div>}</div>
+          <div><div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Líquido ≈</div>
+            <div className={`${num} text-gray-900`}>{imp?.semEstimativa || imp?.semDatas ? '—' : formatBRL(imp?.liquido ?? x.vale)}</div>
+            <div className="text-[11.5px] text-gray-400">{!imp || imp.semEstimativa ? 'sem estimativa' : imp.semDatas ? 'faltam as datas dos depósitos' : imp.isento ? 'isento de IR' : `IR ≈ ${formatBRL(ir)} se resgatar hoje`}</div></div>
         </div>
-        {x.prazos && <AbasPilula abas={[{ key: 'aplicacoes', label: 'Aplicações e vencimentos' }, { key: 'historico', label: 'Histórico' }]} valor={aba} onChange={setAba} variante="claro" altura={30} folga={2} />}
-        {aba === 'aplicacoes' && x.prazos ? (
+        {abas.length > 1 && <AbasPilula abas={abas} valor={aba} onChange={setAba} variante="claro" altura={30} folga={2} />}
+
+        {aba === 'depositos' && imp?.semDatas && (
+          <div className="rounded-md border border-dashed border-gray-300 px-4 py-5 text-center">
+            <p className="text-[13.5px] font-semibold text-gray-800">Faltam as datas dos depósitos</p>
+            <p className="mx-auto mt-1 max-w-[520px] text-[12.5px] leading-relaxed text-gray-600">
+              O IR de cada depósito depende da idade dele (22,5% até 180 dias … 15% depois de 720). Cole a lista "Detalhes dos depósitos" do banco
+              — a data e o valor de cada um — e o app calcula o imposto e o líquido de cada um, e quando cada alíquota cai.
+            </p>
+            {!movel && comDepositos && <button type="button" className="btn-primary mt-3" onClick={() => setColando(true)}>Colar os depósitos do banco…</button>}
+            {!comDepositos && <p className="mt-2 text-[12px] text-amber-700">Falta aplicar a migration 016 (os depósitos).</p>}
+          </div>
+        )}
+        {aba === 'depositos' && imp && !imp.semDatas && (
+          <div className="space-y-3">
+            <div className="max-h-[300px] overflow-auto rounded-md border border-gray-200">
+              <table className="w-full border-separate border-spacing-0 text-[12.5px]">
+                <thead className="sticky top-0"><tr>
+                  <th className={`${th} text-left`}>Depósito</th><th className={th}>Vale hoje</th><th className={th}>Depositado ≈</th><th className={th}>Rendeu ≈</th>
+                  <th className={`${th} text-left`}>Alíquota</th><th className={`${th} text-left`}>Quando cai</th><th className={th}>IR ≈</th>
+                </tr></thead>
+                <tbody>
+                  {imp.lotes.map((l, i) => (
+                    <tr key={i}>
+                      <td className={`${td} text-left text-gray-700`}>{formatDate(l.data)}{l.dataAproximada && <span className="ml-1 text-gray-400" title="Sem a data da aplicação">≈</span>}
+                        <span className="block text-[11px] text-gray-400">{l.dias} {l.dias === 1 ? 'dia' : 'dias'}{l.origem === 'aporte' ? ' · pelo app' : ''}</span></td>
+                      <td className={`${td} font-medium text-gray-900`}>{formatBRL(l.vale)}</td>
+                      <td className={`${td} text-gray-600`}>{formatBRL(l.depositado)}</td>
+                      <td className={`${td} text-green-700`}>{formatBRL(l.ganho)}</td>
+                      <td className={`${td} text-left`}>{imp.isento ? <Etiqueta tom="verde">isento</Etiqueta> : <Etiqueta tom={TOM_ALIQ[l.aliquota] ?? 'cinza'}>{pctA(l.aliquota)}</Etiqueta>}</td>
+                      <td className={`${td} text-left text-gray-600`}>{imp.isento ? '—' : l.proxima ? <><b className="font-semibold text-gray-800">{formatDate(l.proxima.data)}</b> → {pctA(l.proxima.aliquota)}</> : <span className="text-gray-400">já na menor</span>}</td>
+                      <td className={`${td} text-gray-800`}>{formatBRL(l.ir + l.iof)}{l.iof > 0 && <span className="block text-[10.5px] text-gray-400">com IOF</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!imp.isento && imp.quedas.length > 0 && (
+              <div className="rounded-md border border-gray-200 px-3 py-2.5">
+                <div className="mb-1 text-[12.5px] font-semibold text-gray-800">As próximas quedas do IR <span className="font-normal text-gray-400">se você não resgatar nada</span></div>
+                <ul className="divide-y divide-dashed divide-gray-200">
+                  {imp.quedas.slice(0, 6).map((q, i) => (
+                    <li key={i} className="grid grid-cols-[88px_minmax(0,1fr)_auto] items-center gap-3 py-1.5 text-[12.5px]">
+                      <b className="font-semibold tabular-nums text-gray-800">{formatDate(q.data)}</b>
+                      <span className="min-w-0 text-gray-600">o depósito de {formatDate(q.deposito)} ({formatBRL(q.vale)}) passa de {pctA(q.de)} para {pctA(q.para)}</span>
+                      <span className="whitespace-nowrap font-semibold tabular-nums text-green-700">−{formatBRL(q.menos)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="text-xs text-gray-500">
+              ≈ estimado: o rendimento de cada depósito sai do CDI desde a data dele, ajustado ao que o investimento vale e ao que foi aplicado.
+              {imp.lotes.some((l) => l.dataAproximada) && ' Sem a data das aplicações antigas, a idade conta do cadastro: cole a lista de depósitos do banco para o IR de cada um.'}
+            </p>
+          </div>
+        )}
+        {aba === 'aplicacoes' && x.prazos && (
           <div className="space-y-1.5">
             {x.prazos.lotes.length === 0 && <p className="text-sm text-gray-500">Nada aplicado.</p>}
             {x.prazos.lotes.map((l, i) => (
@@ -225,13 +300,10 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, movel, onFech
                 </span>
               </div>
             ))}
-            <p className="text-xs text-gray-500">
-              {x.prazos.lotes.some((l) => l.inicial && !l.data)
-                ? 'O que já estava aplicado no cadastro entra como uma aplicação sem data. Com a "data da aplicação" no cadastro (✎), o app sabe quando ela vence.'
-                : `Cada aplicação fica ${rotuloPrazo(x.prazos.prazo)}; ${inv.ao_vencer === 'volta' ? 'ao vencer, o dinheiro volta para a conta (lance o resgate).' : 'ao vencer, reaplica sozinha por mais um prazo, sem virar resgate.'}`}
-            </p>
+            <p className="text-xs text-gray-500">{`Cada aplicação fica ${rotuloPrazo(x.prazos.prazo)}; ${inv.ao_vencer === 'volta' ? 'ao vencer, o dinheiro volta para a conta (lance o resgate).' : 'ao vencer, reaplica sozinha por mais um prazo, sem virar resgate.'}`}</p>
           </div>
-        ) : (
+        )}
+        {aba === 'historico' && (
           linhas.length === 0 ? <p className="text-sm text-gray-500">Nada registrado ainda.</p> : (
             <ul className="max-h-[300px] divide-y divide-gray-100 overflow-auto rounded-md border border-gray-200">
               {linhas.map((h) => (
@@ -251,13 +323,95 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, movel, onFech
           )
         )}
         {!movel && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+          <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
             <button type="button" className="text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:underline" onClick={onCadastro}>Editar no cadastro</button>
+            {comDepositos && !imp?.semEstimativa && (
+              <button type="button" className="text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:underline" onClick={() => setColando(true)}>
+                {depositos.length ? `Colar os depósitos de novo (${depositos.length})` : 'Colar os depósitos do banco…'}
+              </button>
+            )}
             <span className="flex-1" />
             {inv.ativo !== false && <button type="button" className="btn-secondary" onClick={() => onAplicar('resgate')}><IcoDesce />Resgatar</button>}
             {inv.ativo !== false && <button type="button" className="btn-primary" onClick={() => onAplicar('aporte')}><IcoSobe />Aplicar</button>}
           </div>
         )}
+      </div>
+      {colando && <ModalColarDepositos inv={inv} vale={x.vale} dataVale={x.data} depositos={depositos} onFechar={() => setColando(false)} onSalvo={() => { setColando(false); onMudou(); }} />}
+    </Modal>
+  );
+}
+
+// ------------------------------------------------------------ colar os depósitos do banco
+// Uma vez só, para o que já estava aplicado antes do cadastro: a lista "Detalhes dos depósitos" do banco (a data e o
+// valor de hoje de cada um), colada como texto (`lerDepositos`). O app mostra o que leu e CONFERE A SOMA com o valor do
+// investimento; o depositado de cada um ele estima pelo CDI. Salvar substitui a lista anterior.
+function ModalColarDepositos({ inv, vale, dataVale, depositos, onFechar, onSalvo }) {
+  const toast = useToast();
+  const hoje = todayISO();
+  const [texto, setTexto] = useState('');
+  const [referencia, setReferencia] = useState(depositos[0]?.referencia ?? (dataVale && dataVale > addMeses(hoje.slice(0, 7), -1) ? dataVale : hoje));
+  const [salvando, setSalvando] = useState(false);
+  const { itens } = useMemo(() => lerDepositos(texto, parseValor), [texto]);
+  const soma = itens.reduce((s, i) => s + i.valor_centavos, 0);
+  const bate = vale > 0 && Math.abs(soma - vale) <= Math.max(100, vale * 0.005);
+  const salvar = async (lista) => {
+    setSalvando(true);
+    try {
+      await salvarDepositos(inv.id, referencia, lista);
+      toast.success(lista.length ? `${lista.length} depósitos de ${inv.nome} salvos.` : 'A lista de depósitos foi apagada.');
+      onSalvo();
+    } catch (err) {
+      toast.error(/depositos_investimento|schema cache|does not exist/i.test(err.message) ? 'Falta aplicar a migration 016 (os depósitos).' : err.message);
+      setSalvando(false);
+    }
+  };
+  const th = 'border-b border-gray-200 bg-hx-f9fafb px-2.5 py-1.5 text-right text-[10.5px] font-semibold uppercase tracking-wide text-gray-500';
+  return (
+    <Modal open onClose={onFechar} title="Depósitos de antes do cadastro" subtitulo={`${inv.nome} · o valor de hoje de cada um, como o banco mostra`} maxWidth="max-w-[880px]" z="z-[70]">
+      <div className="space-y-3">
+        <div className="grid gap-4 md:grid-cols-[1fr_1.15fr]">
+          <div>
+            <span className="label">Cole aqui a lista do banco</span>
+            <textarea className="input !h-[240px] w-full resize-y py-2 font-mono text-[12.5px] leading-relaxed" autoFocus value={texto} onChange={(e) => setTexto(e.target.value)}
+              placeholder={'Feito em 05 SET 2026  R$ 4.165,28\nFeito em 04 SET 2026  R$ 17.204,90\n…'} />
+            <p className="mt-1 text-xs text-gray-500">Aceita "05 SET 2026", "05/09/2026" ou "2026-09-05" e o valor com ou sem R$; uma por linha (ou a data e o valor em linhas seguidas).</p>
+            <div className="mt-2 w-[220px]"><Campo rotulo="Os valores são de"><CampoData value={referencia} onChange={setReferencia} max={hoje} /></Campo></div>
+          </div>
+          <div>
+            <span className="label">O que o app leu</span>
+            {itens.length === 0 ? <p className="rounded-md border border-dashed border-gray-300 px-3 py-6 text-center text-[12.5px] text-gray-400">Cole a lista ao lado.</p> : (
+              <div className="max-h-[240px] overflow-auto rounded-md border border-gray-200">
+                <table className="w-full border-separate border-spacing-0 text-[12.5px]">
+                  <thead className="sticky top-0"><tr><th className={`${th} text-left`}>Data</th><th className={th}>Vale hoje</th><th className={`${th} text-left`}>Alíquota hoje</th></tr></thead>
+                  <tbody>
+                    {itens.map((i, k) => {
+                      const a = aliquotaIR(Math.max(0, diasEntreIR(i.data, hoje)));
+                      return (
+                        <tr key={k}>
+                          <td className="border-b border-gray-100 px-2.5 py-1 tabular-nums text-gray-700">{formatDate(i.data)}</td>
+                          <td className="border-b border-gray-100 px-2.5 py-1 text-right tabular-nums text-gray-900">{formatBRL(i.valor_centavos)}</td>
+                          <td className="border-b border-gray-100 px-2.5 py-1">{ehIsento(inv.tipo) ? <Etiqueta tom="verde">isento</Etiqueta> : <Etiqueta tom={TOM_ALIQ[a] ?? 'cinza'}>{pctA(a)}</Etiqueta>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {itens.length > 0 && (
+              <p className={`mt-2 rounded-md px-3 py-2 text-[12.5px] ${bate ? 'bg-hx-f0fdf4 text-hx-166534' : 'bg-amber-50 text-amber-800'}`}>
+                {bate ? '✓ ' : ''}{itens.length} depósitos somam <b className="font-semibold">{formatBRL(soma)}</b>
+                {bate ? `, o valor de hoje de ${inv.nome}.` : ` e ${inv.nome} vale ${formatBRL(vale)}: confira se a lista está completa (ou atualize o valor dele).`}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+          {depositos.length > 0 && <button type="button" className="text-[13px] font-medium text-hx-c0393d hover:underline" onClick={() => salvar([])} disabled={salvando}>Apagar a lista ({depositos.length})</button>}
+          <span className="flex-1 text-xs text-gray-500">{depositos.length ? `Substitui os ${depositos.length} depósitos colados antes.` : 'Substitui o bloco "sem data" do cadastro no cálculo do IR.'}</span>
+          <button type="button" className="btn-secondary" onClick={onFechar}>Cancelar</button>
+          <button type="button" className="btn-primary" disabled={salvando || !itens.length} onClick={() => salvar(itens)}>{salvando ? 'Salvando…' : `Salvar os ${itens.length || ''} depósitos`}</button>
+        </div>
       </div>
     </Modal>
   );

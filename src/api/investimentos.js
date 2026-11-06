@@ -6,16 +6,36 @@ import { buscarTudo, exigir, supabase } from './supabase.js';
 
 const semTabela = (err) => /investimentos|valores_investimento|investimento_id|schema cache|does not exist/i.test(err?.message ?? '');
 
+// Os DEPÓSITOS de antes do cadastro (migration 016): [] sem a tabela (o IR fica pelo bloco do cadastro).
+async function listarDepositos() {
+  try {
+    return await buscarTudo(() => supabase.from('depositos_investimento').select('id, investimento_id, data, valor_centavos, referencia').order('data').order('id'));
+  } catch (err) {
+    if (/depositos_investimento|schema cache|does not exist/i.test(err?.message ?? '')) return null;
+    throw err;
+  }
+}
+
 export async function listarInvestimentos() {
   try {
-    const [invs, valores] = await Promise.all([
+    const [invs, valores, depositos] = await Promise.all([
       exigir(supabase.from('investimentos').select('*').order('ordem').order('nome')),
       buscarTudo(() => supabase.from('valores_investimento').select('id, investimento_id, data, valor_centavos').order('data').order('id')),
+      listarDepositos(),
     ]);
-    return { investimentos: invs, valores };
+    return { investimentos: invs, valores, depositos: depositos ?? [], comDepositos: depositos !== null };
   } catch (err) {
     if (semTabela(err)) return null;
     throw err;
+  }
+}
+
+// Substitui os depósitos de antes do cadastro de um título pela lista colada. `itens`: [{ data, valor_centavos }];
+// `referencia`: a data dos valores (o dia em que o banco os mostrou).
+export async function salvarDepositos(investimentoId, referencia, itens) {
+  await exigir(supabase.from('depositos_investimento').delete().eq('investimento_id', investimentoId));
+  if (itens.length) {
+    await exigir(supabase.from('depositos_investimento').insert(itens.map((i) => ({ investimento_id: investimentoId, data: i.data, valor_centavos: i.valor_centavos, referencia }))));
   }
 }
 

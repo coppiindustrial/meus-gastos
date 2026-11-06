@@ -28,6 +28,9 @@
 > segunda vista. As fotos antigas da conta ficam como histórico. **Refeita "do zero" (2026-11-06, migration 015)**:
 > o painel em /patrimonio e a tabela em /investimentos; três gestos (cadastrar em tabela, aplicar/resgatar, atualizar
 > valores com o aviso do aporte esquecido); o prazo de cada aplicação que reaplica sozinho; "Começar do zero".
+> **O IR em cascata (2026-11-06, migration 016)**: os depósitos de cada investimento (colados do banco ou feitos pelo
+> app), o IR e o IOF de cada um pela idade, estimados pelo CDI; a coluna "Líquido ≈" e os depósitos dentro do
+> investimento na carteira; a linha do tempo das quedas do IR na ficha.
 > Próxima: 8.C (renda variável BR e exterior).
 > **Extrato da conta (2026-10-27)**: CSV do extrato do Nubank; entradas continuam à mão; fatura, investimentos e
 > transferências entre contas próprias (regra de ignorar) ficam de fora; pagamento de fixo vira o fixo do mês com o

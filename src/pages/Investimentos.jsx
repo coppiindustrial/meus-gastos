@@ -187,6 +187,7 @@ export default function Investimentos() {
       {fichaX && (
         <FichaInvestimento x={fichaX.x} lugar={fichaX.g.conta.nome} movel={movel}
           valores={d.valores.filter((v) => v.investimento_id === ficha)} movimentos={d.movimentos.filter((m) => m.investimento_id === ficha)}
+          depositos={d.depositos.filter((x) => x.investimento_id === ficha)} comDepositos={d.comDepositos}
           onFechar={() => setFicha(null)} onMudou={recarregar}
           onAplicar={(tipo) => setMov({ inv: fichaX.x.inv, tipo })} onCadastro={() => { setFicha(null); setCadastro({}); }} />
       )}

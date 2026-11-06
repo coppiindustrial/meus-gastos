@@ -5,6 +5,7 @@ import { listarInvestimentos } from '../../api/investimentos.js';
 import { cdiMensal } from '../../api/cdi.js';
 import { rendimentoDasSeries, rendimentoDoPeriodo, seriesDoPatrimonio } from '../../lib/patrimonio.js';
 import { carteira, pendentesDeValor } from '../../lib/investimentos.js';
+import { estimarImposto } from '../../lib/impostoInvestimento.js';
 import { competenciaAtual, todayISO } from '../../lib/format.js';
 import { CORES_CONTA } from './TabelaInvestimentos.jsx';
 
@@ -34,14 +35,30 @@ export default function useDadosPatrimonio({ encerrados = false } = {}) {
   const ano = hoje.slice(0, 4);
   const investimentos = useMemo(() => dadosInv?.investimentos ?? [], [dadosInv]);
   const valores = useMemo(() => dadosInv?.valores ?? [], [dadosInv]);
+  const depositos = useMemo(() => dadosInv?.depositos ?? [], [dadosInv]);
   const movs = useMemo(() => movimentos ?? [], [movimentos]);
   const meses = useMemo(() => rendimentoDasSeries(seriesDoPatrimonio({ saldos, movimentos: movs, investimentos, valores }), hoje),
     [saldos, movs, investimentos, valores, hoje]);
-  const primeiroMes = meses[0]?.competencia;
+  const primeiroMes = useMemo(() => [meses[0]?.competencia, ...depositos.map((d) => d.data.slice(0, 7)), ...investimentos.map((i) => i.aplicado_em?.slice(0, 7))]
+    .filter(Boolean).sort()[0], [meses, depositos, investimentos]);
   useEffect(() => { if (primeiroMes) cdiMensal(primeiroMes).then(setCdi); }, [primeiroMes]);
 
+  // O LÍQUIDO (06/11/2026, o mockup "Depósitos em cascata e o valor líquido"): cada título ganha o `imposto` (os depósitos
+  // em cascata, o IR e o IOF de cada um, o líquido — `estimarImposto`, lib/impostoInvestimento.js) e cada lugar soma o seu.
   const grupos = useMemo(() => (contas ? carteira({ contas, investimentos, meses, hoje: hojeISO, ano, encerrados, valores, movimentos: movs })
-    .map((g, i) => ({ ...g, cor: CORES_CONTA[i % CORES_CONTA.length] })) : []), [contas, investimentos, meses, hojeISO, ano, encerrados, valores, movs]);
+    .map((g, i) => {
+      const itens = g.itens.map((x) => ({
+        ...x,
+        imposto: estimarImposto({
+          inv: x.inv, fotos: valores.filter((v) => v.investimento_id === x.inv.id), movimentos: movs,
+          depositos: depositos.filter((d) => d.investimento_id === x.inv.id), cdi, hoje: hojeISO, vale: x.vale, aplicado: x.aplicado,
+        }),
+      }));
+      const ir = itens.reduce((t, x) => t + (x.imposto?.ir ?? 0) + (x.imposto?.iof ?? 0), 0);
+      // `incompleto`: algum título sem o IR estimado (sem as datas, ou fundo) — o líquido do lugar soma o bruto dele
+      const incompleto = itens.some((x) => x.imposto && x.imposto.liquido === null && !x.imposto.isento);
+      return { ...g, itens, ir, incompleto, liquido: g.soConta ? g.vale : itens.reduce((t, x) => t + (x.imposto?.liquido ?? x.vale), 0), cor: CORES_CONTA[i % CORES_CONTA.length] };
+    }) : []), [contas, investimentos, meses, hojeISO, ano, encerrados, valores, movs, depositos, cdi]);
   const pendentes = useMemo(() => pendentesDeValor({ investimentos, valores, hoje: hojeISO }), [investimentos, valores, hojeISO]);
   const comMovimentos = movimentos !== null;
   const doAno = meses.filter((m) => m.competencia.startsWith(ano));
@@ -49,10 +66,11 @@ export default function useDadosPatrimonio({ encerrados = false } = {}) {
   const total = useMemo(() => ({
     aplicado: grupos.reduce((s, g) => s + g.aplicado, 0), vale: grupos.reduce((s, g) => s + g.vale, 0),
     rendeu: grupos.reduce((s, g) => s + g.rendeu, 0), pctAno: totalAno.pct,
+    ir: grupos.reduce((s, g) => s + g.ir, 0), liquido: grupos.reduce((s, g) => s + g.liquido, 0), incompleto: grupos.some((g) => g.incompleto),
   }), [grupos, totalAno.pct]);
 
   return {
-    carregar, contas, saldos, movimentos: movs, comMovimentos, investimentos, valores, comInvestimentos: dadosInv !== null,
+    carregar, contas, saldos, movimentos: movs, comMovimentos, investimentos, valores, depositos, comDepositos: !!dadosInv?.comDepositos, comInvestimentos: dadosInv !== null,
     sem015: investimentos.length > 0 && !('prazo_meses' in investimentos[0]),
     cdi, meses, grupos, pendentes, total, doAno, totalAno, hoje, hojeISO, ano,
   };
