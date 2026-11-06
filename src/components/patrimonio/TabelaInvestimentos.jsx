@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Tooltip from '../Tooltip.jsx';
 import AbasPilula from '../AbasPilula.jsx';
+import Toggle from '../Toggle.jsx';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { COR_ENTRADAS } from '../graficos/Graficos.jsx';
 import { COR_FALTOU, MiniCurva } from '../graficos/GraficosVisao.jsx';
@@ -35,6 +36,10 @@ export const CORES_CONTA = ['var(--serie-gastos)', 'var(--origem-fixo)', 'var(--
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const reais = (c) => `R$ ${Math.round(c / 100).toLocaleString('pt-BR')}`;
 const inteiro = (c) => Math.round(c / 100).toLocaleString('pt-BR');
+// OS CENTAVOS (06/11/2026, a pedido): o interruptor do cabeçalho troca o formato das duas tabelas — ligado, todo valor com
+// os centavos ("R$ 115.404,08"; no mês a mês, "1.234,56"); desligado, em reais redondos. Lembrado em `patrimonio_centavos`.
+const comCentavos = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatos = (centavos) => (centavos ? { reais: (c) => `R$ ${comCentavos(c)}`, inteiro: comCentavos } : { reais, inteiro });
 const pctTexto = (f, casas = 2) => (f === null || f === undefined ? '—' : `${f >= 0 ? '' : '−'}${Math.abs(f * 100).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`);
 const sinal = (c) => (c > 0 ? '+' : c < 0 ? '−' : '');
 const BTN = 'flex h-7 w-[30px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
@@ -186,10 +191,11 @@ function EditorCelula({ ed, onTexto, onFim, alinha, recuo = 12 }) {
 }
 
 function TabelaCarteira({
-  todas, visiveis, recolhidas, alternar, ordem, onOrdenar, total, ano, movel, acoes, edicao, hoje, cdi,
+  todas, visiveis, recolhidas, alternar, ordem, onOrdenar, total, ano, movel, acoes, edicao, hoje, cdi, centavos = false,
   abertosInv = new Set(), alternarInv = () => {}, abrirInv = () => {},
 }) {
   const toast = useToast();
+  const { reais } = formatos(centavos); // com ou sem os centavos (o interruptor do cabeçalho)
   const caixaRef = useRef(null);
   const desenhadas = useLinhasAnimadas(todas, visiveis, caixaRef);
   const balao = useBalao(280, 170);
@@ -657,7 +663,7 @@ function TabelaCarteira({
                     </span>
                   ))}
                   {cel(l, 'aplicado', `${td} px-3 text-right tabular-nums ${movel ? 'hidden' : ''}`, exato
-                    ? <span className="text-gray-800">{formatBRL(f.valor)}</span>
+                    ? <span className="text-gray-800">{reais(f.valor)}</span>
                     : <span className="text-gray-500" title={lo.inteiro ? 'Estimado: o banco mostrou quanto ele valia, não quanto foi aportado' : 'Parte dele já foi resgatada'}>≈ {reais(lo.depositado)}</span>)}
                   {cel(l, 'vale', `${td} px-3 text-right tabular-nums text-gray-600`, reais(lo.vale))}
                   {cel(l, 'liquido', `${td} px-3 text-right tabular-nums text-gray-600`, reais(lo.liquido))}
@@ -767,7 +773,8 @@ function TabelaCarteira({
 }
 
 // ------------------------------------------------------------ B: o mês a mês
-function TabelaMesAMes({ todas, visiveis, recolhidas, alternar, meses, comps, cdi, pct }) {
+function TabelaMesAMes({ todas, visiveis, recolhidas, alternar, meses, comps, cdi, pct, centavos = false }) {
+  const { inteiro } = formatos(centavos);
   const caixaRef = useRef(null);
   const desenhadas = useLinhasAnimadas(todas, visiveis, caixaRef);
   const balao = useBalao(270, 160);
@@ -925,6 +932,8 @@ export default function BlocoInvestimentos({
 }) {
   const [vista, setVistaEstado] = useState(() => (lsGet('patrimonio_vista') === 'mes' ? 'mes' : 'carteira'));
   const [modo, setModo] = useState('rs');
+  const [centavos, setCentavosEstado] = useState(() => lsGet('patrimonio_centavos') === '1');
+  const setCentavos = (v) => { setCentavosEstado(v); lsSet('patrimonio_centavos', v ? '1' : '0'); };
   const [recolhidas, setRecolhidasEstado] = useState(() => new Set(lerJson('patrimonio_recolhidas', [])));
   const [ordem, setOrdemEstado] = useState(() => lerJson('patrimonio_ordem', null));
   // os investimentos com os depósitos abertos (lembrado no navegador)
@@ -975,8 +984,8 @@ export default function BlocoInvestimentos({
   const qtd = grupos.reduce((s, g) => s + g.itens.length, 0);
   const comum = { todas, visiveis, recolhidas, alternar };
   const corpo = verVista === 'mes'
-    ? <TabelaMesAMes key="b" {...comum} todas={todasB} visiveis={visiveisB} meses={meses} comps={comps} cdi={cdi} pct={modo === 'pct'} />
-    : <TabelaCarteira key="a" {...comum} ordem={ordem} onOrdenar={onOrdenar} total={total} ano={ano} hoje={hoje} movel={movel} acoes={acoes} edicao={edicao} cdi={cdi}
+    ? <TabelaMesAMes key="b" {...comum} todas={todasB} visiveis={visiveisB} meses={meses} comps={comps} cdi={cdi} pct={modo === 'pct'} centavos={centavos} />
+    : <TabelaCarteira key="a" {...comum} ordem={ordem} onOrdenar={onOrdenar} total={total} ano={ano} hoje={hoje} movel={movel} acoes={acoes} edicao={edicao} cdi={cdi} centavos={centavos}
       abertosInv={abertosInv} alternarInv={alternarInv} abrirInv={abrirInv} />;
 
   const icones = comFilhos.length > 0 && (
@@ -991,6 +1000,13 @@ export default function BlocoInvestimentos({
   );
   const trocas = (
     <>
+      {(verVista === 'carteira' || modo === 'rs') && (
+        <span className="flex h-[30px] items-center gap-2 px-1">
+          <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => setCentavos(!centavos)}
+            className="whitespace-nowrap text-[12px] font-medium text-gray-600">Centavos</button>
+          <Toggle compacto rotulo="Mostrar os centavos nos valores" checked={centavos} onChange={setCentavos} />
+        </span>
+      )}
       <AbasPilula abas={[{ key: 'carteira', label: 'Carteira' }, { key: 'mes', label: 'Mês a mês' }]} valor={vista} onChange={setVista} variante="claro" altura={30} folga={2} />
       {vista === 'mes' && <AbasPilula abas={[{ key: 'rs', label: 'R$' }, { key: 'pct', label: '%' }]} valor={modo} onChange={setModo} variante="claro" altura={30} folga={2} />}
     </>

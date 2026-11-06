@@ -331,6 +331,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     esquerda, 14px semibold, 46px), o INVESTIMENTO recuado em duas linhas (13px médio), o APORTE recuado de novo numa
     linha só (12,5px, 34px, mais claro) e pendurado num TRILHO que desce da seta do investimento (`Trilho`); os recuos em
     px inteiros (o texto em 30 · 55 · 80).
+    OS CENTAVOS (06/11/2026, a pedido): o interruptor "Centavos" no cabeçalho do bloco (o `Toggle` do "Só o que falta" do
+    Importar, antes das abas; some no "%" do mês a mês) troca o formato das duas vistas — ligado, todo valor com os
+    centavos; desligado (o padrão), em reais redondos, também o valor do aporte. `formatos(centavos)` no topo de
+    TabelaInvestimentos.jsx; lembrado em `patrimonio_centavos`. Os balões e a ficha seguem sempre com os centavos.
   · O CADASTRO EM TABELA (`ModalCadastroInvestimentos.jsx`, a dos fixos/cartões): agrupado por lugar, "Adicionar
     investimento" em cada um e "Novo lugar" no fim; nome, tipo, rende + taxa, prazo · resgate e "TEM HOJE" (só informa:
     o valor e quantos depósitos); ⋯ = emissor, observação, ativo. O tipo preenche o resto (`padraoDoTipo`); Enter desce na
