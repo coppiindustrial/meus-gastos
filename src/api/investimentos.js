@@ -40,6 +40,18 @@ export async function salvarDepositos(investimentoId, referencia, itens) {
   }
 }
 
+// UM APORTE DE ANTES DO APP de cada vez (06/11/2026, a carteira editável): a data, o valor e a referência de um só; o
+// desfazer da tabela o devolve (`inserirDeposito`, com os mesmos campos).
+export function atualizarDeposito(id, mudancas) {
+  return exigir(supabase.from('depositos_investimento').update(mudancas).eq('id', id).select().single());
+}
+export function excluirDeposito(id) {
+  return exigir(supabase.from('depositos_investimento').delete().eq('id', id));
+}
+export function inserirDeposito({ investimento_id, data, valor_centavos, referencia }) {
+  return exigir(supabase.from('depositos_investimento').insert({ investimento_id, data, valor_centavos, referencia }).select().single());
+}
+
 // `prazo_meses` e `ao_vencer` (a migration 015) faltavam aqui: o "prazo por aplicação" do cadastro não gravava (06/11/2026).
 const CAMPOS = ['conta_id', 'nome', 'tipo', 'indexador', 'taxa', 'liquidez', 'liquidez_dias', 'carencia_ate', 'vencimento', 'prazo_meses',
   'ao_vencer', 'vence_dia_anterior', 'emissor', 'aplicado_em', 'aplicado_inicial_centavos', 'observacao', 'ativo'];
@@ -106,15 +118,22 @@ export function excluirValor(id) {
   return exigir(supabase.from('valores_investimento').delete().eq('id', id));
 }
 
+// O valor de um título numa data (o desfazer do "vale hoje" digitado na tabela, que não sabe o id).
+export function excluirValorNaData(investimentoId, data) {
+  return exigir(supabase.from('valores_investimento').delete().eq('investimento_id', investimentoId).eq('data', data));
+}
+
 // O aporte ou o resgate de um título (ou de uma conta sem títulos: `investimento_id` vazio). `encerrar`: o resgate de
-// tudo — grava também o valor 0 na data e tira o título da lista (fica no histórico).
+// tudo — grava também o valor 0 na data e tira o título da lista (fica no histórico). Devolve o movimento gravado (o
+// desfazer da tabela o apaga pelo id).
 export async function lancarMovimento({ conta_id, investimento_id, data, tipo, valor_centavos, descricao = '' }, { encerrar = false } = {}) {
   // sem o título (a conta inteira), a coluna nem vai: assim o lançamento funciona também sem a migration 014
-  await exigir(supabase.from('movimentos_investimento').insert({
+  const mov = await exigir(supabase.from('movimentos_investimento').insert({
     conta_id, ...(investimento_id ? { investimento_id } : {}), data, tipo, valor_centavos, descricao: descricao.trim(), origem: 'manual',
-  }));
+  }).select('id').single());
   if (encerrar && investimento_id) {
     await registrarValores(data, [{ investimento_id, valor_centavos: 0 }]);
     await exigir(supabase.from('investimentos').update({ ativo: false }).eq('id', investimento_id));
   }
+  return mov;
 }

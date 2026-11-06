@@ -11,6 +11,7 @@ import {
   FichaInvestimento, ModalAtualizarValores, ModalComoEntrou, ModalDepositos, ModalLugar, ModalMovimento,
 } from '../components/patrimonio/ModaisPatrimonio.jsx';
 import useDadosPatrimonio from '../components/patrimonio/useDadosPatrimonio.js';
+import useEdicaoCarteira from '../components/patrimonio/useEdicaoCarteira.js';
 import { useNoCelular } from '../lib/celular.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
@@ -26,7 +27,10 @@ import { competenciaCurta } from '../lib/format.js';
 //   · APLICAR / RESGATAR — o ⇅ do grupo e as moedas + e − de cada linha (`ModalMovimento`);
 //   · ATUALIZAR VALORES — o botão de destaque, âmbar com o número quando o mês virou e falta o valor
 //     (`pendentesDeValor`; o mesmo número no menu).
-// O nome (ou o ✎) da linha abre a FICHA: os depósitos e o IR, as quedas, os vencimentos, o histórico. No ▾: novo lugar,
+// A CARTEIRA É UMA PLANILHA (06/11/2026, a opção A do mockup "Carteira editável"): o nome, a taxa, o resgate, o "vale hoje",
+// a data e o valor de cada aporte se editam na própria tabela (`useEdicaoCarteira`), e as linhas "+ aporte",
+// "+ investimento" e "+ instituição" acrescentam ali. O ícone da ficha, no fim da linha, abre a FICHA: os aportes e o IR,
+// as quedas, os vencimentos, o histórico. No ▾: novo lugar,
 // CSV, os encerrados e "Começar do zero". No celular, só a tabela (ler). O CADASTRO NÃO PEDE OS VALORES (06/11/2026): ao
 // salvar investimentos novos abre o "Como o dinheiro entrou?" (`ModalComoEntrou`) — Aplicar ou Colar os depósitos.
 const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
@@ -42,6 +46,7 @@ export default function Investimentos() {
   const movel = useNoCelular();
   const [encerrados, setEncerrados] = useState(false);
   const d = useDadosPatrimonio({ encerrados });
+  const edicao = useEdicaoCarteira(d); // a carteira é uma planilha: cada célula grava sozinha, com o Ctrl+Z
   const [cadastro, setCadastro] = useState(null); // { foco? }
   const [mov, setMov] = useState(null); // { inv?, tipo }
   const [ficha, setFicha] = useState(null); // o id do investimento
@@ -66,7 +71,6 @@ export default function Investimentos() {
   const acoes = movel ? null : {
     podeInvestir: d.comInvestimentos,
     movimento: (x) => setMov(x),
-    novoInvestimento: (conta) => setCadastro({ foco: conta.id }),
     ficha: (inv) => setFicha(inv.id),
     editarConta: (conta) => setLugar({ conta }),
   };
@@ -174,11 +178,12 @@ export default function Investimentos() {
           onMontar={() => setCadastro({})} onComecarDoZero={comecarDoZero} />
       ) : (
         <div className="mt-4">
-          <BlocoInvestimentos grupos={d.grupos.filter((g) => g.itens.length || !g.soConta || g.conta.ativa)} total={d.total} meses={d.meses} comps={comps} cdi={d.cdi} ano={d.ano}
+          <BlocoInvestimentos grupos={d.grupos.filter((g) => g.itens.length || !g.soConta || g.conta.ativa)} total={d.total} meses={d.meses} comps={comps} cdi={d.cdi} ano={d.ano} hoje={d.hojeISO}
+            edicao={movel || !d.comInvestimentos ? null : edicao}
             movel={movel} acoes={acoes} encerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)} qtdEncerrados={qtdEncerrados} />
           <p className="mt-2 text-xs text-gray-500">
             {movel ? 'Aplicar, resgatar e atualizar ficam no computador.'
-              : 'Rendeu = vale hoje − aplicado (o "valor aplicado" do banco, ou o primeiro valor, + aplicações − resgates). Clique no nome para a ficha: os depósitos e o IR, as quedas, os vencimentos e o histórico.'}
+              : 'Rendeu = vale hoje − aplicado (os aportes − os resgates). A seta abre os aportes de cada investimento; clique numa célula para editar, e a ficha (no fim da linha) traz o IR, as quedas, os vencimentos e o histórico.'}
           </p>
         </div>
       )}

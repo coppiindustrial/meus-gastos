@@ -302,11 +302,34 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     menu, `useContadores` 'investimentos'); vazio, "Montar a carteira". A coluna RESGATE junta liquidez e vencimento
     (no "cada aplicação vence": "próxima 03/2027 · reaplica"). AS AÇÕES DA LINHA (06/11/2026, opção A do mockup "Ficha
     do investimento"): todas no MESMO quadrado (`BotaoLinha`, 30px, borda e o fundo `bg-white`, o mais escuro no tema
-    escuro; o nome no tooltip) — no lugar, + investimento novo · ✎ o lugar (também no lugar vazio: o "Adicionar
-    investimento" escrito saiu); no investimento, APLICAR e RESGATAR com as MOEDAS + e − (`IconAplicar`/`IconResgatar`
-    em icons.jsx; as setas ↑ ↓ eram genéricas e o ↓ é o importar do app) · ✎ a FICHA. A SETA de abrir tem o QUADRADO no
-    hover (`QUADRADO_SETA`, a do Gestor), separada do clique no nome. Os dados das duas telas:
+    escuro; o nome no tooltip) — na instituição, ✎ (recebe o extrato, encerrar); no investimento, APORTAR e RESGATAR com
+    as MOEDAS + e − (`IconAplicar`/`IconResgatar` em icons.jsx; o aportar abre o investimento e começa a linha
+    "+ aporte") · o documento da FICHA (`IconFicha`; o nome não abre mais a ficha — ele é uma célula); no aporte, 🗑. A
+    SETA de abrir tem o QUADRADO no hover (`QUADRADO_SETA`, a do Gestor). Os dados das duas telas:
     `components/patrimonio/useDadosPatrimonio.js`.
+  · A CARTEIRA É UMA PLANILHA (06/11/2026, a opção A do mockup "Carteira editável"; "APORTE" no lugar de "depósito" em
+    toda a tela, a pedido — menos o nome da tela do banco, "Detalhes dos depósitos"). A célula ativa e o teclado dos
+    Lançamentos (`TabelaCarteira`): clicar seleciona, clicar de novo / Enter / F2 / digitar edita, Enter grava e desce,
+    Tab vai à próxima que se EDITA, setas andam, Esc desiste (e depois tira a seleção), Ctrl+Z desfaz, Delete exclui o
+    aporte. Editam: o NOME da instituição; no investimento o nome, o tipo e a taxa (o pop-up `EditorInvestimento`, os
+    campos do cadastro: `linhaDoInvestimento`/`diferencaInvestimento`), o RESGATE (o pop-up da liquidez e do prazo) e o
+    "VALE HOJE" (a foto de hoje; fora do normal para o tipo pergunta "Foi um aporte?" e o lança junto); no aporte a DATA
+    e o VALOR. As calculadas só se selecionam (contorno cinza). As linhas de ACRESCENTAR: "+ aporte" no fim dos aportes
+    de cada investimento (um RASCUNHO até ter data — hoje, se não mudar — e valor; o clique já vai ao valor; sem valor
+    ainda, o aporte é também o primeiro valor; com valores registrados depois da data, pergunta se eles já o têm e
+    "Somar" os cresce pela taxa — `valoresComOMovimento`), "+ investimento" no fim de cada instituição (o pop-up inteiro;
+    criado, ele abre na linha "+ aporte") e "+ instituição" no fim. O que cada edição de aporte grava é pela ORIGEM dele
+    (`lo.fonte` de `estimarImposto`: o movimento do app — e a foto gêmea do mesmo dia e valor —, o aporte de antes do app
+    — o valor digitado é o DEPOSITADO, a referência vira a data — ou o "valor aplicado" do cadastro sem data):
+    `planoDoAporte`, `planoDoNovoAporte` e o andar (`modoDaCelula`, `moverAtiva`, `proximaEditavel`, `lerCelula`) em
+    `lib/carteiraEditavel.js` (testada). As gravações em FILA, com o DESFAZER de cada uma (o contrário do que gravou):
+    `components/patrimonio/useEdicaoCarteira.js`. O id da linha do aporte é o da ORIGEM (sobrevive à releitura). O
+    pop-up liga o "clicar fora" no TIQUE SEGUINTE (no duplo clique o React 18 roda o efeito dentro do próprio mousedown,
+    e o pop-up fechava na hora). No celular, só ler.
+    A HIERARQUIA (a pedido: "tudo se mistura"): a INSTITUIÇÃO é uma faixa (`bg-hx-f3f4f6`, a barra da cor dela à
+    esquerda, 14px semibold, 46px), o INVESTIMENTO recuado em duas linhas (13px médio), o APORTE recuado de novo numa
+    linha só (12,5px, 34px, mais claro) e pendurado num TRILHO que desce da seta do investimento (`Trilho`); os recuos em
+    px inteiros (o texto em 30 · 55 · 80).
   · O CADASTRO EM TABELA (`ModalCadastroInvestimentos.jsx`, a dos fixos/cartões): agrupado por lugar, "Adicionar
     investimento" em cada um e "Novo lugar" no fim; nome, tipo, rende + taxa, prazo · resgate e "TEM HOJE" (só informa:
     o valor e quantos depósitos); ⋯ = emissor, observação, ativo. O tipo preenche o resto (`padraoDoTipo`); Enter desce na

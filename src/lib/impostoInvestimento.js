@@ -70,7 +70,7 @@ export function fatorDeCrescimento(de, ate, { cdi, inv, hoje, taxas = null }) {
 }
 
 // O IMPOSTO DE UM TÍTULO hoje. `vale`/`aplicado`: o que ele vale e o que foi aplicado (os números da carteira — o ajuste
-// final fecha com eles). Devolve { lotes: [{ data, dataAproximada, origem, depositado, vale, ganho, aliquota, ir, iof,
+// final fecha com eles). Devolve { lotes: [{ data, dataAproximada, origem, fonte, depositado, vale, ganho, aliquota, ir, iof,
 // liquido, proxima }], ganho, ir, iof, liquido, aliquotaMedia, isento, semEstimativa, proximaQueda } — `lotes` do mais
 // novo ao mais antigo; `proximaQueda`: a primeira data em que o imposto cai, com o depósito e quanto cai.
 export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [], cdi = null, taxas = null, hoje, vale, aplicado }) {
@@ -85,7 +85,8 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   const lotes = [];
   let corte;
   if (depositos.length) {
-    depositos.forEach((d) => lotes.push({ data: d.data, ref: d.referencia, valorRef: Number(d.valor_centavos), origem: 'colado' }));
+    depositos.forEach((d) => lotes.push({ data: d.data, ref: d.referencia, valorRef: Number(d.valor_centavos), origem: 'colado',
+      fonte: { tipo: 'dep', id: d.id, data: d.data, valor: Number(d.valor_centavos), referencia: d.referencia, exato: d.referencia === d.data } }));
     corte = depositos.reduce((m, d) => (d.referencia > m ? d.referencia : m), depositos[0].referencia);
   } else if (abre) {
     // AS APLICAÇÕES PELO APP ATÉ A PRIMEIRA FOTO são depósitos EXATOS (06/11/2026: o "Cadastrar e aplicar" grava a foto e a
@@ -96,8 +97,11 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
     const somaIni = iniciais.reduce((s, m) => s + Number(m.valor_centavos), 0);
     const total = inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined ? Number(inv.aplicado_inicial_centavos) : iniciais.length ? somaIni : Number(abre.valor_centavos);
     const resto = total - somaIni;
-    iniciais.forEach((m) => lotes.push({ data: m.data, principal: Number(m.valor_centavos), origem: 'aporte' }));
-    if (resto > 100) lotes.push({ data: inv.aplicado_em || abre.data, dataAproximada: !inv.aplicado_em, principal: resto, origem: 'inicial' });
+    iniciais.forEach((m) => lotes.push({ data: m.data, principal: Number(m.valor_centavos), origem: 'aporte', fonte: { tipo: 'mov', id: m.id, data: m.data, valor: Number(m.valor_centavos), exato: true } }));
+    if (resto > 100) {
+      lotes.push({ data: inv.aplicado_em || abre.data, dataAproximada: !inv.aplicado_em, principal: resto, origem: 'inicial',
+        fonte: { tipo: 'inicial', data: inv.aplicado_em || abre.data, valor: resto, base: somaIni, exato: inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined } });
+    }
     corte = abre.data;
   }
   const depois = movimentos.filter((m) => m.investimento_id === inv.id && corte && m.data > corte).sort((a, b) => (a.data < b.data ? -1 : 1));
@@ -109,7 +113,7 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   const valorEm = (l, t) => (l.origem === 'colado' ? (t >= l.ref ? l.valorRef * f(l.ref, t) : l.valorRef / f(t, l.ref)) : l.principal * f(l.data, t));
   depois.forEach((m) => {
     const v = Number(m.valor_centavos);
-    if (m.tipo !== 'resgate') { lotes.push({ data: m.data, principal: v, origem: 'aporte', frac: 1 }); return; }
+    if (m.tipo !== 'resgate') { lotes.push({ data: m.data, principal: v, origem: 'aporte', frac: 1, fonte: { tipo: 'mov', id: m.id, data: m.data, valor: v, exato: true } }); return; }
     let falta = v;
     for (const l of [...lotes].sort((a, b) => (a.data < b.data ? -1 : 1))) {
       if (falta <= 0 || l.data > m.data) continue;
@@ -136,7 +140,7 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
     const aliquota = isento ? 0 : aliquotaIR(dias);
     const ir = isento || semEstimativa ? 0 : Math.max(0, ganho - iof) * aliquota;
     return {
-      data: l.data, dataAproximada: !!l.dataAproximada, origem: l.origem, dias,
+      data: l.data, dataAproximada: !!l.dataAproximada, origem: l.origem, fonte: l.fonte ?? null, inteiro: l.frac > 0.999999, dias,
       depositado: Math.round(valeL - ganho), vale: Math.round(valeL), ganho: Math.round(ganho),
       aliquota, ir: Math.round(ir), iof: Math.round(iof), liquido: Math.round(valeL - ir - iof),
       proxima: isento ? null : proximaQueda(l.data, hoje),
@@ -213,7 +217,7 @@ export function planoDosDepositos({ modo, linhas = [], referencia, hoje, semValo
     const l = linhas[i];
     const temValor = String(l.valor ?? '').trim() !== '';
     if (!l.data && !temValor) continue;
-    const n = `${i + 1}º depósito`;
+    const n = `${i + 1}º aporte`;
     if (!l.data) return { erro: `Falta a data do ${n}.` };
     if (!temValor) return { erro: `Falta o valor do ${n}.` };
     if (l.data > hoje) return { erro: `A data do ${n} ainda não chegou.` };

@@ -1,14 +1,17 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Tooltip from '../Tooltip.jsx';
 import AbasPilula from '../AbasPilula.jsx';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { COR_ENTRADAS } from '../graficos/Graficos.jsx';
 import { COR_FALTOU, MiniCurva } from '../graficos/GraficosVisao.jsx';
 import { Etiqueta } from '../Comuns.jsx';
-import { IconAplicar, IconExpandirTudo, IconLapis, IconMais, IconResgatar, IconSetaOrdenacao } from '../icons.jsx';
+import { CirculoMais, IconAplicar, IconExpandirTudo, IconFicha, IconLapis, IconLixeira, IconResgatar, IconSetaOrdenacao } from '../icons.jsx';
+import EditorInvestimento from './EditorInvestimento.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 import useLinhasAnimadas, { atributosLinha } from '../../lib/useLinhasAnimadas.js';
 import { formatBRL } from '../../lib/dinheiro.js';
-import { competenciaCurta, formatDate, nomeCompetencia } from '../../lib/format.js';
+import { competenciaCurta, formatDate, mascaraData, nomeCompetencia } from '../../lib/format.js';
+import { ehPopup, lerCelula, modoDaCelula, moverAtiva, proximaEditavel, textoDaCelula } from '../../lib/carteiraEditavel.js';
 import { lsGet, lsSet } from '../../lib/storage.js';
 import {
   impostoGarantia, linhaMesAMes, nomeTipoInvestimento, ordenarCarteira, proximaOrdemCarteira, rotuloLiquidez, rotuloRende,
@@ -17,10 +20,11 @@ import { rotuloPeloIndice } from '../../lib/valorEstimado.js';
 import { COR_CDI, cdiFechado } from './GraficoPatrimonio.jsx';
 
 // A TABELA DOS INVESTIMENTOS (05/11/2026, opção A do mockup "Patrimônio · a tabela", com a B como segunda vista):
-//   · CARTEIRA (A): a planilha agrupada das Categorias — a conta é o grupo (recolhe animado, `useLinhasAnimadas`), os
-//     títulos embaixo com a liquidez, o vencimento (pílula âmbar até 12 meses e a barrinha do prazo), o aplicado, o que
-//     vale hoje, o que rendeu, o % do ano e a curva dos 12 meses. A linha acende no hover, o balão lê o "Rendeu" e a
-//     curva, e "+ aporte · − resgate · ✎" aparecem no fim da linha. A seta do cabeçalho ordena DENTRO de cada conta.
+//   · CARTEIRA (A): a instituição é o grupo (recolhe animado, `useLinhasAnimadas`), os investimentos embaixo e, dentro de
+//     cada um, os APORTES — a liquidez, o vencimento, o aplicado, o que vale hoje, o líquido, o que rendeu, o % do ano e a
+//     curva dos 12 meses. É uma PLANILHA (06/11/2026, a opção A do mockup "Carteira editável"): a célula ativa e o teclado
+//     dos Lançamentos, cada célula grava sozinha, e as linhas "+ aporte", "+ investimento" e "+ instituição" acrescentam
+//     ali mesmo. A seta do cabeçalho ordena DENTRO de cada instituição.
 //   · MÊS A MÊS (B): a Grupo × mês da Visão geral — o que cada título rendeu em cada mês (R$ ou %), o tom mais forte é
 //     o melhor mês da linha, o hover é a CRUZ (célula com contorno, linha e coluna acesas) e o balão traz o CDI.
 // No canto, o ⇕ expandir / recolher tudo (06/11/2026: o ⬇ CSV e o ⤢ ampliar saíram, a pedido — o CSV está no ▾ da tela e o
@@ -123,16 +127,66 @@ const COLUNAS_A = [
   { id: 'curva', rotulo: '12 meses', semOrdem: true, desk: true },
 ];
 
-// OS DEPÓSITOS DENTRO DO INVESTIMENTO (06/11/2026, o mockup "Depósitos em cascata"): o título com mais de um depósito
-// (ou com a lista colada do banco) ganha a seta e abre nos depósitos, do mais novo ao mais antigo — o depositado, o que
-// vale, o líquido e o rendimento (≈), a ALÍQUOTA de hoje na coluna Resgate e quando ela cai (`estimarImposto`).
+// OS APORTES DENTRO DO INVESTIMENTO (06/11/2026, o mockup "Depósitos em cascata"; "aporte" no lugar de "depósito", a
+// pedido): todo investimento com dinheiro abre nos aportes dele, do mais novo ao mais antigo — o aplicado, o que vale, o
+// líquido e o rendimento (≈), a ALÍQUOTA de hoje na coluna Resgate e quando ela cai (`estimarImposto`).
 const TOM_ALIQUOTA = { 0.225: 'vermelho', 0.2: 'ambar', 0.175: 'cinza', 0.15: 'verde' };
 const pctAliq = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
-// OS DEPÓSITOS SEMPRE DENTRO (06/11/2026, a pedido): todo investimento com dinheiro abre nos depósitos dele, mesmo quando
-// é um só — o mesmo jeito para todos (antes só abria com mais de um, ou com a lista colada do banco).
-export const temDepositos = (x) => !!x.imposto && !x.imposto.semEstimativa && x.imposto.lotes.length > 0;
+const dataCurta = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`;
+export const temAportes = (x) => !!x.imposto && x.imposto.lotes.length > 0;
 
-function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdenar, total, ano, movel, acoes, cdi, abertosInv = new Set(), alternarInv = () => {} }) {
+// A HIERARQUIA (06/11/2026, a pedido: "tudo se mistura"): três níveis que se leem de longe —
+//   · a INSTITUIÇÃO é uma FAIXA: o fundo cinza, a barra da cor dela à esquerda, o nome em 14px e os totais em negrito;
+//   · o INVESTIMENTO, recuado, em duas linhas: o nome e, embaixo, o tipo e a taxa;
+//   · o APORTE, recuado de novo, numa linha só, menor e mais claro, pendurado no investimento por um TRILHO (a linha que
+//     desce da seta dele).
+// Os recuos em px INTEIROS: o nome da instituição em 32; a seta do investimento em 30 (o centro em 40, onde desce o
+// trilho) e o nome dele em 56; o texto do aporte em 80. As linhas de acrescentar começam no recuo do nível delas.
+const RECUO_APORTE = 80;
+const Trilho = ({ ultimo }) => (
+  <>
+    <span aria-hidden="true" className={`pointer-events-none absolute left-[40px] top-0 w-px bg-gray-300 ${ultimo ? 'h-1/2' : 'bottom-0'}`} />
+    <span aria-hidden="true" className="pointer-events-none absolute left-[40px] top-1/2 h-px w-[30px] bg-gray-300" />
+  </>
+);
+const Kbd = ({ children }) => (
+  <kbd className="rounded-[4px] border border-b-2 border-gray-300 bg-white px-1 font-mono text-[10.5px] leading-[16px] text-gray-600">{children}</kbd>
+);
+
+// O CAMPO DENTRO DA CÉLULA (a carteira editável): o texto começa onde o da célula começa (`recuo`); Enter, Tab, as setas
+// de cima e de baixo e Esc dizem para onde ir (`onFim(como, texto)`); sair do campo grava. A data ganha as barras sozinha.
+function EditorCelula({ ed, onTexto, onFim, alinha, recuo = 12 }) {
+  const ref = useRef(null);
+  const feito = useRef(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    if (ed.digitado) el.setSelectionRange(el.value.length, el.value.length); else el.select();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const fim = (como, texto) => { if (feito.current) return; feito.current = true; onFim(como, texto); };
+  const teclas = (e) => {
+    const como = { Enter: 'enter', Escape: 'esc', ArrowUp: 'cima', ArrowDown: 'baixo' }[e.key] ?? (e.key === 'Tab' ? (e.shiftKey ? 'tabAntes' : 'tab') : null);
+    if (!como) return;
+    e.preventDefault();
+    e.stopPropagation();
+    fim(como, e.currentTarget.value);
+  };
+  return (
+    <input ref={ref} value={ed.texto} onKeyDown={teclas} onBlur={(e) => fim('blur', e.target.value)} onMouseDown={(e) => e.stopPropagation()}
+      onChange={(e) => onTexto(ed.modo === 'data' ? mascaraData(e.target.value) : e.target.value)}
+      inputMode={ed.modo === 'valor' ? 'decimal' : ed.modo === 'data' ? 'numeric' : undefined}
+      placeholder={ed.modo === 'data' ? 'dd/mm/aaaa' : ed.modo === 'valor' ? '0,00' : 'o nome'} aria-label="Editar a célula"
+      className={`absolute inset-0 z-20 h-full w-full border-0 bg-white pr-3 text-[13px] text-gray-900 outline-none placeholder:text-gray-400 ${alinha === 'right' ? 'text-right tabular-nums' : ''}`}
+      style={{ paddingLeft: recuo, boxShadow: 'inset 0 0 0 2px var(--grade-sel)' }} />
+  );
+}
+
+function TabelaCarteira({
+  todas, visiveis, recolhidas, alternar, ordem, onOrdenar, total, ano, movel, acoes, edicao, hoje, cdi,
+  abertosInv = new Set(), alternarInv = () => {}, abrirInv = () => {},
+}) {
+  const toast = useToast();
   const caixaRef = useRef(null);
   const desenhadas = useLinhasAnimadas(todas, visiveis, caixaRef);
   const balao = useBalao(280, 170);
@@ -142,22 +196,215 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
   const th0 = 'sticky top-0 z-20 whitespace-nowrap border-b border-gray-200 bg-hx-f9fafb px-3 py-2 text-[10.5px] font-semibold uppercase tracking-wide';
   const aceso = (id) => (sobLinha === id ? 'gm-acesa' : '');
 
+  // ------------------------------------------------ A PLANILHA (06/11/2026, a opção A do mockup "Carteira editável")
+  // A célula ativa e o teclado, como a grade dos Lançamentos: clicar seleciona, clicar de novo (ou Enter, ou digitar)
+  // edita, Enter grava e desce, Tab vai à próxima que se edita, Esc desiste, Ctrl+Z desfaz, Delete exclui o aporte. O
+  // nome, a taxa e o resgate do investimento abrem num pop-up (`EditorInvestimento`); o resto é um campo na célula. Cada
+  // célula grava sozinha (`edicao`, de useEdicaoCarteira.js); as calculadas só se selecionam.
+  const editavel = !!edicao && !movel;
+  const [ativa, setAtiva] = useState(null); // { id, col }
+  const [editor, setEditorEstado] = useState(null); // { id, col, modo, texto, digitado }
+  const editorRef = useRef(null);
+  const setEditor = (e) => { editorRef.current = e; setEditorEstado(e); };
+  const [pop, setPopEstado] = useState(null); // { id, col, modo, nome, ancora }
+  const popRef = useRef(null);
+  const setPop = (p) => { popRef.current = p; setPopEstado(p); };
+  const [rascunhos, setRascunhos] = useState({}); // a linha "+ aporte" de cada investimento: { [invId]: { data, valor } }
+  const [otimista, setOtimista] = useState({}); // o que foi digitado, até a tela reler: { 'id|col': texto }
+  const porId = useMemo(() => new Map(todas.map((l) => [l.id, l])), [todas]);
+  const chave = (id, col) => `${id}|${col}`;
+  const focar = () => caixaRef.current?.focus({ preventScroll: true });
+  const celulaEl = (id, col) => caixaRef.current?.querySelector(`[data-cel="${chave(id, col)}"]`);
+  const rascunhoDe = (l) => ({ data: hoje, valor: '', ...(rascunhos[l.x.inv.id] ?? {}) });
+  const comOtimista = (k, txt) => setOtimista((o) => ({ ...o, [k]: txt }));
+  const semOtimista = (k) => setOtimista((o) => { const n = { ...o }; delete n[k]; return n; });
+
+  // a célula ativa à vista (a página rola o necessário)
+  useEffect(() => { if (ativa) celulaEl(ativa.id, ativa.col)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [ativa]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const iniciar = (l, col, digitado) => {
+    const modo = editavel ? modoDaCelula(l, col) : null;
+    if (!modo) return;
+    if (ehPopup(modo)) {
+      if (modo === 'resgate' && digitado !== undefined) return; // o resgate é uma lista: digitar não abre
+      setPop({ id: l.id, col, modo, nome: digitado, ancora: celulaEl(l.id, col) });
+      return;
+    }
+    const texto = digitado !== undefined ? (modo === 'data' ? mascaraData(digitado) : digitado) : textoDaCelula(l, col, l.tipo === 'novoAporte' ? rascunhoDe(l) : null);
+    setEditor({ id: l.id, col, modo, texto, digitado: digitado !== undefined });
+  };
+
+  const andar = (como, de) => {
+    if (como === 'enter' || como === 'baixo') setAtiva(moverAtiva(visiveis, de, 1, 0));
+    else if (como === 'cima') setAtiva(moverAtiva(visiveis, de, -1, 0));
+    else if (como === 'tab') setAtiva(proximaEditavel(visiveis, de, 1));
+    else if (como === 'tabAntes') setAtiva(proximaEditavel(visiveis, de, -1));
+  };
+
+  // grava a célula (em segundo plano: a tela já andou) e mostra o que foi digitado até a releitura
+  const gravar = async (l, col, modo, texto) => {
+    const r = lerCelula(modo, texto, hoje);
+    if (!r.ok) { toast.error(r.erro); return; }
+    const k = chave(l.id, col);
+    comOtimista(k, modo === 'data' ? formatDate(r.valor) : modo === 'valor' ? formatBRL(r.valor) : r.valor);
+    if (l.tipo === 'grupo') await edicao.renomearInstituicao(l.g.conta, r.valor);
+    else if (l.tipo === 'inv') { await edicao.valeHoje(l.x, r.valor); focar(); }
+    else if (l.tipo === 'lote') await edicao.mudarAporte(l, col === 'nome' ? 'data' : 'valor', r.valor);
+    semOtimista(k);
+  };
+
+  // A LINHA "+ APORTE": um rascunho só na tela até ter a data (hoje, se não mudar) e o valor; com os dois, vira o aporte.
+  const fimRascunho = async (l, col, como, texto) => {
+    const invId = l.x.inv.id;
+    const rasc = rascunhoDe(l);
+    if (col === 'nome') {
+      if (String(texto).trim()) {
+        const r = lerCelula('data', texto, hoje);
+        if (!r.ok) { toast.error(r.erro); focar(); return; }
+        rasc.data = r.valor;
+      }
+      setRascunhos((s) => ({ ...s, [invId]: rasc }));
+      if (como === 'enter' || como === 'tab') { setAtiva({ id: l.id, col: 'aplicado' }); setEditor({ id: l.id, col: 'aplicado', modo: 'valor', texto: rasc.valor, digitado: true }); return; }
+      andar(como, { id: l.id, col });
+      if (como !== 'blur') focar();
+      return;
+    }
+    rasc.valor = texto;
+    setRascunhos((s) => ({ ...s, [invId]: rasc }));
+    if (como === 'tabAntes') { setAtiva({ id: l.id, col: 'nome' }); setEditor({ id: l.id, col: 'nome', modo: 'data', texto: textoDaCelula(l, 'nome', rasc), digitado: false }); return; }
+    if (como !== 'enter') { andar(como, { id: l.id, col }); if (como !== 'blur') focar(); return; }
+    focar();
+    if (!String(texto).trim()) return;
+    const r = lerCelula('valor', texto, hoje);
+    if (!r.ok || !(r.valor > 0)) { toast.error(r.ok ? 'O aporte precisa de um valor.' : r.erro); return; }
+    const k = chave(l.id, 'aplicado');
+    comOtimista(k, formatBRL(r.valor));
+    const res = await edicao.novoAporte(l.x, rasc.data, r.valor);
+    semOtimista(k);
+    if (res.ok) setRascunhos((s) => { const n = { ...s }; delete n[invId]; return n; });
+    focar();
+  };
+
+  const fimEditor = (como, texto) => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    setEditor(null);
+    const l = porId.get(ed.id);
+    if (como === 'esc' || !l) { focar(); return; }
+    if (l.tipo === 'novoAporte') { fimRascunho(l, ed.col, como, texto); return; }
+    if (l.tipo === 'novaInst') {
+      focar();
+      if (como === 'blur' || !String(texto).trim()) return;
+      const r = lerCelula('texto', texto, hoje);
+      edicao.novaInstituicao(r.valor).then((res) => { if (res.ok && res.valor) { setAtiva({ id: `ni:${res.valor}`, col: 'nome' }); focar(); } });
+      return;
+    }
+    if (texto !== textoDaCelula(l, ed.col)) gravar(l, ed.col, ed.modo, texto);
+    andar(como, { id: l.id, col: ed.col });
+    if (como !== 'blur') focar();
+  };
+
+  const fimPop = (p, mudancas) => {
+    if (popRef.current !== p) return;
+    setPop(null);
+    focar();
+    if (!mudancas) return;
+    const l = porId.get(p.id);
+    if (!l) return;
+    if (l.tipo === 'novoInv') {
+      edicao.novoInvestimento(mudancas).then((res) => {
+        if (!res.ok || !res.valor) return;
+        abrirInv(res.valor);
+        setAtiva({ id: `na:${res.valor}`, col: 'aplicado' });
+        focar();
+      });
+      return;
+    }
+    edicao.mudarInvestimento(l.x.inv, mudancas);
+  };
+
+  const excluir = (l) => { edicao.excluirAporte(l).then(() => focar()); };
+
+  const teclas = (e) => {
+    if (!editavel || e.target !== e.currentTarget) return;
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); edicao.desfazer(); return; }
+    const setas = { ArrowDown: [1, 0], ArrowUp: [-1, 0], ArrowRight: [0, 1], ArrowLeft: [0, -1] };
+    if (!ativa) {
+      if (setas[e.key] || e.key === 'Enter') { e.preventDefault(); setAtiva(moverAtiva(visiveis, null, 0, 0)); }
+      return;
+    }
+    const l = porId.get(ativa.id);
+    if (setas[e.key]) { e.preventDefault(); setAtiva(moverAtiva(visiveis, ativa, ...setas[e.key])); return; }
+    if (e.key === 'Tab') { e.preventDefault(); setAtiva(proximaEditavel(visiveis, ativa, e.shiftKey ? -1 : 1)); return; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAtiva(null); return; }
+    if (!l) return;
+    if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); iniciar(l, ativa.col); return; }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (l.tipo === 'lote' && l.lo.fonte && l.lo.fonte.tipo !== 'inicial') { e.preventDefault(); excluir(l); }
+      else if (l.tipo === 'novoAporte') { e.preventDefault(); setRascunhos((s) => { const n = { ...s }; delete n[l.x.inv.id]; return n; }); }
+      return;
+    }
+    if (e.key.length === 1 && !ctrl && !e.altKey && modoDaCelula(l, ativa.col)) { e.preventDefault(); iniciar(l, ativa.col, e.key); }
+  };
+
+  // clicar: seleciona; clicar de novo na mesma (ou duas vezes) edita. Nas linhas de acrescentar, o clique já começa — no
+  // "+ aporte", pelo valor (a data já é hoje). Com o pop-up aberto, o clique só o fecha (gravando).
+  const ADICIONAR = ['novoAporte', 'novoInv', 'novaInst'];
+  const clicar = (l, col) => (e) => {
+    if (!editavel || e.button !== 0) return;
+    if (e.target.closest('button, a, input, label')) return;
+    if (popRef.current) return;
+    e.preventDefault();
+    if (editorRef.current) fimEditor('blur', editorRef.current.texto);
+    const mesma = ativa && ativa.id === l.id && ativa.col === col;
+    if (ADICIONAR.includes(l.tipo)) {
+      const naLinha = ativa && ativa.id === l.id;
+      const c = l.tipo === 'novoAporte' ? (naLinha && col === 'nome' ? 'nome' : 'aplicado') : 'nome';
+      setAtiva({ id: l.id, col: c });
+      focar();
+      iniciar(l, c);
+      return;
+    }
+    setAtiva({ id: l.id, col });
+    focar();
+    if (mesma || e.detail >= 2) iniciar(l, col);
+  };
+
+  // a célula: o lugar do clique, o contorno da ativa (azul na que edita, cinza na calculada) e o campo, quando edita
+  const cel = (l, col, cls, conteudo, extra = {}) => {
+    const modo = editavel ? modoDaCelula(l, col) : null;
+    const eAtiva = editavel && ativa?.id === l.id && ativa.col === col;
+    const k = chave(l.id, col);
+    const ed = editor && editor.id === l.id && editor.col === col ? editor : null;
+    const contorno = eAtiva && !ed ? (modo ? 'shadow-[inset_0_0_0_2px_var(--grade-sel)]' : 'shadow-[inset_0_0_0_2px_var(--contorno-celula)]')
+      : modo ? 'hover:shadow-[inset_0_0_0_1px_var(--grade-sel)]' : '';
+    return (
+      <td key={col} data-cel={k} onMouseDown={editavel ? clicar(l, col) : undefined} {...extra}
+        className={`relative ${cls} ${modo ? 'cursor-cell' : ''} ${contorno}`}>
+        {otimista[k] !== undefined ? <span className="text-gray-400">{otimista[k]}</span> : conteudo}
+        {ed && <EditorCelula ed={ed} onTexto={(t) => setEditor({ ...ed, texto: t })} onFim={fimEditor} alinha={col === 'nome' ? 'left' : 'right'}
+          recuo={col !== 'nome' ? 12 : l.tipo === 'lote' || l.tipo === 'novoAporte' ? RECUO_APORTE : 32} />}
+      </td>
+    );
+  };
+
   const cabecalho = (c) => {
     const ordenada = ordem?.col === c.id;
     return (
       <th key={c.id} aria-sort={ordenada ? (ordem.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
         className={`group/th ${th0} ${c.alinha === 'left' ? 'text-left' : 'text-right'} ${ordenada ? 'text-gray-800' : 'text-gray-500'} ${desk(c)}`}
-        // LARGURAS FIXAS no Investimento e no Resgate (06/11/2026): com a largura pelo conteúdo, abrir os depósitos (o "cai
+        // LARGURAS FIXAS no Investimento e no Resgate (06/11/2026): com a largura pelo conteúdo, abrir os aportes (o "cai
         // para 20% em 10/04/2027" é mais largo que a pílula do título) alargava a coluna e a tabela toda andava para o lado
-        style={movel ? undefined : c.id === 'nome' ? { width: 280, minWidth: 240 } : c.id === 'resgate' ? { width: 210, minWidth: 210 } : undefined}>
+        style={movel ? undefined : c.id === 'nome' ? { width: 290, minWidth: 250 } : c.id === 'resgate' ? { width: 210, minWidth: 210 } : undefined}>
         <span className={`inline-flex items-center gap-1 ${c.alinha === 'left' ? '' : 'flex-row-reverse'}`}>
           <span>{c.id === 'ano' ? `Em ${ano}` : c.rotulo}</span>
           {!c.semOrdem && !movel && (
             <button type="button" onClick={() => onOrdenar(c.id)} aria-label={`Ordenar por ${c.rotulo.toLowerCase()}`}
               title={ordenada ? 'Clique para inverter (a 3ª vez volta à ordem de cadastro)' : `Ordenar por ${c.rotulo.toLowerCase()}`}
-              className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] transition-[opacity,background-color] duration-150 hover:bg-gray-200 ${
+              className={`inline-flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[4px] transition-[opacity,background-color] duration-150 hover:bg-gray-200 ${
                 ordenada ? 'text-gray-800 opacity-100' : 'text-gray-400 opacity-0 group-hover/th:opacity-100'}`}>
-              <IconSetaOrdenacao className="h-3.5 w-3.5" descendente={ordenada && ordem.dir === 'desc'} />
+              <IconSetaOrdenacao className="h-[14px] w-[14px]" descendente={ordenada && ordem.dir === 'desc'} />
             </button>
           )}
         </span>
@@ -174,16 +421,15 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
   const info = (() => {
     const a = balao.ativo;
     if (!a) return null;
-    const l = todas.find((t) => t.id === a.id);
-    if (!l) return null;
-    if (l.tipo === 'lote') return null;
+    const l = porId.get(a.id);
+    if (!l || (l.tipo !== 'inv' && l.tipo !== 'grupo')) return null;
     const item = l.tipo === 'inv' ? l.x : l.g;
     const nome = l.tipo === 'inv' ? l.x.inv.nome : l.g.conta.nome;
     if (a.col === 'liquido') {
       const imp = l.tipo === 'inv' ? l.x.imposto : null;
       if (imp?.semEstimativa) return { titulo: nome, itens: [{ rotulo: 'Vale hoje (bruto)', valor: formatBRL(item.vale) }], nota: 'Fundo: o come-cotas e o IR dele não são estimados.' };
-      if (imp?.semDatas) return { titulo: nome, itens: [{ rotulo: 'Vale hoje (bruto)', valor: formatBRL(item.vale) }, { rotulo: 'Rendeu', valor: formatBRL(imp.ganho), cor: COR_ENTRADAS }], nota: 'Faltam as datas dos depósitos: sem elas não dá para saber a alíquota de cada um. Na ficha, cole a lista de depósitos do banco (ou ponha a data da aplicação no cadastro).' };
-      if (l.tipo === 'grupo' && item.incompleto) return { titulo: `${nome} · se resgatar hoje`, itens: [{ rotulo: 'Vale hoje (bruto)', valor: formatBRL(item.vale) }, { rotulo: 'IR ≈ (dos que têm as datas)', valor: formatBRL(item.ir) }], nota: 'Parcial: algum investimento daqui está sem as datas dos depósitos (ou é fundo) e entra pelo bruto.' };
+      if (imp?.semDatas) return { titulo: nome, itens: [{ rotulo: 'Vale hoje (bruto)', valor: formatBRL(item.vale) }, { rotulo: 'Rendeu', valor: formatBRL(imp.ganho), cor: COR_ENTRADAS }], nota: 'Faltam as datas dos aportes: sem elas não dá para saber a alíquota de cada um. Abra o investimento e ponha a data de cada aporte (ou informe os aportes na ficha).' };
+      if (l.tipo === 'grupo' && item.incompleto) return { titulo: `${nome} · se resgatar hoje`, itens: [{ rotulo: 'Vale hoje (bruto)', valor: formatBRL(item.vale) }, { rotulo: 'IR ≈ (dos que têm as datas)', valor: formatBRL(item.ir) }], nota: 'Parcial: algum investimento daqui está sem as datas dos aportes (ou é fundo) e entra pelo bruto.' };
       const ir = l.tipo === 'inv' ? (imp?.ir ?? 0) : item.ir;
       const iof = l.tipo === 'inv' ? (imp?.iof ?? 0) : 0;
       const q = imp?.proximaQueda;
@@ -196,8 +442,8 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
           { rotulo: 'Líquido ≈', valor: formatBRL(l.tipo === 'inv' ? imp?.liquido ?? item.vale : item.liquido), cor: COR_ENTRADAS },
         ],
         nota: [
-          q ? `Em ${formatDate(q.data)} o depósito de ${formatDate(q.deposito)} cai de ${pctAliq(q.de)} para ${pctAliq(q.para)} (−${formatBRL(q.menos)})` : null,
-          'Estimado pelo CDI desde a data de cada depósito',
+          q ? `Em ${formatDate(q.data)} o aporte de ${formatDate(q.deposito)} cai de ${pctAliq(q.de)} para ${pctAliq(q.para)} (−${formatBRL(q.menos)})` : null,
+          'Estimado pelo CDI desde a data de cada aporte',
         ].filter(Boolean).join(' · '),
       };
     }
@@ -209,11 +455,11 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
         titulo: `${nome} · vale hoje ≈`,
         itens: [
           { rotulo: `Foto real (o banco) em ${formatDate(e.base.data)}`, valor: formatBRL(e.base.valor) },
-          ...(e.liquido ? [{ rotulo: 'Aplicações − resgates depois', valor: `${e.liquido > 0 ? '+' : '−'}${formatBRL(Math.abs(e.liquido))}` }] : []),
+          ...(e.liquido ? [{ rotulo: 'Aportes − resgates depois', valor: `${e.liquido > 0 ? '+' : '−'}${formatBRL(Math.abs(e.liquido))}` }] : []),
           { rotulo: `${e.dias} ${e.dias === 1 ? 'dia útil' : 'dias úteis'} · ${rotuloRende(l.x.inv)}`, valor: `${rendeuEst >= 0 ? '+' : '−'}${formatBRL(Math.abs(rendeuEst))}`, cor: COR_ENTRADAS },
           { rotulo: `Vale hoje ≈ (até ${formatDate(e.ate)})`, valor: formatBRL(e.valor_centavos) },
         ],
-        nota: `A taxa de cada dia vem do Banco Central; quando ela muda, a nova vale sobre o que já rendeu. Confira com o banco no "Atualizar valores" a cada 3 meses.`,
+        nota: 'A taxa de cada dia vem do Banco Central; quando ela muda, a nova vale sobre o que já rendeu. Para conferir com o banco, digite o valor dele nesta célula.',
       };
     }
     if (a.col === 'curva') {
@@ -250,154 +496,221 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
     };
   })();
 
-  const rendeuCel = (id, item) => (
-    <td onMouseMove={mover({ id, col: 'rendeu' })} className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums ${aceso(id)}`}>
-      <span className={item.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(item.rendeu)}{reais(Math.abs(item.rendeu))}</span>
-      <span className="block text-[11.5px] text-gray-500">{pctTexto(item.pct, 1)}</span>
-    </td>
-  );
-  const liquidoCel = (id, valor, sub, forte, extra = '') => (
-    <td onMouseMove={mover({ id, col: 'liquido' })} className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums ${forte ? 'font-semibold text-gray-900' : 'text-gray-800'} ${extra} ${aceso(id)}`}>
-      {valor === null ? <span className="text-gray-400">—</span> : reais(valor)}
-      {sub && <span className="block text-[11.5px] font-normal text-gray-500">{sub}</span>}
-    </td>
-  );
   const subLiquido = (imp) => (!imp ? null : imp.semEstimativa ? 'sem estimativa' : imp.semDatas ? 'faltam as datas' : imp.isento ? 'isento' : `IR ≈ ${reais((imp.ir ?? 0) + (imp.iof ?? 0))}`);
-  const curvaCel = (id, item, cor) => (
-    <td className={`border-b border-gray-100 px-3 py-2 ${movel ? 'hidden' : ''} ${aceso(id)}`}>
-      {item.curva.length > 1 ? (
-        <span className="ml-auto block w-[92px] cursor-crosshair" onMouseMove={sobCurva(id, item.curva)}>
-          <MiniCurva valores={item.curva.map((p) => p.valor)} cor={cor} largura={92} altura={24} />
-        </span>
-      ) : <span className="block text-right text-[11.5px] text-gray-400">{item.curva.length ? '1 mês' : '—'}</span>}
+  const curvaTd = (l, item, cor, cls) => cel(l, 'curva', `${cls} ${movel ? 'hidden' : ''}`, item.curva.length > 1 ? (
+    <span className="ml-auto block w-[92px] cursor-crosshair" onMouseMove={sobCurva(l.id, item.curva)}>
+      <MiniCurva valores={item.curva.map((p) => p.valor)} cor={cor} largura={92} altura={24} />
+    </span>
+  ) : <span className="block text-right text-[11.5px] text-gray-400">{item.curva.length ? '1 mês' : '—'}</span>);
+  const acoesTd = (cls, filhos) => (!movel && (
+    <td className={cls}>
+      {filhos && <span className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/linha:opacity-100 focus-within:opacity-100">{filhos}</span>}
     </td>
-  );
+  ));
+  const vazioTds = (l, cols, cls) => cols.map((c) => cel(l, c, `${cls} ${['resgate', 'aplicado', 'ano', 'curva'].includes(c) && movel ? 'hidden' : ''}`, null));
+
+  // as linhas de acrescentar: o "+" e o rótulo, no recuo do nível delas (o "+ aporte" com o trilho e, ativo, os campos)
+  const linhaAcrescentar = (l, attrs) => {
+    const ativoAqui = ativa?.id === l.id || (editor && editor.id === l.id);
+    const base = 'h-[34px] border-b border-gray-100 py-0 text-[12.5px]';
+    const rotulo = (texto, recuo) => (
+      <span className="flex items-center gap-2 font-medium text-gray-500 transition-colors group-hover/add:text-gray-800" style={{ paddingLeft: recuo }}>
+        <CirculoMais borda="text-gray-400" />{texto}
+      </span>
+    );
+    if (l.tipo === 'novoAporte') {
+      const r = rascunhoDe(l);
+      const comRascunho = ativoAqui || rascunhos[l.x.inv.id];
+      return (
+        <tr key={l.id} {...attrs} className="group/add">
+          {cel(l, 'nome', `${base} pr-3`, (
+            <>
+              <Trilho ultimo />
+              {comRascunho ? (
+                <span className="flex items-center gap-2" style={{ paddingLeft: RECUO_APORTE }}>
+                  <span className={`tabular-nums ${rascunhos[l.x.inv.id]?.data ? 'text-gray-800' : 'text-gray-500'}`}>{formatDate(r.data)}</span>
+                  {r.data === hoje && <span className="text-[11.5px] text-gray-400">hoje</span>}
+                </span>
+              ) : rotulo('Novo aporte', RECUO_APORTE - 4)}
+            </>
+          ), { style: { paddingLeft: 0 } })}
+          {cel(l, 'resgate', `${base} px-3 ${movel ? 'hidden' : ''}`, comRascunho ? <span className="text-[11.5px] text-gray-400">a data e o valor · <Kbd>Enter</Kbd> grava</span> : null)}
+          {cel(l, 'aplicado', `${base} px-3 text-right tabular-nums ${movel ? 'hidden' : ''}`, comRascunho ? (
+            r.valor ? <span className="text-gray-800">{r.valor}</span> : <span className="text-gray-400">valor</span>
+          ) : null)}
+          {vazioTds(l, ['vale', 'liquido', 'rendeu', 'ano', 'curva'], base)}
+          {acoesTd(base)}
+        </tr>
+      );
+    }
+    const inst = l.tipo === 'novaInst';
+    return (
+      <tr key={l.id} {...attrs} className="group/add">
+        {cel(l, 'nome', `${base} pr-3 ${inst ? 'border-t border-gray-200' : 'border-b-gray-200'}`,
+          rotulo(inst ? 'Nova instituição' : `Novo investimento em ${l.g.conta.nome}`, inst ? 10 : 32), { style: { paddingLeft: 0 } })}
+        {vazioTds(l, ['resgate', 'aplicado', 'vale', 'liquido', 'rendeu', 'ano', 'curva'], `${base} ${inst ? 'border-t border-gray-200' : 'border-b-gray-200'}`)}
+        {acoesTd(`${base} ${inst ? 'border-t border-gray-200' : 'border-b-gray-200'}`)}
+      </tr>
+    );
+  };
+
+  // abre quando tem aportes, ou (editável) para o primeiro: a linha "+ aporte" (o encerrado não recebe)
+  const temCorpo = (l) => temAportes(l.x) || (editavel && l.x.inv.ativo !== false);
 
   return (
-    <div ref={caixaRef} onMouseMove={fecharFora(balao)} onMouseLeave={() => { balao.aoSair(); setSobLinha(null); }}>
-      <table className="w-full border-separate border-spacing-0 text-[13px]" style={{ minWidth: movel ? 0 : 960 }}>
-        <thead><tr>{COLUNAS_A.map(cabecalho)}{!movel && <th className={`${th0} w-[210px]`} aria-label="Ações" />}</tr></thead>
+    <div ref={caixaRef} tabIndex={editavel ? 0 : undefined} onKeyDown={teclas} onMouseMove={fecharFora(balao)}
+      onMouseLeave={() => { balao.aoSair(); setSobLinha(null); }} className="outline-none" aria-label={editavel ? 'Carteira: a planilha dos investimentos' : undefined}>
+      <table className="w-full border-separate border-spacing-0 text-[13px]" style={{ minWidth: movel ? 0 : 980 }}>
+        <thead><tr>{COLUNAS_A.map(cabecalho)}{!movel && <th className={`${th0} w-[112px]`} aria-label="Ações" />}</tr></thead>
         <tbody>
           {desenhadas.map(({ linha: l, estado }) => {
             const attrs = atributosLinha(l.id, estado);
+            if (ADICIONAR.includes(l.tipo)) return linhaAcrescentar(l, attrs);
             if (l.tipo === 'grupo') {
               const g = l.g;
               const aberto = !recolhidas.has(g.conta.id);
-              const temFilhos = g.itens.length > 0;
+              const temFilhos = g.itens.length > 0 || editavel;
+              const faixa = 'border-b border-gray-200 bg-hx-f3f4f6';
+              const qtd = g.soConta ? 'nenhum investimento' : `${g.itens.length} ${g.itens.length === 1 ? 'investimento' : 'investimentos'}`;
               return (
                 <tr key={l.id} {...attrs} className="group/linha" onMouseEnter={() => setSobLinha(l.id)}>
-                  <td className={`h-10 border-b border-gray-100 bg-hx-f9fafb px-3 ${aceso(l.id)}`}>
-                    <button type="button" onClick={() => temFilhos && alternar(g.conta.id)} aria-expanded={temFilhos ? aberto : undefined}
-                      className={`flex max-w-[300px] items-center gap-2 text-left ${temFilhos ? '' : 'cursor-default'}`}>
-                      {temFilhos ? <SetaAbre aberto={aberto} /> : <span className="w-[12px] shrink-0" />}
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: g.cor }} />
-                      <span className={`truncate font-semibold ${g.conta.ativa === false ? 'text-gray-400' : 'text-gray-800'}`}>{g.conta.nome}</span>
-                      <span className={`shrink-0 text-[11.5px] font-normal text-gray-400 ${movel ? 'hidden' : ''}`}>
-                        {g.soConta ? 'nenhum investimento' : `${g.itens.length} ${g.itens.length === 1 ? 'investimento' : 'investimentos'}`}
+                  {cel(l, 'nome', `h-[46px] ${faixa} pl-3 pr-3 ${aceso(l.id)} ${!editavel && temFilhos ? 'cursor-pointer' : ''}`, (
+                    <>
+                      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-[3px]" style={{ background: g.cor }} />
+                      <span className="flex max-w-[270px] items-center gap-2">
+                        {temFilhos ? (
+                          <button type="button" onClick={() => alternar(g.conta.id)} aria-expanded={aberto} aria-label={aberto ? `Recolher ${g.conta.nome}` : `Abrir ${g.conta.nome}`}
+                            className="shrink-0"><SetaAbre aberto={aberto} /></button>
+                        ) : <span className="w-[12px] shrink-0" />}
+                        <span className={`truncate text-[14px] font-semibold ${g.conta.ativa === false ? 'text-gray-400' : 'text-gray-900'}`}>{g.conta.nome}</span>
+                        <span className={`shrink-0 text-[11.5px] font-normal text-gray-500 ${movel ? 'hidden' : ''}`}>{qtd}</span>
                       </span>
-                    </button>
-                  </td>
-                  {/* o lugar vazio também acrescenta pelo "+ investimento" do hover, como os outros (o "Adicionar investimento"
-                      escrito aqui era um segundo jeito, só nele) */}
-                  <td className={`border-b border-gray-100 bg-hx-f9fafb ${movel ? 'hidden' : ''} ${aceso(l.id)}`} />
-                  <td className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums text-gray-700 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{reais(g.aplicado)}</td>
-                  <td className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>{reais(g.vale)}</td>
-                  {liquidoCel(l.id, g.liquido, g.incompleto ? 'parcial' : g.ir > 0 ? `IR ≈ ${reais(g.ir)}` : null, true, 'bg-hx-f9fafb')}
-                  <td onMouseMove={mover({ id: l.id, col: 'rendeu' })} className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right font-semibold tabular-nums ${aceso(l.id)}`}>
+                    </>
+                  ), !editavel && temFilhos ? { onClick: () => alternar(g.conta.id) } : {})}
+                  {cel(l, 'resgate', `${faixa} ${movel ? 'hidden' : ''} ${aceso(l.id)}`, null)}
+                  {cel(l, 'aplicado', `${faixa} px-3 text-right font-semibold tabular-nums text-gray-700 ${movel ? 'hidden' : ''} ${aceso(l.id)}`, reais(g.aplicado))}
+                  {cel(l, 'vale', `${faixa} px-3 text-right text-[13.5px] font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`, reais(g.vale))}
+                  {cel(l, 'liquido', `${faixa} px-3 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`, (
+                    <>{reais(g.liquido)}{(g.incompleto || g.ir > 0) && <span className="block text-[11.5px] font-normal text-gray-500">{g.incompleto ? 'parcial' : `IR ≈ ${reais(g.ir)}`}</span>}</>
+                  ), { onMouseMove: mover({ id: l.id, col: 'liquido' }) })}
+                  {cel(l, 'rendeu', `${faixa} px-3 text-right font-semibold tabular-nums ${aceso(l.id)}`, (
                     <span className={g.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(g.rendeu)}{reais(Math.abs(g.rendeu))}</span>
-                  </td>
-                  <td className={`border-b border-gray-100 bg-hx-f9fafb px-3 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{pctTexto(g.pctAno, 1)}</td>
-                  {curvaCel(l.id, g, g.cor)}
-                  {!movel && (
-                    <td className={`border-b border-gray-100 bg-hx-f9fafb px-2 ${aceso(l.id)}`}>
-                      {acoes && (
-                        <span className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/linha:opacity-100 focus-within:opacity-100">
-                          {acoes.podeInvestir && (
-                            <BotaoLinha titulo={`Novo investimento em ${g.conta.nome}`} onClick={() => acoes.novoInvestimento(g.conta)}><IconMais className="h-[14px] w-[14px]" /></BotaoLinha>
-                          )}
-                          <BotaoLinha titulo={`Editar ${g.conta.nome}`} onClick={() => acoes.editarConta(g.conta)}><IconLapis className="h-[14px] w-[14px]" /></BotaoLinha>
-                        </span>
-                      )}
-                    </td>
-                  )}
+                  ), { onMouseMove: mover({ id: l.id, col: 'rendeu' }) })}
+                  {cel(l, 'ano', `${faixa} px-3 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`, pctTexto(g.pctAno, 1))}
+                  {curvaTd(l, g, g.cor, `${faixa} px-3 ${aceso(l.id)}`)}
+                  {acoesTd(`${faixa} px-2 ${aceso(l.id)}`, acoes && (
+                    <BotaoLinha titulo={`Editar ${g.conta.nome}: o nome, se recebe o extrato, encerrar`} onClick={() => acoes.editarConta(g.conta)}><IconLapis className="h-[14px] w-[14px]" /></BotaoLinha>
+                  ))}
                 </tr>
               );
             }
             if (l.tipo === 'lote') {
               const lo = l.lo;
-              const td = `border-b border-gray-100 px-3 py-1.5 text-[12.5px] ${aceso(l.id)}`;
+              const imp = l.x.imposto;
+              const f = lo.fonte;
+              const td = `h-[34px] border-b border-gray-100 py-0 text-[12.5px] ${aceso(l.id)}`;
+              const vence = l.x.inv.liquidez === 'por_aplicacao' ? l.x.prazos?.lotes?.find((p) => p.data === lo.data)?.vence : null;
+              const exato = f?.exato && lo.inteiro;
               return (
-                <tr key={l.id} {...attrs} onMouseEnter={() => setSobLinha(l.id)}>
-                  <td className={`${td} pl-[62px] text-gray-600`}>
-                    {formatDate(lo.data)}{lo.dataAproximada && <span className="ml-1 text-gray-400" title="Sem a data da aplicação: a idade conta da data do cadastro">≈</span>}
-                    <span className="block text-[11px] text-gray-400">{lo.dias} {lo.dias === 1 ? 'dia' : 'dias'}{lo.origem === 'aporte' ? ' · pelo app' : ''}</span>
-                  </td>
-                  <td className={`${td} ${movel ? 'hidden' : ''}`}>
-                    {l.x.imposto.isento ? <Etiqueta tom="verde">isento</Etiqueta> : <Etiqueta tom={TOM_ALIQUOTA[lo.aliquota] ?? 'cinza'}>IR {pctAliq(lo.aliquota)}</Etiqueta>}
-                    {!l.x.imposto.isento && <span className="block whitespace-nowrap text-[11px] text-gray-500">{lo.proxima ? `cai para ${pctAliq(lo.proxima.aliquota)} em ${formatDate(lo.proxima.data)}` : 'já na menor'}</span>}
-                  </td>
-                  <td className={`${td} text-right tabular-nums text-gray-500 ${movel ? 'hidden' : ''}`}>{lo.origem !== 'aporte' && <span className="text-gray-400">≈ </span>}{reais(lo.depositado)}</td>
-                  <td className={`${td} text-right tabular-nums text-gray-800`}>{reais(lo.vale)}</td>
-                  <td className={`${td} text-right tabular-nums text-gray-800`}>{reais(lo.liquido)}{(lo.ir + lo.iof) > 0 && <span className="block text-[11px] text-gray-500">IR ≈ {reais(lo.ir + lo.iof)}</span>}</td>
-                  <td className={`${td} text-right tabular-nums text-green-700`}>{sinal(lo.ganho)}{reais(Math.abs(lo.ganho))}</td>
-                  <td className={`${td} ${movel ? 'hidden' : ''}`} />
-                  <td className={`${td} ${movel ? 'hidden' : ''}`} />
-                  {!movel && <td className={td} />}
+                <tr key={l.id} {...attrs} className="group/linha" onMouseEnter={() => setSobLinha(l.id)}>
+                  {cel(l, 'nome', `${td} pr-3`, (
+                    <>
+                      <Trilho ultimo={l.ultimo} />
+                      <span className="flex items-baseline gap-2 whitespace-nowrap" style={{ paddingLeft: RECUO_APORTE }}>
+                        <span className="tabular-nums text-gray-700">{formatDate(lo.data)}</span>
+                        {lo.dataAproximada && <span className="text-gray-400" title="Sem a data da aplicação: a idade conta da data do cadastro">≈</span>}
+                        <span className="text-[11.5px] text-gray-400">{lo.dias} {lo.dias === 1 ? 'dia' : 'dias'}</span>
+                      </span>
+                    </>
+                  ), { style: { paddingLeft: 0 } })}
+                  {cel(l, 'resgate', `${td} px-3 ${movel ? 'hidden' : ''}`, (
+                    <span className="flex items-center gap-1.5 whitespace-nowrap">
+                      {imp.semEstimativa ? <span className="text-[11.5px] text-gray-400">IR do fundo</span>
+                        : imp.isento ? <Etiqueta tom="verde">isento</Etiqueta>
+                          : <Etiqueta tom={TOM_ALIQUOTA[lo.aliquota] ?? 'cinza'}>IR {pctAliq(lo.aliquota)}</Etiqueta>}
+                      <span className="text-[11.5px] text-gray-500">
+                        {vence ? `vence ${dataCurta(vence)}` : !imp.isento && !imp.semEstimativa ? (lo.proxima ? `→ ${pctAliq(lo.proxima.aliquota)} em ${dataCurta(lo.proxima.data)}` : 'já na menor') : ''}
+                      </span>
+                    </span>
+                  ))}
+                  {cel(l, 'aplicado', `${td} px-3 text-right tabular-nums ${movel ? 'hidden' : ''}`, exato
+                    ? <span className="text-gray-800">{formatBRL(f.valor)}</span>
+                    : <span className="text-gray-500" title={lo.inteiro ? 'Estimado: o banco mostrou quanto ele valia, não quanto foi aportado' : 'Parte dele já foi resgatada'}>≈ {reais(lo.depositado)}</span>)}
+                  {cel(l, 'vale', `${td} px-3 text-right tabular-nums text-gray-600`, reais(lo.vale))}
+                  {cel(l, 'liquido', `${td} px-3 text-right tabular-nums text-gray-600`, reais(lo.liquido))}
+                  {cel(l, 'rendeu', `${td} px-3 text-right tabular-nums text-green-700`, `${sinal(lo.ganho)}${reais(Math.abs(lo.ganho))}`)}
+                  {cel(l, 'ano', `${td} ${movel ? 'hidden' : ''}`, null)}
+                  {cel(l, 'curva', `${td} ${movel ? 'hidden' : ''}`, null)}
+                  {acoesTd(`${td} px-2`, editavel && f && f.tipo !== 'inicial' && (
+                    <BotaoLinha titulo={`Excluir o aporte de ${formatDate(f.data)}`} onClick={() => excluir(l)}><IconLixeira className="h-[14px] w-[14px]" /></BotaoLinha>
+                  ))}
                 </tr>
               );
             }
             const x = l.x;
             const encerrado = x.inv.ativo === false;
-            const comDep = temDepositos(x);
-            const depAberto = abertosInv.has(x.inv.id);
+            const comCorpo = temCorpo(l);
+            const aberto = abertosInv.has(x.inv.id);
             const sub = [nomeTipoInvestimento(x.inv.tipo), rotuloRende(x.inv), x.inv.emissor].filter(Boolean).join(' · ');
+            const td = `border-b border-gray-100 py-2 ${aceso(l.id)}`;
+            const qtdAportes = x.imposto?.lotes.length ?? 0;
             return (
               <tr key={l.id} {...attrs} className="group/linha" onMouseEnter={() => setSobLinha(l.id)}>
-                <td className={`border-b border-gray-100 py-2 pl-[20px] pr-3 ${aceso(l.id)}`}>
-                  <span className="flex items-start gap-1.5">
-                  {comDep ? (
-                    <button type="button" onClick={() => alternarInv(x.inv.id)} aria-expanded={depAberto} title={depAberto ? 'Fechar os depósitos' : `Abrir os ${x.imposto.lotes.length} depósitos`}
-                      className="group/seta -mx-[2px] mt-px flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200"><IconChevron aberto={depAberto} /></button>
-                  ) : <span className="w-[16px] shrink-0" />}
-                  {acoes ? (
-                    <button type="button" onClick={() => acoes.ficha(x.inv)} className="block max-w-[262px] text-left">
-                      <span className={`flex items-center gap-1.5 font-medium ${encerrado ? 'text-gray-400' : 'text-gray-800'}`}>
-                        <span className="truncate hover:underline">{x.inv.nome}</span>{encerrado && <Etiqueta>encerrado</Etiqueta>}
-                        {/* cadastrado sem dinheiro ainda: entra pelo Aplicar (dinheiro novo) ou pelo Colar os depósitos (na ficha) */}
-                        {x.semValor && !encerrado && <span title="Ainda sem dinheiro: aplique (dinheiro novo) ou cole os depósitos do banco na ficha"><Etiqueta tom="ambar">sem valor</Etiqueta></span>}
+                {cel(l, 'nome', `${td} pl-[30px] pr-3`, (
+                  <>
+                    {comCorpo && aberto && <span aria-hidden="true" className="pointer-events-none absolute bottom-0 left-[40px] top-[30px] w-px bg-gray-300" />}
+                    <span className="flex items-start gap-1.5">
+                      {comCorpo ? (
+                        <button type="button" onClick={() => alternarInv(x.inv.id)} aria-expanded={aberto}
+                          title={aberto ? 'Fechar os aportes' : qtdAportes ? `Abrir os ${qtdAportes === 1 ? 'aportes' : `${qtdAportes} aportes`}` : 'Abrir para o primeiro aporte'}
+                          className="group/seta mt-px flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200"><IconChevron aberto={aberto} /></button>
+                      ) : <span className="w-[20px] shrink-0" />}
+                      <span className="block min-w-0 max-w-[222px]">
+                        <span className={`flex items-center gap-1.5 text-[13px] font-medium ${encerrado ? 'text-gray-400' : 'text-gray-800'}`}>
+                          <span className="truncate">{x.inv.nome}</span>{encerrado && <Etiqueta>encerrado</Etiqueta>}
+                          {/* cadastrado sem dinheiro ainda: entra pela linha "+ aporte" (abra o investimento) */}
+                          {x.semValor && !encerrado && <span title="Ainda sem dinheiro: abra e digite o primeiro aporte"><Etiqueta tom="ambar">sem valor</Etiqueta></span>}
+                        </span>
+                        <span className="block truncate text-[11.5px] text-gray-500">{sub}</span>
                       </span>
-                      <span className="block truncate text-[11.5px] text-gray-500">{sub}</span>
-                    </button>
-                  ) : (
-                    <span className="block max-w-[220px]">
-                      <span className="block truncate font-medium text-gray-800">{x.inv.nome}</span>
-                      <span className="block truncate text-[11.5px] text-gray-500">{sub}</span>
                     </span>
-                  )}
-                  </span>
-                </td>
-                <td className={`border-b border-gray-100 px-3 py-2 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}><Resgate x={x} /></td>
-                <td className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{reais(x.aplicado)}</td>
-                <td onMouseMove={x.estimado ? mover({ id: l.id, col: 'vale' }) : undefined}
-                  className={`border-b border-gray-100 px-3 py-2 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`}>
-                  {x.semValor ? <span className="font-normal text-gray-400">—</span> : reais(x.vale)}
-                  {x.estimado && <span className="block whitespace-nowrap text-[11.5px] font-normal text-gray-500">≈ {rotuloPeloIndice(x.inv)} até {formatDate(x.estimado.ate).slice(0, 5)}</span>}
-                </td>
-                {liquidoCel(l.id, x.imposto && x.imposto.liquido === null && !x.imposto.isento ? null : x.imposto?.liquido ?? x.vale, subLiquido(x.imposto), true)}
-                {rendeuCel(l.id, x)}
-                <td className={`border-b border-gray-100 px-3 py-2 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''} ${aceso(l.id)}`}>{pctTexto(x.pctAno, 1)}</td>
-                {curvaCel(l.id, x, l.g.cor)}
-                {!movel && (
-                  <td className={`border-b border-gray-100 px-2 py-2 ${aceso(l.id)}`}>
-                    {acoes && (
-                      <span className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/linha:opacity-100 focus-within:opacity-100">
-                        {!encerrado && <BotaoLinha titulo={`Aplicar em ${x.inv.nome}`} onClick={() => acoes.movimento({ inv: x.inv, tipo: 'aporte' })}><IconAplicar /></BotaoLinha>}
-                        {!encerrado && !x.semValor && <BotaoLinha titulo={`Resgatar de ${x.inv.nome}`} onClick={() => acoes.movimento({ inv: x.inv, tipo: 'resgate' })}><IconResgatar /></BotaoLinha>}
-                        <BotaoLinha titulo={`A ficha de ${x.inv.nome}: os depósitos, o IR e o histórico`} onClick={() => acoes.ficha(x.inv)}><IconLapis className="h-[14px] w-[14px]" /></BotaoLinha>
-                      </span>
+                  </>
+                ))}
+                {cel(l, 'resgate', `${td} px-3 ${movel ? 'hidden' : ''}`, <Resgate x={x} />)}
+                {cel(l, 'aplicado', `${td} px-3 text-right tabular-nums text-gray-700 ${movel ? 'hidden' : ''}`, reais(x.aplicado))}
+                {cel(l, 'vale', `${td} px-3 text-right font-semibold tabular-nums text-gray-900`, (
+                  <>
+                    {x.semValor ? <span className="font-normal text-gray-400">—</span> : reais(x.vale)}
+                    {x.estimado && <span className="block whitespace-nowrap text-[11.5px] font-normal text-gray-500">≈ {rotuloPeloIndice(x.inv)} até {formatDate(x.estimado.ate).slice(0, 5)}</span>}
+                  </>
+                ), { onMouseMove: x.estimado ? mover({ id: l.id, col: 'vale' }) : undefined })}
+                {cel(l, 'liquido', `${td} px-3 text-right font-semibold tabular-nums text-gray-900`, (() => {
+                  const v = x.imposto && x.imposto.liquido === null && !x.imposto.isento ? null : x.imposto?.liquido ?? x.vale;
+                  const s = subLiquido(x.imposto);
+                  return <>{v === null ? <span className="text-gray-400">—</span> : reais(v)}{s && <span className="block text-[11.5px] font-normal text-gray-500">{s}</span>}</>;
+                })(), { onMouseMove: mover({ id: l.id, col: 'liquido' }) })}
+                {cel(l, 'rendeu', `${td} px-3 text-right tabular-nums`, (
+                  <>
+                    <span className={x.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(x.rendeu)}{reais(Math.abs(x.rendeu))}</span>
+                    <span className="block text-[11.5px] text-gray-500">{pctTexto(x.pct, 1)}</span>
+                  </>
+                ), { onMouseMove: mover({ id: l.id, col: 'rendeu' }) })}
+                {cel(l, 'ano', `${td} px-3 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''}`, pctTexto(x.pctAno, 1))}
+                {curvaTd(l, x, l.g.cor, `${td} px-3`)}
+                {acoesTd(`${td} px-2`, acoes && (
+                  <>
+                    {!encerrado && editavel && (
+                      <BotaoLinha titulo={`Aportar em ${x.inv.nome} (a linha "+ aporte")`} onClick={() => {
+                        abrirInv(x.inv.id);
+                        const alvo = { id: `na:${x.inv.id}`, tipo: 'novoAporte', g: l.g, x };
+                        setAtiva({ id: alvo.id, col: 'aplicado' });
+                        setTimeout(() => { focar(); iniciar(alvo, 'aplicado'); }, 260);
+                      }}><IconAplicar /></BotaoLinha>
                     )}
-                  </td>
-                )}
+                    {!encerrado && !x.semValor && <BotaoLinha titulo={`Resgatar de ${x.inv.nome}`} onClick={() => acoes.movimento({ inv: x.inv, tipo: 'resgate' })}><IconResgatar /></BotaoLinha>}
+                    <BotaoLinha titulo={`A ficha de ${x.inv.nome}: os aportes, o IR, as quedas e o histórico`} onClick={() => acoes.ficha(x.inv)}><IconFicha className="h-[15px] w-[15px]" strokeWidth={2} /></BotaoLinha>
+                  </>
+                ))}
               </tr>
             );
           })}
@@ -418,6 +731,14 @@ function TabelaCarteira({ todas, visiveis, recolhidas, alternar, ordem, onOrdena
         </tbody>
       </table>
       {info && <BalaoGrafico pos={balao.pos} largura={280} titulo={info.titulo} itens={info.itens} nota={info.nota} />}
+      {pop && (() => {
+        const l = porId.get(pop.id);
+        if (!l) return null;
+        return (
+          <EditorInvestimento key={chave(pop.id, pop.col)} modo={pop.modo} inv={l.x?.inv} contaId={l.g?.conta.id} nomeInicial={pop.nome} ancora={pop.ancora}
+            onSalvar={(m) => fimPop(pop, m)} onCancelar={() => fimPop(pop, null)} />
+        );
+      })()}
     </div>
   );
 }
@@ -573,10 +894,11 @@ function TabelaMesAMes({ todas, visiveis, recolhidas, alternar, meses, comps, cd
 }
 
 // ------------------------------------------------------------ o bloco
-// `grupos`: o `carteira` (com `cor` por conta). `total`: { aplicado, vale, rendeu, pctAno }. `acoes`: { movimento,
-// novoInvestimento, editarInvestimento, editarConta } (sem elas — o celular —, a tabela só mostra).
+// `grupos`: o `carteira` (com `cor` por conta). `total`: { aplicado, vale, rendeu, pctAno }. `acoes`: { podeInvestir,
+// movimento, ficha, editarConta } e `edicao` (as gravações da planilha — useEdicaoCarteira.js): sem elas — o celular —,
+// a tabela só mostra.
 export default function BlocoInvestimentos({
-  grupos, total, meses, comps, cdi, ano, movel, acoes, encerrados, onEncerrados, qtdEncerrados, aviso,
+  grupos, total, meses, comps, cdi, ano, hoje, movel, acoes, edicao, encerrados, onEncerrados, qtdEncerrados, aviso,
 }) {
   const [vista, setVistaEstado] = useState(() => (lsGet('patrimonio_vista') === 'mes' ? 'mes' : 'carteira'));
   const [modo, setModo] = useState('rs');
@@ -585,6 +907,8 @@ export default function BlocoInvestimentos({
   // os investimentos com os depósitos abertos (lembrado no navegador)
   const [abertosInv, setAbertosInvEstado] = useState(() => new Set(lerJson('patrimonio_depositos_abertos', [])));
   const alternarInv = (id) => setAbertosInvEstado((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); lsSet('patrimonio_depositos_abertos', JSON.stringify([...n])); return n; });
+  const abrirInv = (id) => setAbertosInvEstado((s) => { if (s.has(id)) return s; const n = new Set(s); n.add(id); lsSet('patrimonio_depositos_abertos', JSON.stringify([...n])); return n; });
+  const editavel = !!edicao && !movel;
   const setVista = (v) => { setVistaEstado(v); lsSet('patrimonio_vista', v); };
   const setRecolhidas = (fn) => setRecolhidasEstado((s) => { const n = fn(s); lsSet('patrimonio_recolhidas', JSON.stringify([...n])); return n; });
   const onOrdenar = (col) => setOrdemEstado((o) => { const n = proximaOrdemCarteira(o, col); lsSet('patrimonio_ordem', JSON.stringify(n)); return n; });
@@ -594,21 +918,43 @@ export default function BlocoInvestimentos({
   const verVista = movel ? 'carteira' : vista;
 
   const ordenados = useMemo(() => ordenarCarteira(grupos, ordem), [grupos, ordem]);
-  const todas = useMemo(() => ordenados.flatMap((g) => [
-    { id: `g:${g.conta.id}`, tipo: 'grupo', g },
-    ...g.itens.flatMap((x) => [
-      { id: `i:${x.inv.id}`, tipo: 'inv', g, x },
-      ...(temDepositos(x) ? x.imposto.lotes.map((lo, k) => ({ id: `l:${x.inv.id}:${k}`, tipo: 'lote', g, x, lo })) : []),
-    ]),
-  ]), [ordenados]);
-  const visiveis = useMemo(() => todas.filter((l) => l.tipo === 'grupo' || (!recolhidas.has(l.g.conta.id) && (l.tipo === 'inv' || abertosInv.has(l.x.inv.id)))), [todas, recolhidas, abertosInv]);
-  const todasB = useMemo(() => todas.filter((l) => l.tipo !== 'lote'), [todas]);
-  const visiveisB = useMemo(() => visiveis.filter((l) => l.tipo !== 'lote'), [visiveis]);
+  // AS LINHAS: a instituição, os investimentos dela e, dentro de cada um, os aportes (o id pela ORIGEM do aporte — o
+  // movimento, o de antes do app, o do cadastro —, que sobrevive à releitura: a célula ativa fica onde estava). Editável,
+  // "+ aporte" no fim dos aportes de cada um, "+ investimento" no fim de cada instituição e "+ instituição" no fim de tudo.
+  const podeInvestir = !!acoes?.podeInvestir;
+  const todas = useMemo(() => {
+    const linhas = [];
+    ordenados.forEach((g) => {
+      linhas.push({ id: `g:${g.conta.id}`, tipo: 'grupo', g });
+      g.itens.forEach((x) => {
+        linhas.push({ id: `i:${x.inv.id}`, tipo: 'inv', g, x });
+        const lotes = temAportes(x) ? x.imposto.lotes : [];
+        const comNovo = editavel && x.inv.ativo !== false;
+        lotes.forEach((lo, k) => linhas.push({
+          id: `l:${x.inv.id}:${lo.fonte ? `${lo.fonte.tipo}:${lo.fonte.id ?? 'ini'}` : k}`, tipo: 'lote', g, x, lo, ultimo: !comNovo && k === lotes.length - 1,
+        }));
+        if (comNovo) linhas.push({ id: `na:${x.inv.id}`, tipo: 'novoAporte', g, x });
+      });
+      if (editavel && podeInvestir) linhas.push({ id: `ni:${g.conta.id}`, tipo: 'novoInv', g });
+    });
+    if (editavel) linhas.push({ id: 'nq', tipo: 'novaInst' });
+    return linhas;
+  }, [ordenados, editavel, podeInvestir]);
+  const visiveis = useMemo(() => todas.filter((l) => {
+    if (l.tipo === 'grupo' || l.tipo === 'novaInst') return true;
+    if (recolhidas.has(l.g.conta.id)) return false;
+    if (l.tipo === 'inv' || l.tipo === 'novoInv') return true;
+    return abertosInv.has(l.x.inv.id); // o aporte e o "+ aporte"
+  }), [todas, recolhidas, abertosInv]);
+  const soB = (l) => l.tipo === 'grupo' || l.tipo === 'inv';
+  const todasB = useMemo(() => todas.filter(soB), [todas]);
+  const visiveisB = useMemo(() => visiveis.filter(soB), [visiveis]);
   const qtd = grupos.reduce((s, g) => s + g.itens.length, 0);
   const comum = { todas, visiveis, recolhidas, alternar };
   const corpo = verVista === 'mes'
     ? <TabelaMesAMes key="b" {...comum} todas={todasB} visiveis={visiveisB} meses={meses} comps={comps} cdi={cdi} pct={modo === 'pct'} />
-    : <TabelaCarteira key="a" {...comum} ordem={ordem} onOrdenar={onOrdenar} total={total} ano={ano} movel={movel} acoes={acoes} cdi={cdi} abertosInv={abertosInv} alternarInv={alternarInv} />;
+    : <TabelaCarteira key="a" {...comum} ordem={ordem} onOrdenar={onOrdenar} total={total} ano={ano} hoje={hoje} movel={movel} acoes={acoes} edicao={edicao} cdi={cdi}
+      abertosInv={abertosInv} alternarInv={alternarInv} abrirInv={abrirInv} />;
 
   const icones = comFilhos.length > 0 && (
     <span className="inline-flex shrink-0 overflow-hidden rounded-md border border-gray-300 bg-white">
@@ -646,7 +992,17 @@ export default function BlocoInvestimentos({
       </div>
       {aviso}
       <div className="min-h-0 overflow-x-auto">{corpo}</div>
-      {rodape && <div className="border-t border-gray-100 px-4 py-2">{rodape}</div>}
+      {/* O RODAPÉ DA PLANILHA: as teclas e se está gravando (cada célula grava sozinha) */}
+      {editavel && verVista === 'carteira' ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-100 bg-hx-fafbfc px-4 py-2 text-[11.5px] text-gray-500">
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <Kbd>Enter</Kbd> edita e grava · <Kbd>Tab</Kbd> a próxima · <Kbd>Esc</Kbd> desiste · <Kbd>Ctrl Z</Kbd> desfaz · <Kbd>Delete</Kbd> exclui o aporte
+          </span>
+          {rodape}
+          <span className="flex-1" />
+          <span className={edicao.gravando ? 'font-medium text-gray-700' : ''}>{edicao.gravando ? 'Gravando…' : 'cada célula grava sozinha'}</span>
+        </div>
+      ) : rodape && <div className="border-t border-gray-100 px-4 py-2">{rodape}</div>}
     </section>
   );
 }

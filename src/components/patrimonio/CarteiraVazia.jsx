@@ -102,7 +102,7 @@ export default function CarteiraVazia({ contas, saldos, movel, podeCadastrar, on
           {!temLugar && botao('Montar a carteira')}
         </Passo>
         <Passo n={2} estado={temLugar ? 'atual' : 'depois'} rotulo="Passo 2 · o quê" titulo="Os investimentos">
-          <span className="text-[12.5px] leading-relaxed text-gray-600">Uma linha por investimento: o nome e o tipo (o resto o tipo já preenche). O dinheiro entra depois: Aplicar, se é novo, ou colar os depósitos do banco, se já estava aplicado.</span>
+          <span className="text-[12.5px] leading-relaxed text-gray-600">Uma linha por investimento: o nome e o tipo (o resto o tipo já preenche). O dinheiro entra depois: Aplicar, se é novo, ou colar os aportes do banco, se já estava aplicado.</span>
           {temLugar && botao('Montar a carteira')}
         </Passo>
         <Passo n={3} estado="depois" rotulo="Passo 3 · todo mês" titulo="Atualizar valores">

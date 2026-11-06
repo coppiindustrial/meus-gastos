@@ -171,7 +171,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
 
   return (
     <Modal open onClose={fechar} title="Cadastro dos investimentos" maxWidth="max-w-[1180px]" padding="p-0"
-      subtitulo={`${plural(ativos, 'ativo', 'ativos')} · o que cada um é; o dinheiro entra pelo Aplicar ou pelo Colar os depósitos`}>
+      subtitulo={`${plural(ativos, 'ativo', 'ativos')} · o que cada um é; o dinheiro entra pelo Aplicar ou pelo Colar os aportes`}>
       <div ref={caixaRef} className="max-h-[66vh] overflow-auto [scrollbar-gutter:stable]">
         <table className="w-full min-w-[1040px] table-fixed border-separate border-spacing-0 text-[12.5px]">
           <colgroup>
@@ -229,14 +229,14 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
                           {/* TEM HOJE só informa: o dinheiro entra pelos depósitos (Aplicar ou Colar), o valor muda pelo "Atualizar valores" */}
                           {l.novo ? (
                             <span className="flex h-8 items-center justify-center rounded-[6px] border border-dashed border-gray-300 px-2 text-[11.5px] text-gray-400"
-                              title="Depois de salvar: Aplicar (dinheiro novo) ou Colar os depósitos do banco (o que já estava aplicado)">entra depois de salvar</span>
+                              title="Depois de salvar: Aplicar (dinheiro novo) ou Colar os aportes do banco (o que já estava aplicado)">entra depois de salvar</span>
                           ) : valesHoje[l.id] ? (
                             <span className="block px-2 py-1 text-right leading-tight" title='Muda pelo "Atualizar valores"'>
                               <span className="block tabular-nums text-gray-600">{formatBRL(valesHoje[l.id])}</span>
-                              {depositosPorInv[l.id] > 0 && <span className="block text-[10.5px] text-gray-400">{plural(depositosPorInv[l.id], 'depósito', 'depósitos')}</span>}
+                              {depositosPorInv[l.id] > 0 && <span className="block text-[10.5px] text-gray-400">{plural(depositosPorInv[l.id], 'aporte', 'aportes')}</span>}
                             </span>
                           ) : (
-                            <span className="flex h-8 items-center justify-end px-2 text-[12px] text-gray-400" title="Ainda sem dinheiro: aplique ou cole os depósitos, na ficha dele">sem valor</span>
+                            <span className="flex h-8 items-center justify-end px-2 text-[12px] text-gray-400" title="Ainda sem dinheiro: aplique ou cole os aportes, na ficha dele">sem valor</span>
                           )}
                         </td>
                         <td className={`${td} text-right`}>
@@ -296,7 +296,7 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-200 bg-hx-f9fafb px-4 py-3">
         <span className="text-[12px] text-gray-500">
           {nAlt ? <><b className="font-semibold text-hx-92400e">{plural(nAlt, 'alteração', 'alterações')}</b> · ainda não salvo</>
-            : 'Enter desce na mesma coluna · o dinheiro entra pelos depósitos: Aplicar (dinheiro novo) ou Colar os depósitos do banco (o que já estava aplicado)'}
+            : 'Enter desce na mesma coluna · o dinheiro entra pelos aportes: Aplicar (dinheiro novo) ou Colar os aportes do banco (o que já estava aplicado)'}
         </span>
         <span className="flex-1" />
         <button type="button" className="btn-secondary" onClick={fechar} disabled={salvando}>Cancelar</button>
