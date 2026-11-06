@@ -210,7 +210,7 @@ export default function Investimentos() {
           onFechar={() => setColar(null)} onSalvo={() => { entrou(colar.id); setColar(null); recarregar(); }} />
       )}
       {mov && (
-        <ModalMovimento inicial={mov} grupos={d.grupos} contas={d.contas} z="z-[65]"
+        <ModalMovimento inicial={mov} grupos={d.grupos} contas={d.contas} valores={d.valores} taxas={d.taxas} z="z-[65]"
           onFechar={() => setMov(null)} onSalvo={() => { if (mov.doComoEntrou) entrou(mov.inv.id); setMov(null); recarregar(); }} />
       )}
       {lugar && (

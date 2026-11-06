@@ -41,9 +41,10 @@ export const LIQUIDEZ = [
   // o nome curto: "Cada aplicação vence depois de…" era cortado na lista da célula (06/11/2026)
   { value: 'por_aplicacao', label: 'Prazo por aplicação' },
 ];
+// Curtos (06/11/2026): na célula do cadastro o "Volta para a conta" era cortado.
 export const AO_VENCER = [
-  { value: 'reaplica', label: 'Reaplica sozinho' },
-  { value: 'volta', label: 'Volta para a conta' },
+  { value: 'reaplica', label: 'Reaplica' },
+  { value: 'volta', label: 'Volta à conta' },
 ];
 
 const tipoDe = (t) => TIPOS_INVESTIMENTO.find((x) => x.value === t) ?? TIPOS_INVESTIMENTO[TIPOS_INVESTIMENTO.length - 1];
@@ -104,7 +105,7 @@ export function vencimentoInfo(vencimento, hoje, inicio) {
 // linha só (a série dela). `encerrados`: mostrar os desativados (o resgate de tudo). Os totais somam o que aparece.
 // `valores` e `movimentos` (opcionais): com eles, cada título traz também as aplicações e quando cada uma vence
 // (`prazos`, de `aplicacoesComPrazo`) — o que a coluna Resgate e a ficha mostram no "cada aplicação vence".
-export function carteira({ contas, investimentos = [], meses, hoje, ano = hoje.slice(0, 4), encerrados = false, valores = [], movimentos = [] }) {
+export function carteira({ contas, investimentos = [], meses, hoje, ano = hoje.slice(0, 4), encerrados = false, valores = [], movimentos = [], depositos = [] }) {
   const ult = meses[meses.length - 1];
   const doAno = meses.filter((m) => m.competencia.startsWith(ano));
   const ultimos12 = meses.slice(-12);
@@ -133,7 +134,7 @@ export function carteira({ contas, investimentos = [], meses, hoje, ano = hoje.s
         inv, ...(l ?? { vale: 0, foto: 0, data: null, aplicado: 0, rendeu: 0, pct: null, pctAno: null, curva: [], mes: null }),
         semValor: !l, ultimoMes: ref ? { competencia: ref.competencia, ...ref.porSerie[`i:${inv.id}`] } : null,
         venc: vencimentoInfo(inv.vencimento, hoje, inicio), diaria: liquidezDiaria(inv, hoje),
-        prazos: inv.liquidez === 'por_aplicacao' ? aplicacoesComPrazo({ inv, fotos: valores.filter((v) => v.investimento_id === inv.id), movimentos, hoje }) : null,
+        prazos: inv.liquidez === 'por_aplicacao' ? aplicacoesComPrazo({ inv, fotos: valores.filter((v) => v.investimento_id === inv.id), movimentos, depositos: depositos.filter((d) => d.investimento_id === inv.id), hoje }) : null,
       };
     });
     const soma = (k) => itens.reduce((s, x) => s + (x[k] ?? 0), 0);
@@ -240,14 +241,14 @@ export function linhaDoInvestimento(inv) {
     id: inv.id, novo: false, excluir: false, orig: inv, conta_id: inv.conta_id, nome: inv.nome, tipo: inv.tipo,
     indexador: inv.indexador ?? '', taxa: taxaDe(inv.taxa), liquidez: inv.liquidez ?? 'diaria',
     liquidez_dias: inv.liquidez_dias ? String(inv.liquidez_dias) : '', carencia_ate: inv.carencia_ate ?? '', vencimento: inv.vencimento ?? '',
-    prazo_meses: inv.prazo_meses ? String(inv.prazo_meses) : '', ao_vencer: inv.ao_vencer ?? 'reaplica',
+    prazo_meses: inv.prazo_meses ? String(inv.prazo_meses) : '', ao_vencer: inv.ao_vencer ?? 'reaplica', vence_dia_anterior: !!inv.vence_dia_anterior,
     emissor: inv.emissor ?? '', observacao: inv.observacao ?? '', ativo: inv.ativo !== false,
   };
 }
 export function linhaNova(id, contaId) {
   return {
     id, novo: true, excluir: false, orig: null, conta_id: contaId, nome: '', tipo: 'cdb', ...padraoDoTipo('cdb'), liquidez_dias: '', carencia_ate: '',
-    vencimento: '', prazo_meses: '', ao_vencer: 'reaplica', emissor: '', observacao: '', ativo: true,
+    vencimento: '', prazo_meses: '', ao_vencer: 'reaplica', vence_dia_anterior: false, emissor: '', observacao: '', ativo: true,
   };
 }
 
@@ -266,6 +267,7 @@ export function dadosDaLinha(l) {
     vencimento: l.liquidez === 'vencimento' || l.liquidez === 'diaria' ? l.vencimento || null : null,
     prazo_meses: l.liquidez === 'por_aplicacao' ? Number(l.prazo_meses) || null : null,
     ao_vencer: l.ao_vencer ?? 'reaplica', emissor: (l.emissor ?? '').trim(),
+    ...(l.vence_dia_anterior || l.orig?.vence_dia_anterior ? { vence_dia_anterior: l.liquidez === 'por_aplicacao' && !!l.vence_dia_anterior } : {}),
     observacao: (l.observacao ?? '').trim(), ativo: l.ativo !== false,
   };
 }
@@ -281,6 +283,7 @@ export function diferencaInvestimento(l) {
     if (k === 'emissor' || k === 'observacao') return (a ?? '') === (b ?? '');
     if (k === 'ao_vencer') return a === (b ?? 'reaplica');
     if (k === 'ativo') return a === (b !== false);
+    if (k === 'vence_dia_anterior') return a === !!b;
     return (a ?? null) === b;
   };
   return Object.fromEntries(Object.keys(d).filter((k) => !igual(k)).map((k) => [k, d[k]]));
@@ -301,10 +304,12 @@ export function validarCadastro(linhas) {
 }
 
 // ------------------------------------------------------------ o prazo de cada aplicação (o CDB de 2 anos que reaplica)
-// As aplicações de um título e quando cada uma vence: a primeira é o que já estava aplicado no cadastro (o "valor
-// aplicado", ou a primeira foto; a data é a da aplicação, se houver) e as outras, os aportes depois da primeira foto.
-// O resgate sai das MAIS ANTIGAS (a primeira que entrou é a primeira que sai). Com `ao_vencer` 'reaplica', o vencimento
-// que já passou ANDA mais um prazo (quantas vezes for preciso), sem virar resgate; com 'volta', fica o que venceu.
+// As aplicações de um título e quando cada uma vence. Elas são os MESMOS depósitos do IR (06/11/2026): a lista dos depósitos
+// de antes do app (`depositos`: digitados ou colados), ou, sem ela, as aplicações pelo app até a primeira foto (o
+// "Cadastrar e aplicar") e o que sobra do cadastro (o "valor aplicado", ou a primeira foto; com a data da aplicação, se
+// houver); depois, os aportes. O resgate sai das MAIS ANTIGAS. Cada uma vence `prazo_meses` depois da data dela — ou UM DIA
+// ANTES (`vence_dia_anterior`, a migration 017: o RDB do Nubank de 03/06 com 6 meses vence em 02/12). Com `ao_vencer`
+// 'reaplica', o vencimento que já passou ANDA mais um prazo, sem virar resgate; com 'volta', fica o que venceu.
 // Devolve { lotes: [{ data, valor, vence, renovacoes, vencida, frac, inicial }], proximo, prazo }.
 const somaMeses = (iso, n) => {
   const [y, m, d] = iso.split('-').map(Number);
@@ -313,28 +318,45 @@ const somaMeses = (iso, n) => {
   const ult = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
   return `${ano}-${String(mes).padStart(2, '0')}-${String(Math.min(d, ult)).padStart(2, '0')}`;
 };
-export function aplicacoesComPrazo({ inv, fotos = [], movimentos = [], hoje }) {
+const diaAntes = (iso) => new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) - 86400000).toISOString().slice(0, 10);
+const diaDepois = (iso) => new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) + 86400000).toISOString().slice(0, 10);
+export function aplicacoesComPrazo({ inv, fotos = [], movimentos = [], depositos = [], hoje }) {
   const fs = [...fotos].sort((a, b) => (a.data < b.data ? -1 : 1));
   const abre = fs[0];
-  const inicial = inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined
-    ? Number(inv.aplicado_inicial_centavos) : abre ? Number(abre.valor_centavos) : 0;
+  const doInv = movimentos.filter((m) => m.investimento_id === inv.id).sort((a, b) => (a.data < b.data ? -1 : 1));
   const lotes = [];
-  if (inicial > 0) lotes.push({ data: inv.aplicado_em || null, valor: inicial, inicial: true });
-  movimentos.filter((m) => m.investimento_id === inv.id && (!abre || m.data > abre.data))
-    .sort((a, b) => (a.data < b.data ? -1 : 1))
-    .forEach((m) => {
-      const v = Number(m.valor_centavos);
-      if (m.tipo !== 'resgate') { lotes.push({ data: m.data, valor: v, inicial: false }); return; }
-      let falta = v;
-      for (const l of lotes) { if (falta <= 0) break; const tira = Math.min(l.valor, falta); l.valor -= tira; falta -= tira; }
-    });
+  let corte;
+  if (depositos.length) {
+    [...depositos].sort((a, b) => (a.data < b.data ? -1 : 1)).forEach((d) => lotes.push({ data: d.data, valor: Number(d.valor_centavos), inicial: false }));
+    corte = depositos.reduce((m, d) => (d.referencia > m ? d.referencia : m), depositos[0].referencia);
+  } else if (abre) {
+    const iniciais = doInv.filter((m) => m.tipo !== 'resgate' && m.data <= abre.data);
+    const somaIni = iniciais.reduce((t2, m) => t2 + Number(m.valor_centavos), 0);
+    const total = inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined ? Number(inv.aplicado_inicial_centavos) : iniciais.length ? somaIni : Number(abre.valor_centavos);
+    const resto = total - somaIni;
+    if (resto > 100) lotes.push({ data: inv.aplicado_em || null, valor: resto, inicial: true });
+    iniciais.forEach((m) => lotes.push({ data: m.data, valor: Number(m.valor_centavos), inicial: false }));
+    corte = abre.data;
+  } else {
+    const inicial = Number(inv.aplicado_inicial_centavos ?? 0);
+    if (inicial > 0) lotes.push({ data: inv.aplicado_em || null, valor: inicial, inicial: true });
+  }
+  doInv.filter((m) => !corte || m.data > corte).forEach((m) => {
+    const v = Number(m.valor_centavos);
+    if (m.tipo !== 'resgate') { lotes.push({ data: m.data, valor: v, inicial: false }); return; }
+    let falta = v;
+    for (const l of lotes) { if (falta <= 0) break; const tira = Math.min(l.valor, falta); l.valor -= tira; falta -= tira; }
+  });
   const prazo = inv.liquidez === 'por_aplicacao' ? Number(inv.prazo_meses) || null : null;
+  const antes = !!inv.vence_dia_anterior;
+  const vencer = (de) => (antes ? diaAntes(somaMeses(de, prazo)) : somaMeses(de, prazo));
   const vivos = lotes.filter((l) => l.valor > 0).map((l) => {
     if (!prazo || !l.data) return { ...l, vence: null, renovacoes: 0, vencida: false, frac: null };
-    let vence = somaMeses(l.data, prazo);
+    let vence = vencer(l.data);
+    let comecou = l.data;
     let renovacoes = 0;
-    if (inv.ao_vencer !== 'volta') while (vence < hoje) { vence = somaMeses(vence, prazo); renovacoes += 1; }
-    const comecou = renovacoes ? somaMeses(vence, -prazo) : l.data;
+    // reaplica: a nova aplicação começa no vencimento (no dia seguinte, quando vence no dia anterior) e anda mais um prazo
+    if (inv.ao_vencer !== 'volta') while (vence < hoje) { comecou = antes ? diaDepois(vence) : vence; vence = vencer(comecou); renovacoes += 1; }
     const frac = Math.min(1, Math.max(0, diasEntre(comecou, hoje) / Math.max(1, diasEntre(comecou, vence))));
     return { ...l, vence, renovacoes, vencida: vence < hoje, frac };
   });

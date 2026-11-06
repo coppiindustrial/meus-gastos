@@ -61,7 +61,7 @@ export default function useDadosPatrimonio({ encerrados = false } = {}) {
 
   // O LÍQUIDO (06/11/2026, o mockup "Depósitos em cascata e o valor líquido"): cada título ganha o `imposto` (os depósitos
   // em cascata, o IR e o IOF de cada um, o líquido — `estimarImposto`, lib/impostoInvestimento.js) e cada lugar soma o seu.
-  const grupos = useMemo(() => (contas ? carteira({ contas, investimentos, meses, hoje: hojeISO, ano, encerrados, valores, movimentos: movs })
+  const grupos = useMemo(() => (contas ? carteira({ contas, investimentos, meses, hoje: hojeISO, ano, encerrados, valores, movimentos: movs, depositos })
     .map((g, i) => {
       const itens = g.itens.map((x) => {
         // o valor de hoje é estimado quando a foto mais nova do título é a estimada

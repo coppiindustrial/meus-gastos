@@ -157,3 +157,27 @@ export function fatorDiario(inv, de, ate, taxas) {
   }
   return f;
 }
+
+// O MOVIMENTO QUE OS VALORES NÃO TÊM (06/11/2026): a aplicação (ou o resgate) lançada DEPOIS de um valor e com a data
+// ANTES dele — o valor foi registrado sem ela (a aplicação de junho lançada depois do valor de outubro: o app achava que
+// o título tinha só o de outubro e dividia esse total entre os dois depósitos). Pela hora: o valor que não mudou desde
+// antes de o movimento ser lançado (`atualizado_em` < `criado_em` dele). Devolve [{ mov, fotos }] (os valores afetados).
+export function movimentosForaDosValores({ valores = [], movimentos = [] }) {
+  const out = [];
+  for (const m of movimentos) {
+    if (!m.investimento_id || !m.criado_em) continue;
+    const fotos = valores.filter((v) => v.investimento_id === m.investimento_id && !v.estimado && v.data > m.data
+      && (v.atualizado_em ?? v.criado_em) && (v.atualizado_em ?? v.criado_em) < m.criado_em);
+    if (fotos.length) out.push({ mov: m, fotos });
+  }
+  return out;
+}
+// Cada valor com o movimento somado: a aplicação CRESCIDA pela taxa de cada dia até a data do valor (sem a série, ou no que
+// não anda sozinho, o valor puro); o resgate, tirado. Devolve [{ id, data, antes, valor_centavos }].
+export function valoresComOMovimento({ mov, fotos, inv, taxas = null }) {
+  return fotos.map((f) => {
+    const fator = (taxas && andaSozinho(inv) ? fatorDiario(inv, mov.data, f.data, taxas) : null) ?? 1;
+    const delta = (mov.tipo === 'resgate' ? -1 : 1) * Number(mov.valor_centavos) * fator;
+    return { id: f.id, data: f.data, antes: Number(f.valor_centavos), valor_centavos: Math.max(0, Math.round(Number(f.valor_centavos) + delta)) };
+  });
+}

@@ -20,7 +20,7 @@ export async function listarInvestimentos() {
   try {
     const [invs, valores, depositos] = await Promise.all([
       exigir(supabase.from('investimentos').select('*').order('ordem').order('nome')),
-      buscarTudo(() => supabase.from('valores_investimento').select('id, investimento_id, data, valor_centavos').order('data').order('id')),
+      buscarTudo(() => supabase.from('valores_investimento').select('id, investimento_id, data, valor_centavos, criado_em, atualizado_em').order('data').order('id')),
       listarDepositos(),
     ]);
     return { investimentos: invs, valores, depositos: depositos ?? [], comDepositos: depositos !== null };
@@ -42,7 +42,7 @@ export async function salvarDepositos(investimentoId, referencia, itens) {
 
 // `prazo_meses` e `ao_vencer` (a migration 015) faltavam aqui: o "prazo por aplicação" do cadastro não gravava (06/11/2026).
 const CAMPOS = ['conta_id', 'nome', 'tipo', 'indexador', 'taxa', 'liquidez', 'liquidez_dias', 'carencia_ate', 'vencimento', 'prazo_meses',
-  'ao_vencer', 'emissor', 'aplicado_em', 'aplicado_inicial_centavos', 'observacao', 'ativo'];
+  'ao_vencer', 'vence_dia_anterior', 'emissor', 'aplicado_em', 'aplicado_inicial_centavos', 'observacao', 'ativo'];
 const limpar = (inv) => {
   const d = {};
   CAMPOS.forEach((k) => { if (inv[k] !== undefined) d[k] = inv[k] === '' && !['nome', 'emissor', 'observacao'].includes(k) ? null : inv[k]; });

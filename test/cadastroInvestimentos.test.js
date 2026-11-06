@@ -110,3 +110,25 @@ test('os rótulos novos e os que pedem o valor do mês', () => {
   assert.deepEqual(pendentesDeValor({ investimentos: invs, valores, hoje: '2026-11-20' }).map((i) => i.id), []);
   assert.deepEqual(pendentesDeValor({ investimentos: invs, valores, hoje: '2026-12-02' }).map((i) => i.id), ['a']);
 });
+
+test('o prazo por aplicação com os depósitos de antes do app e o vencimento no dia anterior (o RDB do Nubank)', () => {
+  const inv = { id: 'rdb', liquidez: 'por_aplicacao', prazo_meses: 6, ao_vencer: 'volta', vence_dia_anterior: true, aplicado_inicial_centavos: null, aplicado_em: null };
+  // os dois depósitos digitados ("o que foi depositado": a referência é a própria data)
+  const depositos = [
+    { investimento_id: 'rdb', data: '2026-10-11', valor_centavos: 2200000, referencia: '2026-10-11' },
+    { investimento_id: 'rdb', data: '2026-06-03', valor_centavos: 1000000, referencia: '2026-06-03' },
+  ];
+  const r = aplicacoesComPrazo({ inv, fotos: [{ data: '2026-11-06', valor_centavos: 3300000 }], depositos, hoje: '2026-11-06' });
+  assert.deepEqual(r.lotes.map((l) => [l.data, l.vence]), [['2026-06-03', '2026-12-02'], ['2026-10-11', '2027-04-10']]);
+  assert.equal(r.proximo.vence, '2026-12-02');
+  // sem o "dia anterior": no mesmo dia do mês
+  const mesmo = aplicacoesComPrazo({ inv: { ...inv, vence_dia_anterior: false }, depositos, hoje: '2026-11-06' });
+  assert.deepEqual(mesmo.lotes.map((l) => l.vence), ['2026-12-03', '2027-04-11']);
+  // o "Cadastrar e aplicar" (a foto e a aplicação no mesmo dia) também tem a data — não fica "sem data"
+  const app = aplicacoesComPrazo({ inv, fotos: [{ data: '2026-10-11', valor_centavos: 2200000 }],
+    movimentos: [{ investimento_id: 'rdb', data: '2026-10-11', tipo: 'aporte', valor_centavos: 2200000 }], hoje: '2026-11-06' });
+  assert.deepEqual(app.lotes.map((l) => [l.data, l.vence]), [['2026-10-11', '2027-04-10']]);
+  // reaplicando: a nova aplicação começa no dia seguinte ao vencimento e anda mais 6 meses
+  const re = aplicacoesComPrazo({ inv: { ...inv, ao_vencer: 'reaplica' }, depositos: [depositos[1]], hoje: '2026-12-10' });
+  assert.deepEqual([re.lotes[0].vence, re.lotes[0].renovacoes], ['2027-06-02', 1]);
+});

@@ -106,3 +106,17 @@ test('o investimento feito pelo app: a aplicação do dia da primeira foto é o 
   // sem a aplicação no app, o mesmo cadastro continua sem as datas
   assert.equal(estimarImposto({ inv: novo, fotos, movimentos: [], cdi, hoje, vale: 2219551, aplicado: 2200000 }).semDatas, true);
 });
+
+test('sem o "valor aplicado", as aplicações até a primeira foto são o aplicado: o que a foto tem a mais é rendimento', () => {
+  const novo = { ...inv, aplicado_inicial_centavos: null, aplicado_em: null };
+  // a foto de 11/10 já com a aplicação de 01/06 crescida (27.000), as duas aplicações somam 26.800
+  const fotos = [{ data: '2026-10-11', valor_centavos: 2700000 }];
+  const movimentos = [
+    { investimento_id: 'rdb', data: '2026-06-01', tipo: 'aporte', valor_centavos: 480000 },
+    { investimento_id: 'rdb', data: '2026-10-11', tipo: 'aporte', valor_centavos: 2200000 },
+  ];
+  const r = estimarImposto({ inv: novo, fotos, movimentos, cdi, hoje, vale: 2720000, aplicado: 2680000 });
+  assert.equal(r.semDatas, false);
+  assert.deepEqual(r.lotes.map((l) => [l.data, l.origem]), [['2026-10-11', 'aporte'], ['2026-06-01', 'aporte']]);
+  assert.ok(Math.abs(r.lotes.reduce((s, l) => s + l.depositado, 0) - 2680000) <= 2); // o depositado de cada um fecha com o aplicado
+});

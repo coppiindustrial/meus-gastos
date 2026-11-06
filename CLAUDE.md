@@ -319,9 +319,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     na carteira com "sem valor" (fora do "Atualizar valores"). `criarInvestimento` sem `valor_centavos` grava só o título.
     O `prazo_meses`/`ao_vencer` não gravavam (faltavam no `CAMPOS` da api) — corrigido em 06/11/2026.
   · O PRAZO DE CADA APLICAÇÃO (liquidez `por_aplicacao` + `prazo_meses` + `ao_vencer` 'reaplica' | 'volta', a 015): o
-    CDB em que cada aporte vence N meses depois dele. `aplicacoesComPrazo` (testada): a 1ª aplicação é o "valor
-    aplicado" do cadastro (com a "data da aplicação", se houver; sem ela, sem vencimento), as outras os aportes; o
-    resgate sai das mais antigas; com 'reaplica' o vencimento que passou anda mais um prazo, sem virar resgate.
+    CDB em que cada aporte vence N meses depois dele. `aplicacoesComPrazo` (testada): as aplicações são os MESMOS depósitos
+    do IR (06/11/2026) — a lista dos depósitos de antes do app (digitados ou colados) ou, sem ela, as aplicações pelo app
+    até a primeira foto e o que sobra do cadastro (sem a "data da aplicação", sem vencimento) —, depois os aportes; o
+    resgate sai das mais antigas; com 'reaplica' o vencimento que passou anda mais um prazo, sem virar resgate. VENCE UM
+    DIA ANTES (`vence_dia_anterior`, a migration 017; o "vence um dia antes" embaixo do prazo no cadastro): o RDB do Nubank
+    de 03/06 com 6 meses vence em 02/12 (sem marcar, no mesmo dia do mês); reaplicando, a nova começa no dia seguinte. O
+    campo só vai ao banco quando marcado (ou já estava): sem a 017, o resto do cadastro salva igual. Um MESMO investimento
+    com PRAZOS DIFERENTES em cada aporte (datas livres) ainda não tem desenho: pensar quando aparecer (06/11/2026).
   · ATUALIZAR VALORES (`ModalAtualizarValores`): o rendimento FORA DO NORMAL para o tipo (`rendimentoForaDoNormal`:
     pós-fixado 2,5%/mês, marcado a mercado 5%, fundo 10%) vira "Foi uma aplicação de R$ X?", que lança o movimento
     junto com o salvar; Enter num campo vazio repete o valor de antes. APLICAR (`ModalMovimento`): o novo investimento
@@ -360,6 +365,15 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     valor e — no movimento — o tipo e a observação (`atualizarMovimento`, `atualizarValor`); a aplicação feita junto com a
     primeira foto (o mesmo dia e o mesmo valor) leva a foto junto. Na carteira, as colunas Investimento e RESGATE têm
     largura FIXA: abrir os depósitos não empurra a tabela.
+  · O MOVIMENTO COM A DATA ANTES DOS VALORES (06/11/2026, o RDB Planejado: a aplicação de 03/06 lançada depois do valor de
+    11/10, que não a tinha — o app achava que o título valia só o de outubro e dividia esse total entre os dois depósitos).
+    `movimentosForaDosValores` (lib/valorEstimado.js, testada) acha o movimento lançado DEPOIS de um valor (`criado_em` dele
+    > `atualizado_em` do valor) e com a data ANTES dele; a ficha avisa e "Somar aos valores de depois" grava cada valor com
+    ele (`valoresComOMovimento`: a aplicação crescida pela taxa de cada dia até a data do valor; o resgate, tirado) — "Já
+    estava incluída" regrava o mesmo valor e o aviso some. No Aplicar / Resgatar com a data antes de valores já
+    registrados, eles passam a ter o movimento ao salvar ("eles já incluem" deixa como estão). E SEM o "valor aplicado" do
+    cadastro, as aplicações até a primeira foto SÃO o aplicado (`aplicadoAteAFoto` na série; o IR e os vencimentos idem): o
+    que a foto tem a mais é rendimento, não um depósito sem data.
   · A FICHA DO INVESTIMENTO (06/11/2026, as opções A do mockup "Ficha do investimento"; `FichaInvestimento`): os QUATRO
     NÚMEROS são cartões com HOVER — o cartão acende, a linha de baixo vira a CONTA ("= vale hoje − aplicado") e a COLUNA
     dele na lista acende (`gm-acesa`; o cabeçalho da coluna acende o cartão). A lista dos depósitos tem a ALTURA DA

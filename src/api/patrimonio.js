@@ -52,7 +52,7 @@ const semTabela = (err) => /movimentos_investimento|recebe_extrato|schema cache|
 
 // Todos os movimentos; null sem a migration 013 (a tela diz que ela falta e segue só com as fotos). Com a 014, cada um
 // traz o investimento em que entrou; sem ela, a leitura cai para a antiga.
-const COLS_MOV = 'id, conta_id, data, tipo, valor_centavos, descricao, origem, id_externo';
+const COLS_MOV = 'id, conta_id, data, tipo, valor_centavos, descricao, origem, id_externo, criado_em';
 export async function listarMovimentos() {
   const ler = (cols) => buscarTudo(() => supabase.from('movimentos_investimento').select(cols).order('data').order('id'));
   try {

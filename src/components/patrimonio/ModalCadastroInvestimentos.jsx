@@ -118,7 +118,8 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
       }
       toast.success(nAlt === 1 ? 'Alteração salva.' : `${nAlt} alterações salvas.`);
     } catch (err) {
-      toast.error(/duplicate|unique/i.test(err.message) ? 'Já existe uma instituição com esse nome.' : err.message);
+      toast.error(/duplicate|unique/i.test(err.message) ? 'Já existe uma instituição com esse nome.'
+        : /vence_dia_anterior/i.test(err.message) ? 'Falta aplicar a migration 017 (o "vence um dia antes").' : err.message);
     }
     setSalvando(false);
     onSalvo(criados); // parte pode ter gravado: a tela recarrega com o que ficou no banco
@@ -143,10 +144,18 @@ export default function ModalCadastroInvestimentos({ contas, investimentos, vale
     <div className="flex flex-col gap-1">
       <SelectSimples value={l.liquidez} onChange={(v) => muda(l.id, 'liquidez', v)} opcoes={LIQUIDEZ} disabled={l.excluir} compacto className={ver(l.id, 'prazo')} />
       {l.liquidez === 'por_aplicacao' && (
-        <div className="grid grid-cols-2 gap-1">
-          <SelectSimples value={l.prazo_meses} onChange={(v) => muda(l.id, 'prazo_meses', v)} opcoes={MESES_PRAZO} placeholder="prazo" disabled={l.excluir} compacto />
-          <SelectSimples value={l.ao_vencer} onChange={(v) => muda(l.id, 'ao_vencer', v)} opcoes={AO_VENCER} disabled={l.excluir} compacto />
-        </div>
+        <>
+          {/* o prazo é curto ("6 meses") e o "ao vencer" mais largo: com metade cada, o "Volta para a conta" era cortado */}
+          <div className="grid grid-cols-[94px_minmax(0,1fr)] gap-1">
+            <SelectSimples value={l.prazo_meses} onChange={(v) => muda(l.id, 'prazo_meses', v)} opcoes={MESES_PRAZO} placeholder="prazo" disabled={l.excluir} compacto />
+            <SelectSimples value={l.ao_vencer} onChange={(v) => muda(l.id, 'ao_vencer', v)} opcoes={AO_VENCER} disabled={l.excluir} compacto />
+          </div>
+          {/* VENCE UM DIA ANTES (a migration 017): o RDB do Nubank de 03/06 com 6 meses vence em 02/12 */}
+          <label className="flex cursor-pointer items-center gap-2 px-0.5 text-[11.5px] text-gray-500" title="Como o RDB do Nubank: aplicado em 03/06 com 6 meses, vence em 02/12">
+            <Toggle compacto checked={!!l.vence_dia_anterior} onChange={(v) => muda(l.id, 'vence_dia_anterior', v)} disabled={l.excluir} rotulo="Vence um dia antes de completar o prazo" />
+            vence um dia antes
+          </label>
+        </>
       )}
       {l.liquidez === 'dias' && (
         <span className="flex items-center gap-1.5 text-[12px] text-gray-500">D+

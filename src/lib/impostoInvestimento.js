@@ -92,8 +92,10 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
     // aplicação no MESMO dia, e ela ficava de fora — o título feito pelo app caía em "faltam as datas"); o bloco do cadastro
     // (o "valor aplicado", ou a primeira foto) só leva o que SOBRA sem elas, e só ele pode ficar sem data.
     const iniciais = movimentos.filter((m) => m.investimento_id === inv.id && m.tipo !== 'resgate' && m.data <= abre.data);
-    const total = inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined ? Number(inv.aplicado_inicial_centavos) : Number(abre.valor_centavos);
-    const resto = total - iniciais.reduce((s, m) => s + Number(m.valor_centavos), 0);
+    // sem o "valor aplicado" do cadastro, elas SÃO o aplicado: o que a foto tem a mais é rendimento (a de junho lançada depois)
+    const somaIni = iniciais.reduce((s, m) => s + Number(m.valor_centavos), 0);
+    const total = inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined ? Number(inv.aplicado_inicial_centavos) : iniciais.length ? somaIni : Number(abre.valor_centavos);
+    const resto = total - somaIni;
     iniciais.forEach((m) => lotes.push({ data: m.data, principal: Number(m.valor_centavos), origem: 'aporte' }));
     if (resto > 100) lotes.push({ data: inv.aplicado_em || abre.data, dataAproximada: !inv.aplicado_em, principal: resto, origem: 'inicial' });
     corte = abre.data;

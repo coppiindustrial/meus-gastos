@@ -16,7 +16,7 @@ import { aliquotaIR, diasEntre as diasEntreIR, ehIsento, lerDepositos, planoDosD
 import {
   TIPOS_INVESTIMENTO, nomeTipoInvestimento, padraoDoTipo, pendentesDeValor, rendimentoForaDoNormal, rotuloLiquidez, rotuloPrazo, rotuloRende,
 } from '../../lib/investimentos.js';
-import { andaSozinho, fatorDiario, rotuloPeloIndice } from '../../lib/valorEstimado.js';
+import { andaSozinho, fatorDiario, movimentosForaDosValores, rotuloPeloIndice, valoresComOMovimento } from '../../lib/valorEstimado.js';
 import { calcularValor, formatBRL, parseValor } from '../../lib/dinheiro.js';
 import { addMeses, formatDate, nomeCompetencia, todayISO } from '../../lib/format.js';
 
@@ -79,7 +79,7 @@ export function ModalLugar({ conta, qtdInvestimentos = 0, onFechar, onSalvo }) {
 // ------------------------------------------------------------ aplicar / resgatar
 // `inicial`: { inv?, tipo }. `grupos`: a carteira (a lista por lugar, o "fica com R$ X aplicados", o vale de hoje para o
 // "Resgatar tudo"). O NOVO INVESTIMENTO nasce aqui (só aplicando): nome, onde e tipo; o valor é o da própria aplicação.
-export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }) {
+export function ModalMovimento({ inicial, grupos, contas, valores = [], taxas = null, onFechar, onSalvo, z }) {
   const toast = useToast();
   const hoje = todayISO();
   const [tipo, setTipo] = useState(inicial?.tipo ?? 'aporte');
@@ -89,6 +89,7 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
   const [valor, setValor] = useState('');
   const [descricao, setDescricao] = useState('');
   const [tudo, setTudo] = useState(false);
+  const [jaIncluem, setJaIncluem] = useState(false); // os valores de depois da data já têm este movimento
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const ativas = contas.filter((c) => c.ativa);
@@ -103,6 +104,9 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
   const aplicando = tipo === 'aporte';
   const depois = x && v ? x.aplicado + (aplicando ? v : -v) : null;
   const prazo = (novo ? null : x?.inv.liquidez === 'por_aplicacao' ? Number(x.inv.prazo_meses) : null);
+  // OS VALORES DE DEPOIS DA DATA (06/11/2026): com a data antes de valores já registrados, eles não têm este movimento —
+  // ao salvar, passam a ter (a aplicação crescida pela taxa até cada um). "Eles já incluem" deixa como estão.
+  const depoisDaData = !novo && x ? valores.filter((f) => f.investimento_id === x.inv.id && !f.estimado && f.data > data) : [];
 
   const enviar = async (e) => {
     e.preventDefault();
@@ -122,6 +126,9 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
         await lancarMovimento({ conta_id: x.inv.conta_id, investimento_id: x.inv.id, data, tipo, valor_centavos: v, descricao }, { encerrar: !aplicando && tudo });
         // sem valor ainda: a aplicação é também o valor dele nesse dia (o mesmo que o "Cadastrar e aplicar" faz)
         if (aplicando && x.semValor) await registrarValores(data, [{ investimento_id: x.inv.id, valor_centavos: v }]);
+        if (depoisDaData.length && !jaIncluem) {
+          for (const f of valoresComOMovimento({ mov: { data, tipo, valor_centavos: v }, fotos: depoisDaData, inv: x.inv, taxas })) await atualizarValor(f.id, { data: f.data, valor_centavos: f.valor_centavos });
+        }
         toast.success(`${aplicando ? 'Aplicação' : 'Resgate'} de ${formatBRL(v)} ${aplicando ? 'em' : 'de'} ${x.inv.nome}${!aplicando && tudo ? ' · encerrado' : ''}.`);
       }
       onSalvo();
@@ -171,6 +178,14 @@ export function ModalMovimento({ inicial, grupos, contas, onFechar, onSalvo, z }
           <Campo rotulo="Observação (opcional)">
             <input className="input" value={descricao} placeholder={aplicando ? 'Ex.: 13º, sobra de outubro' : 'Ex.: compra do carro'} onChange={(e) => setDescricao(e.target.value)} />
           </Campo>
+        )}
+        {depoisDaData.length > 0 && v > 0 && (
+          <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900">
+            <p>{depoisDaData.length === 1 ? `O valor de ${formatDate(depoisDaData[0].data)} (${formatBRL(depoisDaData[0].valor_centavos)}) é` : `Os ${depoisDaData.length} valores de depois de ${formatDate(data)} são`} de depois desta data:
+              {jaIncluem ? ' ficam como estão.' : ` passa${depoisDaData.length === 1 ? '' : 'm'} a incluir ${aplicando ? 'esta aplicação' : 'este resgate'}${andaSozinho(x.inv) && taxas ? ` (com o rendimento ${rotuloPeloIndice(x.inv)} até lá)` : ''}.`}</p>
+            <label className="flex cursor-pointer items-center gap-2"><input type="checkbox" checked={jaIncluem} onChange={(e) => setJaIncluem(e.target.checked)} />
+              {depoisDaData.length === 1 ? 'Ele já inclui' : 'Eles já incluem'} {aplicando ? 'esta aplicação' : 'este resgate'}</label>
+          </div>
         )}
         {depois !== null && (
           <p className="rounded-md bg-hx-f9fafb px-3 py-2 text-[12.5px] text-gray-600">
@@ -288,6 +303,20 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
   const [aba, setAba] = useState(temDep ? 'depositos' : x.prazos ? 'aplicacoes' : 'historico');
   const [colando, setColando] = useState(false);
   const [editando, setEditando] = useState(null); // a linha do histórico aberta no ✎
+  // OS MOVIMENTOS QUE OS VALORES NÃO TÊM (06/11/2026): lançados depois de um valor e com a data antes dele
+  const fora = movimentosForaDosValores({ valores, movimentos });
+  const [acertando, setAcertando] = useState(false);
+  const acertar = async (f, somar) => {
+    setAcertando(true);
+    try {
+      // "Já estava": grava o mesmo valor (o `atualizado_em` muda e o aviso some); "Somar": o valor com o movimento
+      const novos = somar ? valoresComOMovimento({ mov: f.mov, fotos: f.fotos, inv: x.inv, taxas }) : f.fotos.map((v) => ({ id: v.id, data: v.data, valor_centavos: Number(v.valor_centavos) }));
+      for (const n of novos) await atualizarValor(n.id, { data: n.data, valor_centavos: n.valor_centavos });
+      toast.success(somar ? 'Os valores de depois passaram a incluir o movimento.' : 'Pronto: os valores ficam como estão.');
+      onMudou();
+    } catch (err) { toast.error(err.message); }
+    setAcertando(false);
+  };
   const [foco, setFoco] = useState(null); // a coluna acesa pelo número (ou pelo cabeçalho dela)
   const inv = x.inv;
   const linhas = [
@@ -346,6 +375,23 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
     <Modal open onClose={onFechar} title={inv.nome} maxWidth="max-w-[900px]" acoes={acoesCab}
       subtitulo={[lugar, nomeTipoInvestimento(inv.tipo), rotuloRende(inv), rotuloLiquidez(inv) + (inv.liquidez === 'por_aplicacao' ? (inv.ao_vencer === 'volta' ? ' · volta ao vencer' : ' · reaplica sozinho') : '')].filter(Boolean).join(' · ')}>
       <div className="space-y-4">
+        {!movel && fora.map((f) => {
+          const novos = valoresComOMovimento({ mov: f.mov, fotos: f.fotos, inv: x.inv, taxas });
+          const aplic = f.mov.tipo !== 'resgate';
+          return (
+            <div key={f.mov.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12.5px] text-amber-900">
+              <span className="min-w-0 flex-1">
+                <b className="font-semibold">{aplic ? 'A aplicação' : 'O resgate'} de {formatDate(f.mov.data)} ({formatBRL(f.mov.valor_centavos)})</b> foi lançad{aplic ? 'a' : 'o'} depois
+                {f.fotos.length === 1 ? ` do valor de ${formatDate(f.fotos[0].data)} (${formatBRL(f.fotos[0].valor_centavos)})` : ` dos ${f.fotos.length} valores de depois dele`}, que não {f.fotos.length === 1 ? 'a tem' : 'a têm'}.
+                {novos.length === 1 && ` Somada${andaSozinho(x.inv) && taxas ? ` com o rendimento ${rotuloPeloIndice(x.inv)}` : ''}, ele fica ${formatBRL(novos[0].valor_centavos)}.`}
+              </span>
+              <span className="flex gap-2">
+                <button type="button" className="btn-secondary !h-8 !text-[12.5px]" disabled={acertando} onClick={() => acertar(f, false)}>Já estava incluíd{aplic ? 'a' : 'o'}</button>
+                <button type="button" className="btn-primary !h-8 !text-[12.5px]" disabled={acertando} onClick={() => acertar(f, true)}>Somar aos valores de depois</button>
+              </span>
+            </div>
+          );
+        })}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {numeros.map((n) => (
             <div key={n.k} onMouseEnter={() => setFoco(n.k)} onMouseLeave={() => setFoco(null)}

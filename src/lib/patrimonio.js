@@ -132,6 +132,15 @@ export function rendimentoDasSeries(series, ate) {
 // As séries do Patrimônio: uma por CONTA com fotos (até a primeira foto de um título dela, se houver) e uma por
 // INVESTIMENTO. O movimento de um título conta na conta dele (o do título, não o `conta_id` gravado) — e, na série da
 // conta, só os de até a troca (o aporte de antes do cadastro, que a foto da conta já tinha).
+// O que foi aplicado até a primeira foto de um título: as aplicações − os resgates com a data até ela (undefined sem nenhuma).
+function aplicadoAteAFoto(fotos, movs) {
+  if (!fotos.length) return undefined;
+  const primeira = fotos.reduce((m, f) => (f.data < m ? f.data : m), fotos[0].data);
+  const ate = movs.filter((m) => m.data <= primeira);
+  if (!ate.some((m) => m.tipo !== 'resgate')) return undefined;
+  return ate.reduce((s, m) => s + (m.tipo === 'resgate' ? -1 : 1) * Number(m.valor_centavos), 0);
+}
+
 export function seriesDoPatrimonio({ saldos = [], movimentos = [], investimentos = [], valores = [] }) {
   const invs = new Map(investimentos.map((i) => [i.id, i]));
   const fotosInv = new Map();
@@ -161,7 +170,8 @@ export function seriesDoPatrimonio({ saldos = [], movimentos = [], investimentos
     series.push({
       id: `i:${id}`, conta_id: inv.conta_id, fotos: fs,
       movimentos: movimentos.filter((m) => m.investimento_id === id),
-      aplicadoInicial: inv.aplicado_inicial_centavos === null || inv.aplicado_inicial_centavos === undefined ? undefined : Number(inv.aplicado_inicial_centavos),
+      // sem o "valor aplicado" do cadastro: as aplicações até a primeira foto (06/11/2026), se houver — senão, a primeira foto
+      aplicadoInicial: inv.aplicado_inicial_centavos === null || inv.aplicado_inicial_centavos === undefined ? aplicadoAteAFoto(fs, movimentos.filter((m) => m.investimento_id === id)) : Number(inv.aplicado_inicial_centavos),
     });
   });
   return series;

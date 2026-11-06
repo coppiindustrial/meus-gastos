@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { andaSozinho, estimarValores, fatorDiario, finsDeMes } from '../src/lib/valorEstimado.js';
+import { andaSozinho, estimarValores, fatorDiario, finsDeMes, movimentosForaDosValores, valoresComOMovimento } from '../src/lib/valorEstimado.js';
 import { pendentesDeValor } from '../src/lib/investimentos.js';
 
 // Dados FICTÍCIOS. Os dias úteis de 01/09 a 05/11/2026 (sem feriados): o "CDI" é 0,05% ao dia até 16/09 e 0,04% depois.
@@ -98,4 +98,22 @@ test('a conferência: o que anda sozinho pede a cada 3 meses; o de preço de mer
   assert.deepEqual(pendentesDeValor({ investimentos: invs, valores, hoje: '2026-12-02' }).map((i) => i.id), ['cdb', 'fundo']);
   // a foto estimada não conta como conferida
   assert.deepEqual(pendentesDeValor({ investimentos: [cdb], valores: [...valores, { investimento_id: 'cdb', data: '2026-11-30', estimado: true }], hoje: '2026-12-02' }).map((i) => i.id), ['cdb']);
+});
+
+test('a aplicação lançada depois do valor e com a data antes dele: o valor não a tem, e ganha ela crescida pela taxa', () => {
+  const valores = [{ id: 'f1', investimento_id: 'cdb', data: '2026-10-11', valor_centavos: 2200000, criado_em: '2026-11-06T19:48:01Z', atualizado_em: '2026-11-06T19:48:01Z' }];
+  const movimentos = [
+    { id: 'a1', investimento_id: 'cdb', data: '2026-10-11', tipo: 'aporte', valor_centavos: 2200000, criado_em: '2026-11-06T19:48:00Z' }, // o "Cadastrar e aplicar"
+    { id: 'a2', investimento_id: 'cdb', data: '2026-09-01', tipo: 'aporte', valor_centavos: 480000, criado_em: '2026-11-06T20:51:16Z' }, // lançada depois, com a data antes
+  ];
+  const fora = movimentosForaDosValores({ valores, movimentos });
+  assert.deepEqual(fora.map((f) => [f.mov.id, f.fotos.map((x) => x.id)]), [['a2', ['f1']]]);
+  // somada: crescida pela taxa de cada dia de 01/09 até 11/10 (o CDI fictício)
+  const [novo] = valoresComOMovimento({ mov: fora[0].mov, fotos: fora[0].fotos, inv: cdb, taxas });
+  const f = cal.filter((d) => d >= '2026-09-01' && d < '2026-10-11').reduce((x, d) => x * (1 + (d <= '2026-09-16' ? 0.0005 : 0.0004)), 1);
+  assert.equal(novo.valor_centavos, Math.round(2200000 + 480000 * f));
+  // depois de corrigido (o valor mudou depois do lançamento), não aparece mais
+  assert.deepEqual(movimentosForaDosValores({ valores: [{ ...valores[0], atualizado_em: '2026-11-06T21:00:00Z' }], movimentos }), []);
+  // o resgate tira; o que não anda sozinho entra pelo valor puro
+  assert.equal(valoresComOMovimento({ mov: { ...movimentos[1], tipo: 'resgate' }, fotos: valores, inv: { tipo: 'fundo' }, taxas }).at(0).valor_centavos, 2200000 - 480000);
 });
