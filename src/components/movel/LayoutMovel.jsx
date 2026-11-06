@@ -26,6 +26,7 @@ const ICONES = {
   '/fixos': <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></>,
   '/cadastros/cartoes': <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></>,
   '/patrimonio': <path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6" />,
+  '/investimentos': <path d="M4 18l6-6 4 4 6-8M14 8h6v6" />,
 };
 export const SECOES_MOVEL = [
   { to: '/', label: 'Visão geral' },
@@ -33,6 +34,7 @@ export const SECOES_MOVEL = [
   { to: '/fixos', label: 'Gastos fixos', contador: 'fixos', dica: 'a lançar' },
   { to: '/cadastros/cartoes', label: 'Cartões' },
   { to: '/patrimonio', label: 'Patrimônio' },
+  { to: '/investimentos', label: 'Investimentos' },
 ];
 const Icone = ({ para }) => (
   <svg viewBox="0 0 24 24" className="h-[20px] w-[20px] shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONES[para]}</svg>

@@ -20,6 +20,12 @@ export async function salvarConta({ id, nome, tipo, instituicao, ativa, recebe_e
     : supabase.from('contas').insert(dados).select().single());
 }
 
+// COMEÇAR DO ZERO (06/11/2026): apaga TODOS os lugares e, em cascata, as fotos, os movimentos, os investimentos e os
+// valores deles. Só pelo botão do "Mais ações" da tela Investimentos, com a confirmação.
+export function apagarPatrimonio() {
+  return exigir(supabase.from('contas').delete().not('id', 'is', null));
+}
+
 // Apaga a conta e todo o histórico de saldos dela (FK em cascata).
 export function excluirConta(id) {
   return exigir(supabase.from('contas').delete().eq('id', id));

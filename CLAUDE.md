@@ -88,7 +88,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   linhas de todas, Ctrl+D preenche cada uma, Ctrl+C só com as mesmas colunas (`naSelecao`, `linhasDasFaixas`,
   `textoDasFaixas` em `lib/planilha.js`, testadas); sem alça. Seleção sem o Ctrl volta a ser uma só.
 - **Categorias = planilha agrupada** (opção A): grupos recolhíveis, e por categoria o uso tirado da `resumo_mensal`
-  (`lib/usoCategorias.js`: 12 meses, total no mês, média pelos meses com dado, último uso).
+  (`lib/usoCategorias.js`: 12 meses, total no mês, média pelos meses com dado, último uso). O PERÍODO (06/11/2026, a
+  pedido): o `SegPeriodoFiltro` da Visão geral, que ABRE NO ANO TODO (antes era o mês de hoje); com a lista das
+  competências, `usoPorCategoria` dá o total, os lançamentos e a média do período ("Total · 2026").
   GERIR (29/10/2026, opção A do mockup "Categorias · gerir mais fácil"): o cabeçalho é o grupo do DRE (✎ Gerir
   categorias · ▾ Novo grupo / Exportar CSV) + "+ Nova categoria". O ✎ abre `components/ModalCadastroCategorias.jsx`,
   o cadastro no jeito do dos fixos: grupos como cabeçalho, categorias embaixo, cada célula um campo (nome, grupo,
@@ -278,6 +280,34 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   conta, "Novo investimento" no pé, "fica com R$ X aplicados") e "Registrar o mês" POR TÍTULO (a conta sem títulos é
   uma linha; "+ aporte" na linha, por cima). Sem a 014, `listarInvestimentos` devolve null, a tabela mostra só as
   contas e avisa (a leitura dos movimentos cai para a sem `investimento_id`).
+- O PATRIMÔNIO "DO ZERO" (06/11/2026, o mockup aprovado "Patrimônio do zero", e a SEPARAÇÃO pedida — o painel e a
+  tabela, como a Visão geral e os Lançamentos; migration 015). TRÊS GESTOS, sempre com o mesmo nome: CADASTRAR,
+  APLICAR / RESGATAR e ATUALIZAR VALORES ("aporte" e "registrar o mês" saíram da tela). A conta virou LUGAR (o banco ou
+  a corretora); a conta corrente é o tipo `saldo` ("Saldo em conta").
+  · `/patrimonio` (`pages/Patrimonio.jsx`) = o PAINEL, só de ler: os 4 `CartaoKpi` (com o "desde out/26" no começo
+    curto), o `GraficoPatrimonio` (do 2º mês em diante), "Onde está o dinheiro" (lugar | tipo | resgate) e "Próximos
+    vencimentos" (com data e cada aplicação, reaplica / volta), e a faixa âmbar do que pede o valor do mês.
+  · `/investimentos` (`pages/Investimentos.jsx`) = a TABELA (`BlocoInvestimentos`, Carteira | Mês a mês). O topo é o
+    grupo do DRE: ✎ o cadastro · ⇅ aplicar ou resgatar · ▾ (novo lugar, CSV, encerrados, COMEÇAR DO ZERO —
+    `apagarPatrimonio`, apaga os lugares e tudo em cascata, com confirmação; só a pessoa clica) + o destaque "Atualizar
+    valores", âmbar com o número dos que pedem o valor do fim do mês passado (`pendentesDeValor`; o mesmo número no
+    menu, `useContadores` 'investimentos'); vazio, "Montar a carteira". A coluna RESGATE junta liquidez e vencimento
+    (no "cada aplicação vence": "próxima 03/2027 · reaplica"); na linha, ↑ Aplicar · ↓ Resgatar com o nome e ✎ a FICHA
+    (os dois "+" de antes confundiam). Os dados das duas telas: `components/patrimonio/useDadosPatrimonio.js`.
+  · O CADASTRO EM TABELA (`ModalCadastroInvestimentos.jsx`, a dos fixos/cartões): agrupado por lugar, "Adicionar
+    investimento" em cada um e "Novo lugar" no fim; nome, tipo, rende + taxa, prazo · resgate, valor aplicado e (só na
+    linha nova) valor hoje; ⋯ = emissor, observação, ativo. O tipo preenche o resto (`padraoDoTipo`); Enter desce na
+    coluna; "Salvar alterações (N)" (`diferencaInvestimento`, `validarCadastro`; testadas em
+    `test/cadastroInvestimentos.test.js`). O formulário longo de um investimento saiu.
+  · O PRAZO DE CADA APLICAÇÃO (liquidez `por_aplicacao` + `prazo_meses` + `ao_vencer` 'reaplica' | 'volta', a 015): o
+    CDB em que cada aporte vence N meses depois dele. `aplicacoesComPrazo` (testada): a 1ª aplicação é o "valor
+    aplicado" do cadastro (com a "data da aplicação", se houver; sem ela, sem vencimento), as outras os aportes; o
+    resgate sai das mais antigas; com 'reaplica' o vencimento que passou anda mais um prazo, sem virar resgate.
+  · ATUALIZAR VALORES (`ModalAtualizarValores`): o rendimento FORA DO NORMAL para o tipo (`rendimentoForaDoNormal`:
+    pós-fixado 2,5%/mês, marcado a mercado 5%, fundo 10%) vira "Foi uma aplicação de R$ X?", que lança o movimento
+    junto com o salvar; Enter num campo vazio repete o valor de antes. APLICAR (`ModalMovimento`): o novo investimento
+    nasce ali (nome, lugar, tipo; o valor entra como a aplicação), "Resgatar tudo · R$ X" encerra. Os valores aceitam
+    conta (`calcularValor`).
 
 ## Gastos fixos (fase 5)
 
@@ -317,8 +347,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 ## Visão geral (a tela inicial, 27/10/2026)
 
 - Substituiu o "Resumo do mês": é o Dashboard da planilha (segmentações ANO e MÊS) no estilo do Gestor.
-  Filtros: anos (vários), meses (grade de 12, Shift = intervalo, atalhos de trimestre), tipo, origem, categoria e
-  "Comparar: ano anterior". Contas puras em `lib/visaoGeral.js` (testadas), sobre a `resumo_mensal`; média divide
+  Filtros: o PERÍODO, tipo, origem, categoria e "Comparar: ano anterior". O PERÍODO (06/11/2026, opção B do mockup
+  "O filtro de período"; o mesmo das Categorias) é o `SegPeriodoFiltro` (`components/filtros/`), no lugar do Ano + Meses
+  de antes: os TIPOS numa coluna à esquerda (mês · trimestre · semestre · acumulado · ano · 12 meses, com o que cada um
+  faz), o ano (Ctrl+clique soma mais um) e a grade do tipo; meses sem lançamento apagados; rodapé com o período em
+  palavras e "O ano todo" (o padrão). No "Mês", clique = um, Shift = intervalo, Ctrl = vários; os 12 meses terminam no
+  mês escolhido e atravessam o ano. Contas em `lib/periodoFiltro.js` (`per` = { modo, anos, meses, tri, sem, ate } →
+  `compsDoPeriodo`, `textoDoPeriodo`; testadas). A folha do celular ainda escolhe ano + meses (`periodoDeAnosMeses`). Contas puras em `lib/visaoGeral.js` (testadas), sobre a `resumo_mensal`; média divide
   pelos meses COM dado.
 - O AVISO "AGORA" (28/10/2026, opção A) é a linha do widget Alertas do Dashboard do Gestor
   (`components/dashboard/AvisoAgora.jsx`), no TOPO: pílulas no tom do que pedem — âmbar = fixos a lançar (do ano

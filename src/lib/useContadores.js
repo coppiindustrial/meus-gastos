@@ -5,6 +5,8 @@ import { contarPendencias } from '../api/resumo.js';
 import { listarLancamentosDeFixos, listarPulados, listarRecorrencias } from '../api/fixos.js';
 import { pendenciasAgora } from './importacoes.js';
 import { matrizDoAno, pendentesPorMes } from './fixos.js';
+import { listarInvestimentos } from '../api/investimentos.js';
+import { pendentesDeValor } from './investimentos.js';
 import { todayISO } from './format.js';
 
 // OS NÚMEROS DO MENU (`contador` em lib/navegacao.js), o que ainda pede a pessoa depois de importar:
@@ -31,6 +33,9 @@ export default function useContadores(ativo) {
         .then(([recs, lancs, pulados]) => Object.values(pendentesPorMes(matrizDoAno(recs, lancs, Number(hoje.slice(0, 4)), hoje, pulados ?? [])))
           .reduce((s, l) => s + l.length, 0))
         .then(por('fixos')).catch(() => {});
+      // os investimentos que pedem o valor do mês (o destaque "Atualizar valores N" da tela Investimentos)
+      listarInvestimentos().then((d) => (d ? pendentesDeValor({ investimentos: d.investimentos, valores: d.valores, hoje }).length : 0))
+        .then(por('investimentos')).catch(() => {});
     };
     const depois = () => { clearTimeout(tempo); tempo = setTimeout(contar, ESPERA); };
     contar();

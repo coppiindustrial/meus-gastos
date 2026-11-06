@@ -25,7 +25,10 @@
 > `valores_investimento`, o valor de cada data; `movimentos_investimento.investimento_id`): o aporte e o resgate manuais
 > no título escolhido, o "Registrar o mês" por título, o rendimento por título; a tela = os números e o gráfico no jeito
 > da Visão geral e a tabela agrupada por conta (opção A do mockup "Patrimônio · a tabela"), com o mês a mês (a B) como
-> segunda vista. As fotos antigas da conta ficam como histórico. Próxima: 8.C (renda variável BR e exterior).
+> segunda vista. As fotos antigas da conta ficam como histórico. **Refeita "do zero" (2026-11-06, migration 015)**:
+> o painel em /patrimonio e a tabela em /investimentos; três gestos (cadastrar em tabela, aplicar/resgatar, atualizar
+> valores com o aviso do aporte esquecido); o prazo de cada aplicação que reaplica sozinho; "Começar do zero".
+> Próxima: 8.C (renda variável BR e exterior).
 > **Extrato da conta (2026-10-27)**: CSV do extrato do Nubank; entradas continuam à mão; fatura, investimentos e
 > transferências entre contas próprias (regra de ignorar) ficam de fora; pagamento de fixo vira o fixo do mês com o
 > valor real; o resto entra como avulso (sem regra → Revisar pendências). Migration 005.

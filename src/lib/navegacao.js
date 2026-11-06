@@ -39,7 +39,10 @@ export const GRUPOS = [
     label: 'Análises',
     icon: SbChart,
     items: [
+      // O PAINEL e a TABELA separados (06/11/2026, como a Visão geral e os Lançamentos): o número nos Investimentos é o
+      // dos que pedem o valor do mês.
       { to: '/patrimonio', label: 'Patrimônio' },
+      { to: '/investimentos', label: 'Investimentos', contador: 'investimentos', dica: 'a atualizar' },
     ],
   },
 ];
