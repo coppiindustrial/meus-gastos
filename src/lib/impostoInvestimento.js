@@ -142,19 +142,21 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   });
   const vivos = lotes.filter((l) => l.frac > 1e-6).map((l) => ({ ...l, v: valorEm(l, hoje) * l.frac, p: l.principal * l.frac }));
 
-  // o ajuste: a soma fecha com o que o título vale e com o que foi aplicado — pelos aportes que NÃO são fixos (os com os
-  // dois números do banco ficam como o banco disse; os outros levam a diferença)
+  // o ajuste: a soma fecha com o que o título vale e com o que foi aplicado — pelos aportes que NÃO são fixos. Os com os
+  // dois números do banco ficam como o banco disse; o valor do banco de HOJE (o colado com a referência de hoje) também não
+  // muda (07/11/2026: digitado o Vale hoje, a linha o mostrava reajustado) — só o rendimento dele leva a diferença.
+  vivos.forEach((l) => { l.valorFixo = l.fixo || (l.origem === 'colado' && l.ref === hoje && l.ref !== l.data); });
   const soltos = vivos.filter((l) => !l.fixo);
   const fixos = vivos.filter((l) => l.fixo);
-  const somaV = soltos.reduce((s, l) => s + l.v, 0);
+  const somaV = vivos.filter((l) => !l.valorFixo).reduce((s, l) => s + l.v, 0);
   const somaG = soltos.reduce((s, l) => s + (l.v - l.p), 0);
-  const fixoV = fixos.reduce((s, l) => s + l.v, 0);
+  const fixoV = vivos.filter((l) => l.valorFixo).reduce((s, l) => s + l.v, 0);
   const fixoG = fixos.reduce((s, l) => s + (l.v - l.p), 0);
   const kv = somaV > 0 && vale > 0 ? Math.max(0, vale - fixoV) / somaV : 1;
   const G = vale !== undefined && aplicado !== undefined ? vale - aplicado : somaG + fixoG;
   const kg = somaG > 0 ? (G - fixoG) / somaG : 0;
   const lista = vivos.map((l) => {
-    const valeL = l.fixo ? l.v : l.v * kv;
+    const valeL = l.valorFixo ? l.v : l.v * kv;
     const ganho = l.fixo ? l.v - l.p : (l.v - l.p) * kg;
     const dias = Math.max(0, diasEntre(l.data, hoje));
     const iof = isento || semEstimativa ? 0 : Math.max(0, ganho) * aliquotaIOF(dias);

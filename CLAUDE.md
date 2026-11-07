@@ -329,7 +329,11 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     parcial e o IR retido nele já estão na conta do banco; o "Valor aplicado" e os "Saques parciais" não fecham). Com os
     dois, o aplicado é a conta (bruto − rendimento), a linha mostra "· banco dd/mm" e o aporte fica FIXO no
     `estimarImposto` (`fixo`: não entra no ajuste; os outros levam a diferença para fechar com o título); o Valor Bruto
-    novo muda a foto de hoje do investimento pela diferença (`vale.delta`) e o aplicado acompanha (`aplicadoSem`):
+    novo muda a foto de hoje do investimento pela diferença (`vale.delta`) e o aplicado acompanha (`aplicadoSem`). OS DOIS
+    FICAM COMO DIGITADOS, EM QUALQUER ORDEM (07/11/2026, a pedido: "eu altero os valores e não fica"): digitado um deles
+    hoje, o outro de hoje não muda (o Vale hoje com o rendimento de hoje mantém o rendimento; o Rendeu usa o Valor Bruto
+    digitado hoje, não o da linha) — e o colado com a referência de HOJE tem o valor FIXO no `estimarImposto`
+    (`valorFixo`: não é reajustado para fechar com o título; só o rendimento dele leva a diferença):
     `planoDoAporte`, `planoDoNovoAporte` e o andar (`modoDaCelula`, `moverAtiva`, `proximaEditavel`, `lerCelula`) em
     `lib/carteiraEditavel.js` (testada). As gravações em FILA, com o DESFAZER de cada uma (o contrário do que gravou):
     `components/patrimonio/useEdicaoCarteira.js`. O id da linha do aporte é o da ORIGEM (sobrevive à releitura). O

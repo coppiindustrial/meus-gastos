@@ -157,16 +157,21 @@ export function planoDoAporte({ lo, inv, campo, valor, fotos = [], hoje = null }
     const antesDe = (m) => ({ data: f.data, valor_centavos: f.valor, referencia: f.referencia, ...('rendimento_centavos' in m || comPar ? { rendimento_centavos: f.rendimento ?? null } : {}) });
     const plano = (mudancas, aplicado = null, vale = null) => ({ alvo: 'dep', id: f.id, mudancas, antes: antesDe(mudancas), aplicado, vale });
     if (campo === 'data') return plano(depositado ? { data: valor, referencia: valor } : { data: valor });
-    // O VALOR BRUTO (o Vale hoje): o que ele vale hoje, como o banco mostra. Com o principal sabido (o par, ou o digitado
-    // como "o que foi depositado"), ele fica e o rendimento é a diferença; sem ele, só o valor de hoje (o principal segue
-    // estimado). O valor do investimento hoje acompanha a diferença (`vale`).
+    // OS DOIS NÚMEROS FICAM COMO DIGITADOS, EM QUALQUER ORDEM (07/11/2026, a pedido: "eu altero os valores e não fica"):
+    // os dois são da tela do banco de HOJE. Digitado um deles hoje, o outro de hoje não muda — o aplicado é a conta.
+    // O VALOR BRUTO (o Vale hoje): com o rendimento de hoje já digitado, ele fica; com um par antigo (ou o digitado como
+    // "o que foi depositado"), fica o aplicado e o rendimento é a diferença; sem nada, só o valor de hoje. O valor do
+    // investimento hoje acompanha a diferença (`vale`).
     if (campo === 'bruto') {
+      const vale = { delta: valor - lo.vale };
+      if (comPar && f.referencia === hoje) return plano({ valor_centavos: valor }, aplicadoSem(lo, inv, valor - f.rendimento), vale);
       const principal = f.exato ? (f.principal ?? f.valor) : null;
-      return plano(principal !== null ? { valor_centavos: valor, referencia: hoje, rendimento_centavos: valor - principal } : { valor_centavos: valor, referencia: hoje }, null, { delta: valor - lo.vale });
+      return plano(principal !== null ? { valor_centavos: valor, referencia: hoje, rendimento_centavos: valor - principal } : { valor_centavos: valor, referencia: hoje }, null, vale);
     }
-    // O RENDIMENTO BRUTO (o Rendeu): com o valor de hoje, o par completo; o aplicado é o valor − o rendimento
+    // O RENDIMENTO BRUTO (o Rendeu): com o Valor Bruto de hoje já digitado, ele fica; senão, o valor de hoje que a linha
+    // mostra. O aplicado é o valor − o rendimento.
     if (campo === 'rendimento') {
-      const bruto = comPar && f.referencia === hoje ? f.valor : lo.vale;
+      const bruto = f.referencia === hoje && !depositado ? f.valor : lo.vale;
       return plano({ valor_centavos: bruto, referencia: hoje, rendimento_centavos: valor }, aplicadoSem(lo, inv, bruto - valor));
     }
     // o APLICADO: no par, o rendimento passa a ser o valor − o aplicado; sem ele, o aporte vira "o que foi depositado"

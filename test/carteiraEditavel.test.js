@@ -189,13 +189,21 @@ test('os dois números do banco no aporte de antes do app: o Vale hoje e o Rende
   assert.deepEqual(r.mudancas, { valor_centavos: 1426501, referencia: hoje, rendimento_centavos: 434868 });
   assert.deepEqual(r.aplicado, { antes: 1147083, depois: 1147083 - 1105994 + 991633 });
   assert.equal(r.vale, null);
-  // com o par: o Valor Bruto novo mantém o aplicado e muda o rendimento; o valor de hoje acompanha a diferença
+  // com o par de HOJE: o Valor Bruto novo fica, o rendimento de hoje também; o aplicado e o valor de hoje acompanham
   const par = { ...col, fonte: { ...col.fonte, exato: true, principal: 991633, rendimento: 434868 } };
   const b = planoDoAporte({ lo: par, inv: comAplicado, campo: 'bruto', valor: 1427000, hoje });
-  assert.deepEqual(b.mudancas, { valor_centavos: 1427000, referencia: hoje, rendimento_centavos: 1427000 - 991633 });
+  assert.deepEqual(b.mudancas, { valor_centavos: 1427000 });
   assert.deepEqual(b.vale, { delta: 1427000 - 1426501 });
-  assert.equal(b.aplicado, null);
+  assert.deepEqual(b.aplicado, { antes: 1147083, depois: 1147083 - 991633 + (1427000 - 434868) });
   assert.deepEqual(b.antes, { data: '2024-12-05', valor_centavos: 1426501, referencia: '2026-11-07', rendimento_centavos: 434868 });
+  // com um par ANTIGO: o aplicado fica e o rendimento é a diferença
+  const antigo = { ...par, fonte: { ...par.fonte, referencia: '2026-10-31' } };
+  assert.deepEqual(planoDoAporte({ lo: antigo, inv: comAplicado, campo: 'bruto', valor: 1427000, hoje }).mudancas,
+    { valor_centavos: 1427000, referencia: hoje, rendimento_centavos: 1427000 - 991633 });
+  // EM QUALQUER ORDEM, os dois números do banco ficam como digitados: primeiro o Vale hoje (sem par), depois o Rendeu
+  const soValor = { ...col, vale: 1430000, fonte: { ...col.fonte, valor: 1430000, referencia: hoje } };
+  assert.deepEqual(planoDoAporte({ lo: soValor, inv: comAplicado, campo: 'rendimento', valor: 434868, hoje }).mudancas,
+    { valor_centavos: 1430000, referencia: hoje, rendimento_centavos: 434868 }); // o valor digitado, não o da linha
   // o Aplicado no par: o rendimento passa a ser o valor − o aplicado
   assert.deepEqual(planoDoAporte({ lo: par, inv: comAplicado, campo: 'valor', valor: 990000, hoje }).mudancas, { rendimento_centavos: 1426501 - 990000 });
   // sem o principal (o colado), o Valor Bruto é só o valor de hoje

@@ -133,6 +133,10 @@ test('o aporte com os dois números do banco fica exato; os outros levam a difer
   assert.equal(a.fonte.principal, 991633);
   assert.equal(a.ir, Math.round(434868 * 0.175));
   const b = r.lotes.find((l) => l.data === '2025-05-07');
-  assert.equal(b.vale, 1476934 - 1426501); // o resto do valor
+  assert.equal(b.vale, 1476934 - 1426501); // o valor de hoje do banco
   assert.equal(b.ganho, 1476934 - 1035000 - 434868); // o resto do rendimento
+  // o valor do banco de HOJE não é reajustado, mesmo que o título valha outra coisa: só o rendimento leva a diferença
+  const r2 = estimarImposto({ inv: { ...inv, aplicado_inicial_centavos: null }, fotos: [{ data: hoje, valor_centavos: 1500000 }], depositos, cdi, hoje, vale: 1500000, aplicado: 1035000 });
+  assert.equal(r2.lotes.find((l) => l.data === '2025-05-07').vale, 50433);
+  assert.equal(r2.lotes.find((l) => l.data === '2024-12-05').vale, 1426501);
 });
