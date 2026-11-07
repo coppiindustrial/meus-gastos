@@ -19,9 +19,10 @@
 //     então, já tem o rendimento dos dias úteis antes dela; o valor de HOJE também — e os dias úteis entre o último CDI
 //     publicado e hoje (o Banco Central publica no dia útil seguinte: o da sexta só na segunda) vão com a taxa do último
 //     (`projetados`). (Em 06/11/2026 eu tinha passado a contar o dia de hoje; acertou o RDB por coincidência e errou no sábado.)
-//   · O APORTE rende desde o próprio dia — e o de SÁBADO, DOMINGO ou FERIADO rende o CDI do dia útil ANTES dele
-//     (`inicioDoRendimento`: o de sábado 12/09 conta o de sexta 11/09, que vale até a segunda). O movimento no dia da foto
-//     já está nela.
+//   · O APORTE rende desde o próprio dia — o de SÁBADO rende o CDI da SEXTA (o de sábado 12/09 contou o de 11/09), e o
+//     de DOMINGO ou FERIADO só começa no dia útil seguinte (o de domingo 11/10 começou em 13/10, depois do feriado de 12/10;
+//     o de sexta 09/10 não entrou) — `inicioDoRendimento`, conferido nos dois do RDB Planejado em 07/11/2026. O movimento
+//     no dia da foto já está nela.
 
 // o que nunca anda sozinho: preço de mercado, regra própria ou sem rendimento
 export const MANUAIS = ['tesouro_ipca', 'tesouro_prefixado', 'fundo', 'debenture', 'outro', 'poupanca', 'saldo'];
@@ -79,22 +80,16 @@ function preparar(inv, taxas) {
 }
 const sinalDe = (m) => (m.tipo === 'resgate' ? -1 : 1) * Number(m.valor_centavos);
 
-// O DIA EM QUE O APORTE COMEÇA A RENDER: o próprio dia, se for útil; num sábado, domingo ou feriado, o dia útil antes dele.
-// Os dias úteis são os da série (o CDI; a Selic no "Selic +"); depois do último publicado, os dias de semana. Sem a série,
-// o próprio dia.
-const fimDeSemana = (d) => { const s = new Date(utc(d)).getUTCDay(); return s === 0 || s === 6; };
+// O DIA EM QUE O APORTE COMEÇA A RENDER (o caminho só conta os dias úteis a partir dele): o próprio dia; no SÁBADO, a sexta
+// antes dele, se ela foi dia útil (na série; depois do último publicado, a sexta conta). O domingo e o feriado ficam no
+// próprio dia — o rendimento começa no dia útil seguinte.
 export function inicioDoRendimento(inv, data, taxas) {
+  if (!data || new Date(utc(data)).getUTCDay() !== 6) return data;
+  const sexta = maisDias(data, -1);
   const cal = calendarioDe(inv, taxas);
-  if (!data || !cal.length || data < cal[0][0]) return data;
-  const ult = cal[cal.length - 1][0];
-  if (data > ult) {
-    let d = data;
-    while (fimDeSemana(d) && d > ult) d = maisDias(d, -1);
-    if (d > ult) return d;
-  }
-  let lo = 0; let hi = cal.length - 1; // o último dia útil da série até a data
-  while (lo < hi) { const m = Math.ceil((lo + hi) / 2); if (cal[m][0] <= data) lo = m; else hi = m - 1; }
-  return cal[lo][0];
+  if (!cal.length || sexta < cal[0][0]) return data;
+  if (sexta > cal[cal.length - 1][0]) return sexta;
+  return cal.some(([d]) => d === sexta) ? sexta : data; // a sexta foi feriado: começa no próximo dia útil
 }
 
 // O calendário com os dias de semana DEPOIS do último publicado, até `ate`, com a taxa dele (`[d, r, true]`: projetado).

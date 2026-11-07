@@ -449,9 +449,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     às 19h16 e R$ 369,74 no sábado às 05h03; o CDB da XP a 100,25% desde 13/08, R$ 694,12 "atualizado em 06/11"): (1) o
     VALOR DE UM DIA tem o CDI dos dias úteis ANTES dele (o da sexta entra no sábado de madrugada) — a foto de uma data, e
     o valor de hoje, com os dias úteis entre o último CDI publicado e hoje pela taxa do último (`projetados`,
-    `comProjetados` no `caminhar`); (2) o APORTE rende desde o próprio dia, e o de SÁBADO, DOMINGO ou FERIADO rende o CDI
-    do dia útil ANTES dele (`inicioDoRendimento`; `fatorDoAporte` no IR de cada aporte, no "Somar aos valores" e no
-    pop-up dos aportes de antes). Em 06/11/2026 eu tinha passado a contar o dia de hoje ("o dia inteiro"): acertou o RDB por
+    `comProjetados` no `caminhar`); (2) o APORTE rende desde o próprio dia; o de SÁBADO rende o CDI da SEXTA, e o de
+    DOMINGO ou FERIADO só começa no dia útil seguinte (os dois do RDB Planejado, no centavo: o de sábado 12/09 contou o de
+    11/09; o de domingo 11/10 começou em 13/10, sem o de 09/10) — `inicioDoRendimento`; `fatorDoAporte` no IR de cada
+    aporte, no "Somar aos valores" e no pop-up dos aportes de antes. Em 06/11/2026 eu tinha passado a contar o dia de hoje ("o dia inteiro"): acertou o RDB por
     coincidência (o dia a mais era o da sexta 11/09) e errou no sábado — voltou a regra (1). Na
     carteira, "≈ pelo CDI até hoje" embaixo do valor e o balão com a conta (e de que dia é a taxa dos dias não
     publicados); na ficha, o "Vale hoje". SEM O BANCO CENTRAL (a API respondeu 502 por horas no mesmo dia): as taxas que já vieram ficam; sem

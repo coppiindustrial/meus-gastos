@@ -121,10 +121,14 @@ test('a aplicação lançada depois do valor e com a data antes dele: o valor n�
   assert.equal(valoresComOMovimento({ mov: { ...movimentos[1], tipo: 'resgate' }, fotos: valores, inv: { tipo: 'fundo' }, taxas }).at(0).valor_centavos, 2200000 - 480000);
 });
 
-test('o dia do banco: o aporte de sábado rende o CDI de sexta; no sábado, o de sexta já entrou (projetado)', () => {
+test('o dia do banco: o aporte de sábado rende o CDI de sexta (o de domingo, não); no sábado, o de sexta já entrou (projetado)', () => {
   // 12/09/2026 e 07/11/2026 são sábados; o CDI fictício vai até 05/11 (uma quinta) — o de sexta 06/11 ainda não saiu
   assert.equal(inicioDoRendimento(cdb, '2026-09-12', taxas), '2026-09-11');
   assert.equal(inicioDoRendimento(cdb, '2026-09-14', taxas), '2026-09-14');
+  assert.equal(inicioDoRendimento(cdb, '2026-09-13', taxas), '2026-09-13'); // domingo: começa na segunda
+  // o domingo: rende desde a segunda 14/09 (a sexta não entra)
+  assert.ok(Math.abs(fatorDoAporte(cdb, '2026-09-13', '2026-09-16', taxas) - 1.0005 ** 2) < 1e-12);
+  assert.ok(Math.abs(fatorDoAporte(cdb, '2026-09-12', '2026-09-16', taxas) - 1.0005 ** 3) < 1e-12);
   assert.equal(inicioDoRendimento(cdb, '2026-11-07', taxas), '2026-11-06'); // depois do publicado: o dia de semana antes
   const taxaDe = (d) => (d <= '2026-09-16' ? 0.0005 : 0.0004);
   const dias = [...cal.filter((d) => d >= '2026-09-11'), '2026-11-06']; // 06/11 vai com a taxa de 05/11
