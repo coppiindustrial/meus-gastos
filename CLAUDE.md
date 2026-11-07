@@ -339,6 +339,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     esquerda, 14px semibold, 46px), o INVESTIMENTO recuado em duas linhas (13px médio), o APORTE recuado de novo numa
     linha só (12,5px, 34px, mais claro) e pendurado num TRILHO que desce da seta do investimento (`Trilho`); os recuos em
     px inteiros (o texto em 30 · 55 · 80).
+    O ⇕ (07/11/2026, a pedido): "Recolher tudo" fecha as instituições E os investimentos (`abertosInv`); "Expandir as
+    instituições" abre só elas — os investimentos aparecem fechados e cada um abre na seta dele.
     O "RENDEU" É BRUTO (o vale hoje − o aplicado, como a "Valorização" do banco); o balão dele traz também o "Depois do IR ≈"
     (o líquido − o aplicado, se resgatasse hoje; "parcial" na instituição com algum sem estimativa).
     OS CENTAVOS (06/11/2026, a pedido): o interruptor "Centavos" no cabeçalho do bloco (o `Toggle` do "Só o que falta" do

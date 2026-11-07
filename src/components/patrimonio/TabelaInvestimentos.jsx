@@ -1020,9 +1020,15 @@ export default function BlocoInvestimentos({
 
   const icones = comFilhos.length > 0 && (
     <span className="inline-flex shrink-0 overflow-hidden rounded-md border border-gray-300 bg-white">
-      <Tooltip label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}>
-        <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'} className={BTN}
-          onClick={() => setRecolhidas(() => (tudoAberto ? new Set(comFilhos.map((g) => g.conta.id)) : new Set()))}>
+      {/* RECOLHER TUDO fecha também os investimentos (07/11/2026, a pedido: abrir a instituição depois mostrava os aportes
+          de todos); EXPANDIR abre só as instituições — os investimentos aparecem fechados, cada um abre na seta dele */}
+      <Tooltip label={tudoAberto ? 'Recolher tudo' : 'Expandir as instituições'}>
+        <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir as instituições'} className={BTN}
+          onClick={() => {
+            if (!tudoAberto) { setRecolhidas(() => new Set()); return; }
+            setRecolhidas(() => new Set(comFilhos.map((g) => g.conta.id)));
+            setAbertosInvEstado(() => { lsSet('patrimonio_depositos_abertos', '[]'); return new Set(); });
+          }}>
           <IconExpandirTudo fechar={tudoAberto} />
         </button>
       </Tooltip>
