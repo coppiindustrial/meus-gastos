@@ -85,8 +85,16 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   const lotes = [];
   let corte;
   if (depositos.length) {
-    depositos.forEach((d) => lotes.push({ data: d.data, ref: d.referencia, valorRef: Number(d.valor_centavos), origem: 'colado',
-      fonte: { tipo: 'dep', id: d.id, data: d.data, valor: Number(d.valor_centavos), referencia: d.referencia, exato: d.referencia === d.data, vencimento: d.vencimento || null } }));
+    // OS DOIS NÚMEROS DO BANCO (07/11/2026, a migration 019): com o `rendimento_centavos` (o "Rendimento bruto" da tela do
+    // depósito, no dia da referência), o que ainda está aplicado é o valor − o rendimento, EXATO — o saque parcial e o IR
+    // retido nele já estão na conta do banco. O aporte assim fica FIXO: não entra no ajuste que fecha o resto com o título.
+    depositos.forEach((d) => {
+      const rend = d.rendimento_centavos === null || d.rendimento_centavos === undefined ? null : Number(d.rendimento_centavos);
+      const valor = Number(d.valor_centavos);
+      const principal = rend !== null ? valor - rend : d.referencia === d.data ? valor : null;
+      lotes.push({ data: d.data, ref: d.referencia, valorRef: valor, origem: 'colado', fixo: rend !== null,
+        fonte: { tipo: 'dep', id: d.id, data: d.data, valor, referencia: d.referencia, exato: principal !== null, principal, rendimento: rend, vencimento: d.vencimento || null } });
+    });
     corte = depositos.reduce((m, d) => (d.referencia > m ? d.referencia : m), depositos[0].referencia);
   } else if (abre) {
     // AS APLICAÇÕES PELO APP ATÉ A PRIMEIRA FOTO são depósitos EXATOS (06/11/2026: o "Cadastrar e aplicar" grava a foto e a
@@ -97,7 +105,7 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
     const somaIni = iniciais.reduce((s, m) => s + Number(m.valor_centavos), 0);
     const total = inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined ? Number(inv.aplicado_inicial_centavos) : iniciais.length ? somaIni : Number(abre.valor_centavos);
     const resto = total - somaIni;
-    iniciais.forEach((m) => lotes.push({ data: m.data, principal: Number(m.valor_centavos), origem: 'aporte', fonte: { tipo: 'mov', id: m.id, data: m.data, valor: Number(m.valor_centavos), exato: true, vencimento: m.vencimento || null } }));
+    iniciais.forEach((m) => lotes.push({ data: m.data, principal: Number(m.valor_centavos), origem: 'aporte', fonte: { tipo: 'mov', id: m.id, data: m.data, valor: Number(m.valor_centavos), principal: Number(m.valor_centavos), exato: true, vencimento: m.vencimento || null } }));
     if (resto > 100) {
       lotes.push({ data: inv.aplicado_em || abre.data, dataAproximada: !inv.aplicado_em, principal: resto, origem: 'inicial',
         fonte: { tipo: 'inicial', data: inv.aplicado_em || abre.data, valor: resto, base: somaIni, exato: inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined } });
@@ -113,7 +121,7 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   const fim = (t) => maisDias(t, 1);
   lotes.forEach((l) => {
     l.frac = 1;
-    if (l.origem === 'colado') l.principal = l.ref === l.data ? l.valorRef : l.valorRef / f(l.data, fim(l.ref));
+    if (l.origem === 'colado') l.principal = l.fixo ? l.fonte.principal : l.ref === l.data ? l.valorRef : l.valorRef / f(l.data, fim(l.ref));
   });
   const valorEm = (l, t) => {
     if (l.origem !== 'colado' || l.ref === l.data) return l.principal * f(l.data, fim(t));
@@ -121,7 +129,7 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   };
   depois.forEach((m) => {
     const v = Number(m.valor_centavos);
-    if (m.tipo !== 'resgate') { lotes.push({ data: m.data, principal: v, origem: 'aporte', frac: 1, fonte: { tipo: 'mov', id: m.id, data: m.data, valor: v, exato: true, vencimento: m.vencimento || null } }); return; }
+    if (m.tipo !== 'resgate') { lotes.push({ data: m.data, principal: v, origem: 'aporte', frac: 1, fonte: { tipo: 'mov', id: m.id, data: m.data, valor: v, principal: v, exato: true, vencimento: m.vencimento || null } }); return; }
     let falta = v;
     for (const l of [...lotes].sort((a, b) => (a.data < b.data ? -1 : 1))) {
       if (falta <= 0 || l.data > m.data) continue;
@@ -134,15 +142,20 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   });
   const vivos = lotes.filter((l) => l.frac > 1e-6).map((l) => ({ ...l, v: valorEm(l, hoje) * l.frac, p: l.principal * l.frac }));
 
-  // o ajuste: a soma fecha com o que o título vale e com o que foi aplicado
-  const somaV = vivos.reduce((s, l) => s + l.v, 0);
-  const somaG = vivos.reduce((s, l) => s + (l.v - l.p), 0);
-  const kv = somaV > 0 && vale > 0 ? vale / somaV : 1;
-  const G = vale !== undefined && aplicado !== undefined ? vale - aplicado : somaG;
-  const kg = somaG > 0 ? G / somaG : 0;
+  // o ajuste: a soma fecha com o que o título vale e com o que foi aplicado — pelos aportes que NÃO são fixos (os com os
+  // dois números do banco ficam como o banco disse; os outros levam a diferença)
+  const soltos = vivos.filter((l) => !l.fixo);
+  const fixos = vivos.filter((l) => l.fixo);
+  const somaV = soltos.reduce((s, l) => s + l.v, 0);
+  const somaG = soltos.reduce((s, l) => s + (l.v - l.p), 0);
+  const fixoV = fixos.reduce((s, l) => s + l.v, 0);
+  const fixoG = fixos.reduce((s, l) => s + (l.v - l.p), 0);
+  const kv = somaV > 0 && vale > 0 ? Math.max(0, vale - fixoV) / somaV : 1;
+  const G = vale !== undefined && aplicado !== undefined ? vale - aplicado : somaG + fixoG;
+  const kg = somaG > 0 ? (G - fixoG) / somaG : 0;
   const lista = vivos.map((l) => {
-    const valeL = l.v * kv;
-    const ganho = (l.v - l.p) * kg;
+    const valeL = l.fixo ? l.v : l.v * kv;
+    const ganho = l.fixo ? l.v - l.p : (l.v - l.p) * kg;
     const dias = Math.max(0, diasEntre(l.data, hoje));
     const iof = isento || semEstimativa ? 0 : Math.max(0, ganho) * aliquotaIOF(dias);
     const aliquota = isento ? 0 : aliquotaIR(dias);

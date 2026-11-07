@@ -30,6 +30,9 @@ export function modoDaCelula(l, col) {
       if (col === 'nome') return 'data';
       if (col === 'aplicado') return 'valor';
       if (col === 'resgate') return f.tipo === 'inicial' ? null : 'vencimento'; // o do cadastro não tem onde guardar
+      // OS DOIS NÚMEROS DO BANCO (07/11/2026, a opção B do mockup "Aportes com os números do banco"): no aporte de antes do
+      // app, o Vale hoje recebe o "Valor Bruto" e o Rendeu o "Rendimento bruto" da tela do depósito (o do app anda pelo CDI)
+      if (f.tipo === 'dep' && (col === 'vale' || col === 'rendeu')) return 'valor';
       return null;
     }
     case 'novoAporte': return col === 'nome' ? 'data' : col === 'aplicado' ? 'valor' : col === 'resgate' ? 'vencimento' : null;
@@ -76,7 +79,9 @@ export function textoDaCelula(l, col, rascunho = null) {
     const f = l.lo.fonte;
     if (col === 'nome') return br(f?.data ?? l.lo.data);
     if (col === 'resgate') return br(l.vence ?? ''); // o que aparece: o digitado, ou o da regra
-    return f?.exato ? campoValor(f.valor) : campoValor(l.lo.depositado);
+    if (col === 'vale') return campoValor(l.lo.vale);
+    if (col === 'rendeu') return campoValor(l.lo.ganho);
+    return f?.exato ? campoValor(f.principal ?? f.valor) : campoValor(l.lo.depositado);
   }
   if (l.tipo === 'novoAporte') return col === 'nome' ? br(rascunho?.data) : col === 'resgate' ? br(rascunho?.venc ?? '') : (rascunho?.valor ?? '');
   return '';
@@ -116,7 +121,8 @@ export function lerCelula(modo, texto, hoje) {
 //   · 'dep' (de antes do app): a data — e a referência, quando o valor é o depositado —; o valor digitado é o
 //     DEPOSITADO, então o aporte colado como "o que vale hoje" passa a ser "o que foi depositado" (a referência = a data);
 //   · 'inicial' (o que o cadastro tem aplicado sem data): a data da aplicação, ou o valor aplicado (mais o que já tem data).
-// Devolve { alvo: 'mov' | 'dep' | 'inv', id, mudancas, antes, gemea?, aplicado? } — `antes` desfaz.
+// Devolve { alvo: 'mov' | 'dep' | 'inv', id, mudancas, antes, gemea?, aplicado?, vale? } — `antes` desfaz. No aporte de antes do
+// app, `campo` 'bruto' (o Vale hoje) e 'rendimento' (o Rendeu) gravam o par do banco na data de `hoje` (a 019).
 //
 // O APLICADO DO INVESTIMENTO ACOMPANHA o aporte de antes do app (06/11/2026, achado com o Nu Limite Garantido): com eles, o
 // aplicado é o `aplicado_inicial_centavos` do investimento (o pop-up dos aportes de antes grava a soma, ou o "valor
@@ -127,11 +133,11 @@ export function lerCelula(modo, texto, hoje) {
 export function aplicadoSem(lo, inv, novo) {
   const ini = inv?.aplicado_inicial_centavos;
   if (ini === null || ini === undefined) return null;
-  const era = lo.fonte?.exato ? lo.fonte.valor : lo.depositado;
+  const era = lo.fonte?.exato ? (lo.fonte.principal ?? lo.fonte.valor) : lo.depositado;
   return { antes: Number(ini), depois: Math.max(0, Number(ini) - era + (novo ?? 0)) };
 }
 
-export function planoDoAporte({ lo, inv, campo, valor, fotos = [] }) {
+export function planoDoAporte({ lo, inv, campo, valor, fotos = [], hoje = null }) {
   const f = lo.fonte;
   // o vencimento (018): só a coluna dele, no aporte do app ou no de antes do app
   if (campo === 'vencimento') return { alvo: f.tipo, id: f.id, mudancas: { vencimento: valor }, antes: { vencimento: f.vencimento ?? null } };
@@ -147,8 +153,25 @@ export function planoDoAporte({ lo, inv, campo, valor, fotos = [] }) {
   }
   if (f.tipo === 'dep') {
     const depositado = f.referencia === f.data;
-    const mudancas = campo === 'data' ? (depositado ? { data: valor, referencia: valor } : { data: valor }) : { valor_centavos: valor, referencia: f.data };
-    return { alvo: 'dep', id: f.id, mudancas, antes: { data: f.data, valor_centavos: f.valor, referencia: f.referencia }, aplicado: campo === 'valor' ? aplicadoSem(lo, inv, valor) : null };
+    const comPar = f.rendimento !== null && f.rendimento !== undefined;
+    const antesDe = (m) => ({ data: f.data, valor_centavos: f.valor, referencia: f.referencia, ...('rendimento_centavos' in m || comPar ? { rendimento_centavos: f.rendimento ?? null } : {}) });
+    const plano = (mudancas, aplicado = null, vale = null) => ({ alvo: 'dep', id: f.id, mudancas, antes: antesDe(mudancas), aplicado, vale });
+    if (campo === 'data') return plano(depositado ? { data: valor, referencia: valor } : { data: valor });
+    // O VALOR BRUTO (o Vale hoje): o que ele vale hoje, como o banco mostra. Com o principal sabido (o par, ou o digitado
+    // como "o que foi depositado"), ele fica e o rendimento é a diferença; sem ele, só o valor de hoje (o principal segue
+    // estimado). O valor do investimento hoje acompanha a diferença (`vale`).
+    if (campo === 'bruto') {
+      const principal = f.exato ? (f.principal ?? f.valor) : null;
+      return plano(principal !== null ? { valor_centavos: valor, referencia: hoje, rendimento_centavos: valor - principal } : { valor_centavos: valor, referencia: hoje }, null, { delta: valor - lo.vale });
+    }
+    // O RENDIMENTO BRUTO (o Rendeu): com o valor de hoje, o par completo; o aplicado é o valor − o rendimento
+    if (campo === 'rendimento') {
+      const bruto = comPar && f.referencia === hoje ? f.valor : lo.vale;
+      return plano({ valor_centavos: bruto, referencia: hoje, rendimento_centavos: valor }, aplicadoSem(lo, inv, bruto - valor));
+    }
+    // o APLICADO: no par, o rendimento passa a ser o valor − o aplicado; sem ele, o aporte vira "o que foi depositado"
+    if (comPar) return plano({ rendimento_centavos: f.valor - valor }, aplicadoSem(lo, inv, valor));
+    return plano({ valor_centavos: valor, referencia: f.data }, aplicadoSem(lo, inv, valor));
   }
   const mudancas = campo === 'data' ? { aplicado_em: valor } : { aplicado_inicial_centavos: valor + (f.base ?? 0) };
   return {

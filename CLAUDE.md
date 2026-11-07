@@ -323,7 +323,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     (`lo.fonte` de `estimarImposto`: o movimento do app — e a foto gêmea do mesmo dia e valor —, o aporte de antes do app
     — o valor digitado é o DEPOSITADO, a referência vira a data, e o APLICADO do investimento (`aplicado_inicial_centavos`)
     acompanha a diferença, também ao excluir, com o desfazer (`aplicadoSem`, 06/11/2026 — antes o "Rendeu" ficava com o
-    aplicado de antes) — ou o "valor aplicado" do cadastro sem data):
+    aplicado de antes) — ou o "valor aplicado" do cadastro sem data). OS DOIS NÚMEROS DO BANCO (07/11/2026, a opção B do
+    mockup "Aportes com os números do banco"; migration 019, `rendimento_centavos` em `depositos_investimento`): no aporte
+    de antes do app, o VALE HOJE recebe o "Valor Bruto" e o RENDEU o "Rendimento bruto" da tela do depósito (o saque
+    parcial e o IR retido nele já estão na conta do banco; o "Valor aplicado" e os "Saques parciais" não fecham). Com os
+    dois, o aplicado é a conta (bruto − rendimento), a linha mostra "· banco dd/mm" e o aporte fica FIXO no
+    `estimarImposto` (`fixo`: não entra no ajuste; os outros levam a diferença para fechar com o título); o Valor Bruto
+    novo muda a foto de hoje do investimento pela diferença (`vale.delta`) e o aplicado acompanha (`aplicadoSem`):
     `planoDoAporte`, `planoDoNovoAporte` e o andar (`modoDaCelula`, `moverAtiva`, `proximaEditavel`, `lerCelula`) em
     `lib/carteiraEditavel.js` (testada). As gravações em FILA, com o DESFAZER de cada uma (o contrário do que gravou):
     `components/patrimonio/useEdicaoCarteira.js`. O id da linha do aporte é o da ORIGEM (sobrevive à releitura). O

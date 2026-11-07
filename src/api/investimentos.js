@@ -34,15 +34,19 @@ export async function listarInvestimentos() {
 // Substitui os depósitos de antes do cadastro de um título pela lista colada. `itens`: [{ data, valor_centavos }];
 // `referencia`: a data dos valores (o dia em que o banco os mostrou).
 export async function salvarDepositos(investimentoId, referencia, itens) {
-  // o VENCIMENTO de cada um (018) não está na tabela do pop-up: o da mesma data passa ao aporte novo
+  // o VENCIMENTO de cada um (018) não está na tabela do pop-up: o da mesma data passa ao aporte novo; o RENDIMENTO do banco
+  // (019), só se o aporte ficou igual (a mesma data, o mesmo valor e a mesma referência)
   const antes = await exigir(supabase.from('depositos_investimento').select('*').eq('investimento_id', investimentoId));
   const vencDe = Object.fromEntries(antes.filter((d) => d.vencimento).map((d) => [d.data, d.vencimento]));
+  const rendDe = (i, ref) => antes.find((d) => d.data === i.data && Number(d.valor_centavos) === Number(i.valor_centavos) && d.referencia === ref
+    && d.rendimento_centavos !== null && d.rendimento_centavos !== undefined)?.rendimento_centavos;
   await exigir(supabase.from('depositos_investimento').delete().eq('investimento_id', investimentoId));
   if (itens.length) {
     // cada item pode ter a sua referência (o digitado como "o que foi depositado" leva a própria data — `planoDosDepositos`)
     await exigir(supabase.from('depositos_investimento').insert(itens.map((i) => ({
       investimento_id: investimentoId, data: i.data, valor_centavos: i.valor_centavos, referencia: i.referencia ?? referencia,
       ...(vencDe[i.data] ? { vencimento: vencDe[i.data] } : {}),
+      ...(rendDe(i, i.referencia ?? referencia) !== undefined ? { rendimento_centavos: rendDe(i, i.referencia ?? referencia) } : {}),
     }))));
   }
 }
@@ -55,8 +59,11 @@ export function atualizarDeposito(id, mudancas) {
 export function excluirDeposito(id) {
   return exigir(supabase.from('depositos_investimento').delete().eq('id', id));
 }
-export function inserirDeposito({ investimento_id, data, valor_centavos, referencia, vencimento }) {
-  return exigir(supabase.from('depositos_investimento').insert({ investimento_id, data, valor_centavos, referencia, ...(vencimento ? { vencimento } : {}) }).select().single());
+export function inserirDeposito({ investimento_id, data, valor_centavos, referencia, vencimento, rendimento }) {
+  return exigir(supabase.from('depositos_investimento').insert({
+    investimento_id, data, valor_centavos, referencia, ...(vencimento ? { vencimento } : {}),
+    ...(rendimento !== null && rendimento !== undefined ? { rendimento_centavos: rendimento } : {}),
+  }).select().single());
 }
 
 // `prazo_meses` e `ao_vencer` (a migration 015) faltavam aqui: o "prazo por aplicação" do cadastro não gravava (06/11/2026).

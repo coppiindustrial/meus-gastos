@@ -269,7 +269,7 @@ function TabelaCarteira({
     comOtimista(k, modo === 'data' ? formatDate(r.valor) : modo === 'vencimento' ? (r.valor ? `vence ${dataCurta(r.valor)}` : 'a regra…') : modo === 'valor' ? formatBRL(r.valor) : r.valor);
     if (l.tipo === 'grupo') await edicao.renomearInstituicao(l.g.conta, r.valor);
     else if (l.tipo === 'inv') { await edicao.valeHoje(l.x, r.valor); focar(); }
-    else if (l.tipo === 'lote') await edicao.mudarAporte(l, col === 'nome' ? 'data' : col === 'resgate' ? 'vencimento' : 'valor', r.valor);
+    else if (l.tipo === 'lote') await edicao.mudarAporte(l, { nome: 'data', resgate: 'vencimento', vale: 'bruto', rendeu: 'rendimento' }[col] ?? 'valor', r.valor);
     semOtimista(k);
   };
 
@@ -671,6 +671,9 @@ function TabelaCarteira({
                         <span className="tabular-nums text-gray-700">{formatDate(lo.data)}</span>
                         {lo.dataAproximada && <span className="text-gray-400" title="Sem a data da aplicação: a idade conta da data do cadastro">≈</span>}
                         <span className="text-[11.5px] text-gray-400">{lo.dias} {lo.dias === 1 ? 'dia' : 'dias'}</span>
+                        {f?.rendimento !== null && f?.rendimento !== undefined && (
+                          <span className="text-[11px] font-medium" style={{ color: 'var(--serie-sobrou)' }} title={`O Valor Bruto e o Rendimento bruto do banco em ${formatDate(f.referencia)}: o aplicado é a diferença`}>· banco {formatDate(f.referencia).slice(0, 5)}</span>
+                        )}
                       </span>
                     </>
                   ), { style: { paddingLeft: 0 } })}
@@ -685,7 +688,7 @@ function TabelaCarteira({
                     </span>
                   ))}
                   {cel(l, 'aplicado', `${td} px-3 text-right tabular-nums ${movel ? 'hidden' : ''}`, exato
-                    ? <span className="text-gray-800">{reais(f.valor)}</span>
+                    ? <span className="text-gray-800">{reais(f.principal ?? f.valor)}</span>
                     : <span className="text-gray-500" title={lo.inteiro ? 'Estimado: o banco mostrou quanto ele valia, não quanto foi aportado' : 'Parte dele já foi resgatada'}>≈ {reais(lo.depositado)}</span>)}
                   {cel(l, 'vale', `${td} px-3 text-right tabular-nums text-gray-600`, reais(lo.vale))}
                   {cel(l, 'liquido', `${td} px-3 text-right tabular-nums text-gray-600`, reais(lo.liquido))}

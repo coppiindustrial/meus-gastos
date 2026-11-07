@@ -172,3 +172,35 @@ test('o aplicado do investimento acompanha o aporte de antes do app (a diferenç
   assert.deepEqual(aplicadoSem(dig, comAplicado, null), { antes: 1476934, depois: 1376934 });
   assert.deepEqual(aplicadoSem(dig, { ...inv, aplicado_inicial_centavos: 50000 }, null), { antes: 50000, depois: 0 });
 });
+
+test('os dois números do banco no aporte de antes do app: o Vale hoje e o Rendeu', () => {
+  const hoje = '2026-11-07';
+  const comAplicado = { ...inv, aplicado_inicial_centavos: 1147083 };
+  // o colado do banco, ainda sem o rendimento (dados FICTÍCIOS)
+  const col = { data: '2024-12-05', vale: 1426501, ganho: 320507, depositado: 1105994, fonte: { tipo: 'dep', id: 'd1', data: '2024-12-05', valor: 1426501, referencia: '2026-11-07', exato: false, principal: null, rendimento: null } };
+  const lnha = { ...linhas[2], lo: col };
+  assert.equal(modoDaCelula(lnha, 'vale'), 'valor');
+  assert.equal(modoDaCelula(lnha, 'rendeu'), 'valor');
+  assert.equal(modoDaCelula(linhas[2], 'vale'), null); // o feito pelo app anda pelo CDI
+  assert.equal(textoDaCelula(lnha, 'rendeu'), '3.205,07');
+  assert.equal(textoDaCelula(lnha, 'vale'), '14.265,01');
+  // o Rendimento bruto: o par completo com o valor de hoje; o aplicado vira 14.265,01 − 4.348,68, pela diferença
+  const r = planoDoAporte({ lo: col, inv: comAplicado, campo: 'rendimento', valor: 434868, hoje });
+  assert.deepEqual(r.mudancas, { valor_centavos: 1426501, referencia: hoje, rendimento_centavos: 434868 });
+  assert.deepEqual(r.aplicado, { antes: 1147083, depois: 1147083 - 1105994 + 991633 });
+  assert.equal(r.vale, null);
+  // com o par: o Valor Bruto novo mantém o aplicado e muda o rendimento; o valor de hoje acompanha a diferença
+  const par = { ...col, fonte: { ...col.fonte, exato: true, principal: 991633, rendimento: 434868 } };
+  const b = planoDoAporte({ lo: par, inv: comAplicado, campo: 'bruto', valor: 1427000, hoje });
+  assert.deepEqual(b.mudancas, { valor_centavos: 1427000, referencia: hoje, rendimento_centavos: 1427000 - 991633 });
+  assert.deepEqual(b.vale, { delta: 1427000 - 1426501 });
+  assert.equal(b.aplicado, null);
+  assert.deepEqual(b.antes, { data: '2024-12-05', valor_centavos: 1426501, referencia: '2026-11-07', rendimento_centavos: 434868 });
+  // o Aplicado no par: o rendimento passa a ser o valor − o aplicado
+  assert.deepEqual(planoDoAporte({ lo: par, inv: comAplicado, campo: 'valor', valor: 990000, hoje }).mudancas, { rendimento_centavos: 1426501 - 990000 });
+  // sem o principal (o colado), o Valor Bruto é só o valor de hoje
+  assert.deepEqual(planoDoAporte({ lo: col, inv: comAplicado, campo: 'bruto', valor: 1427000, hoje }).mudancas, { valor_centavos: 1427000, referencia: hoje });
+  // o digitado ("o que foi depositado"): o principal fica, o rendimento é a diferença
+  const dig = { ...col, fonte: { ...col.fonte, referencia: '2024-12-05', exato: true, principal: 1000000, valor: 1000000 } };
+  assert.deepEqual(planoDoAporte({ lo: dig, inv: comAplicado, campo: 'bruto', valor: 1300000, hoje }).mudancas, { valor_centavos: 1300000, referencia: hoje, rendimento_centavos: 300000 });
+});

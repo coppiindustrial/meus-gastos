@@ -120,3 +120,19 @@ test('sem o "valor aplicado", as aplicações até a primeira foto são o aplica
   assert.deepEqual(r.lotes.map((l) => [l.data, l.origem]), [['2026-10-11', 'aporte'], ['2026-06-01', 'aporte']]);
   assert.ok(Math.abs(r.lotes.reduce((s, l) => s + l.depositado, 0) - 2680000) <= 2); // o depositado de cada um fecha com o aplicado
 });
+
+test('o aporte com os dois números do banco fica exato; os outros levam a diferença', () => {
+  // dados FICTÍCIOS: o de 2024 com o Valor Bruto e o Rendimento bruto do banco, o de 2025 só com o valor
+  const depositos = [
+    { id: 'a', data: '2024-12-05', valor_centavos: 1426501, referencia: hoje, rendimento_centavos: 434868 },
+    { id: 'b', data: '2025-05-07', valor_centavos: 50433, referencia: hoje },
+  ];
+  const r = estimarImposto({ inv: { ...inv, aplicado_inicial_centavos: null }, fotos: [{ data: hoje, valor_centavos: 1476934 }], depositos, cdi, hoje, vale: 1476934, aplicado: 1035000 });
+  const a = r.lotes.find((l) => l.data === '2024-12-05');
+  assert.deepEqual([a.vale, a.depositado, a.ganho, a.aliquota], [1426501, 991633, 434868, 0.175]); // como o banco disse
+  assert.equal(a.fonte.principal, 991633);
+  assert.equal(a.ir, Math.round(434868 * 0.175));
+  const b = r.lotes.find((l) => l.data === '2025-05-07');
+  assert.equal(b.vale, 1476934 - 1426501); // o resto do valor
+  assert.equal(b.ganho, 1476934 - 1035000 - 434868); // o resto do rendimento
+});

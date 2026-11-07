@@ -21,6 +21,7 @@ const amigavel = (err) => {
   const m = err?.message ?? '';
   if (/duplicate|unique/i.test(m)) return 'Já existe um valor nessa data para este investimento.';
   if (/vencimento/i.test(m) && /column|schema cache|does not exist/i.test(m)) return 'Falta aplicar a migration 018 (o vencimento de cada aporte): cole o arquivo no SQL Editor do Supabase.';
+  if (/rendimento_centavos/i.test(m)) return 'Falta aplicar a migration 019 (o rendimento do banco em cada aporte): cole o arquivo no SQL Editor do Supabase.';
   return m || 'Não gravou.';
 };
 
@@ -132,8 +133,12 @@ export default function useEdicaoCarteira(d) {
 
   // ------------------------------------------------------------ os aportes
   const mudarAporte = useCallback((l, campo, valor) => {
-    const fotos = dRef.current.valores.filter((v) => v.investimento_id === l.x.inv.id);
-    const plano = planoDoAporte({ lo: l.lo, inv: l.x.inv, campo, valor, fotos });
+    const { valores, hojeISO: hoje } = dRef.current;
+    const fotos = valores.filter((v) => v.investimento_id === l.x.inv.id);
+    const plano = planoDoAporte({ lo: l.lo, inv: l.x.inv, campo, valor, fotos, hoje });
+    // o Valor Bruto digitado num aporte muda o valor do investimento hoje pela diferença (a foto de hoje)
+    const naData = fotos.find((v) => !v.estimado && v.data === hoje) ?? null;
+    const valeNovo = plano.vale && Math.abs(plano.vale.delta) >= 1 ? Math.max(0, Math.round(l.x.vale + plano.vale.delta)) : null;
     const igual = Object.entries(plano.mudancas).every(([k, v]) => plano.antes[k] === v);
     if (igual) return Promise.resolve({ ok: true });
     return rodar(`o aporte de ${formatDate(l.lo.fonte.data)}`, async () => {
@@ -147,11 +152,16 @@ export default function useEdicaoCarteira(d) {
       }
       if (plano.alvo === 'dep') {
         await atualizarDeposito(plano.id, plano.mudancas);
-        // o aplicado do investimento acompanha a diferença (`aplicadoSem`)
+        // o aplicado do investimento acompanha a diferença (`aplicadoSem`); o valor de hoje, a do Valor Bruto
         if (plano.aplicado) await atualizarInvestimento(l.x.inv.id, { aplicado_inicial_centavos: plano.aplicado.depois });
+        if (valeNovo !== null) await registrarValores(hoje, [{ investimento_id: l.x.inv.id, valor_centavos: valeNovo }]);
         return async () => {
           await atualizarDeposito(plano.id, plano.antes);
           if (plano.aplicado) await atualizarInvestimento(l.x.inv.id, { aplicado_inicial_centavos: plano.aplicado.antes });
+          if (valeNovo !== null) {
+            if (naData) await registrarValores(hoje, [{ investimento_id: l.x.inv.id, valor_centavos: Number(naData.valor_centavos) }]);
+            else await excluirValorNaData(l.x.inv.id, hoje);
+          }
         };
       }
       await atualizarInvestimento(plano.id, plano.mudancas);
@@ -202,7 +212,7 @@ export default function useEdicaoCarteira(d) {
     if (!f || f.tipo === 'inicial') return { ok: false };
     const ok = await confirmar({
       titulo: 'Excluir o aporte?', perigo: true, confirmar: 'Excluir',
-      texto: `O aporte de ${formatBRL(f.valor)} em ${formatDate(f.data)} sai de ${l.x.inv.nome}.\n\nCtrl+Z desfaz.`,
+      texto: `O aporte de ${formatBRL(f.principal ?? f.valor)} em ${formatDate(f.data)} sai de ${l.x.inv.nome}.\n\nCtrl+Z desfaz.`,
     });
     if (!ok) return { ok: false };
     const { movimentos, valores } = dRef.current;
@@ -213,7 +223,7 @@ export default function useEdicaoCarteira(d) {
         await excluirDeposito(f.id);
         if (aplicado) await atualizarInvestimento(l.x.inv.id, { aplicado_inicial_centavos: aplicado.depois });
         return async () => {
-          await inserirDeposito({ investimento_id: l.x.inv.id, data: f.data, valor_centavos: f.valor, referencia: f.referencia, vencimento: f.vencimento });
+          await inserirDeposito({ investimento_id: l.x.inv.id, data: f.data, valor_centavos: f.valor, referencia: f.referencia, vencimento: f.vencimento, rendimento: f.rendimento });
           if (aplicado) await atualizarInvestimento(l.x.inv.id, { aplicado_inicial_centavos: aplicado.antes });
         };
       }
