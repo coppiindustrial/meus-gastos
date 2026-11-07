@@ -186,14 +186,16 @@ export function planoDoAporte({ lo, inv, campo, valor, fotos = [], hoje = null }
 }
 
 // O APORTE NOVO (a linha "+ aporte"): o movimento; sem valor ainda, ele é também o primeiro valor (como o "Cadastrar e
-// aplicar"); com valores registrados DEPOIS da data, eles podem passar a incluí-lo (`depois`: a tela pergunta). Antes do
-// último aporte de antes do app (os digitados ou colados), não entra: ficaria fora da conta dos aportes (`erro`).
+// aplicar"); com valores registrados NO DIA ou DEPOIS da data, eles podem passar a incluí-lo (`depois`: a tela pergunta —
+// o valor do mesmo dia conta como já tendo os movimentos dele, então sem a pergunta o aporte de hoje sumia do Vale hoje).
+// Até o ÚLTIMO APORTE de antes do app (os digitados ou colados, pela DATA deles — 07/11/2026: pela referência, digitar os
+// números do banco de hoje recusava o aporte de hoje), não entra: ficaria fora da conta dos aportes (`erro`).
 export function planoDoNovoAporte({ inv, data, valores = [], depositos = [] }) {
   const deps = depositos.filter((d) => d.investimento_id === inv.id);
-  const corte = deps.reduce((m, d) => (d.referencia > m ? d.referencia : m), '');
+  const corte = deps.reduce((m, d) => (d.data > m ? d.data : m), '');
   if (deps.length && data <= corte) {
     return { erro: `Até ${br(corte)} os aportes de ${inv.nome} são os de antes do app: um de ${br(data)} entra pela ficha, em "Informar os aportes".` };
   }
   const fotos = valores.filter((v) => v.investimento_id === inv.id && !v.estimado);
-  return { foto: fotos.length === 0, depois: fotos.filter((f) => f.data > data).sort((a, b) => (a.data < b.data ? -1 : 1)) };
+  return { foto: fotos.length === 0, depois: fotos.filter((f) => f.data >= data).sort((a, b) => (a.data < b.data ? -1 : 1)) };
 }

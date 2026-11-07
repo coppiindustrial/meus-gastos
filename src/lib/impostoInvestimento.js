@@ -84,6 +84,7 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
   // os depósitos que formam o título
   const lotes = [];
   let corte;
+  let corteAporte;
   if (depositos.length) {
     // OS DOIS NÚMEROS DO BANCO (07/11/2026, a migration 019): com o `rendimento_centavos` (o "Rendimento bruto" da tela do
     // depósito, no dia da referência), o que ainda está aplicado é o valor − o rendimento, EXATO — o saque parcial e o IR
@@ -96,6 +97,10 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
         fonte: { tipo: 'dep', id: d.id, data: d.data, valor, referencia: d.referencia, exato: principal !== null, principal, rendimento: rend, vencimento: d.vencimento || null } });
     });
     corte = depositos.reduce((m, d) => (d.referencia > m ? d.referencia : m), depositos[0].referencia);
+    // o APORTE do app conta depois do ÚLTIMO DEPÓSITO da lista (07/11/2026: digitados os números do banco de hoje, a
+    // referência virava hoje e o aporte de hoje era recusado — na lista, cada aporte é um depósito com a data dele); o
+    // RESGATE, depois da referência (os valores do banco já o descontam)
+    corteAporte = depositos.reduce((m, d) => (d.data > m ? d.data : m), depositos[0].data);
   } else if (abre) {
     // AS APLICAÇÕES PELO APP ATÉ A PRIMEIRA FOTO são depósitos EXATOS (06/11/2026: o "Cadastrar e aplicar" grava a foto e a
     // aplicação no MESMO dia, e ela ficava de fora — o título feito pelo app caía em "faltam as datas"); o bloco do cadastro
@@ -111,8 +116,9 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
         fonte: { tipo: 'inicial', data: inv.aplicado_em || abre.data, valor: resto, base: somaIni, exato: inv.aplicado_inicial_centavos !== null && inv.aplicado_inicial_centavos !== undefined } });
     }
     corte = abre.data;
+    corteAporte = abre.data;
   }
-  const depois = movimentos.filter((m) => m.investimento_id === inv.id && corte && m.data > corte).sort((a, b) => (a.data < b.data ? -1 : 1));
+  const depois = movimentos.filter((m) => m.investimento_id === inv.id && corte && m.data > (m.tipo === 'resgate' ? corte : corteAporte)).sort((a, b) => (a.data < b.data ? -1 : 1));
   // o principal e o valor de cada um numa data
   // O DIA DO BANCO (07/11/2026, conferido no centavo — lib/valorEstimado.js): o valor numa data tem o CDI dos dias úteis
   // antes dela. O aporte rende desde `inicioDoRendimento` (o próprio dia, ou o dia útil antes dele no sábado, domingo ou

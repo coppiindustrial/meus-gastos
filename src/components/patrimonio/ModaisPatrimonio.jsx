@@ -105,8 +105,11 @@ export function ModalMovimento({ inicial, grupos, contas, valores = [], taxas = 
   const depois = x && v ? x.aplicado + (aplicando ? v : -v) : null;
   const prazo = (novo ? null : x?.inv.liquidez === 'por_aplicacao' ? Number(x.inv.prazo_meses) : null);
   // OS VALORES DE DEPOIS DA DATA (06/11/2026): com a data antes de valores já registrados, eles não têm este movimento —
-  // ao salvar, passam a ter (a aplicação crescida pela taxa até cada um). "Eles já incluem" deixa como estão.
-  const depoisDaData = !novo && x ? valores.filter((f) => f.investimento_id === x.inv.id && !f.estimado && f.data > data) : [];
+  // ao salvar, passam a ter (a aplicação crescida pela taxa até cada um). "Eles já incluem" deixa como estão. O valor do
+  // MESMO DIA também (07/11/2026: ele conta como já tendo os movimentos do dia — sem a pergunta, a aplicação de hoje sumia
+  // do valor), menos no "Resgatar tudo", que grava o 0 nesse dia.
+  const depoisDaData = !novo && x ? valores.filter((f) => f.investimento_id === x.inv.id && !f.estimado && (f.data > data || (f.data === data && (aplicando || !tudo)))) : [];
+  const noDia = depoisDaData[0]?.data === data;
 
   const enviar = async (e) => {
     e.preventDefault();
@@ -181,7 +184,7 @@ export function ModalMovimento({ inicial, grupos, contas, valores = [], taxas = 
         )}
         {depoisDaData.length > 0 && v > 0 && (
           <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900">
-            <p>{depoisDaData.length === 1 ? `O valor de ${formatDate(depoisDaData[0].data)} (${formatBRL(depoisDaData[0].valor_centavos)}) é` : `Os ${depoisDaData.length} valores de depois de ${formatDate(data)} são`} de depois desta data:
+            <p>{depoisDaData.length === 1 ? `O valor de ${formatDate(depoisDaData[0].data)} (${formatBRL(depoisDaData[0].valor_centavos)}) é ${noDia ? 'do mesmo dia' : 'de depois desta data'}` : `Os ${depoisDaData.length} valores ${noDia ? 'desde' : 'de depois de'} ${formatDate(data)} são ${noDia ? 'do mesmo dia ou de depois' : 'de depois desta data'}`}:
               {jaIncluem ? ' ficam como estão.' : ` passa${depoisDaData.length === 1 ? '' : 'm'} a incluir ${aplicando ? 'esta aplicação' : 'este resgate'}${andaSozinho(x.inv) && taxas ? ` (com o rendimento ${rotuloPeloIndice(x.inv)} até lá)` : ''}.`}</p>
             <label className="flex cursor-pointer items-center gap-2"><input type="checkbox" checked={jaIncluem} onChange={(e) => setJaIncluem(e.target.checked)} />
               {depoisDaData.length === 1 ? 'Ele já inclui' : 'Eles já incluem'} {aplicando ? 'esta aplicação' : 'este resgate'}</label>

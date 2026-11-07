@@ -332,9 +332,12 @@ export function aplicacoesComPrazo({ inv, fotos = [], movimentos = [], depositos
   const doInv = movimentos.filter((m) => m.investimento_id === inv.id).sort((a, b) => (a.data < b.data ? -1 : 1));
   const lotes = [];
   let corte;
+  let corteAporte;
   if (depositos.length) {
     [...depositos].sort((a, b) => (a.data < b.data ? -1 : 1)).forEach((d) => lotes.push({ data: d.data, valor: Number(d.valor_centavos), inicial: false, propria: d.vencimento || null, ref: { tipo: 'dep', id: d.id } }));
     corte = depositos.reduce((m, d) => (d.referencia > m ? d.referencia : m), depositos[0].referencia);
+    // o aporte do app conta depois do ÚLTIMO DEPÓSITO da lista; o resgate, depois da referência (a régua do estimarImposto)
+    corteAporte = depositos.reduce((m, d) => (d.data > m ? d.data : m), depositos[0].data);
   } else if (abre) {
     const iniciais = doInv.filter((m) => m.tipo !== 'resgate' && m.data <= abre.data);
     const somaIni = iniciais.reduce((t2, m) => t2 + Number(m.valor_centavos), 0);
@@ -343,11 +346,12 @@ export function aplicacoesComPrazo({ inv, fotos = [], movimentos = [], depositos
     if (resto > 100) lotes.push({ data: inv.aplicado_em || null, valor: resto, inicial: true, ref: { tipo: 'inicial' } });
     iniciais.forEach((m) => lotes.push({ data: m.data, valor: Number(m.valor_centavos), inicial: false, propria: m.vencimento || null, ref: { tipo: 'mov', id: m.id } }));
     corte = abre.data;
+    corteAporte = abre.data;
   } else {
     const inicial = Number(inv.aplicado_inicial_centavos ?? 0);
     if (inicial > 0) lotes.push({ data: inv.aplicado_em || null, valor: inicial, inicial: true, ref: { tipo: 'inicial' } });
   }
-  doInv.filter((m) => !corte || m.data > corte).forEach((m) => {
+  doInv.filter((m) => !corte || m.data > (m.tipo === 'resgate' ? corte : corteAporte)).forEach((m) => {
     const v = Number(m.valor_centavos);
     if (m.tipo !== 'resgate') { lotes.push({ data: m.data, valor: v, inicial: false, propria: m.vencimento || null, ref: { tipo: 'mov', id: m.id } }); return; }
     let falta = v;

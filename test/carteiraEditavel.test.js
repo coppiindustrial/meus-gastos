@@ -131,9 +131,13 @@ test('planoDoNovoAporte: a primeira foto, os valores de depois e o de antes dos 
   const p = planoDoNovoAporte({ inv, data: '2026-09-15', valores });
   assert.equal(p.foto, false);
   assert.deepEqual(p.depois.map((f) => f.id), ['v1', 'v2']); // a estimada e a de outro título não contam
-  const deps = [{ investimento_id: 'i1', data: '2026-08-01', referencia: '2026-09-05' }];
-  assert.match(planoDoNovoAporte({ inv, data: '2026-09-05', depositos: deps }).erro, /antes do app/);
-  assert.equal(planoDoNovoAporte({ inv, data: '2026-09-06', depositos: deps }).erro, undefined);
+  // o valor do MESMO DIA também entra na pergunta (ele conta como já tendo os movimentos do dia)
+  assert.deepEqual(planoDoNovoAporte({ inv, data: '2026-10-31', valores }).depois.map((f) => f.id), ['v2']);
+  // o corte é a DATA do último aporte de antes do app, não a referência (os números do banco digitados hoje)
+  const deps = [{ investimento_id: 'i1', data: '2026-08-01', referencia: '2026-11-07' }];
+  assert.match(planoDoNovoAporte({ inv, data: '2026-08-01', depositos: deps }).erro, /antes do app/);
+  assert.equal(planoDoNovoAporte({ inv, data: '2026-08-02', depositos: deps }).erro, undefined);
+  assert.equal(planoDoNovoAporte({ inv, data: '2026-11-07', depositos: deps }).erro, undefined); // o aporte de hoje
 });
 
 test('o vencimento de cada aporte: digitado, vazio volta à regra, sem o ano é o próximo', () => {

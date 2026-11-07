@@ -140,3 +140,17 @@ test('o aporte com os dois números do banco fica exato; os outros levam a difer
   assert.equal(r2.lotes.find((l) => l.data === '2025-05-07').vale, 50433);
   assert.equal(r2.lotes.find((l) => l.data === '2024-12-05').vale, 1426501);
 });
+
+test('com os números do banco de hoje, o aporte de hoje pelo app entra; o resgate de antes da referência, não', () => {
+  // dados FICTÍCIOS: a lista com a referência de hoje (os números do banco digitados hoje) e um aporte de hoje pelo app
+  const depositos = [{ id: 'a', data: '2024-12-05', valor_centavos: 1426501, referencia: hoje, rendimento_centavos: 434868 }];
+  const movimentos = [
+    { id: 'm1', investimento_id: inv.id, data: hoje, tipo: 'aporte', valor_centavos: 2700000 },
+    { id: 'm2', investimento_id: inv.id, data: '2026-10-01', tipo: 'resgate', valor_centavos: 100000 },
+  ];
+  const vale = 1426501 + 2700000;
+  const r = estimarImposto({ inv: { ...inv, aplicado_inicial_centavos: null }, fotos: [{ data: hoje, valor_centavos: vale }], movimentos, depositos, cdi, hoje, vale, aplicado: 991633 + 2700000 });
+  assert.deepEqual(r.lotes.map((l) => [l.data, l.origem]), [[hoje, 'aporte'], ['2024-12-05', 'colado']]);
+  assert.deepEqual([r.lotes[0].depositado, r.lotes[0].vale], [2700000, 2700000]);
+  assert.equal(r.lotes[1].vale, 1426501); // o resgate de antes da referência já está nos números do banco
+});

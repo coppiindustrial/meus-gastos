@@ -318,7 +318,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     de cada investimento (um RASCUNHO até ter data — hoje, se não mudar — e valor; o clique já vai ao valor; o rascunho
     VAZIO não se guarda — sair da linha a devolve ao "Novo aporte" — e Esc, Delete e o ✕ à vista no fim dela desistem; sem valor
     ainda, o aporte é também o primeiro valor; com valores registrados depois da data, pergunta se eles já o têm e
-    "Somar" os cresce pela taxa — `valoresComOMovimento`), "+ investimento" no fim de cada instituição (o pop-up inteiro;
+    "Somar" os cresce pela taxa — `valoresComOMovimento`; o valor do MESMO DIA também entra na pergunta, também no Aplicar,
+    menos no "Resgatar tudo": ele conta como já tendo os movimentos do dia, e sem a pergunta o aporte de hoje sumia do Vale
+    hoje. O aporte do app conta depois do ÚLTIMO APORTE da lista de antes do app, pela DATA dele; o resgate, depois da
+    referência — 07/11/2026: pela referência, digitar os números do banco de hoje recusava o aporte de hoje), "+ investimento" no fim de cada instituição (o pop-up inteiro;
     criado, ele abre na linha "+ aporte") e "+ instituição" no fim. O que cada edição de aporte grava é pela ORIGEM dele
     (`lo.fonte` de `estimarImposto`: o movimento do app — e a foto gêmea do mesmo dia e valor —, o aporte de antes do app
     — o valor digitado é o DEPOSITADO, a referência vira a data, e o APLICADO do investimento (`aplicado_inicial_centavos`)

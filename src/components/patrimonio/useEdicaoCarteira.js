@@ -169,8 +169,9 @@ export default function useEdicaoCarteira(d) {
     });
   }, [rodar]);
 
-  // O APORTE NOVO (a linha "+ aporte"). Com valores registrados depois da data, pergunta se eles já o incluem (a foto do
-  // banco de depois inclui; a que nasceu junto com outro aporte, não) — "Somar" os cresce pela taxa até cada um.
+  // O APORTE NOVO (a linha "+ aporte"). Com valores registrados no dia ou depois da data, pergunta se eles já o incluem (a
+  // foto do banco de depois inclui; a que nasceu junto com outro aporte, ou a digitada antes dele, não) — "Somar" os cresce
+  // pela taxa até cada um.
   const novoAporte = useCallback(async (x, data, valor, vencimento = null) => {
     const { valores, depositos, taxas } = dRef.current;
     const plano = planoDoNovoAporte({ inv: x.inv, data, valores, depositos });
@@ -179,9 +180,11 @@ export default function useEdicaoCarteira(d) {
     if (plano.depois.length) {
       if (andaSozinho(x.inv) && !taxas) { toast.error('Esperando o CDI do Banco Central para somar o rendimento: tente de novo em instantes.'); return { ok: false }; }
       const n = plano.depois.length;
+      const d0 = plano.depois[0];
+      const noDia = d0.data === data;
       somar = await confirmar({
-        titulo: n === 1 ? 'O valor de depois já tem este aporte?' : 'Os valores de depois já têm este aporte?',
-        texto: `${n === 1 ? `O valor de ${formatDate(plano.depois[0].data)} (${formatBRL(plano.depois[0].valor_centavos)}) é` : `Os ${n} valores registrados depois de ${formatDate(data)} são`} de depois deste aporte.\n\n"Somar" ${n === 1 ? 'o faz incluir' : 'os faz incluir'} os ${formatBRL(valor)}${andaSozinho(x.inv) ? `, com o rendimento ${rotuloPeloIndice(x.inv)} até lá` : ''}. Se ${n === 1 ? 'ele veio' : 'eles vieram'} do banco depois do aporte, ${n === 1 ? 'já o tem' : 'já o têm'}.`,
+        titulo: n === 1 ? `O valor ${noDia ? 'do mesmo dia' : 'de depois'} já tem este aporte?` : 'Os valores de depois já têm este aporte?',
+        texto: `${n === 1 ? `O valor de ${formatDate(d0.data)} (${formatBRL(d0.valor_centavos)}) é ${noDia ? 'do mesmo dia' : 'de depois'}` : `Os ${n} valores registrados ${noDia ? 'desde' : 'depois de'} ${formatDate(data)} são ${noDia ? 'do mesmo dia ou de depois' : 'de depois'}`} deste aporte.\n\n"Somar" ${n === 1 ? 'o faz incluir' : 'os faz incluir'} os ${formatBRL(valor)}${andaSozinho(x.inv) ? `, com o rendimento ${rotuloPeloIndice(x.inv)} até lá` : ''}. Se ${n === 1 ? 'ele veio' : 'eles vieram'} do banco depois do aporte, ${n === 1 ? 'já o tem' : 'já o têm'}.`,
         confirmar: 'Somar aos valores', cancelar: n === 1 ? 'Já tem' : 'Já têm',
       });
     }
