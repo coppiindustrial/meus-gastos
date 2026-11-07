@@ -6,7 +6,7 @@ import {
   atualizarDeposito, atualizarInvestimento, atualizarValor, criarInvestimento, excluirDeposito, excluirInvestimento, excluirValor,
   excluirValorNaData, inserirDeposito, lancarMovimento, registrarValores,
 } from '../../api/investimentos.js';
-import { planoDoAporte, planoDoNovoAporte } from '../../lib/carteiraEditavel.js';
+import { aplicadoSem, planoDoAporte, planoDoNovoAporte } from '../../lib/carteiraEditavel.js';
 import { nomeTipoInvestimento, rendimentoForaDoNormal } from '../../lib/investimentos.js';
 import { andaSozinho, rotuloPeloIndice, valoresComOMovimento } from '../../lib/valorEstimado.js';
 import { formatBRL } from '../../lib/dinheiro.js';
@@ -147,7 +147,12 @@ export default function useEdicaoCarteira(d) {
       }
       if (plano.alvo === 'dep') {
         await atualizarDeposito(plano.id, plano.mudancas);
-        return () => atualizarDeposito(plano.id, plano.antes);
+        // o aplicado do investimento acompanha a diferença (`aplicadoSem`)
+        if (plano.aplicado) await atualizarInvestimento(l.x.inv.id, { aplicado_inicial_centavos: plano.aplicado.depois });
+        return async () => {
+          await atualizarDeposito(plano.id, plano.antes);
+          if (plano.aplicado) await atualizarInvestimento(l.x.inv.id, { aplicado_inicial_centavos: plano.aplicado.antes });
+        };
       }
       await atualizarInvestimento(plano.id, plano.mudancas);
       return () => atualizarInvestimento(plano.id, plano.antes);
@@ -203,8 +208,14 @@ export default function useEdicaoCarteira(d) {
     const { movimentos, valores } = dRef.current;
     return rodar(`a exclusão do aporte de ${formatDate(f.data)}`, async () => {
       if (f.tipo === 'dep') {
+        // o aporte de antes do app que sai leva o valor dele do aplicado do investimento (`aplicadoSem` sem o novo)
+        const aplicado = aplicadoSem(l.lo, l.x.inv, null);
         await excluirDeposito(f.id);
-        return () => inserirDeposito({ investimento_id: l.x.inv.id, data: f.data, valor_centavos: f.valor, referencia: f.referencia, vencimento: f.vencimento });
+        if (aplicado) await atualizarInvestimento(l.x.inv.id, { aplicado_inicial_centavos: aplicado.depois });
+        return async () => {
+          await inserirDeposito({ investimento_id: l.x.inv.id, data: f.data, valor_centavos: f.valor, referencia: f.referencia, vencimento: f.vencimento });
+          if (aplicado) await atualizarInvestimento(l.x.inv.id, { aplicado_inicial_centavos: aplicado.antes });
+        };
       }
       const mov = movimentos.find((m) => m.id === f.id);
       const fotos = valores.filter((v) => v.investimento_id === l.x.inv.id);

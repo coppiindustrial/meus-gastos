@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  lerCelula, modoDaCelula, moverAtiva, planoDoAporte, planoDoNovoAporte, proximaEditavel, textoDaCelula,
+  aplicadoSem, lerCelula, modoDaCelula, moverAtiva, planoDoAporte, planoDoNovoAporte, proximaEditavel, textoDaCelula,
 } from '../src/lib/carteiraEditavel.js';
 
 // dados FICTÍCIOS
@@ -155,4 +155,20 @@ test('o vencimento de cada aporte: digitado, vazio volta à regra, sem o ano é 
   const dep = { ...loteDep, fonte: { ...loteDep.fonte, vencimento: '2027-01-01' } };
   assert.deepEqual(planoDoAporte({ lo: dep, inv, campo: 'vencimento', valor: null }),
     { alvo: 'dep', id: 'd1', mudancas: { vencimento: null }, antes: { vencimento: '2027-01-01' } });
+});
+
+test('o aplicado do investimento acompanha o aporte de antes do app (a diferença; o que sai leva o dele)', () => {
+  const comAplicado = { ...inv, aplicado_inicial_centavos: 1476934 };
+  // o digitado (o depositado exato): trocar 1.000,00 por 990,00 tira 10,00 do aplicado
+  const dig = { data: '2024-12-05', depositado: 100012, fonte: { tipo: 'dep', id: 'd2', data: '2024-12-05', valor: 100000, referencia: '2024-12-05', exato: true } };
+  const p = planoDoAporte({ lo: dig, inv: comAplicado, campo: 'valor', valor: 99000 });
+  assert.deepEqual(p.aplicado, { antes: 1476934, depois: 1475934 });
+  // o colado (o que vale hoje): pela diferença ao depositado estimado, que é o que ele soma no aplicado
+  assert.deepEqual(planoDoAporte({ lo: loteDep, inv: comAplicado, campo: 'valor', valor: 50000 }).aplicado, { antes: 1476934, depois: 1476634 });
+  // a data não mexe no aplicado; sem o aplicado gravado, nada a acompanhar
+  assert.equal(planoDoAporte({ lo: dig, inv: comAplicado, campo: 'data', valor: '2024-12-04' }).aplicado, null);
+  assert.equal(planoDoAporte({ lo: dig, inv, campo: 'valor', valor: 99000 }).aplicado, null);
+  // excluir: o aplicado sem ele (nunca negativo)
+  assert.deepEqual(aplicadoSem(dig, comAplicado, null), { antes: 1476934, depois: 1376934 });
+  assert.deepEqual(aplicadoSem(dig, { ...inv, aplicado_inicial_centavos: 50000 }, null), { antes: 50000, depois: 0 });
 });

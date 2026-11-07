@@ -321,7 +321,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     "Somar" os cresce pela taxa — `valoresComOMovimento`), "+ investimento" no fim de cada instituição (o pop-up inteiro;
     criado, ele abre na linha "+ aporte") e "+ instituição" no fim. O que cada edição de aporte grava é pela ORIGEM dele
     (`lo.fonte` de `estimarImposto`: o movimento do app — e a foto gêmea do mesmo dia e valor —, o aporte de antes do app
-    — o valor digitado é o DEPOSITADO, a referência vira a data — ou o "valor aplicado" do cadastro sem data):
+    — o valor digitado é o DEPOSITADO, a referência vira a data, e o APLICADO do investimento (`aplicado_inicial_centavos`)
+    acompanha a diferença, também ao excluir, com o desfazer (`aplicadoSem`, 06/11/2026 — antes o "Rendeu" ficava com o
+    aplicado de antes) — ou o "valor aplicado" do cadastro sem data):
     `planoDoAporte`, `planoDoNovoAporte` e o andar (`modoDaCelula`, `moverAtiva`, `proximaEditavel`, `lerCelula`) em
     `lib/carteiraEditavel.js` (testada). As gravações em FILA, com o DESFAZER de cada uma (o contrário do que gravou):
     `components/patrimonio/useEdicaoCarteira.js`. O id da linha do aporte é o da ORIGEM (sobrevive à releitura). O

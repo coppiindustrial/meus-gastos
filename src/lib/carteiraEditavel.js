@@ -116,7 +116,21 @@ export function lerCelula(modo, texto, hoje) {
 //   · 'dep' (de antes do app): a data — e a referência, quando o valor é o depositado —; o valor digitado é o
 //     DEPOSITADO, então o aporte colado como "o que vale hoje" passa a ser "o que foi depositado" (a referência = a data);
 //   · 'inicial' (o que o cadastro tem aplicado sem data): a data da aplicação, ou o valor aplicado (mais o que já tem data).
-// Devolve { alvo: 'mov' | 'dep' | 'inv', id, mudancas, antes, gemea? } — `antes` desfaz.
+// Devolve { alvo: 'mov' | 'dep' | 'inv', id, mudancas, antes, gemea?, aplicado? } — `antes` desfaz.
+//
+// O APLICADO DO INVESTIMENTO ACOMPANHA o aporte de antes do app (06/11/2026, achado com o Nu Limite Garantido): com eles, o
+// aplicado é o `aplicado_inicial_centavos` do investimento (o pop-up dos aportes de antes grava a soma, ou o "valor
+// aplicado" do banco), e mudar o valor de um pela tabela não mexia nele — o "Rendeu" ficava com o aplicado de antes.
+// `aplicadoSem(lo, inv, novo)`: { antes, depois } do aplicado com o aporte trocado (`novo`; null = o aporte sai), pela
+// diferença — o do digitado pelo valor exato, o do colado pelo depositado estimado (que é o que ele soma no aplicado).
+// Sem o aplicado gravado (null), nada a acompanhar.
+export function aplicadoSem(lo, inv, novo) {
+  const ini = inv?.aplicado_inicial_centavos;
+  if (ini === null || ini === undefined) return null;
+  const era = lo.fonte?.exato ? lo.fonte.valor : lo.depositado;
+  return { antes: Number(ini), depois: Math.max(0, Number(ini) - era + (novo ?? 0)) };
+}
+
 export function planoDoAporte({ lo, inv, campo, valor, fotos = [] }) {
   const f = lo.fonte;
   // o vencimento (018): só a coluna dele, no aporte do app ou no de antes do app
@@ -134,7 +148,7 @@ export function planoDoAporte({ lo, inv, campo, valor, fotos = [] }) {
   if (f.tipo === 'dep') {
     const depositado = f.referencia === f.data;
     const mudancas = campo === 'data' ? (depositado ? { data: valor, referencia: valor } : { data: valor }) : { valor_centavos: valor, referencia: f.data };
-    return { alvo: 'dep', id: f.id, mudancas, antes: { data: f.data, valor_centavos: f.valor, referencia: f.referencia } };
+    return { alvo: 'dep', id: f.id, mudancas, antes: { data: f.data, valor_centavos: f.valor, referencia: f.referencia }, aplicado: campo === 'valor' ? aplicadoSem(lo, inv, valor) : null };
   }
   const mudancas = campo === 'data' ? { aplicado_em: valor } : { aplicado_inicial_centavos: valor + (f.base ?? 0) };
   return {
