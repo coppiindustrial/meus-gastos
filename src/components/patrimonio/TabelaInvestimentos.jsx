@@ -495,9 +495,9 @@ function TabelaCarteira({
           { rotulo: `Foto real (o banco) em ${formatDate(e.base.data)}`, valor: formatBRL(e.base.valor) },
           ...(e.liquido ? [{ rotulo: 'Aportes − resgates depois', valor: `${e.liquido > 0 ? '+' : '−'}${formatBRL(Math.abs(e.liquido))}` }] : []),
           { rotulo: `${e.dias} ${e.dias === 1 ? 'dia útil' : 'dias úteis'} · ${rotuloRende(l.x.inv)}`, valor: `${rendeuEst >= 0 ? '+' : '−'}${formatBRL(Math.abs(rendeuEst))}`, cor: COR_ENTRADAS },
-          { rotulo: 'Vale hoje ≈ (com o rendimento de hoje)', valor: formatBRL(e.valor_centavos) },
+          { rotulo: 'Vale hoje ≈', valor: formatBRL(e.valor_centavos) },
         ],
-        nota: `A taxa de cada dia vem do Banco Central; quando ela muda, a nova vale sobre o que já rendeu.${e.projetados ? ` O Banco Central publica a taxa no dia seguinte: ${e.projetados === 1 ? 'hoje vai' : `os últimos ${e.projetados} dias vão`} com a de ${formatDate(e.ate)}.` : ''} Para conferir com o banco, digite o valor dele nesta célula.`,
+        nota: `A taxa de cada dia vem do Banco Central; quando ela muda, a nova vale sobre o que já rendeu.${e.projetados ? ` O Banco Central publica a taxa no dia útil seguinte: ${e.projetados === 1 ? 'o último dia útil vai' : `os últimos ${e.projetados} dias úteis vão`} com a de ${formatDate(e.ate)}.` : ''} Para conferir com o banco, digite o valor dele nesta célula.`,
       };
     }
     if (a.col === 'curva') {
@@ -523,7 +523,7 @@ function TabelaCarteira({
       titulo: nome,
       itens: [
         { rotulo: 'Aplicado (do seu bolso)', valor: formatBRL(item.aplicado) },
-        { rotulo: l.tipo === 'inv' && l.x.estimado ? `Vale hoje ≈ (${rotuloPeloIndice(l.x.inv)}, com o de hoje)` : `Vale hoje${item.data ? ` (foto de ${formatDate(item.data)})` : ''}`, valor: formatBRL(item.vale) },
+        { rotulo: l.tipo === 'inv' && l.x.estimado ? `Vale hoje ≈ (${rotuloPeloIndice(l.x.inv)})` : `Vale hoje${item.data ? ` (foto de ${formatDate(item.data)})` : ''}`, valor: formatBRL(item.vale) },
         { rotulo: l.tipo === 'inv' ? 'Rendeu desde o cadastro (bruto)' : l.g.soConta ? 'Rendeu desde a primeira foto' : 'Rendeu (os investimentos, bruto)', valor: `${formatBRL(item.rendeu)} · ${pctTexto(item.pct, 1)}`, cor: COR_ENTRADAS },
         // DEPOIS DO IR (06/11/2026, a pedido): o líquido − o aplicado, se resgatasse hoje (o fundo e o sem as datas não estimam)
         ...(depoisDoIR !== null ? [{ rotulo: `Depois do IR ≈${l.tipo === 'grupo' && l.g.incompleto ? ' (parcial)' : ''}`, valor: `${formatBRL(depoisDoIR)} · ${pctTexto(item.aplicado > 0 ? depoisDoIR / item.aplicado : null, 1)}`, cor: COR_ENTRADAS }] : []),

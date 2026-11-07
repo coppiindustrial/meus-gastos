@@ -16,7 +16,7 @@ import { aliquotaIR, diasEntre as diasEntreIR, ehIsento, lerDepositos, planoDosD
 import {
   TIPOS_INVESTIMENTO, nomeTipoInvestimento, padraoDoTipo, pendentesDeValor, rendimentoForaDoNormal, rotuloLiquidez, rotuloPrazo, rotuloRende,
 } from '../../lib/investimentos.js';
-import { andaSozinho, fatorAteOFim, movimentosForaDosValores, rotuloPeloIndice, valoresComOMovimento } from '../../lib/valorEstimado.js';
+import { andaSozinho, fatorDoAporte, movimentosForaDosValores, rotuloPeloIndice, valoresComOMovimento } from '../../lib/valorEstimado.js';
 import { calcularValor, formatBRL, parseValor } from '../../lib/dinheiro.js';
 import { addMeses, formatDate, nomeCompetencia, todayISO } from '../../lib/format.js';
 
@@ -650,7 +650,7 @@ export function ModalDepositos({ inv, semValor = false, vale, dataVale, deposito
     let s = 0;
     for (const l of lidas) {
       if (!(l.data && l.v > 0)) continue;
-      const f = fatorAteOFim(inv, l.data, hoje, taxas); // com o rendimento de hoje, como o banco
+      const f = fatorDoAporte(inv, l.data, hoje, taxas); // como o banco mostra hoje
       if (f === null) return null;
       s += l.v * f;
     }

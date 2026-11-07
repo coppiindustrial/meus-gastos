@@ -439,14 +439,17 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     saiu) × (1 + CDI do dia × %) — a mudança do CDI vale dali em diante sobre o que já rendeu. `estimarValores` faz FOTOS
     ESTIMADAS (`estimado: true`): no fim de cada mês entre duas reais (o caminho AJUSTADO à real seguinte) e depois da última
     (fins de mês + HOJE, `ultimo`), que entram nas séries (`useDadosPatrimonio`:
-    `valoresSerie`) — o mês a mês, o painel e o líquido seguem sem a foto de todo mês. O DIA INTEIRO (06/11/2026, conferido
-    com o banco: o aporte de sábado 12/09 no RDB a 102,5% do CDI tinha R$ 360,18 de rendimento às 19h16 de sexta, 06/11, e o
-    app dava R$ 350 — um dia a menos): o valor de uma data JÁ TEM o rendimento dela, como o banco mostra — a foto de uma
-    data tem o rendimento até ela (inclusive), o aporte rende desde o próprio dia e o de HOJE já entra, com a taxa do último
-    dia publicado (o Banco Central publica um dia depois; `projetados`, os dias de semana depois dele — `comProjetados` no
-    `caminhar`; `fatorAteOFim` no IR de cada aporte e no "Somar aos valores"). Depois disso: R$ 360,02 contra R$ 360,18. Na
-    carteira, "≈ pelo CDI até hoje" embaixo do valor e o balão com a conta (e de que dia é a taxa de hoje); na ficha, o
-    "Vale hoje". SEM O BANCO CENTRAL (a API respondeu 502 por horas no mesmo dia): as taxas que já vieram ficam; sem
+    `valoresSerie`) — o mês a mês, o painel e o líquido seguem sem a foto de todo mês. O DIA DO BANCO (07/11/2026,
+    conferido NO CENTAVO com o CDI de cada dia: o RDB a 102,5% aplicado no sábado 12/09 mostrava R$ 360,18 na sexta 06/11
+    às 19h16 e R$ 369,74 no sábado às 05h03; o CDB da XP a 100,25% desde 13/08, R$ 694,12 "atualizado em 06/11"): (1) o
+    VALOR DE UM DIA tem o CDI dos dias úteis ANTES dele (o da sexta entra no sábado de madrugada) — a foto de uma data, e
+    o valor de hoje, com os dias úteis entre o último CDI publicado e hoje pela taxa do último (`projetados`,
+    `comProjetados` no `caminhar`); (2) o APORTE rende desde o próprio dia, e o de SÁBADO, DOMINGO ou FERIADO rende o CDI
+    do dia útil ANTES dele (`inicioDoRendimento`; `fatorDoAporte` no IR de cada aporte, no "Somar aos valores" e no
+    pop-up dos aportes de antes). Em 06/11/2026 eu tinha passado a contar o dia de hoje ("o dia inteiro"): acertou o RDB por
+    coincidência (o dia a mais era o da sexta 11/09) e errou no sábado — voltou a regra (1). Na
+    carteira, "≈ pelo CDI até hoje" embaixo do valor e o balão com a conta (e de que dia é a taxa dos dias não
+    publicados); na ficha, o "Vale hoje". SEM O BANCO CENTRAL (a API respondeu 502 por horas no mesmo dia): as taxas que já vieram ficam; sem
     nenhuma, a faixa âmbar `AvisoSemTaxas` (Investimentos e Patrimônio) explica que o valor para na última foto e tem o
     "Tentar agora"; o app tenta sozinho a cada minuto (`semTaxas`, `tentarTaxas` do `useDadosPatrimonio`). O VENCIMENTO À
     VISTA (a pedido): o aporte mostra "vence dd/mm/aa" — o do prazo por aplicação ou o do investimento —, e o investimento
