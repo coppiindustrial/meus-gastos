@@ -162,9 +162,13 @@ export function estimarImposto({ inv, fotos = [], movimentos = [], depositos = [
     const iof = isento || semEstimativa ? 0 : Math.max(0, ganho) * aliquotaIOF(dias);
     const aliquota = isento ? 0 : aliquotaIR(dias);
     const ir = isento || semEstimativa ? 0 : Math.max(0, ganho - iof) * aliquota;
+    // o rendimento é o vale − o depositado JÁ ARREDONDADOS (07/11/2026: arredondados um a um, o aporte de R$ 27.000,00 que
+    // vale R$ 29.179,25 mostrava "Rendeu R$ 2.179,24")
+    const valeR = Math.round(valeL);
+    const depositado = Math.round(valeL - ganho);
     return {
       data: l.data, dataAproximada: !!l.dataAproximada, origem: l.origem, fonte: l.fonte ?? null, inteiro: l.frac > 0.999999, dias,
-      depositado: Math.round(valeL - ganho), vale: Math.round(valeL), ganho: Math.round(ganho),
+      depositado, vale: valeR, ganho: valeR - depositado,
       aliquota, ir: Math.round(ir), iof: Math.round(iof), liquido: Math.round(valeL - ir - iof),
       proxima: isento ? null : proximaQueda(l.data, hoje),
     };
