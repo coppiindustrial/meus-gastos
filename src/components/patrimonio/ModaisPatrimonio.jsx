@@ -326,10 +326,32 @@ export function FichaInvestimento({ x, lugar, valores, movimentos, depositos = [
     ...valores.map((f) => ({ ...f, tipo: 'foto' })),
     ...movimentos.map((m) => ({ ...m })),
   ].sort((a, b) => b.data.localeCompare(a.data) || (a.tipo === 'foto' ? -1 : 1));
+  // O MOVIMENTO QUE SAI (07/11/2026): os valores do dia e de depois contam como tendo ele — pergunta e "Tirar dos valores"
+  // faz o contrário do "Somar" (sem tirar, o aporte excluído virava rendimento). O da carteira faz o mesmo (useEdicaoCarteira).
   const apagar = async (h) => {
     const foto = h.tipo === 'foto';
     if (!await confirmar({ titulo: foto ? 'Excluir este valor?' : `Excluir est${h.tipo === 'aporte' ? 'a aplicação' : 'e resgate'}?`, texto: `${formatBRL(h.valor_centavos)} em ${formatDate(h.data)}.`, confirmar: 'Excluir', perigo: true })) return;
-    try { await (foto ? excluirValor(h.id) : excluirMovimento(h.id)); toast.success('Excluído.'); onMudou(); } catch (err) { toast.error(err.message); }
+    let tirar = [];
+    if (!foto) {
+      const reais = valores.filter((v) => !v.estimado);
+      const gemea = h.tipo !== 'resgate' && reais.length === 1 && reais[0].data === h.data && Number(reais[0].valor_centavos) === Number(h.valor_centavos);
+      const comEle = gemea ? [] : reais.filter((v) => v.data >= h.data).sort((a, b) => (a.data < b.data ? -1 : 1));
+      if (comEle.length && (taxas || !andaSozinho(inv))) {
+        const novos = valoresComOMovimento({ mov: { data: h.data, tipo: h.tipo === 'resgate' ? 'aporte' : 'resgate', valor_centavos: Number(h.valor_centavos) }, fotos: comEle, inv, taxas });
+        const n = comEle.length;
+        const sim = await confirmar({
+          titulo: n === 1 ? `Tirar ${h.tipo === 'resgate' ? 'o resgate' : 'a aplicação'} do valor de ${formatDate(novos[0].data)}?` : `Tirar ${h.tipo === 'resgate' ? 'o resgate' : 'a aplicação'} dos ${n} valores?`,
+          texto: `${n === 1 ? `O valor de ${formatDate(novos[0].data)} (${formatBRL(novos[0].antes)}) tem` : `Os ${n} valores desde ${formatDate(h.data)} têm`} ${h.tipo === 'resgate' ? 'este resgate' : 'esta aplicação'} de ${formatBRL(h.valor_centavos)}.\n\n"Tirar" ${n === 1 ? `o deixa com ${formatBRL(novos[0].valor_centavos)}` : 'o tira de cada um'}. Sem tirar, ${h.tipo === 'resgate' ? 'o que saiu conta como perda' : 'o dinheiro dela conta como rendimento'}.`,
+          confirmar: n === 1 ? 'Tirar do valor' : 'Tirar dos valores', cancelar: 'Deixar como está',
+        });
+        if (sim) tirar = novos;
+      }
+    }
+    try {
+      await (foto ? excluirValor(h.id) : excluirMovimento(h.id));
+      for (const v of tirar) await atualizarValor(v.id, { data: v.data, valor_centavos: v.valor_centavos });
+      toast.success(tirar.length ? 'Excluído, e os valores sem ele.' : 'Excluído.'); onMudou();
+    } catch (err) { toast.error(err.message); }
   };
   const abas = [
     ...(temDep ? [{ key: 'depositos', label: 'Aportes e IR', qtd: imp.semDatas ? undefined : imp.lotes.length }] : []),

@@ -210,6 +210,9 @@ export default function useEdicaoCarteira(d) {
 
   // EXCLUIR UM APORTE (o 🗑 da linha, ou Delete): o do app (e, se era o único valor, a foto que nasceu junto com ele) ou o
   // de antes do app. O que o cadastro tem sem data não se exclui (é o "valor aplicado" do cadastro).
+  // OS VALORES DO DIA E DE DEPOIS (07/11/2026, a pedido: "eu exclui o aporte e o vale hoje não se altera?"): eles contam
+  // como tendo o aporte (o "Somar" o pôs neles, ou o banco já o mostrava) — sem tirar, o dinheiro dele virava rendimento.
+  // Pergunta, e "Tirar dos valores" faz o contrário do "Somar" (o aporte crescido pela taxa até cada um).
   const excluirAporte = useCallback(async (l) => {
     const f = l.lo.fonte;
     if (!f || f.tipo === 'inicial') return { ok: false };
@@ -218,7 +221,25 @@ export default function useEdicaoCarteira(d) {
       texto: `O aporte de ${formatBRL(f.principal ?? f.valor)} em ${formatDate(f.data)} sai de ${l.x.inv.nome}.\n\nCtrl+Z desfaz.`,
     });
     if (!ok) return { ok: false };
-    const { movimentos, valores } = dRef.current;
+    const { movimentos, valores, taxas } = dRef.current;
+    let tirar = [];
+    if (f.tipo === 'mov') {
+      const reais = valores.filter((v) => v.investimento_id === l.x.inv.id && !v.estimado);
+      const gemeaAntes = reais.length === 1 && reais[0].data === f.data && Number(reais[0].valor_centavos) === f.valor;
+      const comEle = gemeaAntes ? [] : reais.filter((v) => v.data >= f.data).sort((a, b) => (a.data < b.data ? -1 : 1));
+      if (comEle.length) {
+        if (andaSozinho(l.x.inv) && !taxas) { toast.error('Esperando o CDI do Banco Central para tirar o aporte dos valores: tente de novo em instantes.'); return { ok: false }; }
+        const novos = valoresComOMovimento({ mov: { data: f.data, tipo: 'resgate', valor_centavos: f.valor }, fotos: comEle, inv: l.x.inv, taxas });
+        const n = comEle.length;
+        const v0 = novos[0];
+        const sim = await confirmar({
+          titulo: n === 1 ? `Tirar o aporte do valor de ${formatDate(v0.data)}?` : `Tirar o aporte dos ${n} valores?`,
+          texto: `${n === 1 ? `O valor de ${formatDate(v0.data)} (${formatBRL(v0.antes)}) tem` : `Os ${n} valores desde ${formatDate(f.data)} têm`} este aporte de ${formatBRL(f.valor)}${andaSozinho(l.x.inv) ? `, com o rendimento ${rotuloPeloIndice(l.x.inv)}` : ''}.\n\n"Tirar" ${n === 1 ? `o deixa com ${formatBRL(v0.valor_centavos)}` : 'o tira de cada um'}. Sem tirar, o dinheiro dele conta como rendimento.`,
+          confirmar: n === 1 ? 'Tirar do valor' : 'Tirar dos valores', cancelar: 'Deixar como está',
+        });
+        if (sim) tirar = novos;
+      }
+    }
     return rodar(`a exclusão do aporte de ${formatDate(f.data)}`, async () => {
       if (f.tipo === 'dep') {
         // o aporte de antes do app que sai leva o valor dele do aplicado do investimento (`aplicadoSem` sem o novo)
@@ -235,12 +256,14 @@ export default function useEdicaoCarteira(d) {
       const gemea = fotos.length === 1 && fotos[0].data === f.data && Number(fotos[0].valor_centavos) === f.valor ? fotos[0] : null;
       await excluirMovimento(f.id);
       if (gemea) await excluirValor(gemea.id);
+      for (const v of tirar) await atualizarValor(v.id, { data: v.data, valor_centavos: v.valor_centavos });
       return async () => {
         await salvarMovimentos([{ conta_id: mov.conta_id, investimento_id: mov.investimento_id, data: mov.data, tipo: mov.tipo, valor_centavos: Number(mov.valor_centavos), descricao: mov.descricao ?? '', ...(mov.vencimento ? { vencimento: mov.vencimento } : {}) }]);
         if (gemea) await registrarValores(gemea.data, [{ investimento_id: l.x.inv.id, valor_centavos: Number(gemea.valor_centavos) }]);
+        for (const v of tirar) await atualizarValor(v.id, { data: v.data, valor_centavos: v.antes });
       };
     });
-  }, [confirmar, rodar]);
+  }, [confirmar, rodar, toast]);
 
   return useMemo(() => ({
     gravando: gravando > 0, podeDesfazer: qtdDesfazer > 0, desfazer,

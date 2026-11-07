@@ -321,7 +321,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     "Somar" os cresce pela taxa — `valoresComOMovimento`; o valor do MESMO DIA também entra na pergunta, também no Aplicar,
     menos no "Resgatar tudo": ele conta como já tendo os movimentos do dia, e sem a pergunta o aporte de hoje sumia do Vale
     hoje. O aporte do app conta depois do ÚLTIMO APORTE da lista de antes do app, pela DATA dele; o resgate, depois da
-    referência — 07/11/2026: pela referência, digitar os números do banco de hoje recusava o aporte de hoje), "+ investimento" no fim de cada instituição (o pop-up inteiro;
+    referência — 07/11/2026: pela referência, digitar os números do banco de hoje recusava o aporte de hoje). EXCLUIR o
+    aporte do app (o 🗑 / Delete da carteira e o Histórico da ficha) pergunta se os valores do dia e de depois o perdem
+    ("Tirar do valor" = o contrário do "Somar"; sem tirar, o dinheiro dele virava rendimento; não pergunta pela foto gêmea,
+    que sai junto). "+ investimento" no fim de cada instituição (o pop-up inteiro;
     criado, ele abre na linha "+ aporte") e "+ instituição" no fim. O que cada edição de aporte grava é pela ORIGEM dele
     (`lo.fonte` de `estimarImposto`: o movimento do app — e a foto gêmea do mesmo dia e valor —, o aporte de antes do app
     — o valor digitado é o DEPOSITADO, a referência vira a data, e o APLICADO do investimento (`aplicado_inicial_centavos`)
