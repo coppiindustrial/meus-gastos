@@ -127,6 +127,9 @@ const COLUNAS_A = [
   { id: 'resgate', rotulo: 'Resgate', alinha: 'left', desk: true },
   { id: 'aplicado', rotulo: 'Aplicado', desk: true },
   { id: 'vale', rotulo: 'Vale hoje' },
+  // A COLUNA DO IR (07/11/2026, a pedido): o IR ≈ de cada aporte, investimento e instituição se resgatasse hoje (com o IOF
+  // dos 30 primeiros dias) — antes ficava embaixo do líquido, e o aporte nem o mostrava
+  { id: 'ir', rotulo: 'IR ≈', desk: true },
   { id: 'liquido', rotulo: 'Líquido ≈' },
   { id: 'rendeu', rotulo: 'Rendeu' },
   { id: 'ano', rotulo: 'Em ', desk: true },
@@ -535,7 +538,6 @@ function TabelaCarteira({
     };
   })();
 
-  const subLiquido = (imp) => (!imp ? null : imp.semEstimativa ? 'sem estimativa' : imp.semDatas ? 'faltam as datas' : imp.isento ? 'isento' : `IR ≈ ${reais((imp.ir ?? 0) + (imp.iof ?? 0))}`);
   const curvaTd = (l, item, cor, cls) => cel(l, 'curva', `${cls} ${movel ? 'hidden' : ''}`, item.curva.length > 1 ? (
     <span className="ml-auto block w-[92px] cursor-crosshair" onMouseMove={sobCurva(l.id, item.curva)}>
       <MiniCurva valores={item.curva.map((p) => p.valor)} cor={cor} largura={92} altura={24} />
@@ -546,7 +548,7 @@ function TabelaCarteira({
       {filhos && <span className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/linha:opacity-100 focus-within:opacity-100">{filhos}</span>}
     </td>
   ));
-  const vazioTds = (l, cols, cls) => cols.map((c) => cel(l, c, `${cls} ${['resgate', 'aplicado', 'ano', 'curva'].includes(c) && movel ? 'hidden' : ''}`, null));
+  const vazioTds = (l, cols, cls) => cols.map((c) => cel(l, c, `${cls} ${['resgate', 'aplicado', 'ir', 'ano', 'curva'].includes(c) && movel ? 'hidden' : ''}`, null));
 
   // as linhas de acrescentar: o "+" e o rótulo, no recuo do nível delas (o "+ aporte" com o trilho e, ativo, os campos)
   const linhaAcrescentar = (l, attrs) => {
@@ -580,7 +582,7 @@ function TabelaCarteira({
           {cel(l, 'aplicado', `${base} px-3 text-right tabular-nums ${movel ? 'hidden' : ''}`, comRascunho ? (
             r.valor ? <span className="text-gray-800">{r.valor}</span> : <span className="text-gray-400">valor</span>
           ) : null)}
-          {vazioTds(l, ['vale', 'liquido', 'rendeu', 'ano', 'curva'], base)}
+          {vazioTds(l, ['vale', 'ir', 'liquido', 'rendeu', 'ano', 'curva'], base)}
           {/* o ✕ no fim da linha, À VISTA enquanto o rascunho aparece (as ações das outras linhas são de hover) */}
           {!movel && (
             <td className={`${base} px-2`}>
@@ -599,7 +601,7 @@ function TabelaCarteira({
       <tr key={l.id} {...attrs} className="group/add">
         {cel(l, 'nome', `${base} pr-3 ${inst ? 'border-t border-gray-200' : 'border-b-gray-200'}`,
           rotulo(inst ? 'Nova instituição' : `Novo investimento em ${l.g.conta.nome}`, inst ? 10 : 32), { style: { paddingLeft: 0 } })}
-        {vazioTds(l, ['resgate', 'aplicado', 'vale', 'liquido', 'rendeu', 'ano', 'curva'], `${base} ${inst ? 'border-t border-gray-200' : 'border-b-gray-200'}`)}
+        {vazioTds(l, ['resgate', 'aplicado', 'vale', 'ir', 'liquido', 'rendeu', 'ano', 'curva'], `${base} ${inst ? 'border-t border-gray-200' : 'border-b-gray-200'}`)}
         {acoesTd(`${base} ${inst ? 'border-t border-gray-200' : 'border-b-gray-200'}`)}
       </tr>
     );
@@ -641,9 +643,11 @@ function TabelaCarteira({
                   {cel(l, 'resgate', `${faixa} ${movel ? 'hidden' : ''} ${aceso(l.id)}`, null)}
                   {cel(l, 'aplicado', `${faixa} px-3 text-right font-semibold tabular-nums text-gray-700 ${movel ? 'hidden' : ''} ${aceso(l.id)}`, reais(g.aplicado))}
                   {cel(l, 'vale', `${faixa} px-3 text-right text-[13.5px] font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`, reais(g.vale))}
-                  {cel(l, 'liquido', `${faixa} px-3 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`, (
-                    <>{reais(g.liquido)}{(g.incompleto || g.ir > 0) && <span className="block text-[11.5px] font-normal text-gray-500">{g.incompleto ? 'parcial' : `IR ≈ ${reais(g.ir)}`}</span>}</>
+                  {cel(l, 'ir', `${faixa} px-3 text-right font-semibold tabular-nums text-gray-700 ${movel ? 'hidden' : ''} ${aceso(l.id)}`, (
+                    <>{g.ir > 0 ? reais(g.ir) : <span className="font-normal text-gray-400">—</span>}{g.incompleto && <span className="block text-[11.5px] font-normal text-gray-500">parcial</span>}</>
                   ), { onMouseMove: mover({ id: l.id, col: 'liquido' }) })}
+                  {cel(l, 'liquido', `${faixa} px-3 text-right font-semibold tabular-nums text-gray-900 ${aceso(l.id)}`, reais(g.liquido),
+                    { onMouseMove: mover({ id: l.id, col: 'liquido' }) })}
                   {cel(l, 'rendeu', `${faixa} px-3 text-right font-semibold tabular-nums ${aceso(l.id)}`, (
                     <span className={g.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(g.rendeu)}{reais(Math.abs(g.rendeu))}</span>
                   ), { onMouseMove: mover({ id: l.id, col: 'rendeu' }) })}
@@ -691,6 +695,9 @@ function TabelaCarteira({
                     ? <span className="text-gray-800">{reais(f.principal ?? f.valor)}</span>
                     : <span className="text-gray-500" title={lo.inteiro ? 'Estimado: o banco mostrou quanto ele valia, não quanto foi aportado' : 'Parte dele já foi resgatada'}>≈ {reais(lo.depositado)}</span>)}
                   {cel(l, 'vale', `${td} px-3 text-right tabular-nums text-gray-600`, reais(lo.vale))}
+                  {cel(l, 'ir', `${td} px-3 text-right tabular-nums text-gray-600 ${movel ? 'hidden' : ''}`, imp.semEstimativa ? <span className="text-gray-400">—</span>
+                    : imp.isento ? <span className="text-gray-400">isento</span>
+                      : <span title={lo.iof > 0 ? `IR ${formatBRL(lo.ir)} + IOF ${formatBRL(lo.iof)} (menos de 30 dias)` : `${pctAliq(lo.aliquota)} do rendimento`}>{reais(lo.ir + lo.iof)}</span>)}
                   {cel(l, 'liquido', `${td} px-3 text-right tabular-nums text-gray-600`, reais(lo.liquido))}
                   {cel(l, 'rendeu', `${td} px-3 text-right tabular-nums text-green-700`, `${sinal(lo.ganho)}${reais(Math.abs(lo.ganho))}`)}
                   {cel(l, 'ano', `${td} ${movel ? 'hidden' : ''}`, null)}
@@ -738,10 +745,17 @@ function TabelaCarteira({
                     {x.estimado && <span className="block whitespace-nowrap text-[11.5px] font-normal text-gray-500">≈ {rotuloPeloIndice(x.inv)} até hoje</span>}
                   </>
                 ), { onMouseMove: x.estimado ? mover({ id: l.id, col: 'vale' }) : undefined })}
+                {cel(l, 'ir', `${td} px-3 text-right tabular-nums text-gray-700 ${movel ? 'hidden' : ''}`, (() => {
+                  const imp = x.imposto;
+                  if (!imp || imp.semEstimativa) return <span className="text-gray-400">—<span className="block text-[11.5px]">{imp ? 'sem estimativa' : ''}</span></span>;
+                  if (imp.semDatas) return <span className="text-gray-400">—<span className="block text-[11.5px]">faltam as datas</span></span>;
+                  if (imp.isento) return <span className="text-gray-400">isento</span>;
+                  const t = (imp.ir ?? 0) + (imp.iof ?? 0);
+                  return <>{reais(t)}{t > 0 && <span className="block text-[11.5px] text-gray-500">{(imp.iof ?? 0) > 0 ? `com IOF ${reais(imp.iof)}` : `${pctAliq(imp.aliquotaMedia)} do rendimento`}</span>}</>;
+                })(), { onMouseMove: mover({ id: l.id, col: 'liquido' }) })}
                 {cel(l, 'liquido', `${td} px-3 text-right font-semibold tabular-nums text-gray-900`, (() => {
                   const v = x.imposto && x.imposto.liquido === null && !x.imposto.isento ? null : x.imposto?.liquido ?? x.vale;
-                  const s = subLiquido(x.imposto);
-                  return <>{v === null ? <span className="text-gray-400">—</span> : reais(v)}{s && <span className="block text-[11.5px] font-normal text-gray-500">{s}</span>}</>;
+                  return v === null ? <span className="text-gray-400">—</span> : reais(v);
                 })(), { onMouseMove: mover({ id: l.id, col: 'liquido' }) })}
                 {cel(l, 'rendeu', `${td} px-3 text-right tabular-nums`, (
                   <>
@@ -773,7 +787,8 @@ function TabelaCarteira({
             <td className={`border-t border-gray-200 bg-hx-f9fafb ${movel ? 'hidden' : ''}`} />
             <td className={`border-t border-gray-200 bg-hx-f9fafb px-3 text-right tabular-nums text-gray-700 ${movel ? 'hidden' : ''}`}>{reais(total.aplicado)}</td>
             <td className="border-t border-gray-200 bg-hx-f9fafb px-3 text-right tabular-nums text-gray-900">{reais(total.vale)}</td>
-            <td className="border-t border-gray-200 bg-hx-f9fafb px-3 text-right tabular-nums text-gray-900">{reais(total.liquido ?? total.vale)}{(total.incompleto || total.ir > 0) && <span className="block text-[11.5px] font-normal text-gray-500">{total.incompleto ? 'parcial' : `IR ≈ ${reais(total.ir)}`}</span>}</td>
+            <td className={`border-t border-gray-200 bg-hx-f9fafb px-3 text-right tabular-nums text-gray-700 ${movel ? 'hidden' : ''}`}>{reais(total.ir)}{total.incompleto && <span className="block text-[11.5px] font-normal text-gray-500">parcial</span>}</td>
+            <td className="border-t border-gray-200 bg-hx-f9fafb px-3 text-right tabular-nums text-gray-900">{reais(total.liquido ?? total.vale)}</td>
             <td className="border-t border-gray-200 bg-hx-f9fafb px-3 text-right tabular-nums">
               <span className={total.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(total.rendeu)}{reais(Math.abs(total.rendeu))}</span>
               <span className="block text-[11.5px] font-normal text-gray-500">{pctTexto(total.aplicado > 0 ? total.rendeu / total.aplicado : null, 1)}</span>

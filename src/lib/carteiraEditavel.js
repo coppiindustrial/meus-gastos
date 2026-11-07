@@ -7,7 +7,7 @@ import { calcularValor } from './dinheiro.js';
 // antes do app (`depositos_investimento`) ou o que o cadastro tem aplicado sem data (`lo.fonte`, de estimarImposto).
 
 // As colunas da carteira, na ordem da tela: o andar passa por todas (a calculada também se seleciona); só algumas editam.
-export const COLUNAS_CARTEIRA = ['nome', 'resgate', 'aplicado', 'vale', 'liquido', 'rendeu', 'ano', 'curva'];
+export const COLUNAS_CARTEIRA = ['nome', 'resgate', 'aplicado', 'vale', 'ir', 'liquido', 'rendeu', 'ano', 'curva'];
 
 // Como a célula se edita: 'texto' (um nome), 'data', 'valor', 'vencimento' (a data do aporte que vence: vazia, a regra do
 // investimento), 'rende' (o pop-up do nome, do tipo e da taxa), 'resgate' (o pop-up da liquidez e do prazo) e 'novoInv'

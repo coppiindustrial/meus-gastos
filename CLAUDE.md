@@ -341,6 +341,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     px inteiros (o texto em 30 · 55 · 80).
     O ⇕ (07/11/2026, a pedido): "Recolher tudo" fecha as instituições E os investimentos (`abertosInv`); "Expandir as
     instituições" abre só elas — os investimentos aparecem fechados e cada um abre na seta dele.
+    A COLUNA "IR ≈" (07/11/2026, a pedido), entre o Vale hoje e o Líquido: o IR (com o IOF dos 30 primeiros dias) se
+    resgatasse hoje, em cada aporte, investimento (embaixo, a alíquota média ou "com IOF"; "—" no fundo e sem as datas;
+    "isento"), instituição ("parcial" com algum sem estimativa) e no Total — o "IR ≈" embaixo do líquido saiu. Só de ler; a
+    seta do cabeçalho ordena por ela; some no celular.
     O "RENDEU" É BRUTO (o vale hoje − o aplicado, como a "Valorização" do banco); o balão dele traz também o "Depois do IR ≈"
     (o líquido − o aplicado, se resgatasse hoje; "parcial" na instituição com algum sem estimativa).
     OS CENTAVOS (06/11/2026, a pedido): o interruptor "Centavos" no cabeçalho do bloco (o `Toggle` do "Só o que falta" do

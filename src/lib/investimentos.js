@@ -170,6 +170,7 @@ const chaves = {
   vence: (x) => x.inv.vencimento ?? '9999-12-31',
   aplicado: (x) => x.aplicado,
   vale: (x) => x.vale,
+  ir: (x) => (x.imposto?.ir ?? 0) + (x.imposto?.iof ?? 0),
   liquido: (x) => x.imposto?.liquido ?? x.vale,
   rendeu: (x) => x.rendeu,
   ano: (x) => x.pctAno ?? -Infinity,

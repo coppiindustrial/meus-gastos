@@ -45,7 +45,7 @@ test('moverAtiva: as setas, presas nas bordas', () => {
   assert.deepEqual(moverAtiva(linhas, null, 1, 0), { id: 'g:c1', col: 'nome' });
   assert.deepEqual(moverAtiva(linhas, { id: 'g:c1', col: 'nome' }, 1, 0), { id: 'i:i1', col: 'nome' });
   assert.deepEqual(moverAtiva(linhas, { id: 'g:c1', col: 'nome' }, -1, -1), { id: 'g:c1', col: 'nome' });
-  assert.deepEqual(moverAtiva(linhas, { id: 'i:i1', col: 'vale' }, 0, 1), { id: 'i:i1', col: 'liquido' });
+  assert.deepEqual(moverAtiva(linhas, { id: 'i:i1', col: 'vale' }, 0, 1), { id: 'i:i1', col: 'ir' }); // a coluna do IR, só de ler
   assert.deepEqual(moverAtiva(linhas, { id: 'nq', col: 'curva' }, 1, 1), { id: 'nq', col: 'curva' });
   // a linha sumiu (o desfazer a tirou): volta à primeira, na mesma coluna
   assert.deepEqual(moverAtiva(linhas, { id: 'sumiu', col: 'vale' }, 1, 0), { id: 'g:c1', col: 'vale' });
