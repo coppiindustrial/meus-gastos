@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Tooltip from '../Tooltip.jsx';
 import AbasPilula from '../AbasPilula.jsx';
 import Toggle from '../Toggle.jsx';
+import { DivisorFaixa, Trilho as TrilhoFaixa } from '../filtros/FaixaFiltros.jsx'; // o `Trilho` daqui é o dos aportes
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { COR_ENTRADAS } from '../graficos/Graficos.jsx';
 import { COR_FALTOU, MiniCurva } from '../graficos/GraficosVisao.jsx';
@@ -42,7 +43,8 @@ const comCentavos = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFr
 const formatos = (centavos) => (centavos ? { reais: (c) => `R$ ${comCentavos(c)}`, inteiro: comCentavos } : { reais, inteiro });
 const pctTexto = (f, casas = 2) => (f === null || f === undefined ? '—' : `${f >= 0 ? '' : '−'}${Math.abs(f * 100).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`);
 const sinal = (c) => (c > 0 ? '+' : c < 0 ? '−' : '');
-const BTN = 'flex h-7 w-[30px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
+// o ícone dentro do trilho (o ⇕): sem moldura, o quadrado no hover; px inteiros com a diferença par para o ícone de 14
+const ICONE_TRILHO = 'inline-flex h-[24px] w-[28px] shrink-0 items-center justify-center rounded-[4px] text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900';
 // O BALÃO SAI quando o cursor passa a uma célula SEM balão (06/11/2026: ele ficava preso — o da linha do investimento
 // seguia aceso sobre os depósitos, que não têm balão — e só saía ao deixar a tabela). Todo `aoMover` vai pelo `mover`, que
 // MARCA o evento; a caixa da tabela, no fim da bolha, fecha o balão quando ninguém marcou.
@@ -1033,33 +1035,41 @@ export default function BlocoInvestimentos({
     : <TabelaCarteira key="a" {...comum} ordem={ordem} onOrdenar={onOrdenar} total={total} ano={ano} hoje={hoje} movel={movel} acoes={acoes} edicao={edicao} cdi={cdi} centavos={centavos}
       abertosInv={abertosInv} alternarInv={alternarInv} abrirInv={abrirInv} />;
 
-  const icones = comFilhos.length > 0 && (
-    <span className="inline-flex shrink-0 overflow-hidden rounded-md border border-gray-300 bg-white">
-      {/* RECOLHER TUDO fecha também os investimentos (07/11/2026, a pedido: abrir a instituição depois mostrava os aportes
-          de todos); EXPANDIR abre só as instituições — os investimentos aparecem fechados, cada um abre na seta dele */}
-      <Tooltip label={tudoAberto ? 'Recolher tudo' : 'Expandir as instituições'}>
-        <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir as instituições'} className={BTN}
-          onClick={() => {
-            if (!tudoAberto) { setRecolhidas(() => new Set()); return; }
-            setRecolhidas(() => new Set(comFilhos.map((g) => g.conta.id)));
-            setAbertosInvEstado(() => { lsSet('patrimonio_depositos_abertos', '[]'); return new Set(); });
-          }}>
-          <IconExpandirTudo fechar={tudoAberto} />
-        </button>
-      </Tooltip>
-    </span>
-  );
-  const trocas = (
-    <>
-      {(verVista === 'carteira' || modo === 'rs') && (
-        <span className="flex h-[30px] items-center gap-2 px-1">
+  // O CABEÇALHO NO JEITO DO DRE (07/11/2026, a pedido): as VISTAS à esquerda (Carteira | Mês a mês e, no mês a mês, o
+  // R$ | %), como o "Mensal · Trimestral · Anual" de lá, e os AJUSTES da tabela num TRILHO à direita (o `Trilho` +
+  // `DivisorFaixa` dos filtros, como o "Custos V/F/C · Centavos · ⇕" de lá): a chave dos Centavos e o ⇕ sem moldura
+  // própria. A legenda vai embaixo, à esquerda; o título "Investimentos" saiu (é o da tela).
+  const mostraCentavos = verVista === 'carteira' || modo === 'rs';
+  const ajustes = (mostraCentavos || comFilhos.length > 0) && (
+    <TrilhoFaixa className="shrink-0">
+      {mostraCentavos && (
+        <span className="flex h-[24px] items-center gap-2 px-2">
           <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => setCentavos(!centavos)}
             className="whitespace-nowrap text-[12px] font-medium text-gray-600">Centavos</button>
           <Toggle compacto rotulo="Mostrar os centavos nos valores" checked={centavos} onChange={setCentavos} />
         </span>
       )}
-      <AbasPilula abas={[{ key: 'carteira', label: 'Carteira' }, { key: 'mes', label: 'Mês a mês' }]} valor={vista} onChange={setVista} variante="claro" altura={30} folga={2} />
-      {vista === 'mes' && <AbasPilula abas={[{ key: 'rs', label: 'R$' }, { key: 'pct', label: '%' }]} valor={modo} onChange={setModo} variante="claro" altura={30} folga={2} />}
+      {mostraCentavos && comFilhos.length > 0 && <DivisorFaixa />}
+      {comFilhos.length > 0 && (
+        // RECOLHER TUDO fecha também os investimentos (07/11/2026, a pedido: abrir a instituição depois mostrava os aportes
+        // de todos); EXPANDIR abre só as instituições — os investimentos aparecem fechados, cada um abre na seta dele
+        <Tooltip label={tudoAberto ? 'Recolher tudo' : 'Expandir as instituições'}>
+          <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir as instituições'} className={ICONE_TRILHO}
+            onClick={() => {
+              if (!tudoAberto) { setRecolhidas(() => new Set()); return; }
+              setRecolhidas(() => new Set(comFilhos.map((g) => g.conta.id)));
+              setAbertosInvEstado(() => { lsSet('patrimonio_depositos_abertos', '[]'); return new Set(); });
+            }}>
+            <IconExpandirTudo fechar={tudoAberto} />
+          </button>
+        </Tooltip>
+      )}
+    </TrilhoFaixa>
+  );
+  const vistas = (
+    <>
+      <AbasPilula abas={[{ key: 'carteira', label: 'Carteira' }, { key: 'mes', label: 'Mês a mês' }]} valor={vista} onChange={setVista} variante="claro" altura={31} folga={3} />
+      {vista === 'mes' && <AbasPilula abas={[{ key: 'rs', label: 'R$' }, { key: 'pct', label: '%' }]} valor={modo} onChange={setModo} variante="claro" altura={31} folga={3} />}
     </>
   );
   const legenda = verVista === 'mes'
@@ -1073,13 +1083,21 @@ export default function BlocoInvestimentos({
 
   return (
     <section className="card flex flex-col overflow-hidden !p-0">
-      <div className="flex shrink-0 flex-wrap items-center gap-2.5 px-4 pb-2.5 pt-3">
-        <span className="text-[13px] font-semibold text-gray-800">Investimentos</span>
-        <span className="text-[11px] text-gray-400">{legenda}</span>
-        <span className="flex-1" />
-        {!movel && trocas}
-        {!movel && icones}
-      </div>
+      {movel ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2.5 px-4 pb-2.5 pt-3">
+          <span className="text-[13px] font-semibold text-gray-800">Investimentos</span>
+          <span className="text-[11px] text-gray-400">{legenda}</span>
+        </div>
+      ) : (
+        <div className="flex shrink-0 flex-col gap-2 px-4 pb-2.5 pt-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {vistas}
+            <span className="flex-1" />
+            {ajustes}
+          </div>
+          <span className="text-[11.5px] text-gray-400">{legenda}</span>
+        </div>
+      )}
       {aviso}
       <div className="min-h-0 overflow-x-auto">{corpo}</div>
       {/* O RODAPÉ DA PLANILHA: as teclas e se está gravando (cada célula grava sozinha) */}

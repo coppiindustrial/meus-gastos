@@ -341,6 +341,11 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
     px inteiros (o texto em 30 · 55 · 80).
     O ⇕ (07/11/2026, a pedido): "Recolher tudo" fecha as instituições E os investimentos (`abertosInv`); "Expandir as
     instituições" abre só elas — os investimentos aparecem fechados e cada um abre na seta dele.
+    O CABEÇALHO DO BLOCO NO JEITO DO DRE (07/11/2026, a pedido, com o print do DRE do Gestor): as VISTAS à esquerda
+    (Carteira | Mês a mês e o R$ | % do mês a mês, `AbasPilula` de 31px) e os AJUSTES num trilho à direita (`Trilho` +
+    `DivisorFaixa` dos filtros, importado como `TrilhoFaixa` — o `Trilho` da tabela é o dos aportes): a chave Centavos e o ⇕
+    sem moldura (`ICONE_TRILHO`, 28×24 com o ícone de 14). A legenda embaixo, à esquerda; o título "Investimentos" do bloco
+    saiu (é o da tela; no celular fica).
     A COLUNA "IR ≈" (07/11/2026, a pedido), entre o Vale hoje e o Líquido: o IR (com o IOF dos 30 primeiros dias) se
     resgatasse hoje, em cada aporte, investimento (embaixo, a alíquota média ou "com IOF"; "—" no fundo e sem as datas;
     "isento"), instituição ("parcial" com algum sem estimativa) e no Total — o "IR ≈" embaixo do líquido saiu. Só de ler; a
