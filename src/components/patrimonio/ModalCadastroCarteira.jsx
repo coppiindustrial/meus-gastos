@@ -137,10 +137,10 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
     <Modal open onClose={fechar} title="Cadastro dos investimentos" maxWidth="max-w-[1440px]" padding="p-0"
       subtitulo={`${plural(ativos, 'ativo', 'ativos')} · o que cada um é; o dinheiro entra pelos aportes`}>
       <div ref={caixaRef} className="max-h-[66vh] overflow-auto [scrollbar-gutter:stable]">
-        <table className="w-full min-w-[1300px] table-fixed border-separate border-spacing-0 text-[12.5px]">
+        <table className="w-full min-w-[1350px] table-fixed border-separate border-spacing-0 text-[12.5px]">
           <colgroup>
             <col /><col style={{ width: 124 }} /><col style={{ width: 124 }} /><col style={{ width: 160 }} />
-            <col style={{ width: 392 }} /><col style={{ width: 176 }} /><col style={{ width: 64 }} /><col style={{ width: 70 }} />
+            <col style={{ width: 444 }} /><col style={{ width: 176 }} /><col style={{ width: 64 }} /><col style={{ width: 70 }} />
           </colgroup>
           <thead className="sticky top-0 z-10"><tr>
             <th className={th}>Nome</th><th className={th}>Tipo</th><th className={th}>Rende (% do CDI)</th><th className={th}>Resgate</th>
