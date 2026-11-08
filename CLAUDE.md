@@ -248,8 +248,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   por aplicação que reaplicava sozinho, o extrato virando aporte. O mockup aprovado: "Carteira por aportes", a TABELA A
   (agrupada), e as recomendadas nas outras escolhas (o vencido sai sozinho, o resgate sai do aporte escolhido, começar
   digitando do banco). As tabelas antigas (`contas`, `saldos`, `investimentos`, `valores_investimento`,
-  `movimentos_investimento`, `depositos_investimento`) FICAM PARADAS no banco: o app não lê nem grava nelas. Apagá-las é
-  uma migration nova, só com o OK do usuário e depois de conferida a carteira nova.
+  `movimentos_investimento`, `depositos_investimento`) SAEM DO BANCO pela migration 021 (08/11/2026, com o OK do usuário;
+  sem `cascade`); a cópia do que havia nelas está em `dados/backup-carteira-antiga-2026-11-08.json`, fora do git.
 - O MODELO (migration 020): `inv_cadastro` = o que o investimento É (nome, a instituição em TEXTO, tipo cdb/rdb/lci/lca/outro,
   a taxa em % do CDI, resgate `diaria` | `vencimento`, `prazo_meses` + `vence_dia_antes` que só SUGEREM o vencimento do
   aporte, ativo, ordem) · `inv_aportes` = o dinheiro que entrou: origem `novo` (a data e o valor aplicado) ou `antigo` =

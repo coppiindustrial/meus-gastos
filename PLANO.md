@@ -42,7 +42,9 @@
 > complexa demais") e refeita com o mockup "Carteira por aportes" (tabela A): o cadastro (nome, instituição, tipo, taxa em
 > % do CDI), os aportes (dinheiro novo: data, valor e vencimento; já estava aplicado: o total do banco e quanto já rendeu)
 > e os resgates de cada aporte; uma conta só, o CDI de cada dia × a taxa, conferida no centavo com o Nubank e a XP. As
-> tabelas antigas ficam paradas até a conferência; o visual (tabela agrupada, cartões, gráfico, painel) ficou.
+> tabelas antigas saem pela migration 021 (2026-11-08, depois da conferência; cópia em `dados/`); o visual (tabela
+> agrupada, gráfico, painel) ficou. O "Quanto já rendeu" do que já estava aplicado o app calcula pelo CDI desde o
+> depósito (2026-11-08), e os Investimentos ficaram sem os cartões de resumo (eles moram no Patrimônio).
 > Próxima: 8.C (renda variável BR e exterior).
 > **Extrato da conta (2026-10-27)**: CSV do extrato do Nubank; entradas continuam à mão; fatura, investimentos e
 > transferências entre contas próprias (regra de ignorar) ficam de fora; pagamento de fixo vira o fixo do mês com o
