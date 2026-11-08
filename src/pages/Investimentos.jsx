@@ -2,156 +2,118 @@ import { useRef, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Tooltip from '../components/Tooltip.jsx';
 import MenuContexto from '../components/MenuContexto.jsx';
+import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { IconLapis, IconSeta } from '../components/icons.jsx';
-import BlocoInvestimentos from '../components/patrimonio/TabelaInvestimentos.jsx';
-import CarteiraVazia from '../components/patrimonio/CarteiraVazia.jsx';
-import ModalCadastroInvestimentos from '../components/patrimonio/ModalCadastroInvestimentos.jsx';
-import {
-  FichaInvestimento, ModalAtualizarValores, ModalComoEntrou, ModalDepositos, ModalLugar, ModalMovimento,
-} from '../components/patrimonio/ModaisPatrimonio.jsx';
-import useDadosPatrimonio from '../components/patrimonio/useDadosPatrimonio.js';
-import useEdicaoCarteira from '../components/patrimonio/useEdicaoCarteira.js';
+import TabelaCarteira from '../components/patrimonio/TabelaCarteira.jsx';
+import ModalAporte from '../components/patrimonio/ModalAporte.jsx';
+import ModalResgate from '../components/patrimonio/ModalResgate.jsx';
+import ModalCadastroCarteira from '../components/patrimonio/ModalCadastroCarteira.jsx';
 import AvisoSemTaxas from '../components/patrimonio/AvisoSemTaxas.jsx';
+import useCarteira from '../components/patrimonio/useCarteira.js';
 import { useNoCelular } from '../lib/celular.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
-import { apagarPatrimonio } from '../api/patrimonio.js';
-import { linhaMesAMes, mesesDaGrade, nomeTipoInvestimento, rotuloLiquidez, rotuloRende } from '../lib/investimentos.js';
+import { excluirAporte } from '../api/carteira.js';
+import { nomeDoTipo, rotuloTaxa } from '../lib/carteira.js';
 import { exportCsv } from '../lib/exportCsv.js';
 import { formatBRL } from '../lib/dinheiro.js';
-import { competenciaCurta } from '../lib/format.js';
+import { formatDate } from '../lib/format.js';
 
-// OS INVESTIMENTOS (06/11/2026, o mockup "Patrimônio do zero" e a separação pedida: o painel fica em /patrimonio, como a
-// Visão geral; aqui, a TABELA, como os Lançamentos). Três gestos só, sempre com o mesmo nome:
-//   · CADASTRAR — o ✎ do grupo do DRE abre a tabela de cadastro (`ModalCadastroInvestimentos`), como nos fixos;
-//   · APLICAR / RESGATAR — o ⇅ do grupo e as moedas + e − de cada linha (`ModalMovimento`);
-//   · ATUALIZAR VALORES — o botão de destaque, âmbar com o número quando o mês virou e falta o valor
-//     (`pendentesDeValor`; o mesmo número no menu).
-// A CARTEIRA É UMA PLANILHA (06/11/2026, a opção A do mockup "Carteira editável"): o nome, a taxa, o resgate, o "vale hoje",
-// a data e o valor de cada aporte se editam na própria tabela (`useEdicaoCarteira`), e as linhas "+ aporte",
-// "+ investimento" e "+ instituição" acrescentam ali. O ícone da ficha, no fim da linha, abre a FICHA: os aportes e o IR,
-// as quedas, os vencimentos, o histórico. No ▾: novo lugar,
-// CSV, os encerrados e "Começar do zero". No celular, só a tabela (ler). O CADASTRO NÃO PEDE OS VALORES (06/11/2026): ao
-// salvar investimentos novos abre o "Como o dinheiro entrou?" (`ModalComoEntrou`) — Aplicar ou Colar os depósitos.
+// OS INVESTIMENTOS (07/11/2026, a carteira do zero: o mockup "Carteira por aportes", tabela A). Dois cadastros e uma
+// conta só: o ✎ abre o CADASTRO dos investimentos (o que cada um é: nome, instituição, tipo, taxa, resgate); "Lançar
+// aporte" é o gesto do dia a dia (dinheiro novo, ou o que já estava aplicado: o total do banco e quanto já rendeu); na
+// linha de cada aporte, RESGATAR, EDITAR e EXCLUIR. O valor de hoje de cada aporte é a conta pelo CDI de cada dia
+// (`lib/carteira.js`); o painel do Patrimônio lê os mesmos dados (`useCarteira`). No celular, só ler.
 const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
-const IcoTroca = () => (
-  <svg viewBox="0 0 24 24" className="h-[15px] w-[15px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M7 17V5M3 9l4-4 4 4M17 7v12M13 15l4 4 4-4" />
-  </svg>
-);
 
 export default function Investimentos() {
   const toast = useToast();
   const confirmar = useConfirmacao();
   const movel = useNoCelular();
+  const d = useCarteira();
+  const [cadastro, setCadastro] = useState(false);
+  const [aporte, setAporte] = useState(null); // { investimento_id?, aporte?, reaplicar? }
+  const [resgate, setResgate] = useState(null); // o item da carteira
   const [encerrados, setEncerrados] = useState(false);
-  const d = useDadosPatrimonio({ encerrados });
-  const edicao = useEdicaoCarteira(d); // a carteira é uma planilha: cada célula grava sozinha, com o Ctrl+Z
-  const [cadastro, setCadastro] = useState(null); // { foco? }
-  const [mov, setMov] = useState(null); // { inv?, tipo }
-  const [ficha, setFicha] = useState(null); // o id do investimento
-  const [atualizar, setAtualizar] = useState(false);
-  const [lugar, setLugar] = useState(null); // { conta? }
-  const [comoEntrou, setComoEntrou] = useState(null); // { criados: [{ inv, lugar }], feitos: Set } — depois do cadastro
-  const [colar, setColar] = useState(null); // o investimento (do "Como o dinheiro entrou?") cujos depósitos se colam
   const [mais, setMais] = useState(null);
   const maisAberto = useRef(false);
 
-  if (!d.contas) return (<div><CabecalhoPagina titulo="Investimentos" /><PageLoading /></div>);
-  const ativos = d.investimentos.filter((i) => i.ativo !== false);
-  const qtdEncerrados = d.investimentos.length - ativos.length;
-  const valesHoje = Object.fromEntries(d.grupos.flatMap((g) => g.itens.map((x) => [x.inv.id, x.vale])));
-  const comps = mesesDaGrade(d.meses, d.hoje);
+  if (d.carregando) return (<div><CabecalhoPagina titulo="Investimentos" /><PageLoading /></div>);
+  if (d.semMigration) {
+    return (
+      <div>
+        <CabecalhoPagina titulo="Investimentos" />
+        <p className="mt-4 max-w-2xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+          Falta aplicar a <b className="font-semibold">migration 020</b> (a carteira do zero): no Supabase, SQL Editor, cole o arquivo
+          <code className="mx-1">supabase/migrations/020_carteira_do_zero.sql</code> e clique em Run. Depois, recarregue esta tela.
+        </p>
+      </div>
+    );
+  }
+  const { carteira } = d;
   const recarregar = () => d.carregar();
-  const fichaX = ficha ? d.grupos.flatMap((g) => g.itens.map((x) => ({ x, g }))).find((y) => y.x.inv.id === ficha) : null;
-  const depositosPorInv = d.depositos.reduce((m, x) => ({ ...m, [x.investimento_id]: (m[x.investimento_id] ?? 0) + 1 }), {});
-  const itemDe = (id) => d.grupos.flatMap((g) => g.itens).find((x) => x.inv.id === id) ?? null;
-  const entrou = (id) => setComoEntrou((c) => (c ? { ...c, feitos: new Set([...c.feitos, id]) } : c));
+  const aportesPorInv = d.aportes.reduce((m, a) => ({ ...m, [a.investimento_id]: (m[a.investimento_id] ?? 0) + 1 }), {});
+  const qtdInv = carteira.grupos.reduce((s, g) => s + g.investimentos.length, 0);
+  const qtdAportes = carteira.grupos.reduce((s, g) => s + g.investimentos.reduce((t, x) => t + x.aportes.length, 0), 0);
+  const t = carteira.total;
 
   const acoes = movel ? null : {
-    podeInvestir: d.comInvestimentos,
-    movimento: (x) => setMov(x),
-    ficha: (inv) => setFicha(inv.id),
-    editarConta: (conta) => setLugar({ conta }),
+    aportar: (inv) => setAporte({ investimento_id: inv.id }),
+    editar: (item) => setAporte({ aporte: item.ap }),
+    resgatar: (item) => setResgate(item),
+    reaplicar: (item) => {
+      const e = item.pos.encerrado;
+      const data = e.data <= d.hoje ? e.data : d.hoje;
+      setAporte({ investimento_id: item.inv.id, reaplicar: { data, valor: e.valor } });
+    },
+    excluir: async (item) => {
+      const { ap, inv, resgates } = item;
+      const data = ap.origem === 'antigo' ? ap.aplicado_em ?? ap.data : ap.data;
+      const ok = await confirmar({
+        titulo: 'Excluir o aporte?', perigo: true, confirmar: 'Excluir',
+        texto: `O aporte de ${formatDate(data)} em ${inv.nome} (${formatBRL(Number(ap.valor_centavos))}) sai da carteira${resgates.length ? `, com ${resgates.length === 1 ? 'o resgate' : `os ${resgates.length} resgates`} dele` : ''}. Os outros aportes não mudam. Não se desfaz.`,
+      });
+      if (!ok) return;
+      try { await excluirAporte(ap.id); toast.success('Aporte excluído.'); recarregar(); } catch (err) { toast.error(err.message); }
+    },
   };
 
-  const exportar = (vista, modo) => {
-    if (vista === 'mes') {
-      const linhas = d.grupos.flatMap((g) => [
-        { nome: g.conta.nome, nivel: 'instituição', l: linhaMesAMes(d.meses, comps, (m) => m.porConta[g.conta.id]) },
-        ...g.itens.map((x) => ({ nome: x.inv.nome, nivel: g.conta.nome, l: linhaMesAMes(d.meses, comps, (m) => m.porSerie[`i:${x.inv.id}`]) })),
-      ]);
-      exportCsv(`rendimento-mes-a-mes-${modo === 'pct' ? 'pct' : 'reais'}`, linhas, [
-        { key: 'nome', label: 'Investimento' }, { key: 'nivel', label: 'Instituição' },
-        ...comps.map((c) => ({ key: c, label: competenciaCurta(c), tipo: modo === 'pct' ? 'numero' : 'dinheiro', map: (r) => (r.l.porMes[c] ? (modo === 'pct' ? (r.l.porMes[c].pct ?? 0) * 100 : r.l.porMes[c].rendeu / 100) : null) })),
-        { key: 'total', label: modo === 'pct' ? 'No período (%)' : 'Total', tipo: modo === 'pct' ? 'numero' : 'dinheiro', map: (r) => (r.l.total === null ? null : modo === 'pct' ? r.l.pct * 100 : r.l.total / 100) },
-      ]);
-      return;
-    }
-    const linhas = d.grupos.flatMap((g) => g.itens.map((x) => ({ g, x })));
-    exportCsv('investimentos', linhas, [
-      { key: 'lugar', label: 'Instituição', map: (r) => r.g.conta.nome },
-      { key: 'nome', label: 'Investimento', map: (r) => r.x.inv.nome },
-      { key: 'tipo', label: 'Tipo', map: (r) => nomeTipoInvestimento(r.x.inv.tipo) },
-      { key: 'rende', label: 'Rende', map: (r) => rotuloRende(r.x.inv) },
-      { key: 'resgate', label: 'Resgate', map: (r) => rotuloLiquidez(r.x.inv) },
-      { key: 'vencimento', label: 'Vencimento', tipo: 'data', map: (r) => r.x.prazos?.proximo?.vence ?? r.x.inv.vencimento ?? '' },
-      { key: 'aplicado', label: 'Aplicado', tipo: 'dinheiro', map: (r) => r.x.aplicado / 100 },
-      { key: 'vale', label: 'Vale hoje', tipo: 'dinheiro', map: (r) => r.x.vale / 100 },
-      { key: 'rendeu', label: 'Rendeu', tipo: 'dinheiro', map: (r) => r.x.rendeu / 100 },
-      { key: 'pct', label: 'Rendeu (%)', tipo: 'numero', map: (r) => (r.x.pct === null ? null : r.x.pct * 100) },
+  const exportar = () => {
+    const linhas = carteira.grupos.flatMap((g) => g.investimentos.flatMap((x) => x.aportes.map((item) => ({ g, x, item }))));
+    exportCsv('carteira', linhas, [
+      { key: 'inst', label: 'Instituição', map: (r) => r.g.instituicao },
+      { key: 'inv', label: 'Investimento', map: (r) => r.x.inv.nome },
+      { key: 'tipo', label: 'Tipo', map: (r) => nomeDoTipo(r.x.inv.tipo) },
+      { key: 'taxa', label: 'Rende', map: (r) => rotuloTaxa(r.x.inv.taxa) },
+      { key: 'origem', label: 'Aporte', map: (r) => (r.item.ap.origem === 'antigo' ? 'já estava aplicado' : 'dinheiro novo') },
+      { key: 'data', label: 'Data do aporte', tipo: 'data', map: (r) => (r.item.ap.origem === 'antigo' ? r.item.ap.aplicado_em ?? '' : r.item.ap.data) },
+      { key: 'venc', label: 'Vencimento', tipo: 'data', map: (r) => r.item.ap.vencimento ?? '' },
+      { key: 'aplicado', label: 'Aplicado', tipo: 'dinheiro', map: (r) => r.item.pos.aplicado / 100 },
+      { key: 'vale', label: 'Vale hoje', tipo: 'dinheiro', map: (r) => r.item.pos.vale / 100 },
+      { key: 'rendeu', label: 'Rendeu', tipo: 'dinheiro', map: (r) => r.item.pos.rendeu / 100 },
+      { key: 'ir', label: 'IR ≈', tipo: 'dinheiro', map: (r) => (r.item.pos.ir + r.item.pos.iof) / 100 },
+      { key: 'liq', label: 'Líquido ≈', tipo: 'dinheiro', map: (r) => r.item.pos.liquido / 100 },
     ]);
-  };
-  const comecarDoZero = async () => {
-    const n = d.investimentos.length;
-    const ok = await confirmar({
-      titulo: 'Começar do zero?', perigo: true, confirmar: 'Apagar tudo',
-      texto: `Apaga as ${d.contas.length} instituição(ões), ${n} investimento(s) e todos os valores, aplicações, resgates e fotos antigas do Patrimônio. Não se desfaz. Os lançamentos, as faturas e o resto do app não mudam.`,
-    });
-    if (!ok) return;
-    try { await apagarPatrimonio(); toast.success('Patrimônio apagado. Comece pelo "Montar a carteira".'); recarregar(); } catch (err) { toast.error(err.message); }
   };
   const abrirMais = (el) => {
     const r = el.getBoundingClientRect();
     setMais({ x: r.right - 260, y: r.bottom + 4, titulo: 'Mais ações', itens: [
-      { rotulo: 'Exportar a carteira (CSV)', sub: 'cada investimento, aplicado, vale e rendeu', desabilitado: !ativos.length, motivo: !ativos.length ? 'nada cadastrado' : undefined, onEscolher: () => exportar('carteira') },
-      { rotulo: 'Exportar o mês a mês (CSV)', sub: 'o que cada um rendeu em cada mês, em reais', desabilitado: !ativos.length, motivo: !ativos.length ? 'nada cadastrado' : undefined, onEscolher: () => exportar('mes', 'rs') },
-      { rotulo: encerrados ? 'Esconder os encerrados' : 'Mostrar os encerrados', sub: 'os que você resgatou inteiros', desabilitado: !qtdEncerrados, motivo: !qtdEncerrados ? 'nenhum encerrado' : undefined, onEscolher: () => setEncerrados((e) => !e) },
-      { sep: true },
-      { rotulo: 'Começar do zero', sub: 'apaga instituições, investimentos e valores', perigo: true, desabilitado: !d.contas.length, onEscolher: comecarDoZero },
+      { rotulo: 'Exportar a carteira (CSV)', sub: 'cada aporte: aplicado, vale hoje, rendeu, IR', desabilitado: !qtdAportes, motivo: !qtdAportes ? 'nenhum aporte' : undefined, onEscolher: exportar },
+      { rotulo: encerrados ? 'Esconder os encerrados' : 'Mostrar os encerrados', sub: 'os que venceram ou foram resgatados inteiros', desabilitado: !carteira.encerrados.length, motivo: !carteira.encerrados.length ? 'nenhum encerrado' : undefined, onEscolher: () => setEncerrados((e) => !e) },
     ] });
   };
 
-  const vazio = ativos.length === 0;
-  const destaque = vazio ? (
-    <button type="button" className="btn-primary" onClick={() => setCadastro({})} disabled={!d.comInvestimentos}>Montar a carteira</button>
-  ) : d.pendentes.length ? (
-    <Tooltip label={`${d.pendentes.length} ${d.pendentes.length === 1 ? 'investimento' : 'investimentos'} sem o valor do fim do mês passado`}>
-      <button type="button" onClick={() => setAtualizar(true)}
-        className="inline-flex h-9 items-center gap-2 rounded-md border border-amber-400 bg-amber-50 px-3.5 text-[13px] font-semibold text-amber-800 transition-colors hover:bg-amber-100">
-        Atualizar valores <span className="rounded-full bg-amber-600 px-1.5 text-[11px] font-bold leading-[18px] text-white">{d.pendentes.length}</span>
-      </button>
-    </Tooltip>
-  ) : (
-    <button type="button" className="btn-primary" onClick={() => setAtualizar(true)}>Atualizar valores</button>
-  );
-
+  const vazio = !d.cadastro.length;
   return (
     <div>
       <CabecalhoPagina titulo="Investimentos"
-        acessorio={!vazio && <span className="text-sm text-gray-500">{ativos.length} em {d.grupos.filter((g) => g.itens.length).length} {d.grupos.filter((g) => g.itens.length).length === 1 ? 'instituição' : 'instituições'} · {formatBRL(d.total.vale)}</span>}
-        acoes={<>
-          {/* O GRUPO DO DRE: ✎ o cadastro · ⇅ aplicar ou resgatar · ▾ mais ações (o nome no tooltip), e o destaque ao lado. */}
+        acessorio={!vazio && <span className="text-sm text-gray-500">{qtdInv} em {carteira.grupos.length} {carteira.grupos.length === 1 ? 'instituição' : 'instituições'} · {formatBRL(t.vale)}</span>}
+        acoes={!movel && <>
+          {/* O GRUPO DO DRE: ✎ o cadastro · ▾ mais ações (o nome no tooltip), e o gesto do dia a dia ao lado */}
           <div className="inline-flex overflow-hidden rounded-md border border-gray-300 bg-white">
             <Tooltip label="Cadastro dos investimentos">
-              <button type="button" aria-label="Cadastro dos investimentos" onClick={() => setCadastro({})} disabled={!d.comInvestimentos} className={`${ICONE} w-[38px] disabled:opacity-40`}>
-                <IconLapis className="h-3.5 w-3.5" />
-              </button>
-            </Tooltip>
-            <Tooltip label="Aplicar ou resgatar">
-              <button type="button" aria-label="Aplicar ou resgatar" onClick={() => setMov({ tipo: 'aporte' })} disabled={vazio || !d.comMovimentos}
-                className={`${ICONE} w-[38px] border-l border-gray-200 disabled:opacity-40`}><IcoTroca /></button>
+              <button type="button" aria-label="Cadastro dos investimentos" onClick={() => setCadastro(true)} className={`${ICONE} w-[38px]`}><IconLapis className="h-3.5 w-3.5" /></button>
             </Tooltip>
             <Tooltip label="Mais ações">
               <button type="button" aria-label="Mais ações" aria-haspopup="menu" aria-expanded={!!mais}
@@ -162,67 +124,44 @@ export default function Investimentos() {
               </button>
             </Tooltip>
           </div>
-          {destaque}
+          {vazio
+            ? <button type="button" className="btn-primary" onClick={() => setCadastro(true)}>Cadastrar investimentos</button>
+            : <button type="button" className="btn-primary" onClick={() => setAporte({})}>Lançar aporte</button>}
         </>} />
 
-      {!d.comInvestimentos && (
-        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">Falta aplicar a migration 014 (investimentos).</p>
-      )}
-      {d.sem015 && (
-        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
-          Falta aplicar a migration 015 (o prazo de cada aplicação e o "saldo em conta"). Até lá, "cada aplicação vence" e "Saldo em conta" não salvam.
-        </p>
-      )}
+      {d.semTaxas && <AvisoSemTaxas onTentar={d.tentarTaxas} className="mt-4" />}
 
       {vazio ? (
-        <CarteiraVazia contas={d.contas} saldos={d.saldos} movel={movel} podeCadastrar={d.comInvestimentos}
-          onMontar={() => setCadastro({})} onComecarDoZero={comecarDoZero} />
-      ) : (
-        <div className="mt-4">
-          <BlocoInvestimentos grupos={d.grupos.filter((g) => g.itens.length || !g.soConta || g.conta.ativa)} total={d.total} meses={d.meses} comps={comps} cdi={d.cdi} ano={d.ano} hoje={d.hojeISO}
-            edicao={movel || !d.comInvestimentos ? null : edicao}
-            movel={movel} acoes={acoes} encerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)} qtdEncerrados={qtdEncerrados}
-            aviso={d.semTaxas && <AvisoSemTaxas onTentar={d.tentarTaxas} className="mx-4 mb-2.5" />} />
-          <p className="mt-2 text-xs text-gray-500">
-            {movel ? 'Aplicar, resgatar e atualizar ficam no computador.'
-              : 'Rendeu = vale hoje − aplicado (os aportes − os resgates). A seta abre os aportes de cada investimento; clique numa célula para editar, e a ficha (no fim da linha) traz o IR, as quedas, os vencimentos e o histórico.'}
-          </p>
+        <div className="mt-6 max-w-2xl">
+          <ListaVazia>
+            Comece pelo cadastro: o nome de cada investimento, a instituição, o tipo e a taxa (em % do CDI). Depois, "Lançar aporte":
+            o dinheiro novo com a data, o valor e o vencimento; o que já estava aplicado, com o total que o banco mostra hoje e quanto ele já rendeu.
+          </ListaVazia>
         </div>
+      ) : (
+        <>
+          {/* SEM OS CARTÕES DE RESUMO (08/11/2026, a pedido): o vale hoje, o aplicado, o rendeu e o líquido moram no
+              Patrimônio, que é onde se analisa; aqui é a tabela de lançar (o Total dela fecha a conta) */}
+          <div className="mt-4">
+            <TabelaCarteira carteira={carteira} hoje={d.hoje} movel={movel} acoes={acoes} mostrarEncerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)} />
+          </div>
+          {movel && <p className="mt-2 text-xs text-gray-500">Lançar, resgatar e editar ficam no computador.</p>}
+        </>
       )}
 
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
       {cadastro && (
-        <ModalCadastroInvestimentos contas={d.contas} investimentos={d.investimentos} valesHoje={valesHoje} depositosPorInv={depositosPorInv} focoLugar={cadastro.foco}
-          onFechar={() => setCadastro(null)}
-          onSalvo={(criados) => { setCadastro(null); recarregar(); if (criados?.length) setComoEntrou({ criados, feitos: new Set() }); }} />
+        <ModalCadastroCarteira cadastro={d.cadastro} aportesPorInv={aportesPorInv}
+          onFechar={() => setCadastro(false)} onSalvo={() => { setCadastro(false); recarregar(); }} />
       )}
-      {atualizar && (
-        <ModalAtualizarValores grupos={d.grupos} valores={d.valores} movimentos={d.movimentos} estimados={d.estimados}
-          onFechar={() => setAtualizar(false)} onSalvo={() => { setAtualizar(false); recarregar(); }} />
+      {aporte && (
+        <ModalAporte inicial={aporte} cadastro={d.cadastro} cal={carteira.cal} hoje={d.hoje}
+          resgates={aporte.aporte ? d.resgates.filter((r) => r.aporte_id === aporte.aporte.id) : []}
+          onCadastro={() => { setAporte(null); setCadastro(true); }}
+          onFechar={() => setAporte(null)} onSalvo={(ficar) => { if (!ficar) setAporte(null); recarregar(); }} />
       )}
-      {fichaX && (
-        <FichaInvestimento x={fichaX.x} lugar={fichaX.g.conta.nome} movel={movel}
-          valores={d.valores.filter((v) => v.investimento_id === ficha)} movimentos={d.movimentos.filter((m) => m.investimento_id === ficha)}
-          depositos={d.depositos.filter((x) => x.investimento_id === ficha)} comDepositos={d.comDepositos} taxas={d.taxas}
-          onFechar={() => setFicha(null)} onMudou={recarregar}
-          onAplicar={(tipo) => setMov({ inv: fichaX.x.inv, tipo })} onCadastro={() => { setFicha(null); setCadastro({}); }} />
-      )}
-      {comoEntrou && (
-        <ModalComoEntrou criados={comoEntrou.criados} feitos={comoEntrou.feitos} onFechar={() => setComoEntrou(null)}
-          onAplicar={(inv) => setMov({ inv, tipo: 'aporte', doComoEntrou: true })} onColar={(inv) => setColar(inv)} />
-      )}
-      {colar && (
-        <ModalDepositos inv={itemDe(colar.id)?.inv ?? colar} taxas={d.taxas} semValor={itemDe(colar.id)?.semValor ?? true} vale={itemDe(colar.id)?.vale ?? 0}
-          dataVale={itemDe(colar.id)?.data ?? null} depositos={d.depositos.filter((x) => x.investimento_id === colar.id)}
-          onFechar={() => setColar(null)} onSalvo={() => { entrou(colar.id); setColar(null); recarregar(); }} />
-      )}
-      {mov && (
-        <ModalMovimento inicial={mov} grupos={d.grupos} contas={d.contas} valores={d.valores} taxas={d.taxas} z="z-[65]"
-          onFechar={() => setMov(null)} onSalvo={() => { if (mov.doComoEntrou) entrou(mov.inv.id); setMov(null); recarregar(); }} />
-      )}
-      {lugar && (
-        <ModalLugar conta={lugar.conta} qtdInvestimentos={lugar.conta ? d.investimentos.filter((i) => i.conta_id === lugar.conta.id).length : 0}
-          onFechar={() => setLugar(null)} onSalvo={() => { setLugar(null); recarregar(); }} />
+      {resgate && (
+        <ModalResgate item={resgate} cal={carteira.cal} hoje={d.hoje} onFechar={() => setResgate(null)} onSalvo={() => { setResgate(null); recarregar(); }} />
       )}
     </div>
   );

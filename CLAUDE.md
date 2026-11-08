@@ -240,239 +240,62 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - **Classificar só pela contraparte**, nunca pela descrição inteira: a regra "4" → Outros da planilha pegava todo
   Pix pelos dígitos do CPF. `id_externo` (identificador do banco, índice único) impede importar duas vezes.
 
-## Patrimônio (fase 6)
+## Investimentos e Patrimônio (a carteira do zero, 07/11/2026)
 
-- `contas` + `saldos` (foto do saldo numa data, única por conta + data: registrar de novo na mesma data substitui).
-- Patrimônio no mês = soma, por conta, da foto mais recente até o fim do mês (vale até a próxima); conta sem foto
-  ainda não entra. Conta encerrada: registrar saldo 0 antes de desativar. Lógica em `lib/patrimonio.js` (testada).
-- O RENDIMENTO (05/11/2026, fase 8.A do PLANO; o plano e as telas no artefato "Patrimônio e rentabilidade"):
-  `movimentos_investimento` (migration 013: conta, data, aporte | resgate, valor, `origem` manual | extrato,
-  `id_externo` único) e `contas.recebe_extrato` (UMA conta; marcar uma desmarca as outras — `salvarConta`). Rendeu =
-  saldo − saldo anterior − (aportes − resgates) entre as duas fotos; o % = rendeu ÷ (saldo anterior + metade do líquido
-  aportado); o do ano ENCADEIA os meses; aportado = a 1ª foto + os aportes − os resgates depois dela; o resto é o
-  rendimento acumulado (`rendimentoPorMes`, `rendimentoDoPeriodo`, testadas em `test/rendimento.test.js`). Mês sem foto
-  nova não tem rendimento (null). O EXTRATO DO NUBANK: as linhas que já ficavam de fora como 'investimento' (RDB,
-  dinheiro guardado) viram APORTE (débito) e RESGATE (crédito) da conta que recebe o extrato (`movimentosDoExtrato`;
-  o mesmo identificador não entra duas vezes; re-importar um extrato antigo só acrescenta os que faltam; o "Excluir" do
-  histórico os apaga — `desfazer.movimentos`). O CDI do mês: a série 4391 do SGS do Banco Central (`api/cdi.js`, aberta
-  ao navegador); só os meses FECHADOS se comparam (o corrente vem parcial). "Registrar o mês": a data (no começo do mês,
-  o fim do anterior se não houver foto depois dele), e por conta saldo + aportes + resgates digitados (os do extrato já
-  somados e mostrados), com o "Rendeu" ao vivo. Sem a migration, a tela mostra só os saldos e avisa.
-- OS INVESTIMENTOS (05/11/2026, fase 8.B; o desenho aprovado "Investimentos no Patrimônio"; migration 014): cada título
-  (CDB, LCI, Tesouro…) é cadastrado DENTRO de uma conta (`investimentos`: tipo, indexador + taxa, liquidez — diária,
-  no vencimento, D+N, carência até —, vencimento, emissor, data da aplicação, "aplicado até hoje", observação, ativo),
-  com o VALOR de cada data em `valores_investimento` (o cadastro pede o "vale hoje" = a primeira foto; "aplicação nova"
-  também grava o aporte do mesmo valor) e o aporte / resgate no título (`movimentos_investimento.investimento_id`).
-  APORTE MANUAL (o extrato não diz em qual CDB entrou; a leitura do extrato segue só para a conta sem títulos). Tudo é
-  SÉRIE (`rendimentoDasSeries` + `seriesDoPatrimonio` em `lib/patrimonio.js`): a conta (`c:<id>`, as fotos de
-  `saldos`) vale pelas fotos dela ATÉ a primeira foto de um título dela (`fim`; no mês da troca ainda dá o rendimento
-  entre as fotos dela, mas não entra no total) e daí em diante é a SOMA DOS TÍTULOS (`i:<id>`); o movimento de um
-  título conta na conta dele. No mês em que a série ABRE, a foto de antes é a primeira (o título cadastrado no dia 5
-  rende até o dia 30). O aporte depois da última foto já entra no valor e no aplicado (não no rendimento). O aplicado
-  parte do "aplicado até hoje" (senão da primeira foto). A CARTEIRA (`carteira`, `ordenarCarteira`, `linhaMesAMes` em
-  `lib/investimentos.js`, testadas em `test/investimentos.test.js`). Resgatar tudo ("Resgatei tudo") grava o valor 0 e
-  desativa: sai da lista e do registrar ("Mostrar os N encerrados" os traz).
-  A TELA (opção A do mockup "Patrimônio · a tabela", com a B como segunda vista, a pedido): os quatro `CartaoKpi
-  compacto` (patrimônio, rendeu no mês, no ano, liquidez diária — ou o aportado no ano, sem títulos), o
-  `GraficoPatrimonio` (`components/patrimonio/`, o card do "Entradas × gastos": `GradeEsq` — que ganhou `rotulo` —,
-  número em cada coluna, guia e 40% no hover, `LegendaSeries`; "Colunas" aportado + rendimento | "% do mês × CDI") e
-  o `BlocoInvestimentos` (`TabelaInvestimentos.jsx`): CARTEIRA = a conta é o grupo que recolhe animado
-  (`useLinhasAnimadas`), títulos com liquidez (pílula azul na diária), vencimento (âmbar até 12 meses, a barrinha do
-  prazo), aplicado, vale hoje, rendeu, % do ano e a curva de 12 meses (balão no Rendeu e ao longo da curva), + aporte ·
-  − resgate · ✎ no hover, a SETA do cabeçalho ordena dentro de cada conta (`patrimonio_ordem`); MÊS A MÊS = a
-  Grupo × mês (cruz, R$ | %, o tom mais forte é o melhor mês da linha). Vista e recolhidas lembradas
-  (`patrimonio_vista`, `patrimonio_recolhidas`); no canto só o ⇕ (06/11/2026: o ⬇ CSV foi para o ▾ da tela, com o mês a
-  mês, e o ⤢ ampliado saiu — não acrescentava nada). Os pop-ups em `ModaisPatrimonio.jsx`:
-  conta (com o histórico dela), investimento (o cadastro + histórico + excluir), aporte/resgate (a lista agrupada por
-  conta, "Novo investimento" no pé, "fica com R$ X aplicados") e "Registrar o mês" POR TÍTULO (a conta sem títulos é
-  uma linha; "+ aporte" na linha, por cima). Sem a 014, `listarInvestimentos` devolve null, a tabela mostra só as
-  contas e avisa (a leitura dos movimentos cai para a sem `investimento_id`).
-- O PATRIMÔNIO "DO ZERO" (06/11/2026, o mockup aprovado "Patrimônio do zero", e a SEPARAÇÃO pedida — o painel e a
-  tabela, como a Visão geral e os Lançamentos; migration 015). TRÊS GESTOS, sempre com o mesmo nome: CADASTRAR,
-  APLICAR / RESGATAR e ATUALIZAR VALORES ("aporte" e "registrar o mês" saíram da tela). A conta virou INSTITUIÇÃO (o banco ou
-  a corretora; 06/11/2026: "lugar" saiu da tela — no código ainda é `conta`/`lugar`, `ModalLugar`); a conta corrente é o
-  tipo `saldo` ("Saldo em conta"). A INSTITUIÇÃO NOVA nasce só no cadastro ("Nova instituição", no fim da tabela).
-  · `/patrimonio` (`pages/Patrimonio.jsx`) = o PAINEL, só de ler: os 4 `CartaoKpi` (com o "desde out/26" no começo
-    curto), o `GraficoPatrimonio` (do 2º mês em diante), "Onde está o dinheiro" (lugar | tipo | resgate) e "Próximos
-    vencimentos" (com data e cada aplicação, reaplica / volta), e a faixa âmbar do que pede o valor do mês.
-  · `/investimentos` (`pages/Investimentos.jsx`) = a TABELA (`BlocoInvestimentos`, Carteira | Mês a mês). O topo é o
-    grupo do DRE: ✎ o cadastro · ⇅ aplicar ou resgatar · ▾ (o CSV da carteira e o do mês a mês, encerrados, COMEÇAR DO
-    ZERO — `apagarPatrimonio`, apaga as instituições e tudo em cascata, com confirmação; só a pessoa clica) + o destaque "Atualizar
-    valores", âmbar com o número dos que pedem o valor do fim do mês passado (`pendentesDeValor`; o mesmo número no
-    menu, `useContadores` 'investimentos'); vazio, "Montar a carteira". A coluna RESGATE junta liquidez e vencimento
-    (no "cada aplicação vence": "próxima 03/2027 · reaplica"). AS AÇÕES DA LINHA (06/11/2026, opção A do mockup "Ficha
-    do investimento"): todas no MESMO quadrado (`BotaoLinha`, 30px, borda e o fundo `bg-white`, o mais escuro no tema
-    escuro; o nome no tooltip) — na instituição, ✎ (recebe o extrato, encerrar); no investimento, APORTAR e RESGATAR com
-    as MOEDAS + e − (`IconAplicar`/`IconResgatar` em icons.jsx; o aportar abre o investimento e começa a linha
-    "+ aporte") · o documento da FICHA (`IconFicha`; o nome não abre mais a ficha — ele é uma célula); no aporte, 🗑. A
-    SETA de abrir tem o QUADRADO no hover (`QUADRADO_SETA`, a do Gestor). Os dados das duas telas:
-    `components/patrimonio/useDadosPatrimonio.js`.
-  · A CARTEIRA É UMA PLANILHA (06/11/2026, a opção A do mockup "Carteira editável"; "APORTE" no lugar de "depósito" em
-    toda a tela, a pedido — menos o nome da tela do banco, "Detalhes dos depósitos"). A célula ativa e o teclado dos
-    Lançamentos (`TabelaCarteira`): clicar seleciona, clicar de novo / Enter / F2 / digitar edita, Enter grava e desce,
-    Tab vai à próxima que se EDITA, setas andam, Esc desiste (e depois tira a seleção), Ctrl+Z desfaz, Delete exclui o
-    aporte. Editam: o NOME da instituição; no investimento o nome, o tipo e a taxa (o pop-up `EditorInvestimento`, os
-    campos do cadastro: `linhaDoInvestimento`/`diferencaInvestimento`), o RESGATE (o pop-up da liquidez e do prazo) e o
-    "VALE HOJE" (a foto de hoje; fora do normal para o tipo pergunta "Foi um aporte?" e o lança junto); no aporte a DATA
-    e o VALOR. As calculadas só se selecionam (contorno cinza). As linhas de ACRESCENTAR: "+ aporte" no fim dos aportes
-    de cada investimento (um RASCUNHO até ter data — hoje, se não mudar — e valor; o clique já vai ao valor; o rascunho
-    VAZIO não se guarda — sair da linha a devolve ao "Novo aporte" — e Esc, Delete e o ✕ à vista no fim dela desistem; sem valor
-    ainda, o aporte é também o primeiro valor; com valores registrados depois da data, pergunta se eles já o têm e
-    "Somar" os cresce pela taxa — `valoresComOMovimento`; o valor do MESMO DIA também entra na pergunta, também no Aplicar,
-    menos no "Resgatar tudo": ele conta como já tendo os movimentos do dia, e sem a pergunta o aporte de hoje sumia do Vale
-    hoje. O aporte do app conta depois do ÚLTIMO APORTE da lista de antes do app, pela DATA dele; o resgate, depois da
-    referência — 07/11/2026: pela referência, digitar os números do banco de hoje recusava o aporte de hoje). EXCLUIR o
-    aporte do app (o 🗑 / Delete da carteira e o Histórico da ficha) pergunta se os valores do dia e de depois o perdem
-    ("Tirar do valor" = o contrário do "Somar"; sem tirar, o dinheiro dele virava rendimento; não pergunta pela foto gêmea,
-    que sai junto). "+ investimento" no fim de cada instituição (o pop-up inteiro;
-    criado, ele abre na linha "+ aporte") e "+ instituição" no fim. O que cada edição de aporte grava é pela ORIGEM dele
-    (`lo.fonte` de `estimarImposto`: o movimento do app — e a foto gêmea do mesmo dia e valor —, o aporte de antes do app
-    — o valor digitado é o DEPOSITADO, a referência vira a data, e o APLICADO do investimento (`aplicado_inicial_centavos`)
-    acompanha a diferença, também ao excluir, com o desfazer (`aplicadoSem`, 06/11/2026 — antes o "Rendeu" ficava com o
-    aplicado de antes) — ou o "valor aplicado" do cadastro sem data). OS DOIS NÚMEROS DO BANCO (07/11/2026, a opção B do
-    mockup "Aportes com os números do banco"; migration 019, `rendimento_centavos` em `depositos_investimento`): no aporte
-    de antes do app, o VALE HOJE recebe o "Valor Bruto" e o RENDEU o "Rendimento bruto" da tela do depósito (o saque
-    parcial e o IR retido nele já estão na conta do banco; o "Valor aplicado" e os "Saques parciais" não fecham). Com os
-    dois, o aplicado é a conta (bruto − rendimento), a linha mostra "· banco dd/mm" e o aporte fica FIXO no
-    `estimarImposto` (`fixo`: não entra no ajuste; os outros levam a diferença para fechar com o título); o Valor Bruto
-    novo muda a foto de hoje do investimento pela diferença (`vale.delta`) e o aplicado acompanha (`aplicadoSem`). OS DOIS
-    FICAM COMO DIGITADOS, EM QUALQUER ORDEM (07/11/2026, a pedido: "eu altero os valores e não fica"): digitado um deles
-    hoje, o outro de hoje não muda (o Vale hoje com o rendimento de hoje mantém o rendimento; o Rendeu usa o Valor Bruto
-    digitado hoje, não o da linha) — e o colado com a referência de HOJE tem o valor FIXO no `estimarImposto`
-    (`valorFixo`: não é reajustado para fechar com o título; só o rendimento dele leva a diferença):
-    `planoDoAporte`, `planoDoNovoAporte` e o andar (`modoDaCelula`, `moverAtiva`, `proximaEditavel`, `lerCelula`) em
-    `lib/carteiraEditavel.js` (testada). As gravações em FILA, com o DESFAZER de cada uma (o contrário do que gravou):
-    `components/patrimonio/useEdicaoCarteira.js`. O id da linha do aporte é o da ORIGEM (sobrevive à releitura). O
-    pop-up liga o "clicar fora" no TIQUE SEGUINTE (no duplo clique o React 18 roda o efeito dentro do próprio mousedown,
-    e o pop-up fechava na hora). No celular, só ler.
-    A HIERARQUIA (a pedido: "tudo se mistura"): a INSTITUIÇÃO é uma faixa (`bg-hx-f3f4f6`, a barra da cor dela à
-    esquerda, 14px semibold, 46px), o INVESTIMENTO recuado em duas linhas (13px médio), o APORTE recuado de novo numa
-    linha só (12,5px, 34px, mais claro) e pendurado num TRILHO que desce da seta do investimento (`Trilho`); os recuos em
-    px inteiros (o texto em 30 · 55 · 80).
-    O ⇕ (07/11/2026, a pedido): "Recolher tudo" fecha as instituições E os investimentos (`abertosInv`); "Expandir as
-    instituições" abre só elas — os investimentos aparecem fechados e cada um abre na seta dele.
-    O CABEÇALHO DO BLOCO NO JEITO DO DRE (07/11/2026, a pedido, com o print do DRE do Gestor): as VISTAS à esquerda
-    (Carteira | Mês a mês e o R$ | % do mês a mês, `AbasPilula` de 31px) e os AJUSTES num trilho à direita (`Trilho` +
-    `DivisorFaixa` dos filtros, importado como `TrilhoFaixa` — o `Trilho` da tabela é o dos aportes): a chave Centavos e o ⇕
-    sem moldura (`ICONE_TRILHO`, 28×24 com o ícone de 14). A legenda embaixo, à esquerda; o título "Investimentos" do bloco
-    saiu (é o da tela; no celular fica).
-    A COLUNA "IR ≈" (07/11/2026, a pedido), entre o Vale hoje e o Líquido: o IR (com o IOF dos 30 primeiros dias) se
-    resgatasse hoje, em cada aporte, investimento (embaixo, a alíquota média ou "com IOF"; "—" no fundo e sem as datas;
-    "isento"), instituição ("parcial" com algum sem estimativa) e no Total — o "IR ≈" embaixo do líquido saiu. Só de ler; a
-    seta do cabeçalho ordena por ela; some no celular.
-    O "RENDEU" É BRUTO (o vale hoje − o aplicado, como a "Valorização" do banco); o balão dele traz também o "Depois do IR ≈"
-    (o líquido − o aplicado, se resgatasse hoje; "parcial" na instituição com algum sem estimativa).
-    OS CENTAVOS (06/11/2026, a pedido): o interruptor "Centavos" no cabeçalho do bloco (o `Toggle` do "Só o que falta" do
-    Importar, antes das abas; some no "%" do mês a mês) troca o formato das duas vistas — ligado, todo valor com os
-    centavos; desligado (o padrão), em reais redondos, também o valor do aporte. `formatos(centavos)` no topo de
-    TabelaInvestimentos.jsx; lembrado em `patrimonio_centavos`. Os balões e a ficha seguem sempre com os centavos.
-  · O CADASTRO EM TABELA (`ModalCadastroInvestimentos.jsx`, a dos fixos/cartões): agrupado por lugar, "Adicionar
-    investimento" em cada um e "Novo lugar" no fim; nome, tipo, rende + taxa, prazo · resgate e "TEM HOJE" (só informa:
-    o valor e quantos depósitos); ⋯ = emissor, observação, ativo. O tipo preenche o resto (`padraoDoTipo`); Enter desce na
-    coluna; "Salvar alterações (N)" (`diferencaInvestimento`, `validarCadastro`; testadas em
-    `test/cadastroInvestimentos.test.js`). SEM OS VALORES (06/11/2026, opção A do mockup "Ficha do investimento"): o
-    cadastro diz o que o investimento É; o dinheiro entra como DEPÓSITO. Salvar investimentos novos abre o "COMO O
-    DINHEIRO ENTROU?" (`ModalComoEntrou`): "É dinheiro novo" = o Aplicar (no investimento SEM VALOR, a aplicação grava
-    também a primeira foto) e "Já estava aplicado" = o Colar os depósitos, que pede o VALOR APLICADO do banco (saiu do
-    cadastro) e, sem valor ainda, faz da soma o valor de hoje (`planoDoColar`, testada). O cadastrado sem dinheiro fica
-    na carteira com "sem valor" (fora do "Atualizar valores"). `criarInvestimento` sem `valor_centavos` grava só o título.
-    O `prazo_meses`/`ao_vencer` não gravavam (faltavam no `CAMPOS` da api) — corrigido em 06/11/2026.
-  · O PRAZO DE CADA APLICAÇÃO (liquidez `por_aplicacao` + `prazo_meses` + `ao_vencer` 'reaplica' | 'volta', a 015): o
-    CDB em que cada aporte vence N meses depois dele. `aplicacoesComPrazo` (testada): as aplicações são os MESMOS depósitos
-    do IR (06/11/2026) — a lista dos depósitos de antes do app (digitados ou colados) ou, sem ela, as aplicações pelo app
-    até a primeira foto e o que sobra do cadastro (sem a "data da aplicação", sem vencimento) —, depois os aportes; o
-    resgate sai das mais antigas; com 'reaplica' o vencimento que passou anda mais um prazo, sem virar resgate. VENCE UM
-    DIA ANTES (`vence_dia_anterior`, a migration 017; o "vence um dia antes" embaixo do prazo no cadastro): o RDB do Nubank
-    de 03/06 com 6 meses vence em 02/12 (sem marcar, no mesmo dia do mês); reaplicando, a nova começa no dia seguinte. O
-    campo só vai ao banco quando marcado (ou já estava): sem a 017, o resto do cadastro salva igual.
-    O VENCIMENTO DE CADA APORTE (06/11/2026, a pedido: "coloco a data e ponto final" — cada instituição conta o prazo de um
-    jeito; migration 018, `vencimento` em `movimentos_investimento` e `depositos_investimento`): DIGITADO na célula Resgate
-    da linha do aporte (ou no "+ aporte", o Tab depois da data; "02/09" sem o ano é o próximo 02/09), vale como está — sem
-    a regra do prazo nem o reaplicar (`propria` em `aplicacoesComPrazo`, que também roda fora do "prazo por aplicação"
-    quando algum aporte tem o seu; os outros ficam com o vencimento do investimento). Vazio, volta à regra. O investimento
-    mostra o que vence primeiro; o painel e a ficha, cada um. As listas leem `*` (a coluna vem quando existe); gravar sem a
-    018 diz que ela falta. O `salvarDepositos` (o pop-up dos aportes de antes) leva o vencimento de mesma data adiante.
-  · ATUALIZAR VALORES (`ModalAtualizarValores`): o rendimento FORA DO NORMAL para o tipo (`rendimentoForaDoNormal`:
-    pós-fixado 2,5%/mês, marcado a mercado 5%, fundo 10%) vira "Foi uma aplicação de R$ X?", que lança o movimento
-    junto com o salvar; Enter num campo vazio repete o valor de antes. APLICAR (`ModalMovimento`): o novo investimento
-    nasce ali (nome, lugar, tipo; o valor entra como a aplicação), "Resgatar tudo · R$ X" encerra. Os valores aceitam
-    conta (`calcularValor`).
-  · O IR EM CASCATA E O LÍQUIDO (06/11/2026, o mockup aprovado "Depósitos em cascata e o valor líquido", opção A;
-    migration 016 `depositos_investimento`): o IR da renda fixa vai sobre o rendimento de CADA DEPÓSITO pela idade dele
-    (22,5% · 20% · 17,5% · 15%, e o IOF nos 30 primeiros dias). `estimarImposto` (`lib/impostoInvestimento.js`, testada):
-    os depósitos são a lista COLADA do banco ("Detalhes dos depósitos": a data e o valor numa `referencia` —
-    `lerDepositos` lê "Feito em / 05 SET 2026 / R$ 4.165,28") ou, sem ela, o bloco do cadastro (com a "data da
-    aplicação"), mais as aplicações feitas pelo app (exatas); o resgate sai dos mais antigos. O rendimento de cada um sai
-    do CDI de cada mês (`fatorDeCrescimento`, × o % contratado) desde a data, AJUSTADO ao que o título vale e ao que foi
-    aplicado. Conferido com o RDB real: IR ≈ R$ 1.150,38 contra R$ 1.149,32 do banco. Isentos (LCI, LCA, CRI/CRA,
-    poupança, saldo) = líquido igual ao bruto; fundo = sem estimativa; SEM AS DATAS (o bloco do cadastro sem a data da
-    aplicação) o IR NÃO se estima — "— faltam as datas", nunca "R$ 0". Na carteira, a coluna "Líquido ≈" (o balão: IR,
-    IOF, a próxima queda) e o título com mais de um depósito ABRE nos depósitos (a seta antes do nome; `abertosInv`,
-    lembrado em `patrimonio_depositos_abertos`): a data e a idade, a alíquota de hoje e quando cai, o depositado ≈, o
-    líquido e o rendimento. O painel diz o líquido no cartão do Patrimônio. O CDI é lido desde o depósito mais antigo
-    (`useDadosPatrimonio`).
-  · OS DEPÓSITOS SEMPRE DENTRO (06/11/2026, a pedido, e o mockup aprovado "Depósitos de antes", opções A): todo
-    investimento com dinheiro ABRE nos depósitos dele, mesmo com um só (`temDepositos`). A aplicação feita pelo app até a
-    primeira foto (o "Cadastrar e aplicar" grava a foto e a aplicação no mesmo dia) JÁ É o depósito, com a data — ela
-    ficava de fora e o título caía em "faltam as datas" (o bloco "sem data" agora só leva o que sobra sem elas). O DINHEIRO
-    DE ANTES DO APP é DIGITADO (`ModalDepositos`: a tabela data · valor · IR hoje, Enter desce, "Adicionar depósito", ✕);
-    "Colar do banco" é um ATALHO que preenche a mesma tabela (ao colar, ou "Preencher a tabela"). Em cima, o que os valores
-    são: "o que foi depositado" (a `referencia` de cada um é a própria data — o principal é o valor) ou "o que vale hoje"
-    (numa data, como a tela do banco; colar passa a ele). Embaixo, o valor aplicado (a soma, ou o do banco) e, no sem
-    valor, o "vale hoje" (vazio: a estimativa pelo CDI). A conta é `planoDosDepositos` (testada); salvar substitui a
-    lista (`salvarDepositos` aceita a referência de cada item). Abre pelo ícone das moedas no cabeçalho da ficha, pelo
-    "Informar os depósitos" e pelo "Já estava aplicado" do "Como o dinheiro entrou?".
-  · O PAINEL CONTA O QUE RENDEU ANTES DO APP (06/11/2026, a pedido): o cartão "Rendeu até hoje" é o `rendimentoAcum` (o que
-    vale − o aplicado, também o que o título já tinha rendido ao entrar) — antes somava só o rendimento mês a mês desde a
-    primeira foto (o RDB com R$ 6.031 de antes ficava de fora); o do app vai na linha de baixo, com o % do CDI. A variação do
-    cartão Patrimônio só aparece no mês SEM dinheiro novo (o "▲398%" do mês em que o RDB entrou).
-  · EDITAR o que já foi lançado (06/11/2026): o ✎ de cada linha do Histórico da ficha (`ModalEditarRegistro`) muda a data, o
-    valor e — no movimento — o tipo e a observação (`atualizarMovimento`, `atualizarValor`); a aplicação feita junto com a
-    primeira foto (o mesmo dia e o mesmo valor) leva a foto junto. Na carteira, as colunas Investimento e RESGATE têm
-    largura FIXA: abrir os depósitos não empurra a tabela.
-  · O MOVIMENTO COM A DATA ANTES DOS VALORES (06/11/2026, o RDB Planejado: a aplicação de 03/06 lançada depois do valor de
-    11/10, que não a tinha — o app achava que o título valia só o de outubro e dividia esse total entre os dois depósitos).
-    `movimentosForaDosValores` (lib/valorEstimado.js, testada) acha o movimento lançado DEPOIS de um valor (`criado_em` dele
-    > `atualizado_em` do valor) e com a data ANTES dele; a ficha avisa e "Somar aos valores de depois" grava cada valor com
-    ele (`valoresComOMovimento`: a aplicação crescida pela taxa de cada dia até a data do valor; o resgate, tirado) — "Já
-    estava incluída" regrava o mesmo valor e o aviso some. No Aplicar / Resgatar com a data antes de valores já
-    registrados, eles passam a ter o movimento ao salvar ("eles já incluem" deixa como estão). E SEM o "valor aplicado" do
-    cadastro, as aplicações até a primeira foto SÃO o aplicado (`aplicadoAteAFoto` na série; o IR e os vencimentos idem): o
-    que a foto tem a mais é rendimento, não um depósito sem data.
-  · A FICHA DO INVESTIMENTO (06/11/2026, as opções A do mockup "Ficha do investimento"; `FichaInvestimento`): os QUATRO
-    NÚMEROS são cartões com HOVER — o cartão acende, a linha de baixo vira a CONTA ("= vale hoje − aplicado") e a COLUNA
-    dele na lista acende (`gm-acesa`; o cabeçalho da coluna acende o cartão). A lista dos depósitos tem a ALTURA DA
-    FICHA (`calc(90vh−340px)`) e o total preso embaixo. As QUEDAS DO IR têm ABA PRÓPRIA (`QuedasDoIR`: o resumo, a
-    escada do IR de hoje até a última queda e as quedas por mês). Editar no cadastro e colar os depósitos são os ÍCONES do
-    cabeçalho (o grupo do DRE, ao lado do ✕, pelo `acoes` do `Modal`); o rodapé tem só Resgatar e Aplicar (as moedas).
-    Sem dinheiro ainda: o convite para aplicar ou colar.
-  · O VALOR QUE ANDA SOZINHO (06/11/2026, o mockup aprovado "Valor pelo CDI": carteira A, conferir C, Tesouro A;
-    `lib/valorEstimado.js`, testada em `test/valorEstimado.test.js`): as séries DIÁRIAS do SGS do Banco Central
-    (`api/taxas.js`: CDI 12 e Selic 11, % ao dia útil, até ontem; IPCA 433 ao mês — abertas ao navegador) fazem o valor de
-    quem rende por taxa pública (`andaSozinho`: % do CDI, CDI +, Selic +, IPCA +, prefixado; NUNCA Tesouro IPCA+/prefixado,
-    fundo, debênture, poupança, saldo) andar DIA ÚTIL A DIA ÚTIL desde a última FOTO REAL: (valor + o que entrou − o que
-    saiu) × (1 + CDI do dia × %) — a mudança do CDI vale dali em diante sobre o que já rendeu. `estimarValores` faz FOTOS
-    ESTIMADAS (`estimado: true`): no fim de cada mês entre duas reais (o caminho AJUSTADO à real seguinte) e depois da última
-    (fins de mês + HOJE, `ultimo`), que entram nas séries (`useDadosPatrimonio`:
-    `valoresSerie`) — o mês a mês, o painel e o líquido seguem sem a foto de todo mês. O DIA DO BANCO (07/11/2026,
-    conferido NO CENTAVO com o CDI de cada dia: o RDB a 102,5% aplicado no sábado 12/09 mostrava R$ 360,18 na sexta 06/11
-    às 19h16 e R$ 369,74 no sábado às 05h03; o CDB da XP a 100,25% desde 13/08, R$ 694,12 "atualizado em 06/11"): (1) o
-    VALOR DE UM DIA tem o CDI dos dias úteis ANTES dele (o da sexta entra no sábado de madrugada) — a foto de uma data, e
-    o valor de hoje, com os dias úteis entre o último CDI publicado e hoje pela taxa do último (`projetados`,
-    `comProjetados` no `caminhar`); (2) o APORTE rende desde o próprio dia; o de SÁBADO rende o CDI da SEXTA, e o de
-    DOMINGO ou FERIADO só começa no dia útil seguinte (os dois do RDB Planejado, no centavo: o de sábado 12/09 contou o de
-    11/09; o de domingo 11/10 começou em 13/10, sem o de 09/10) — `inicioDoRendimento`; `fatorDoAporte` no IR de cada
-    aporte, no "Somar aos valores" e no pop-up dos aportes de antes. Em 06/11/2026 eu tinha passado a contar o dia de hoje ("o dia inteiro"): acertou o RDB por
-    coincidência (o dia a mais era o da sexta 11/09) e errou no sábado — voltou a regra (1). Na
-    carteira, "≈ pelo CDI até hoje" embaixo do valor e o balão com a conta (e de que dia é a taxa dos dias não
-    publicados); na ficha, o "Vale hoje". SEM O BANCO CENTRAL (a API respondeu 502 por horas no mesmo dia): as taxas que já vieram ficam; sem
-    nenhuma, a faixa âmbar `AvisoSemTaxas` (Investimentos e Patrimônio) explica que o valor para na última foto e tem o
-    "Tentar agora"; o app tenta sozinho a cada minuto (`semTaxas`, `tentarTaxas` do `useDadosPatrimonio`). O VENCIMENTO À
-    VISTA (a pedido): o aporte mostra "vence dd/mm/aa" — o do prazo por aplicação ou o do investimento —, e o investimento
-    perto de vencer, "em 10 meses · 02/09/27" (longe, "vence dd/mm/aaaa"). CONFERIR (`pendentesDeValor`, pela última foto REAL): os que andam sozinhos a cada 3
-    meses, os de preço de mercado todo mês; no "Atualizar valores" o campo vazio mostra a estimativa e o Enter a usa.
-    O IR de cada depósito também passou ao CDI de cada dia (`fatorDiario`; o do mês fica de reserva): o RDB real deu IR ≈
-    R$ 1.149,38 contra os R$ 1.149,32 do banco (antes, R$ 1.150,38).
+- O RECOMEÇO (07/11/2026, a pedido: "não deu certo, ficou complexo demais, não consigo confiar"): TODA a lógica de antes
+  saiu — as fotos de valor e o "Atualizar valores", os depósitos de antes do app, o "aplicado até hoje", as referências,
+  "Foi um aporte?" / "Somar aos valores", o valor estimado que se ajustava à foto seguinte, o IR em cascata ajustado, o prazo
+  por aplicação que reaplicava sozinho, o extrato virando aporte. O mockup aprovado: "Carteira por aportes", a TABELA A
+  (agrupada), e as recomendadas nas outras escolhas (o vencido sai sozinho, o resgate sai do aporte escolhido, começar
+  digitando do banco). As tabelas antigas (`contas`, `saldos`, `investimentos`, `valores_investimento`,
+  `movimentos_investimento`, `depositos_investimento`) FICAM PARADAS no banco: o app não lê nem grava nelas. Apagá-las é
+  uma migration nova, só com o OK do usuário e depois de conferida a carteira nova.
+- O MODELO (migration 020): `inv_cadastro` = o que o investimento É (nome, a instituição em TEXTO, tipo cdb/rdb/lci/lca/outro,
+  a taxa em % do CDI, resgate `diaria` | `vencimento`, `prazo_meses` + `vence_dia_antes` que só SUGEREM o vencimento do
+  aporte, ativo, ordem) · `inv_aportes` = o dinheiro que entrou: origem `novo` (a data e o valor aplicado) ou `antigo` =
+  "já estava aplicado" (`data` = o dia em que você olhou o banco, `valor_centavos` = o total nesse dia,
+  `rendeu_antes_centavos`, `aplicado_em` = a data do DEPÓSITO, opcional: o IR e a conta do que já rendeu); o `vencimento` é o DIGITADO · `inv_resgates` = o que saiu
+  de UM aporte (a data e o valor, ou `tudo`).
+- A ÚNICA CONTA (`lib/carteira.js`, testada em `test/carteira.test.js` com o CDI real de abr–nov/2026 em
+  `test/fixtures/cdi-2026.json`): o valor de hoje = a partida × (1 + CDI do dia × taxa) em cada dia útil de [partida, hoje).
+  As regras do banco, CONFERIDAS NO CENTAVO em 07 e 08/11/2026 com os números reais do Nubank e da XP — essa conferência
+  fica em `dados/conferencia-carteira.test.js`, FORA DO GIT (repositório público; `node --test dados/conferencia-carteira.test.js`),
+  e o `test/` repete as regras com valores inventados: o valor de um dia tem o CDI dos dias úteis ANTES dele; o aporte de SÁBADO rende o CDI de sexta, o de
+  domingo ou feriado começa no dia útil seguinte (`inicioDoAporte`); depois do último CDI publicado, os dias de semana vão
+  com a taxa dele (`calendario`, o `proj`). O TOTAL de um investimento soma os valores EXATOS e arredonda no fim
+  (`somarPosicoes`), como o banco — arredondando cada aporte, o RDB Planejado dava 1 centavo a mais. O resgate parcial tira
+  do valor e o aplicado diminui na mesma proporção; "tudo", ou o vencimento, ENCERRA o aporte (o valor do dia volta para a
+  conta: `encerrado`). O IR pela idade do aporte (22,5 · 20 · 17,5 · 15%, o IOF nos 30 primeiros dias; LCI e LCA isentas);
+  o "já estava aplicado" sem `aplicado_em` vai pelo maior, 22,5% (`semData`: o líquido nunca fica a mais). O mês a mês
+  (`mesAMes`): o fim de cada mês pela mesma conta; rendeu = o total − o do mês anterior − o que entrou + o que saiu.
+- OS DADOS: `api/carteira.js` + `components/patrimonio/useCarteira.js` (o cadastro, os aportes, os resgates, o CDI de cada
+  dia de `api/taxas.js` — desde o aporte mais antigo e no MÍNIMO dois anos, porque a prévia do "Lançar aporte" faz a conta
+  com ele e, sem aporte nenhum, ficava sem CDI — e o de cada mês de `api/cdi.js`). Sem o Banco Central, o valor fica na partida e a faixa
+  `AvisoSemTaxas` avisa e tenta de novo a cada minuto. Sem a 020, as telas pedem para aplicá-la.
+- /investimentos (`pages/Investimentos.jsx`): o grupo do DRE (✎ o cadastro · ▾ o CSV da carteira e os encerrados) + o
+  destaque "Lançar aporte"; SEM CARTÕES DE RESUMO (08/11/2026, a pedido: os números moram no Patrimônio, onde se analisa;
+  o Total da tabela fecha a conta) e a `TabelaCarteira`: a
+  INSTITUIÇÃO é a faixa com a barra da cor (`CORES_INSTITUICAO`), o INVESTIMENTO recuado (tipo · taxa · N aportes; o
+  "resgate diário" em azul ou o próximo vencimento) e os APORTES no TRILHO (a data e a idade, ou "já estava aplicado ·
+  banco em dd/mm"; o vencimento com a pílula âmbar até 45 dias; aplicado; o VALE HOJE com o BALÃO da conta inteira; rendeu;
+  o IR com a alíquota e quando ela cai, também no balão; o líquido), "+ aporte em X" no fim de cada um. Recolhe animado
+  (`useLinhasAnimadas`, lembrado em `carteira_fechadas`); os Centavos no trilho (`carteira_centavos`). As ações da linha no
+  quadrado de 30px: APORTAR no investimento; RESGATAR · EDITAR · EXCLUIR no aporte; REAPLICAR no vencido. Os pop-ups:
+  `ModalAporte` (Dinheiro novo | Já estava aplicado; o vencimento sugerido pelo cadastro até a pessoa mexer, e o fim de
+  semana vai para a segunda; a prévia com o aplicado, desde quando rende e o IR; editando, os resgates do aporte com o ✕;
+  no "já estava aplicado", na ordem da tela do depósito no banco — o Valor Bruto, o dia em que olhou, a data do Depósito —
+  e o QUANTO JÁ RENDEU O APP CALCULA (08/11/2026, a pedido): o total − o total ÷ o fator do CDI desde o depósito
+  (`rendeuDoDeposito`, testada também com um saque no meio; o depósito de mais de dois anos busca o CDI dele). NÃO É o
+  "Rendimento bruto" do Nubank: ele soma o que saiu junto nos saques parciais — a conta fechou no centavo o IR que falta
+  pagar de um depósito com saques. O campo segue a conta até a pessoa digitar; aí, "pela conta: R$ X · usar"),
+  `ModalResgate` (a data e o valor, ou "Tudo"; mostra o que fica rendendo) e `ModalCadastroCarteira` (a tabela de formulário
+  dos fixos, agrupada pela instituição — o nome do grupo é um campo; o investimento com aportes não se exclui, desativa).
+  No celular, só ler.
+- /patrimonio (`pages/Patrimonio.jsx`), só de ler: os 4 `CartaoKpi` (patrimônio com o líquido e o IR, rendeu no último mês
+  fechado com o % do CDI, rendeu até hoje, resgate a qualquer hora), o `GraficoPatrimonio` (aportado × rendimento | % do mês
+  × CDI), "Onde está o dinheiro" (instituição, tipo, resgate) e "Próximos vencimentos" (cada aporte). Os Indicadores leem
+  o mesmo mês a mês ("Sua carteira × CDI × IPCA").
+- O EXTRATO do Nubank: RDB e "dinheiro guardado" voltam a ficar só como "Fora: investimento" (não viram aporte).
 
 ## Indicadores (06/11/2026, o mockup aprovado "Indicadores e importações", opção A)
 

@@ -11,8 +11,6 @@ import { listarRegrasParaClassificar } from '../api/faturas.js';
 import { listarRecorrencias } from '../api/fixos.js';
 import { salvarRegra } from '../api/regras.js';
 import { entradasManuais, fixosLancados, gravarExtrato, idsJaImportados } from '../api/extrato.js';
-import { contaDoExtrato, gravarMovimentosDoExtrato, movimentosJaGravados } from '../api/patrimonio.js';
-import { movimentosDoExtrato } from '../lib/patrimonio.js';
 import { registrarImportacao } from '../api/importacoes.js';
 import { periodoDasLinhas } from '../lib/importacoes.js';
 import { lerExtrato } from '../lib/lerExtrato.js';
@@ -46,7 +44,7 @@ const maisDias = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); ret
 
 const ROTULO = {
   entrada: (p, nomeCat) => <Etiqueta tom="verde">Entrada{p.categoriaId ? ` · ${nomeCat(p.categoriaId)}` : ''}</Etiqueta>,
-  ignorar: (p) => (p.investe ? <Etiqueta tom="verde">{p.investe}</Etiqueta> : <Etiqueta>Fora: {p.motivo}</Etiqueta>),
+  ignorar: (p) => <Etiqueta>Fora: {p.motivo}</Etiqueta>,
   ja: () => <Etiqueta>Já importada</Etiqueta>,
   fixo_novo: (p) => <Etiqueta tom="verde">Fixo: {p.recorrencia.descricao}</Etiqueta>,
   fixo_corrigir: (p) => <Etiqueta tom="verde">Corrige o fixo {p.recorrencia.descricao}</Etiqueta>,
@@ -100,11 +98,8 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
   const [gravando, setGravando] = useState(false);
   const [andamento, setAndamento] = useState('');
   const [soAgora, setSoAgora] = useState({}); // { contraparte: categoriaId | IGNORAR } — as escolhas "só desta vez"
-  // OS INVESTIMENTOS (05/11/2026, migration 013): a aplicação e o resgate do RDB e o "dinheiro guardado" continuam fora
-  // dos gastos, mas viram APORTE e RESGATE da conta marcada no Patrimônio (`recebe_extrato`) — é o que deixa calcular o
-  // rendimento. Os já gravados (pelo identificador do banco) não entram de novo.
-  const [contaInv, setContaInv] = useState(null);
-  const [movsJa, setMovsJa] = useState(new Set());
+  // OS INVESTIMENTOS (RDB, dinheiro guardado) ficam de fora dos gastos e NÃO viram aporte sozinhos (07/11/2026, a carteira
+  // do zero): o aporte se lança na tela Investimentos.
 
   const carregarBase = useCallback(async () => {
     const [categorias, regras, recorrencias, fixos] = await Promise.all([listarCategorias(), listarRegrasParaClassificar(), listarRecorrencias(), fixosLancados()]);
@@ -118,9 +113,6 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
     try {
       const linhas = lerExtrato(await f.text());
       setJa(await idsJaImportados(linhas.map((l) => l.id_externo)));
-      const ci = await contaDoExtrato().catch(() => null);
-      setContaInv(ci);
-      setMovsJa(ci ? await movimentosJaGravados(linhas.map((l) => l.id_externo)).catch(() => new Set()) : new Set());
       const per = periodoDasLinhas(linhas);
       setManuais(per.de ? await entradasManuais(maisDias(per.de, -3), maisDias(per.ate, 3)) : []);
       setArquivo({ nome: f.name, linhas });
@@ -167,7 +159,6 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
     }
   };
 
-  const movsNovos = useMemo(() => (contaInv && plano ? movimentosDoExtrato(plano, contaInv.id).filter((m) => !movsJa.has(m.id_externo)) : []), [contaInv, plano, movsJa]);
   const conta = (acao) => (plano ?? []).filter((p) => p.acao === acao);
   const gastos = [...conta('fixo_novo'), ...conta('fixo_corrigir'), ...conta('avulso')];
   const aGravar = [...gastos, ...conta('entrada')];
@@ -179,17 +170,16 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
     setGravando(true);
     try {
       const { n, apagar, restaurar } = await gravarExtrato(plano, (i, total) => setAndamento(`${i} de ${total}`));
-      const movimentos = await gravarMovimentosDoExtrato(movsNovos);
       const revisar = plano.filter((p) => p.acao === 'avulso' && !p.categoriaId).length;
       const per = periodoDasLinhas(arquivo.linhas);
       const fixos = conta('fixo_novo').length + conta('fixo_corrigir').length;
       await registrarImportacao({
         tipo: 'extrato', arquivo: arquivo.nome, periodo_de: per.de, periodo_ate: per.ate, linhas: n, total_centavos: totalGravar,
         resumo: [`${arquivo.linhas.length} movimentações → ${conta('avulso').length} avulsos`, fixos && `${fixos} fixos`, conta('entrada').length && `${conta('entrada').length} entradas`,
-          `${conta('ignorar').length + conta('ja').length} de fora`, revisar && `${revisar} sem regra`, movimentos.length && `${movimentos.length} aportes/resgates`].filter(Boolean).join(' · '),
-        desfazer: { apagar, restaurar, movimentos },
+          `${conta('ignorar').length + conta('ja').length} de fora`, revisar && `${revisar} sem regra`].filter(Boolean).join(' · '),
+        desfazer: { apagar, restaurar },
       });
-      toast.success(`${n} movimentação(ões) importadas.${movimentos.length ? ` ${movimentos.length} aporte(s)/resgate(s) em ${contaInv.nome}.` : ''}${revisar ? ` ${revisar} ficaram sem categoria: veja em Revisar pendências.` : ''}`);
+      toast.success(`${n} movimentação(ões) importadas.${revisar ? ` ${revisar} ficaram sem categoria: veja em Revisar pendências.` : ''}`);
       onImportado();
     } catch (err) {
       toast.error(/duplicate|unique/i.test(err.message) ? 'Parte deste extrato já tinha sido importada. Escolha o arquivo de novo para ver o que falta.' : err.message);
@@ -224,7 +214,6 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
             <span><strong>{conta('fixo_novo').length + conta('fixo_corrigir').length}</strong> como gasto fixo</span>
             <span><strong>{conta('ignorar').length}</strong> fora</span>
             {conta('ja').length > 0 && <span><strong>{conta('ja').length}</strong> já importadas</span>}
-            {movsNovos.length > 0 && <span className="text-green-700"><strong>{movsNovos.length}</strong> aportes/resgates → {contaInv.nome}</span>}
             <span className="flex-1" />
             {nCreditos > 0 && (
               <label className="inline-flex cursor-pointer items-center gap-2 text-[12.5px] text-gray-700" title="Os créditos do extrato (Pix recebido, salário…) entram como entradas. A que você já lançou à mão (mesmo valor, até 3 dias) fica de fora.">
@@ -263,10 +252,7 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {plano.map((p0) => {
-                    // o movimento de investimento diz para onde vai (ou que já foi), no lugar do "Fora: investimento"
-                    const ehInv = p0.acao === 'ignorar' && p0.motivo === 'investimento' && contaInv;
-                    const p = ehInv ? { ...p0, investe: movsJa.has(p0.linha.id_externo) ? `${p0.linha.valor_centavos < 0 ? 'Aporte' : 'Resgate'} já em ${contaInv.nome}` : `${p0.linha.valor_centavos < 0 ? 'Aporte' : 'Resgate'} · ${contaInv.nome}` } : p0;
+                  {plano.map((p) => {
                     return (
                     <tr key={p.linha.id_externo} className={p.acao === 'ignorar' || p.acao === 'ja' ? 'text-gray-400' : ''}>
                       <td className="table-td">{formatDate(p.linha.data)}</td>
@@ -288,8 +274,8 @@ export default function ImportarExtrato({ arquivo: arquivoInicial = null, onFech
           <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-gray-200 bg-hx-f9fafb px-5 py-3">
             {andamento && <span className="text-sm text-gray-500">Gravando… {andamento}</span>}
             <button type="button" className="btn-secondary" onClick={onFechar} disabled={gravando}>Cancelar</button>
-            <button type="button" className="btn-primary" onClick={importar} disabled={gravando || aGravar.length + movsNovos.length === 0}>
-              {gravando ? <><Spinner className="h-4 w-4" /> Importando…</> : `Importar ${aGravar.length + movsNovos.length}`}
+            <button type="button" className="btn-primary" onClick={importar} disabled={gravando || aGravar.length === 0}>
+              {gravando ? <><Spinner className="h-4 w-4" /> Importando…</> : `Importar ${aGravar.length}`}
             </button>
           </div>
         </div>

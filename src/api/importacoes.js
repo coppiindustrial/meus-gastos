@@ -89,11 +89,9 @@ export async function desfazerImportacao(imp) {
   if (imp.tipo === 'fatura' && imp.fatura_id) {
     await exigir(supabase.from('faturas').delete().eq('id', imp.fatura_id));
   } else if (imp.tipo === 'extrato') {
-    const { apagar = await idsDoExtratoAntigo(imp), restaurar = [], movimentos = [] } = imp.desfazer ?? {};
-    // os aportes e resgates que o extrato gravou no Patrimônio (migration 013) saem junto
-    for (let i = 0; i < movimentos.length; i += 100) {
-      await exigir(supabase.from('movimentos_investimento').delete().in('id', movimentos.slice(i, i + 100)));
-    }
+    // (os aportes/resgates que os extratos antigos gravaram na tabela parada `movimentos_investimento` ficam lá: a
+    // carteira do zero, 07/11/2026, não lê mais aquela tabela)
+    const { apagar = await idsDoExtratoAntigo(imp), restaurar = [] } = imp.desfazer ?? {};
     for (let i = 0; i < apagar.length; i += 100) {
       await exigir(supabase.from('lancamentos').delete().in('id', apagar.slice(i, i + 100)));
     }

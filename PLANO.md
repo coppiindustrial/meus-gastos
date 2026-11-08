@@ -38,6 +38,11 @@
 > conferência com o banco a cada 3 meses (os de preço de mercado, todo mês); o IR pelo CDI de cada dia. **Indicadores (2026-11-06)**: a tela
 > própria em Análises (Selic, CDI, IPCA, dólar, euro, a Focus e a carteira × CDI × IPCA), pelo Banco Central; o Tesouro IPCA+
 > fica de fora (pediria um servidor).
+> **A carteira do zero (2026-11-07, migration 020)**: a lógica dos investimentos de 8.A/8.B foi APAGADA a pedido ("ficou
+> complexa demais") e refeita com o mockup "Carteira por aportes" (tabela A): o cadastro (nome, instituição, tipo, taxa em
+> % do CDI), os aportes (dinheiro novo: data, valor e vencimento; já estava aplicado: o total do banco e quanto já rendeu)
+> e os resgates de cada aporte; uma conta só, o CDI de cada dia × a taxa, conferida no centavo com o Nubank e a XP. As
+> tabelas antigas ficam paradas até a conferência; o visual (tabela agrupada, cartões, gráfico, painel) ficou.
 > Próxima: 8.C (renda variável BR e exterior).
 > **Extrato da conta (2026-10-27)**: CSV do extrato do Nubank; entradas continuam à mão; fatura, investimentos e
 > transferências entre contas próprias (regra de ignorar) ficam de fora; pagamento de fixo vira o fixo do mês com o

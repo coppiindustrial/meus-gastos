@@ -4,7 +4,7 @@ import CardAutoAltura from '../components/dashboard/CardAutoAltura.jsx';
 import { CartaoKpi } from '../components/graficos/CartoesResumo.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import { ColunasMes, GraficoLinhas } from '../components/indicadores/GraficosIndicadores.jsx';
-import useDadosPatrimonio from '../components/patrimonio/useDadosPatrimonio.js';
+import useCarteira from '../components/patrimonio/useCarteira.js';
 import { carregarIndicadores } from '../api/indicadores.js';
 import {
   carteiraContraIndices, degraus, focusPorAno, juroReal, porMes, ultimo, variacaoEm, variacaoNoDia,
@@ -70,7 +70,7 @@ export default function Indicadores() {
     setCarregando(false);
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
-  const pat = useDadosPatrimonio();
+  const pat = useCarteira(); // a carteira do zero: o mês a mês dos aportes e o CDI de cada mês
   const [moeda, setMoedaEstado] = useState(() => (lsGet('indicadores_moeda') === '30d' ? '30d' : '12m'));
   const setMoeda = (v) => { setMoedaEstado(v); lsSet('indicadores_moeda', v); };
 
@@ -89,7 +89,7 @@ export default function Indicadores() {
   const focus = useMemo(() => focusPorAno(d.expectativas, anosFocus), [d.expectativas]); // eslint-disable-line react-hooks/exhaustive-deps
   const corte30 = useMemo(() => { const t = new Date(Date.UTC(+hoje.slice(0, 4), +hoje.slice(5, 7) - 1, +hoje.slice(8, 10)) - 31 * 86400000); return t.toISOString().slice(0, 10); }, [hoje]);
   const filtrarMoeda = (s) => (moeda === '30d' ? (s ?? []).filter((p) => p[0] >= corte30) : s ?? []);
-  const carteira = useMemo(() => carteiraContraIndices(pat.meses, pat.cdi, d.ipca, mesAtual), [pat.meses, pat.cdi, d.ipca, mesAtual]);
+  const carteira = useMemo(() => carteiraContraIndices(pat.meses, pat.cdiMes, d.ipca, mesAtual), [pat.meses, pat.cdiMes, d.ipca, mesAtual]);
 
   const kpis = (
     <div className="card !border-0 !bg-transparent !shadow-none">
