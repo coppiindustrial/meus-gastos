@@ -26,7 +26,7 @@ export default function useCarteira() {
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
 
-  // o CDI desde a partida mais antiga (a sexta antes de um aporte de sábado também conta), e no mínimo os DOIS ANOS de
+  // o CDI desde a partida mais antiga, e no mínimo os DOIS ANOS de
   // antes de hoje: a prévia do "Lançar aporte" faz a conta com este CDI — sem aporte nenhum, ela não tinha CDI (e o
   // "Vale hoje, pela conta" sumia); com um aporte mais antigo que todos, faltavam os dias do começo.
   const desde = useMemo(() => {

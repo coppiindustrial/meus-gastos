@@ -23,6 +23,9 @@ import {
 // novo. Passar a reaplicar vale para os PRÓXIMOS vencimentos: o que já tinha vencido antes de hoje fica como voltou para a
 // conta (`vencidosAntesDeReaplicar` → `nao_reaplicar`; o "Reaplicar" da linha do encerrado continua lá). `com022`: sem a
 // migration, a coluna fica apagada.
+// O FIM DE SEMANA (08/11/2026, migration 023): ao lado do "um dia antes", "fim de semana → seg." — a XP passa o vencimento
+// do sábado ou do domingo para a segunda; o Nubank vence no dia. Só muda a sugestão do vencimento. `com023`: sem a
+// migration, o interruptor fica apagado.
 
 // O id da linha nova leva a hora: o contador volta a 0 quando o Vite recarrega o arquivo, e o pop-up aberto guardava as
 // linhas de antes — duas com o mesmo id, e digitar numa mudava as duas.
@@ -33,7 +36,7 @@ const PRAZOS = [{ value: '', label: 'sem sugestão' }, ...[3, 6, 12, 18, 24, 36,
 const RESGATES = [{ value: 'diaria', label: 'a qualquer hora' }, { value: 'vencimento', label: 'só no vencimento' }];
 const NO_VENCIMENTO = [{ value: 'conta', label: 'volta para a conta' }, { value: 'reaplica', label: 'reaplica sozinho' }];
 
-export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesPorInv = {}, hoje, com022 = true, onFechar, onSalvo }) {
+export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesPorInv = {}, hoje, com022 = true, com023 = true, onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   // os grupos: cada instituição, com o nome editável (`orig` = o de antes)
@@ -108,7 +111,8 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
       const reaplica = passamAReaplicar.length ? ` Os próximos vencimentos de ${passamAReaplicar.map((l) => `"${l.nome.trim()}"`).join(', ')} o app reaplica sozinho.` : '';
       toast.success(`${nAlt === 1 ? 'Alteração salva.' : `${nAlt} alterações salvas.`}${reaplica}`);
     } catch (err) {
-      toast.error(/no_vencimento|nao_reaplicar/i.test(err.message) ? 'Falta aplicar a migration 022 (o que acontece no vencimento).'
+      toast.error(/vence_dia_util/i.test(err.message) ? 'Falta aplicar a migration 023 (o vencimento no fim de semana).'
+        : /no_vencimento|nao_reaplicar/i.test(err.message) ? 'Falta aplicar a migration 022 (o que acontece no vencimento).'
         : /inv_cadastro|schema cache|does not exist/i.test(err.message) ? 'Falta aplicar a migration 020 (a carteira do zero).' : err.message);
     }
     setSalvando(false);
@@ -130,13 +134,13 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
   const ativos = linhas.filter((l) => !l.excluir && l.ativo && !linhaVaziaDoCadastro(l)).length;
 
   return (
-    <Modal open onClose={fechar} title="Cadastro dos investimentos" maxWidth="max-w-[1300px]" padding="p-0"
+    <Modal open onClose={fechar} title="Cadastro dos investimentos" maxWidth="max-w-[1440px]" padding="p-0"
       subtitulo={`${plural(ativos, 'ativo', 'ativos')} · o que cada um é; o dinheiro entra pelos aportes`}>
       <div ref={caixaRef} className="max-h-[66vh] overflow-auto [scrollbar-gutter:stable]">
-        <table className="w-full min-w-[1160px] table-fixed border-separate border-spacing-0 text-[12.5px]">
+        <table className="w-full min-w-[1300px] table-fixed border-separate border-spacing-0 text-[12.5px]">
           <colgroup>
             <col /><col style={{ width: 124 }} /><col style={{ width: 124 }} /><col style={{ width: 160 }} />
-            <col style={{ width: 252 }} /><col style={{ width: 176 }} /><col style={{ width: 64 }} /><col style={{ width: 70 }} />
+            <col style={{ width: 392 }} /><col style={{ width: 176 }} /><col style={{ width: 64 }} /><col style={{ width: 70 }} />
           </colgroup>
           <thead className="sticky top-0 z-10"><tr>
             <th className={th}>Nome</th><th className={th}>Tipo</th><th className={th}>Rende (% do CDI)</th><th className={th}>Resgate</th>
@@ -189,6 +193,14 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
                               <Toggle compacto checked={!!l.vence_dia_antes} onChange={(v) => muda(l.id, 'vence_dia_antes', v)} disabled={l.excluir} rotulo="Vence um dia antes de completar o prazo" />
                               um dia antes
                             </label>
+                          )}
+                          {l.prazo_meses && (
+                            <Tooltip label={com023 ? 'Ligado: o vencimento que cai no sábado ou no domingo vai para a segunda (como a XP). Desligado: vence no dia (como o Nubank).' : 'Falta aplicar a migration 023 (o vencimento no fim de semana)'}>
+                              <label className={`flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-gray-500 ${com023 ? 'cursor-pointer' : 'opacity-50'}`}>
+                                <Toggle compacto checked={!!l.vence_dia_util} onChange={(v) => muda(l.id, 'vence_dia_util', v)} disabled={l.excluir || !com023} rotulo="O vencimento no fim de semana vai para a segunda" />
+                                fim de semana → seg.
+                              </label>
+                            </Tooltip>
                           )}
                         </div>
                       </td>

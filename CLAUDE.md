@@ -251,8 +251,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   `movimentos_investimento`, `depositos_investimento`) SAEM DO BANCO pela migration 021 (08/11/2026, com o OK do usuário;
   sem `cascade`); a cópia do que havia nelas está em `dados/backup-carteira-antiga-2026-11-08.json`, fora do git.
 - O MODELO (migration 020): `inv_cadastro` = o que o investimento É (nome, a instituição em TEXTO, tipo cdb/rdb/lci/lca/outro,
-  a taxa em % do CDI, resgate `diaria` | `vencimento`, `prazo_meses` + `vence_dia_antes` que só SUGEREM o vencimento do
-  aporte, ativo, ordem) · `inv_aportes` = o dinheiro que entrou: origem `novo` (a data e o valor aplicado) ou `antigo` =
+  a taxa em % do CDI, resgate `diaria` | `vencimento`, `prazo_meses` + `vence_dia_antes` + `vence_dia_util` que só SUGEREM o
+  vencimento do aporte, ativo, ordem; o `vence_dia_util` — migration 023, 08/11/2026 — passa o sábado e o domingo para a
+  segunda, como a XP; desligado, o padrão, vence no dia, como o Nubank: antes era sempre a segunda, e o Nubank saía um ou
+  dois dias depois do banco) · `inv_aportes` = o dinheiro que entrou: origem `novo` (a data e o valor aplicado) ou `antigo` =
   "já estava aplicado" (`data` = o dia em que você olhou o banco, `valor_centavos` = o total nesse dia,
   `rendeu_antes_centavos`, `aplicado_em` = a data do DEPÓSITO, opcional: o IR e a conta do que já rendeu); o `vencimento` é o DIGITADO · `inv_resgates` = o que saiu
   de UM aporte (a data e o valor, ou `tudo`).
@@ -260,8 +262,11 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   `test/fixtures/cdi-2026.json`): o valor de hoje = a partida × (1 + CDI do dia × taxa) em cada dia útil de [partida, hoje).
   As regras do banco, CONFERIDAS NO CENTAVO em 07 e 08/11/2026 com os números reais do Nubank e da XP — essa conferência
   fica em `dados/conferencia-carteira.test.js`, FORA DO GIT (repositório público; `node --test dados/conferencia-carteira.test.js`),
-  e o `test/` repete as regras com valores inventados: o valor de um dia tem o CDI dos dias úteis ANTES dele; o aporte de SÁBADO rende o CDI de sexta, o de
-  domingo ou feriado começa no dia útil seguinte (`inicioDoAporte`); depois do último CDI publicado, os dias de semana vão
+  e o `test/` repete as regras com valores inventados: o valor de um dia tem o CDI dos dias úteis ANTES dele; o aporte de SÁBADO, DOMINGO
+  ou FERIADO começa no dia útil seguinte (sai sozinho do calendário, que só tem os dias úteis; `fimDeSemana` só escreve
+  isso na prévia e no balão). Até 08/11/2026 o de sábado ganhava o CDI de sexta, por um aporte de setembro que só fechava
+  assim; mas o depósito de sábado 07/11 no Nubank estava com o rendimento ZERO no domingo à noite, e o app dava um dia de
+  CDI — o de setembro fecha também com o depósito na sexta. Depois do último CDI publicado, os dias de semana vão
   com a taxa dele (`calendario`, o `proj`). O TOTAL de um investimento soma os valores EXATOS e arredonda no fim
   (`somarPosicoes`), como o banco — arredondando cada aporte, o RDB Planejado dava 1 centavo a mais. O resgate parcial tira
   do valor e o aplicado diminui na mesma proporção; "tudo", ou o vencimento, ENCERRA o aporte (o valor do dia volta para a
@@ -294,7 +299,7 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (`useLinhasAnimadas`, lembrado em `carteira_fechadas`); os Centavos no trilho (`carteira_centavos`). As ações da linha no
   quadrado de 30px: APORTAR no investimento; RESGATAR · EDITAR · EXCLUIR no aporte; REAPLICAR no vencido. Os pop-ups:
   `ModalAporte` (Dinheiro novo | Já estava aplicado; o vencimento sugerido pelo cadastro até a pessoa mexer, e o fim de
-  semana vai para a segunda; a prévia com o aplicado, desde quando rende e o IR; editando, os resgates do aporte com o ✕;
+  semana vai para a segunda só com o `vence_dia_util`; a prévia com o aplicado, desde quando rende e o IR; editando, os resgates do aporte com o ✕;
   no "já estava aplicado", na ordem da tela do depósito no banco — o Valor Bruto, o dia em que olhou, a data do Depósito —
   e o QUANTO JÁ RENDEU O APP CALCULA (08/11/2026, a pedido): o total − o total ÷ o fator do CDI desde o depósito
   (`rendeuDoDeposito`, testada também com um saque no meio; o depósito de mais de dois anos busca o CDI dele). NÃO É o

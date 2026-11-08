@@ -10,7 +10,7 @@ import { atualizarAporte, criarAporte, excluirResgate } from '../../api/carteira
 import { taxasDiarias } from '../../api/taxas.js';
 import { calcularValor, formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
-import { aliquotaIR, calendario, diasEntre, inicioDoAporte, lerAporte, maisDias, posicaoDoAporte, rendeuDoDeposito, rotuloTaxa, sugerirVencimento } from '../../lib/carteira.js';
+import { aliquotaIR, calendario, diasEntre, fimDeSemana, lerAporte, maisDias, posicaoDoAporte, rendeuDoDeposito, rotuloTaxa, sugerirVencimento } from '../../lib/carteira.js';
 
 // LANÇAR UM APORTE (07/11/2026, o mockup "Carteira por aportes"): um pop-up só, com duas abas.
 //   · DINHEIRO NOVO — o investimento, a data, o valor e o vencimento. Ponto final.
@@ -23,7 +23,7 @@ import { aliquotaIR, calendario, diasEntre, inicioDoAporte, lerAporte, maisDias,
 // venc } }. Editando, o pop-up lista os resgates do aporte (com o ✕ de cada um).
 // O VENCIMENTO (08/11/2026, migration 022): o "Reaplicar" vem com o LÍQUIDO do dia (`venc`: o valor, o IR) e grava o
 // `reaplicado_de`; o aporte que o app reaplicou sozinho abre com a nota do que ele fez, e salvar tira o "conferir".
-// O reaplicado começa no próprio vencimento (sem a regra do sábado: o CDI de sexta já está no valor do de antes).
+// O dinheiro novo de sábado ou domingo só rende a partir do dia útil seguinte (a prévia diz).
 
 const MODOS = [{ valor: 'novo', rotulo: 'Dinheiro novo' }, { valor: 'antigo', rotulo: 'Já estava aplicado' }];
 const pctAliq = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
@@ -55,7 +55,7 @@ function formInicial(inicial, cadastro, hoje) {
   const data = inicial.reaplicar?.data ?? hoje;
   return {
     modo: inicial.modo ?? 'novo', investimento_id, data, valor: inicial.reaplicar ? valorParaCampo(inicial.reaplicar.valor) : '',
-    vencimento: inv ? sugerirVencimento(data, inv.prazo_meses, inv.vence_dia_antes) ?? '' : '', venceAuto: true,
+    vencimento: inv ? sugerirVencimento(data, inv) ?? '' : '', venceAuto: true,
     lido: hoje, total: '', rendeu: '', aplicado_em: '', rendeuAuto: true,
   };
 }
@@ -74,7 +74,7 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
   const sugestao = (g, investimentoId) => {
     const i = cadastro.find((x) => x.id === investimentoId);
     const base = g.modo === 'novo' ? g.data : g.aplicado_em;
-    return i && base ? sugerirVencimento(base, i.prazo_meses, i.vence_dia_antes) ?? '' : '';
+    return i && base ? sugerirVencimento(base, i) ?? '' : '';
   };
   const mudar = (campo, v) => setF((g) => {
     const n = { ...g, [campo]: v };
@@ -127,18 +127,17 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
   })();
   const erro = errosDeTexto ?? r.erro;
 
-  const reaplicado = !!(inicial.reaplicar?.de || inicial.aporte?.reaplicado_de);
   // A PRÉVIA: o aplicado, de quando rende, o IR de hoje e (no aporte de antes de hoje) quanto ele vale hoje pela conta
   const previa = (() => {
     if (!inv || !r.dados) return null;
     const d = r.dados;
     const aplicado = d.valor_centavos - d.rendeu_antes_centavos;
-    const ap = { ...d, id: 'previa', reaplicado_de: reaplicado ? 'antes' : null };
+    const ap = { ...d, id: 'previa' };
     const desde = d.origem === 'novo' ? d.data : d.aplicado_em;
-    const ini = d.origem === 'novo' && !reaplicado ? inicioDoAporte(d.data, cal ?? []) : d.data;
+    const ini = d.data;
     // só com o CDI desde o começo do aporte (o da tela vem de dois anos para cá, ou do aporte mais antigo)
     const pos = cal?.length && cal[0][0] <= ini ? posicaoDoAporte(ap, inv, editando ? resgates : [], cal, hoje) : null;
-    return { aplicado, pos, desde, ini };
+    return { aplicado, pos, desde, ini, fds: d.origem === 'novo' && fimDeSemana(ini) };
   })();
 
   const salvar = async (e) => {
@@ -221,7 +220,7 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
           <p className="mt-1 text-[11.5px] text-gray-400">
             {/* a dica: o sugerido, o digitado, ou o que fazer com o campo vazio (o "já estava aplicado" sem a data do aporte não tem de onde sugerir) */}
             {f.vencimento
-              ? (inv?.prazo_meses && f.venceAuto ? `sugerido pelo cadastro (${inv.prazo_meses % 12 === 0 ? `${inv.prazo_meses / 12} ${inv.prazo_meses === 12 ? 'ano' : 'anos'}` : `${inv.prazo_meses} meses`}${inv.vence_dia_antes ? ', um dia antes' : ''}); mude se o banco disser outra data` : 'a data que o banco mostra')
+              ? (inv?.prazo_meses && f.venceAuto ? `sugerido pelo cadastro (${inv.prazo_meses % 12 === 0 ? `${inv.prazo_meses / 12} ${inv.prazo_meses === 12 ? 'ano' : 'anos'}` : `${inv.prazo_meses} meses`}${inv.vence_dia_antes ? ', um dia antes' : ''}${inv.vence_dia_util ? ', fim de semana na segunda' : ''}); mude se o banco disser outra data` : 'a data que o banco mostra')
               : inv?.prazo_meses && f.modo === 'antigo' ? 'digite o que o banco mostra (ou a data do depósito, para o app sugerir); vazio = sem vencimento'
                 : 'vazio = sem vencimento (resgata quando quiser)'}
           </p>
@@ -235,7 +234,7 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
                 <div className="flex justify-between gap-3"><span>Rendeu desde o depósito</span>
                   <span>+{((conta.f - 1) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% · {rotuloTaxa(inv.taxa)} de {formatDate(conta.ini)} a {formatDate(f.lido)}</span></div>
               )}
-              <div className="flex justify-between gap-3"><span>Rende</span><span>{rotuloTaxa(inv.taxa)} desde {formatDate(previa.ini)}{previa.ini !== r.dados.data ? ' (sábado: o CDI de sexta)' : ''}</span></div>
+              <div className="flex justify-between gap-3"><span>Rende</span><span>{rotuloTaxa(inv.taxa)} desde {formatDate(previa.ini)}{previa.fds ? ' (fim de semana: a partir do dia útil seguinte)' : ''}</span></div>
               {previa.pos && previa.ini < hoje && <div className="flex justify-between gap-3"><span>Vale hoje, pela conta</span><b className="tabular-nums text-gray-900">{formatBRL(previa.pos.vale)}</b></div>}
               <div className="flex justify-between gap-3"><span>IR se resgatasse hoje</span><span>{previa.desde ? `${(aliquotaIR(Math.max(0, diasEntre(previa.desde, hoje))) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : `22,5% (sem a data do ${f.modo === 'novo' ? 'aporte' : 'depósito'})`}{['lci', 'lca'].includes(inv.tipo) ? ' · isento' : ''}</span></div>
             </div>

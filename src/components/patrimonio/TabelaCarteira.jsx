@@ -10,7 +10,7 @@ import useLinhasAnimadas, { atributosLinha } from '../../lib/useLinhasAnimadas.j
 import { formatBRL } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
 import { lsGet, lsSet } from '../../lib/storage.js';
-import { diasEntre, ehIsento, nomeDoTipo, proximaQueda, rotuloTaxa } from '../../lib/carteira.js';
+import { diasEntre, ehIsento, fimDeSemana, nomeDoTipo, proximaQueda, rotuloTaxa } from '../../lib/carteira.js';
 
 // A CARTEIRA (07/11/2026, a tabela A do mockup "Carteira por aportes"): a INSTITUIÇÃO é a faixa (a barra da cor dela, o
 // nome e os totais), o INVESTIMENTO recuado em duas linhas (o nome; o tipo, a taxa e quantos aportes) e os APORTES
@@ -150,8 +150,8 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
       itens.push({ rotulo: `O banco em ${formatDate(ap.data)}`, valor: formatBRL(Number(ap.valor_centavos)) });
       itens.push({ rotulo: 'Já tinha rendido', valor: formatBRL(Number(ap.rendeu_antes_centavos)) });
     } else {
-      const sabado = pos.partida.data !== ap.data;
-      itens.push({ rotulo: ap.reaplicado_de ? `Reaplicado em ${formatDate(ap.data)} (o vencimento, sem o IR)` : `Aplicado em ${formatDate(ap.data)}${sabado ? ' (sábado: conta o CDI de sexta)' : ''}`, valor: formatBRL(Number(ap.valor_centavos)) });
+      const fds = !ap.reaplicado_de && fimDeSemana(ap.data);
+      itens.push({ rotulo: ap.reaplicado_de ? `Reaplicado em ${formatDate(ap.data)} (o vencimento, sem o IR)` : `Aplicado em ${formatDate(ap.data)}${fds ? ` (${semana(ap.data)}: rende a partir do dia útil seguinte)` : ''}`, valor: formatBRL(Number(ap.valor_centavos)) });
     }
     if (c) itens.push({ rotulo: `${c.dias} ${c.dias === 1 ? 'dia útil' : 'dias úteis'} de CDI a ${rotuloTaxa(inv.taxa).replace(' do CDI', '')}`, valor: `× ${c.f.toLocaleString('pt-BR', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}` });
     itens.push({ rotulo: 'Vale hoje', valor: formatBRL(pos.vale), cor: COR_ENTRADAS });

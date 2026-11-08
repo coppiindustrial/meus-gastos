@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diferencaDoCadastro, fator, inicioDoAporte, lerAporte, lerResgate,
+  aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
   linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
   rendeuDoDeposito, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
 } from '../src/lib/carteira.js';
@@ -18,24 +18,32 @@ const vale = (ap, i, dia, rs = []) => posicaoDoAporte(ap, i, rs, cal, dia).vale;
 // AS REGRAS DO BANCO foram conferidas no centavo com os números reais do Nubank e da XP (07 e 08/11/2026); essa
 // conferência fica em dados/conferencia-carteira.test.js, FORA DO GIT (o repositório é público). Aqui, as mesmas regras
 // com valores inventados.
-test('as regras do banco: o total arredonda no fim, o sábado rende a sexta, o dia a dia útil', () => {
+test('as regras do banco: o total arredonda no fim, o fim de semana começa no dia útil seguinte, o dia a dia útil', () => {
   // o TOTAL do investimento soma os aportes sem arredondar cada um, como o banco
   const i = inv(102.5);
   const aps = [novo('2026-06-03', 333333), novo('2026-09-12', 1234567), novo('2026-10-13', 777777)];
   const pos = aps.map((ap) => posicaoDoAporte(ap, i, [], cal, HOJE));
   const total = somarPosicoes(pos.map((p) => ({ pos: p }))).vale;
   assert.equal(total, Math.round(pos.reduce((s, p) => s + p.exato.vale, 0)));
-  // o aporte de sábado rende o CDI de sexta: vale o mesmo que o de sexta; o de quinta, um dia a mais
-  assert.equal(vale(novo('2026-09-12', 1000000), i, HOJE), vale(novo('2026-09-11', 1000000), i, HOJE));
-  assert.ok(vale(novo('2026-09-10', 1000000), i, HOJE) > vale(novo('2026-09-11', 1000000), i, HOJE));
+  // o aporte de sábado ou domingo começa na segunda: vale o mesmo que o de segunda; o de sexta, um dia a mais
+  assert.equal(vale(novo('2026-09-12', 1000000), i, HOJE), vale(novo('2026-09-14', 1000000), i, HOJE));
+  assert.equal(vale(novo('2026-09-13', 1000000), i, HOJE), vale(novo('2026-09-14', 1000000), i, HOJE));
+  assert.ok(vale(novo('2026-09-11', 1000000), i, HOJE) > vale(novo('2026-09-12', 1000000), i, HOJE));
   // a data de um dia a mais muda o valor: o dia útil entre os dois
   const d = vale(novo('2026-09-02', 1000000), inv(103), HOJE) - vale(novo('2026-09-03', 1000000), inv(103), HOJE);
   assert.ok(d > 0 && d < 1000000 * 0.001);
 });
 
-test('o dia do banco: o sábado rende o CDI de sexta, o domingo começa no dia útil seguinte', () => {
-  assert.equal(inicioDoAporte('2026-09-12', cal), '2026-09-11');
-  assert.equal(inicioDoAporte('2026-10-11', cal), '2026-10-11'); // domingo: o 12/10 é feriado, o primeiro dia útil é 13/10
+test('o dia do banco: sábado, domingo e feriado começam no dia útil seguinte', () => {
+  // um depósito de sábado: rendimento zero no domingo; na terça, só o CDI de segunda
+  const sab = novo('2026-11-07', 1000000);
+  assert.equal(partidaDoAporte(sab).data, '2026-11-07');
+  assert.equal(posicaoDoAporte(sab, inv(100), [], calendario(CDI, '2026-11-08'), '2026-11-08').vale, 1000000);
+  const terca = posicaoDoAporte(sab, inv(100), [], calendario(CDI, '2026-11-10'), '2026-11-10');
+  assert.deepEqual([terca.conta.dias, terca.vale], [1, Math.round(1000000 * (1 + 0.00050788))]);
+  assert.deepEqual(['2026-11-06', '2026-11-07', '2026-11-08', '2026-11-09'].map(fimDeSemana), [false, true, true, false]);
+  // o de sábado 10/10: a segunda 12/10 é feriado, começa em 13/10
+  assert.equal(fator(cal, '2026-10-10', '2026-10-14', 100).dias, 1);
   assert.equal(fator(cal, '2026-10-11', '2026-10-14', 100).dias, 1); // só o 13/10
   // os dias depois do último publicado vão com a taxa dele (a sexta 06/11)
   const f = fator(cal, '2026-11-05', HOJE, 100);
@@ -76,8 +84,8 @@ test('já estava aplicado: o que rendeu sai da conta do CDI desde o depósito, t
   const r2 = conta(comSaque.vale, '2026-04-07');
   assert.ok(Math.abs(r2.rendeu - comSaque.rendeu) <= 1);
   assert.ok(r2.rendeu < semSaque.rendeu - Math.round(semSaque.rendeu * 0.3)); // o rendimento do que saiu não está ali
-  // o depósito de sábado rende o CDI de sexta, como o dinheiro novo
-  assert.equal(conta(1000000, '2026-10-10').ini, '2026-10-09');
+  // o depósito de sábado começa no dia útil seguinte, como o dinheiro novo (o 12/10 é feriado: o 13/10)
+  assert.equal(conta(1000000, '2026-10-10').f, conta(1000000, '2026-10-13').f);
   // sem o CDI desde o depósito, sem a data, depois do dia em que olhou ou sem o total: não há conta
   assert.equal(conta(1000000, '2026-03-02'), null);
   assert.equal(conta(1000000, ''), null);
@@ -123,13 +131,26 @@ test('o resgate sai do aporte: o aplicado diminui na mesma proporção; tudo e o
   assert.equal(posicaoDoAporte({ ...ap, vencimento: '2026-10-01' }, i, [], cal, '2026-09-30').encerrado, null);
 });
 
-test('o vencimento sugerido: o prazo, um dia antes se o cadastro diz, e o fim de semana vai para a segunda', () => {
-  assert.equal(sugerirVencimento('2026-06-03', 6, true), '2026-12-02'); // o RDB Planejado
-  assert.equal(sugerirVencimento('2026-09-12', 6, true), '2027-03-11');
-  assert.equal(sugerirVencimento('2026-06-05', 12), '2027-06-07'); // 05/06/2027 é sábado: a XP vence na segunda
-  assert.equal(sugerirVencimento('2026-04-07', 12), '2027-04-07');
-  assert.equal(sugerirVencimento('2026-01-31', 1), '2026-03-02'); // 28/02 é sábado
-  assert.equal(sugerirVencimento('2026-04-07', null), null);
+test('o vencimento sugerido: o prazo, um dia antes se o cadastro diz, e o fim de semana como o banco faz', () => {
+  const nubank = (prazo, antes = false) => ({ prazo_meses: prazo, vence_dia_antes: antes, vence_dia_util: false });
+  const xp = (prazo, antes = false) => ({ prazo_meses: prazo, vence_dia_antes: antes, vence_dia_util: true });
+  assert.equal(sugerirVencimento('2026-06-03', nubank(6, true)), '2026-12-02'); // o RDB Planejado
+  assert.equal(sugerirVencimento('2026-09-12', nubank(6, true)), '2027-03-11');
+  assert.equal(sugerirVencimento('2026-04-07', xp(12)), '2027-04-07');
+  // 05/06/2027 é sábado: a XP vence na segunda, o Nubank no sábado mesmo
+  assert.equal(sugerirVencimento('2026-06-05', xp(12)), '2027-06-07');
+  assert.equal(sugerirVencimento('2026-06-05', nubank(12)), '2027-06-05');
+  // um dia antes que cai no fim de semana: no Nubank fica (sábado e domingo); na XP vai para a segunda
+  assert.equal(sugerirVencimento('2026-06-06', nubank(12, true)), '2027-06-05');
+  assert.equal(sugerirVencimento('2026-06-07', nubank(12, true)), '2027-06-06');
+  assert.equal(sugerirVencimento('2026-06-07', xp(12, true)), '2027-06-07');
+  assert.equal(sugerirVencimento('2026-06-06', xp(12, true)), '2027-06-07');
+  assert.equal(sugerirVencimento('2026-01-31', xp(1)), '2026-03-02'); // 28/02 é sábado
+  assert.equal(sugerirVencimento('2026-01-31', nubank(1)), '2026-02-28');
+  // sem o cadastro, sem o prazo ou sem a 023 (sem a coluna: vence no dia)
+  assert.equal(sugerirVencimento('2026-04-07', nubank(null)), null);
+  assert.equal(sugerirVencimento('2026-04-07', undefined), null);
+  assert.equal(sugerirVencimento('2026-06-05', { prazo_meses: 12 }), '2027-06-05');
 });
 
 test('a carteira: por instituição, os investimentos e os aportes abertos; os encerrados à parte', () => {
@@ -207,6 +228,13 @@ test('o cadastro em tabela: a diferença e o que falta', () => {
   assert.deepEqual(diferencaDoCadastro({ ...linhaDoCadastro({ ...orig, no_vencimento: 'reaplica' }), no_vencimento: 'conta' }), { no_vencimento: 'conta' });
   assert.equal(validarCadastro([{ ...l, no_vencimento: 'reaplica', prazo_meses: '' }]).campo, 'prazo_meses');
   assert.equal(validarCadastro([{ ...l, no_vencimento: 'reaplica' }]), null);
+  // o fim de semana: false é o padrão (nem vai para o banco, como o 'conta')
+  assert.equal(l.vence_dia_util, false);
+  assert.equal('vence_dia_util' in dadosDoCadastro(l), false);
+  assert.equal(dadosDoCadastro({ ...l, vence_dia_util: true }).vence_dia_util, true);
+  assert.deepEqual(diferencaDoCadastro({ ...l, vence_dia_util: true }), { vence_dia_util: true });
+  assert.deepEqual(diferencaDoCadastro(linhaDoCadastro({ ...orig, vence_dia_util: true })), {});
+  assert.deepEqual(diferencaDoCadastro({ ...linhaDoCadastro({ ...orig, vence_dia_util: true }), vence_dia_util: false }), { vence_dia_util: false });
 });
 
 test('o vencimento que reaplica: um aporte novo com o líquido do dia, o IR recomeça e o prazo do cadastro', () => {
@@ -250,7 +278,7 @@ test('o vencimento que reaplica: na isenta o dinheiro segue rendendo igual, tamb
   assert.equal(venc.ir, 0);
   assert.equal(dados.valor_centavos, venc.valor);
   // o reaplicado começa no próprio vencimento (o CDI de sexta já está no valor do de antes): sem render duas vezes
-  assert.equal(partidaDoAporte(dados, cal).data, '2026-10-10');
+  assert.equal(partidaDoAporte(dados).data, '2026-10-10');
   const continuo = posicaoDoAporte({ ...ap, vencimento: null }, i, [], cal, HOJE).vale;
   const reaplicado = posicaoDoAporte({ ...dados, id: 'n' }, i, [], cal, HOJE).vale;
   assert.ok(Math.abs(reaplicado - continuo) <= 1, `${reaplicado} × ${continuo}`);
