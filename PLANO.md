@@ -44,7 +44,9 @@
 > e os resgates de cada aporte; uma conta só, o CDI de cada dia × a taxa, conferida no centavo com o Nubank e a XP. As
 > tabelas antigas saem pela migration 021 (2026-11-08, depois da conferência; cópia em `dados/`); o visual (tabela
 > agrupada, gráfico, painel) ficou. O "Quanto já rendeu" do que já estava aplicado o app calcula pelo CDI desde o
-> depósito (2026-11-08), e os Investimentos ficaram sem os cartões de resumo (eles moram no Patrimônio).
+> depósito (2026-11-08), e os Investimentos ficaram sem os cartões de resumo (eles moram no Patrimônio). No vencimento
+> (migration 022, 2026-11-08): o cadastro diz se o dinheiro volta para a conta ou se o banco reaplica; reaplicando, o app
+> grava no dia um aporte novo com o líquido (o IR recomeça) e o prazo do cadastro, marcado "conferir".
 > Próxima: 8.C (renda variável BR e exterior).
 > **Extrato da conta (2026-10-27)**: CSV do extrato do Nubank; entradas continuam à mão; fatura, investimentos e
 > transferências entre contas próprias (regra de ignorar) ficam de fora; pagamento de fixo vira o fixo do mês com o

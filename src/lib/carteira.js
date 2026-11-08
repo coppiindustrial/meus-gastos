@@ -113,17 +113,20 @@ export function rendeuDoDeposito({ total, deposito, lido, taxa }, cal) {
 
 // ------------------------------------------------------------ um aporte
 // A partida: { data (desde quando rende), valor, aplicado, desdeIR (a idade, para o IR; null = sem a data) }.
+// O REAPLICADO (`reaplicado_de`) começa no próprio vencimento, sem a regra do sábado: o valor do de antes já tem o CDI
+// dos dias úteis antes do vencimento (o de sexta, num vencimento de sábado), e contá-lo de novo seria render duas vezes.
 export function partidaDoAporte(ap, cal) {
   const valor = Number(ap.valor_centavos);
   if (ap.origem === 'antigo') {
     return { data: ap.data, valor, aplicado: valor - Number(ap.rendeu_antes_centavos ?? 0), desdeIR: ap.aplicado_em ?? null };
   }
-  return { data: inicioDoAporte(ap.data, cal), valor, aplicado: valor, desdeIR: ap.data };
+  return { data: ap.reaplicado_de ? ap.data : inicioDoAporte(ap.data, cal), valor, aplicado: valor, desdeIR: ap.data };
 }
 
 // A POSIÇÃO DE UM APORTE no `dia` (o valor tem o CDI dos dias úteis antes dele), com os eventos ATÉ `eventosAte`
 // (inclusive; o padrão é o próprio dia): os resgates em ordem (cada um tira do valor e diminui o aplicado na mesma
-// proporção) e o vencimento (o valor para no dia e volta para a conta). Devolve { vale, aplicado, rendeu, ir, iof,
+// proporção) e o vencimento (o valor para no dia: volta para a conta ou, se o cadastro reaplica, vira um aporte novo —
+// `reaplicacoesDevidas`). Devolve { vale, aplicado, rendeu, ir, iof,
 // liquido, aliquota, idade, semData, encerrado: null | { data, motivo, valor }, saidas: [{ data, valor }], partida,
 // conta: { de, f, dias, proj } (o trecho desde o último evento) }.
 export function posicaoDoAporte(ap, inv, resgates, cal, dia, eventosAte = dia) {
@@ -168,6 +171,57 @@ export function posicaoDoAporte(ap, inv, resgates, cal, dia, eventosAte = dia) {
   return { vale, aplicado: apl, rendeu, ir, iof, liquido: vale - ir - iof, aliquota, idade, semData, encerrado: null, saidas, partida: p, conta, exato };
 }
 
+// ------------------------------------------------------------ o vencimento: volta para a conta ou reaplica
+// O QUE O VENCIMENTO DEVOLVE (a posição de um aporte encerrado pelo vencimento): o valor do dia, o IR e o IOF pela idade
+// do aporte nesse dia, e o LÍQUIDO — o que volta para a conta ou o que o banco reaplica. null se não venceu.
+export function noVencimento(inv, pos) {
+  const e = pos?.encerrado;
+  if (!e || e.motivo !== 'vencimento') return null;
+  const ganho = Math.max(0, e.valor - e.aplicado);
+  const desde = pos.partida?.desdeIR ?? null;
+  const idade = desde ? diasEntre(desde, e.data) : null;
+  const aliquota = ehIsento(inv?.tipo) ? 0 : idade === null ? FAIXAS_IR[0].aliquota : aliquotaIR(idade);
+  const iof = idade !== null && idade < 30 ? Math.round(ganho * aliquotaIOF(idade)) : 0;
+  const ir = Math.round((ganho - iof) * aliquota);
+  return { data: e.data, valor: e.valor, aplicado: e.aplicado, ir, iof, liquido: e.valor - ir - iof, aliquota, idade };
+}
+
+// O APORTE NOVO DE UMA REAPLICAÇÃO (o automático e o do botão "Reaplicar"): a data é o vencimento, o valor é o líquido
+// (o IR recomeça: é uma aplicação nova) e o vencimento sai do prazo do cadastro. As colunas de `inv_aportes`.
+export function aporteReaplicado(ap, inv, venc, { conferir = false } = {}) {
+  return {
+    investimento_id: inv.id, origem: 'novo', data: venc.data, valor_centavos: venc.liquido, rendeu_antes_centavos: 0, aplicado_em: null,
+    vencimento: sugerirVencimento(venc.data, inv.prazo_meses, inv.vence_dia_antes), reaplicado_de: ap.id, conferir,
+  };
+}
+
+// AS REAPLICAÇÕES QUE FALTAM: cada aporte de um investimento que REAPLICA (`no_vencimento`), que venceu até hoje, que não
+// foi marcado para não reaplicar e que ainda não virou outro. Só com o CDI desde a partida dele (sem ele, o valor do
+// vencimento sairia errado). [{ ap, inv, venc, dados }] — `dados` já com "conferir".
+export function reaplicacoesDevidas({ cadastro = [], aportes = [], resgates = [], cal = [], hoje }) {
+  const invPorId = new Map(cadastro.map((i) => [i.id, i]));
+  const jaVirou = new Set(aportes.map((a) => a.reaplicado_de).filter(Boolean));
+  const out = [];
+  aportes.forEach((ap) => {
+    const inv = invPorId.get(ap.investimento_id);
+    if (!inv || inv.no_vencimento !== 'reaplica' || !ap.vencimento || ap.vencimento > hoje || ap.nao_reaplicar || jaVirou.has(ap.id)) return;
+    const p = partidaDoAporte(ap, cal);
+    if (!cal.length || cal[0][0] > p.data) return;
+    const rs = resgates.filter((r) => r.aporte_id === ap.id).sort((a, b) => (a.data < b.data ? -1 : 1));
+    const venc = noVencimento(inv, posicaoDoAporte(ap, inv, rs, cal, hoje));
+    if (!venc || venc.liquido <= 0) return;
+    out.push({ ap, inv, venc, dados: aporteReaplicado(ap, inv, venc, { conferir: true }) });
+  });
+  return out;
+}
+
+// QUANDO O CADASTRO PASSA A REAPLICAR, o que já tinha vencido ANTES DE HOJE fica como voltou para a conta (o app não
+// reaplica o passado sozinho; o "Reaplicar" da linha do encerrado continua lá): os ids para marcar `nao_reaplicar`.
+export function vencidosAntesDeReaplicar(aportes, investimentoId, hoje) {
+  const jaVirou = new Set(aportes.map((a) => a.reaplicado_de).filter(Boolean));
+  return aportes.filter((a) => a.investimento_id === investimentoId && a.vencimento && a.vencimento < hoje && !a.nao_reaplicar && !jaVirou.has(a.id)).map((a) => a.id);
+}
+
 // ------------------------------------------------------------ a carteira
 // Os totais de uma lista de aportes: o vale e o aplicado pelos EXATOS, arredondados no fim; o IR, a soma dos de cada um.
 export function somarPosicoes(lista) {
@@ -187,10 +241,12 @@ export function montarCarteira({ cadastro = [], aportes = [], resgates = [], cdi
   const porAporte = new Map();
   resgates.forEach((r) => { if (!porAporte.has(r.aporte_id)) porAporte.set(r.aporte_id, []); porAporte.get(r.aporte_id).push(r); });
   const invPorId = new Map(cadastro.map((i) => [i.id, i]));
+  // `seguinte`: o aporte em que este virou no vencimento (reaplicado), se virou
+  const seguintes = new Map(aportes.filter((a) => a.reaplicado_de).map((a) => [a.reaplicado_de, a]));
   const itens = aportes.filter((a) => invPorId.has(a.investimento_id)).map((ap) => {
     const inv = invPorId.get(ap.investimento_id);
     const rs = (porAporte.get(ap.id) ?? []).slice().sort((a, b) => (a.data < b.data ? -1 : 1));
-    return { ap, inv, resgates: rs, pos: posicaoDoAporte(ap, inv, rs, cal, hoje) };
+    return { ap, inv, resgates: rs, pos: posicaoDoAporte(ap, inv, rs, cal, hoje), seguinte: seguintes.get(ap.id) ?? null };
   });
   const abertos = itens.filter((x) => !x.pos.encerrado);
   const nomes = [...new Set(cadastro.map((i) => i.instituicao.trim()))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
@@ -292,28 +348,33 @@ export function lerResgate({ aporte, data, valor, tudo }, partidaData, vale, hoj
 // ------------------------------------------------------------ o cadastro em tabela
 export const linhaDoCadastro = (i) => ({
   id: i.id, novo: false, orig: i, nome: i.nome, instituicao: i.instituicao, tipo: i.tipo, taxa: String(i.taxa).replace('.', ','),
-  resgate: i.resgate, prazo_meses: i.prazo_meses ? String(i.prazo_meses) : '', vence_dia_antes: !!i.vence_dia_antes, ativo: i.ativo !== false, excluir: false,
+  resgate: i.resgate, prazo_meses: i.prazo_meses ? String(i.prazo_meses) : '', vence_dia_antes: !!i.vence_dia_antes,
+  no_vencimento: i.no_vencimento ?? 'conta', ativo: i.ativo !== false, excluir: false,
 });
 export const linhaNovaDoCadastro = (id, instituicao) => ({
-  id, novo: true, orig: null, nome: '', instituicao, tipo: 'cdb', taxa: '100', resgate: 'diaria', prazo_meses: '', vence_dia_antes: false, ativo: true, excluir: false,
+  id, novo: true, orig: null, nome: '', instituicao, tipo: 'cdb', taxa: '100', resgate: 'diaria', prazo_meses: '', vence_dia_antes: false,
+  no_vencimento: 'conta', ativo: true, excluir: false,
 });
 export const linhaVaziaDoCadastro = (l) => l.novo && !l.nome.trim();
 const lerTaxa = (t) => { const n = Number(String(t ?? '').replace(/\s|%/g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
-// As colunas de `inv_cadastro` de uma linha.
+// As colunas de `inv_cadastro` de uma linha. O `no_vencimento` só vai quando é "reaplica" (o 'conta' é o padrão do banco):
+// sem a migration 022, o cadastro de antes segue gravando.
 export function dadosDoCadastro(l) {
   return {
     nome: l.nome.trim(), instituicao: l.instituicao.trim(), tipo: l.tipo, taxa: lerTaxa(l.taxa), resgate: l.resgate,
     prazo_meses: l.prazo_meses ? Number(l.prazo_meses) : null, vence_dia_antes: !!l.vence_dia_antes, ativo: !!l.ativo,
+    ...(l.no_vencimento === 'reaplica' ? { no_vencimento: 'reaplica' } : {}),
   };
 }
 // O que mudou numa linha que já existia ({} = nada).
 export function diferencaDoCadastro(l) {
   if (l.novo) return dadosDoCadastro(l);
-  const d = dadosDoCadastro(l); const o = l.orig; const out = {};
+  const { no_vencimento: _nv, ...d } = dadosDoCadastro(l); const o = l.orig; const out = {};
   Object.entries(d).forEach(([k, v]) => {
     const antes = k === 'taxa' ? Number(o.taxa) : k === 'prazo_meses' ? (o.prazo_meses ?? null) : k === 'ativo' ? o.ativo !== false : k === 'vence_dia_antes' ? !!o.vence_dia_antes : o[k];
     if (v !== antes) out[k] = v;
   });
+  if ((l.no_vencimento ?? 'conta') !== (o.no_vencimento ?? 'conta')) out.no_vencimento = l.no_vencimento;
   return out;
 }
 // O primeiro problema das linhas que vão ser gravadas: { id, campo, motivo } ou null.
@@ -323,6 +384,7 @@ export function validarCadastro(linhas) {
     if (!l.nome.trim()) return { id: l.id, campo: 'nome', motivo: 'falta o nome de um investimento' };
     if (!l.instituicao.trim()) return { id: l.id, campo: 'instituicao', motivo: `falta a instituição de "${l.nome.trim()}"` };
     if (lerTaxa(l.taxa) === null) return { id: l.id, campo: 'taxa', motivo: `a taxa de "${l.nome.trim()}" não é um número` };
+    if (l.no_vencimento === 'reaplica' && !l.prazo_meses) return { id: l.id, campo: 'prazo_meses', motivo: `"${l.nome.trim()}" reaplica: escolha em quanto tempo ele vence (é o prazo do aporte novo)` };
   }
   return null;
 }

@@ -19,6 +19,9 @@ import { diasEntre, ehIsento, nomeDoTipo, proximaQueda, rotuloTaxa } from '../..
 // (`useLinhasAnimadas`), lembrados em `carteira_fechadas`; os CENTAVOS no trilho do cabeçalho (`carteira_centavos`).
 // As ações da linha no mesmo quadrado de 30px: no investimento, APORTAR (as moedas +); no aporte, RESGATAR (as moedas −),
 // EDITAR e EXCLUIR. No celular, só ler.
+// O VENCIMENTO (08/11/2026, migration 022): o investimento que REAPLICA diz isso na linha dele e embaixo do vencimento de
+// cada aporte; o aporte que o app reaplicou sozinho tem "reaplicado" e a marca âmbar "conferir" (abre o ✎) até a pessoa
+// salvar; o encerrado que virou outro diz "reaplicado" no lugar de "voltou" e não tem mais o botão Reaplicar.
 
 export const CORES_INSTITUICAO = ['var(--serie-gastos)', 'var(--origem-fixo)', 'var(--serie-sobrou)', 'var(--serie-entradas)', 'var(--origem-manual)', 'var(--origem-cartao)'];
 const comCentavos = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -148,7 +151,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
       itens.push({ rotulo: 'Já tinha rendido', valor: formatBRL(Number(ap.rendeu_antes_centavos)) });
     } else {
       const sabado = pos.partida.data !== ap.data;
-      itens.push({ rotulo: `Aplicado em ${formatDate(ap.data)}${sabado ? ' (sábado: conta o CDI de sexta)' : ''}`, valor: formatBRL(Number(ap.valor_centavos)) });
+      itens.push({ rotulo: ap.reaplicado_de ? `Reaplicado em ${formatDate(ap.data)} (o vencimento, sem o IR)` : `Aplicado em ${formatDate(ap.data)}${sabado ? ' (sábado: conta o CDI de sexta)' : ''}`, valor: formatBRL(Number(ap.valor_centavos)) });
     }
     if (c) itens.push({ rotulo: `${c.dias} ${c.dias === 1 ? 'dia útil' : 'dias úteis'} de CDI a ${rotuloTaxa(inv.taxa).replace(' do CDI', '')}`, valor: `× ${c.f.toLocaleString('pt-BR', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}` });
     itens.push({ rotulo: 'Vale hoje', valor: formatBRL(pos.vale), cor: COR_ENTRADAS });
@@ -211,7 +214,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
                   <span className="truncate">{x.inv.nome}</span>
                   {!n && <span className="shrink-0 whitespace-nowrap"><Etiqueta tom="ambar">sem aporte</Etiqueta></span>}
                 </span>
-                <span className="block truncate text-[11.5px] text-gray-500">{nomeDoTipo(x.inv.tipo)} · {rotuloTaxa(x.inv.taxa)}{n ? ` · ${n} ${n === 1 ? 'aporte' : 'aportes'}` : ''}</span>
+                <span className="block truncate text-[11.5px] text-gray-500">{nomeDoTipo(x.inv.tipo)} · {rotuloTaxa(x.inv.taxa)}{n ? ` · ${n} ${n === 1 ? 'aporte' : 'aportes'}` : ''}{x.inv.no_vencimento === 'reaplica' ? ' · reaplica no vencimento' : ''}</span>
               </span>
             </span>
           </td>
@@ -250,11 +253,19 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
             <span className="flex flex-wrap items-baseline gap-x-2" style={{ paddingLeft: movel ? 56 : RECUO_APORTE }}>
               <span className="tabular-nums text-gray-700">{antigo && !ap.aplicado_em ? `saldo de ${formatDate(ap.data)}` : formatDate(data)}</span>
               <span className="text-[11.5px] text-gray-400">
-                {antigo ? `já estava aplicado${ap.aplicado_em ? ` · banco em ${formatDate(ap.data).slice(0, 5)}` : ''}` : `${pos.idade} ${pos.idade === 1 ? 'dia' : 'dias'}`}
+                {antigo ? `já estava aplicado${ap.aplicado_em ? ` · banco em ${formatDate(ap.data).slice(0, 5)}` : ''}` : `${pos.idade} ${pos.idade === 1 ? 'dia' : 'dias'}${ap.reaplicado_de ? ' · reaplicado' : ''}`}
               </span>
+              {ap.conferir && (acoes ? (
+                <Tooltip label="O app lançou sozinho no vencimento: confira o valor com o banco e salve">
+                  <button type="button" onClick={() => acoes.editar(l.item)} className="self-center"><Etiqueta tom="ambar">conferir</Etiqueta></button>
+                </Tooltip>
+              ) : <span className="self-center"><Etiqueta tom="ambar">conferir</Etiqueta></span>)}
             </span>
           </td>
-          <td className={`px-3 ${td} ${movel ? 'hidden' : ''}`}><Vence data={ap.vencimento} hoje={hoje} /></td>
+          <td className={`px-3 ${td} ${movel ? 'hidden' : ''}`}>
+            <Vence data={ap.vencimento} hoje={hoje} />
+            {ap.vencimento && inv.no_vencimento === 'reaplica' && !ap.nao_reaplicar && <span className="block text-[11px] text-gray-400">reaplica sozinho</span>}
+          </td>
           <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>
             {reais(pos.aplicado)}
             {resgates.length > 0 && <span className="block text-[11px] text-gray-400">resgatou {reais0(resgates.reduce((s, r) => s + Number(r.valor_centavos ?? 0), 0))}</span>}
@@ -300,13 +311,13 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
       return (
         <tr key={l.id} {...attrs}>
           <td colSpan={8} className="h-[38px] border-b border-gray-200 bg-hx-f9fafb px-3 text-[12px] font-semibold text-gray-600">
-            Encerrados <span className="font-normal text-gray-400">· venceram ou foram resgatados inteiros; o dinheiro voltou para a conta</span>
+            Encerrados <span className="font-normal text-gray-400">· venceram (o dinheiro voltou para a conta ou virou um aporte novo) ou foram resgatados inteiros</span>
           </td>
         </tr>
       );
     }
     // um encerrado
-    const { ap, inv, pos } = l.item;
+    const { ap, inv, pos, seguinte } = l.item;
     const e = pos.encerrado;
     const td = `h-[38px] border-b border-gray-100 py-1 text-[12.5px] text-gray-500 ${aceso(l.id)}`;
     return (
@@ -314,13 +325,13 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
         <td className={`px-3 ${td}`}><span className="text-gray-700">{inv.nome}</span> · {formatDate(ap.origem === 'antigo' ? ap.aplicado_em ?? ap.data : ap.data)}</td>
         <td className={`px-3 ${td} ${movel ? 'hidden' : ''}`}><Etiqueta>{e.motivo === 'vencimento' ? 'venceu' : 'resgatado'} {dataCurta(e.data)}</Etiqueta></td>
         <td className={`${td} ${numTd} ${movel ? 'hidden' : ''}`}>{reais(e.aplicado)}</td>
-        <td className={`${td} ${numTd}`}>{reais(e.valor)}<span className="block text-[11px] text-gray-400">voltou</span></td>
+        <td className={`${td} ${numTd}`}>{reais(e.valor)}<span className="block text-[11px] text-gray-400">{seguinte ? 'reaplicado' : 'voltou'}</span></td>
         <td className={`${td} ${numTd}`}>{sinal(e.valor - e.aplicado)}{reais(Math.abs(e.valor - e.aplicado))}</td>
         <td className={`${td} ${movel ? 'hidden' : ''}`} />
         <td className={`${td} ${movel ? 'hidden' : ''}`} />
         {acoesTd(`${td} px-2`, acoes && (
           <>
-            {e.motivo === 'vencimento' && <BotaoLinha titulo={`Reaplicar os ${formatBRL(e.valor)} (um aporte novo)`} onClick={() => acoes.reaplicar(l.item)}><IconAplicar /></BotaoLinha>}
+            {e.motivo === 'vencimento' && !seguinte && <BotaoLinha titulo="Reaplicar (um aporte novo com o valor do dia menos o IR)" onClick={() => acoes.reaplicar(l.item)}><IconAplicar /></BotaoLinha>}
             <BotaoLinha titulo="Excluir o aporte (some do histórico)" perigo onClick={() => acoes.excluir(l.item)}><IconLixeira className="h-[14px] w-[14px]" /></BotaoLinha>
           </>
         ))}

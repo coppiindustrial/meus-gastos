@@ -84,7 +84,7 @@ function ProximosVencimentos({ itens, hoje, onVer }) {
     <section className="card flex flex-col p-5">
       <div className="mb-3 flex items-baseline gap-3">
         <span className="text-[13px] font-semibold text-gray-800">Próximos vencimentos</span>
-        <span className="text-[11px] text-gray-400">cada aporte com data; no dia, o dinheiro volta para a conta</span>
+        <span className="text-[11px] text-gray-400">cada aporte com data; no dia, volta para a conta ou reaplica (o cadastro diz)</span>
       </div>
       {lista.length === 0 ? <p className="py-6 text-center text-sm text-gray-400">Nenhum aporte com vencimento.</p> : (
         <ul className="divide-y divide-gray-100">
@@ -93,7 +93,7 @@ function ProximosVencimentos({ itens, hoje, onVer }) {
             return (
               <li key={t.ap.id} className="grid grid-cols-[86px_minmax(0,1fr)_auto_auto] items-center gap-3 py-2 text-[12.5px]">
                 <span className="tabular-nums font-medium text-gray-800">{formatDate(t.ap.vencimento)}</span>
-                <span className="min-w-0 truncate text-gray-700"><span className="mr-2 inline-block h-2 w-2 rounded-full align-middle" style={{ background: t.cor }} />{t.inv.nome}<span className="ml-1.5 text-gray-400">{t.inv.instituicao}</span></span>
+                <span className="min-w-0 truncate text-gray-700"><span className="mr-2 inline-block h-2 w-2 rounded-full align-middle" style={{ background: t.cor }} />{t.inv.nome}<span className="ml-1.5 text-gray-400">{t.inv.instituicao}{t.inv.no_vencimento === 'reaplica' && !t.ap.nao_reaplicar ? ' · reaplica' : ''}</span></span>
                 <span className="whitespace-nowrap text-right tabular-nums text-gray-900">{formatBRL(t.pos.vale)}</span>
                 <span className={`whitespace-nowrap rounded-full px-2 py-px text-[11px] font-semibold ${n <= 45 ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
                   {n === 0 ? 'hoje' : n <= 60 ? `em ${n} ${n === 1 ? 'dia' : 'dias'}` : `em ${Math.round(n / 30.4)} meses`}

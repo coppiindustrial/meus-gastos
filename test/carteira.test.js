@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  aliquotaIOF, aliquotaIR, calendario, diferencaDoCadastro, fator, inicioDoAporte, lerAporte, lerResgate, linhaDoCadastro,
-  mesAMes, montarCarteira, posicaoDoAporte, proximaQueda, rendeuDoDeposito, somarPosicoes, sugerirVencimento, validarCadastro,
+  aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diferencaDoCadastro, fator, inicioDoAporte, lerAporte, lerResgate,
+  linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
+  rendeuDoDeposito, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
 } from '../src/lib/carteira.js';
 
 // O CDI de cada dia útil de 01/04 a 05/11/2026 (a série 12 do Banco Central, dado público), como `api/taxas.js` entrega.
@@ -198,4 +199,78 @@ test('o cadastro em tabela: a diferença e o que falta', () => {
   assert.equal(validarCadastro([{ ...l, taxa: 'abc' }]).campo, 'taxa');
   assert.equal(validarCadastro([{ ...l, instituicao: ' ' }]).campo, 'instituicao');
   assert.equal(validarCadastro([l]), null);
+  // o que acontece no vencimento: 'conta' é o padrão (nem vai para o banco); "reaplica" pede o prazo
+  assert.equal(l.no_vencimento, 'conta');
+  assert.equal('no_vencimento' in dadosDoCadastro(l), false);
+  assert.deepEqual(diferencaDoCadastro({ ...l, no_vencimento: 'reaplica' }), { no_vencimento: 'reaplica' });
+  assert.deepEqual(diferencaDoCadastro(linhaDoCadastro({ ...orig, no_vencimento: 'reaplica' })), {});
+  assert.deepEqual(diferencaDoCadastro({ ...linhaDoCadastro({ ...orig, no_vencimento: 'reaplica' }), no_vencimento: 'conta' }), { no_vencimento: 'conta' });
+  assert.equal(validarCadastro([{ ...l, no_vencimento: 'reaplica', prazo_meses: '' }]).campo, 'prazo_meses');
+  assert.equal(validarCadastro([{ ...l, no_vencimento: 'reaplica' }]), null);
+});
+
+test('o vencimento que reaplica: um aporte novo com o líquido do dia, o IR recomeça e o prazo do cadastro', () => {
+  const i = inv(100, { no_vencimento: 'reaplica', prazo_meses: 3 });
+  const ap = novo('2026-04-07', 1000000, { vencimento: '2026-10-07' });
+  const devidas = reaplicacoesDevidas({ cadastro: [i], aportes: [ap], resgates: [], cal, hoje: HOJE });
+  assert.equal(devidas.length, 1);
+  const { venc, dados } = devidas[0];
+  // o valor do dia do vencimento, menos o IR pela idade nesse dia (183 dias: 20%)
+  const noDia = posicaoDoAporte({ ...ap, vencimento: null }, i, [], cal, '2026-10-07').vale;
+  assert.equal(venc.valor, noDia);
+  assert.equal(venc.aliquota, 0.2);
+  assert.equal(venc.ir, Math.round((noDia - 1000000) * 0.2));
+  assert.deepEqual(dados, {
+    investimento_id: 'i', origem: 'novo', data: '2026-10-07', valor_centavos: noDia - venc.ir, rendeu_antes_centavos: 0, aplicado_em: null,
+    vencimento: '2027-01-07', reaplicado_de: ap.id, conferir: true,
+  });
+  // o novo é uma aplicação nova: o IR recomeça em 22,5% (31 dias), e o de antes vai para os encerrados com o `seguinte`
+  const novoAp = { ...dados, id: 'n' };
+  const c = montarCarteira({ cadastro: [i], aportes: [ap, novoAp], resgates: [], cdi: CDI, hoje: HOJE });
+  assert.equal(c.encerrados.length, 1);
+  assert.equal(c.encerrados[0].seguinte.id, 'n');
+  const aberto = c.grupos[0].investimentos[0].aportes[0];
+  assert.equal(aberto.pos.aplicado, venc.liquido);
+  assert.equal(aberto.pos.aliquota, 0.225);
+  // já virou, voltou para a conta, ainda não venceu, ou o cadastro devolve para a conta: nada a reaplicar
+  assert.equal(reaplicacoesDevidas({ cadastro: [i], aportes: [ap, novoAp], cal, hoje: HOJE }).length, 0);
+  assert.equal(reaplicacoesDevidas({ cadastro: [i], aportes: [{ ...ap, nao_reaplicar: true }], cal, hoje: HOJE }).length, 0);
+  assert.equal(reaplicacoesDevidas({ cadastro: [i], aportes: [ap], cal, hoje: '2026-10-06' }).length, 0);
+  assert.equal(reaplicacoesDevidas({ cadastro: [{ ...i, no_vencimento: 'conta' }], aportes: [ap], cal, hoje: HOJE }).length, 0);
+  // sem o CDI desde a partida, espera (o valor do vencimento sairia errado)
+  assert.equal(reaplicacoesDevidas({ cadastro: [i], aportes: [ap], cal: [], hoje: HOJE }).length, 0);
+  // resgatado inteiro antes do vencimento: não venceu, não reaplica
+  assert.equal(reaplicacoesDevidas({ cadastro: [i], aportes: [ap], resgates: [{ aporte_id: ap.id, data: '2026-08-03', valor_centavos: null, tudo: true }], cal, hoje: HOJE }).length, 0);
+});
+
+test('o vencimento que reaplica: na isenta o dinheiro segue rendendo igual, também num vencimento de sábado', () => {
+  const i = inv(100, { tipo: 'lci', no_vencimento: 'reaplica', prazo_meses: 6 });
+  const ap = novo('2026-04-07', 1000000, { vencimento: '2026-10-10' }); // 10/10/2026 é sábado
+  const [{ venc, dados }] = reaplicacoesDevidas({ cadastro: [i], aportes: [ap], cal, hoje: HOJE });
+  assert.equal(venc.ir, 0);
+  assert.equal(dados.valor_centavos, venc.valor);
+  // o reaplicado começa no próprio vencimento (o CDI de sexta já está no valor do de antes): sem render duas vezes
+  assert.equal(partidaDoAporte(dados, cal).data, '2026-10-10');
+  const continuo = posicaoDoAporte({ ...ap, vencimento: null }, i, [], cal, HOJE).vale;
+  const reaplicado = posicaoDoAporte({ ...dados, id: 'n' }, i, [], cal, HOJE).vale;
+  assert.ok(Math.abs(reaplicado - continuo) <= 1, `${reaplicado} × ${continuo}`);
+});
+
+test('o vencimento: o líquido do dia (IR e IOF pela idade) e o que já tinha vencido quando o cadastro passou a reaplicar', () => {
+  const i = inv(100);
+  // vencido em 20 dias: IOF e 22,5%
+  const curto = posicaoDoAporte(novo('2026-09-01', 1000000, { vencimento: '2026-09-21' }), i, [], cal, HOJE);
+  const v = noVencimento(i, curto);
+  assert.equal(v.idade, 20);
+  assert.ok(v.iof > 0);
+  assert.equal(v.liquido, v.valor - v.ir - v.iof);
+  assert.equal(noVencimento(i, posicaoDoAporte(novo('2026-09-01', 1000000), i, [], cal, HOJE)), null);
+  const aportes = [
+    novo('2026-04-07', 100, { id: 'a', vencimento: '2026-10-07' }),
+    novo('2026-04-07', 100, { id: 'b', vencimento: HOJE }), // vence hoje: esse ainda reaplica
+    novo('2026-04-07', 100, { id: 'c', vencimento: '2026-08-07' }),
+    novo('2026-08-07', 100, { id: 'd', reaplicado_de: 'c' }), // o "c" já virou o "d"
+    novo('2026-04-07', 100, { id: 'e', vencimento: '2026-09-07', nao_reaplicar: true }),
+  ];
+  assert.deepEqual(vencidosAntesDeReaplicar(aportes, 'i', HOJE), ['a']);
 });

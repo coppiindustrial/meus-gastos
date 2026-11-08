@@ -14,8 +14,8 @@ import useCarteira from '../components/patrimonio/useCarteira.js';
 import { useNoCelular } from '../lib/celular.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
-import { excluirAporte } from '../api/carteira.js';
-import { nomeDoTipo, rotuloTaxa } from '../lib/carteira.js';
+import { excluirAporte, marcarNaoReaplicar } from '../api/carteira.js';
+import { noVencimento, nomeDoTipo, rotuloTaxa } from '../lib/carteira.js';
 import { exportCsv } from '../lib/exportCsv.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { formatDate } from '../lib/format.js';
@@ -25,6 +25,9 @@ import { formatDate } from '../lib/format.js';
 // aporte" é o gesto do dia a dia (dinheiro novo, ou o que já estava aplicado: o total do banco e quanto já rendeu); na
 // linha de cada aporte, RESGATAR, EDITAR e EXCLUIR. O valor de hoje de cada aporte é a conta pelo CDI de cada dia
 // (`lib/carteira.js`); o painel do Patrimônio lê os mesmos dados (`useCarteira`). No celular, só ler.
+// O VENCIMENTO (08/11/2026, migration 022): o "Reaplicar" do encerrado abre o aporte novo já com o LÍQUIDO do dia (o
+// valor menos o IR, como o automático do investimento que reaplica sozinho); excluir um aporte REAPLICADO marca o de antes
+// como "voltou para a conta" (`nao_reaplicar`), senão o app o reaplicaria de novo na próxima vez que abrisse.
 const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
 
 export default function Investimentos() {
@@ -54,6 +57,7 @@ export default function Investimentos() {
   const { carteira } = d;
   const recarregar = () => d.carregar();
   const aportesPorInv = d.aportes.reduce((m, a) => ({ ...m, [a.investimento_id]: (m[a.investimento_id] ?? 0) + 1 }), {});
+  const com022 = d.cadastro.some((i) => 'no_vencimento' in i);
   const qtdInv = carteira.grupos.reduce((s, g) => s + g.investimentos.length, 0);
   const qtdAportes = carteira.grupos.reduce((s, g) => s + g.investimentos.reduce((t, x) => t + x.aportes.length, 0), 0);
   const t = carteira.total;
@@ -63,19 +67,26 @@ export default function Investimentos() {
     editar: (item) => setAporte({ aporte: item.ap }),
     resgatar: (item) => setResgate(item),
     reaplicar: (item) => {
-      const e = item.pos.encerrado;
-      const data = e.data <= d.hoje ? e.data : d.hoje;
-      setAporte({ investimento_id: item.inv.id, reaplicar: { data, valor: e.valor } });
+      const v = noVencimento(item.inv, item.pos);
+      setAporte({ investimento_id: item.inv.id, reaplicar: { de: com022 ? item.ap.id : null, data: v.data, valor: v.liquido, venc: v } });
     },
     excluir: async (item) => {
       const { ap, inv, resgates } = item;
       const data = ap.origem === 'antigo' ? ap.aplicado_em ?? ap.data : ap.data;
+      const deAntes = ap.reaplicado_de ? d.aportes.find((a) => a.id === ap.reaplicado_de) : null;
       const ok = await confirmar({
         titulo: 'Excluir o aporte?', perigo: true, confirmar: 'Excluir',
-        texto: `O aporte de ${formatDate(data)} em ${inv.nome} (${formatBRL(Number(ap.valor_centavos))}) sai da carteira${resgates.length ? `, com ${resgates.length === 1 ? 'o resgate' : `os ${resgates.length} resgates`} dele` : ''}. Os outros aportes não mudam. Não se desfaz.`,
+        texto: `O aporte de ${formatDate(data)} em ${inv.nome} (${formatBRL(Number(ap.valor_centavos))}) sai da carteira${resgates.length ? `, com ${resgates.length === 1 ? 'o resgate' : `os ${resgates.length} resgates`} dele` : ''}. Os outros aportes não mudam.`
+          + (deAntes ? ` Ele é a reaplicação do vencimento de ${formatDate(ap.data)}: aquele aporte fica como "voltou para a conta", e o app não o reaplica de novo.` : '')
+          + ' Não se desfaz.',
       });
       if (!ok) return;
-      try { await excluirAporte(ap.id); toast.success('Aporte excluído.'); recarregar(); } catch (err) { toast.error(err.message); }
+      try {
+        if (deAntes) await marcarNaoReaplicar([deAntes.id]);
+        await excluirAporte(ap.id);
+        toast.success('Aporte excluído.');
+        recarregar();
+      } catch (err) { toast.error(err.message); }
     },
   };
 
@@ -151,7 +162,7 @@ export default function Investimentos() {
 
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
       {cadastro && (
-        <ModalCadastroCarteira cadastro={d.cadastro} aportesPorInv={aportesPorInv}
+        <ModalCadastroCarteira cadastro={d.cadastro} aportes={d.aportes} aportesPorInv={aportesPorInv} hoje={d.hoje} com022={com022 || !d.cadastro.length}
           onFechar={() => setCadastro(false)} onSalvo={() => { setCadastro(false); recarregar(); }} />
       )}
       {aporte && (

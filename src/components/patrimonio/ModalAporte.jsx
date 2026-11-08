@@ -19,10 +19,26 @@ import { aliquotaIR, calendario, diasEntre, inicioDoAporte, lerAporte, maisDias,
 //     pelo CDI desde o depósito (`rendeuDoDeposito`) — o "Rendimento bruto" do banco soma também o que saiu nos saques
 //     e não serve quando houve saque. O campo segue a conta até a pessoa digitar nele; aí, a dica oferece a conta ("usar").
 // O vencimento vem SUGERIDO pelo prazo do cadastro (só enquanto você não mexe nele) e vale o que estiver no campo. Os
-// valores aceitam conta (100+50). `inicial`: { investimento_id?, modo?, aporte? (editar), reaplicar?: { data, valor } }.
-// Editando, o pop-up lista os resgates do aporte (com o ✕ de cada um).
+// valores aceitam conta (100+50). `inicial`: { investimento_id?, modo?, aporte? (editar), reaplicar?: { de, data, valor,
+// venc } }. Editando, o pop-up lista os resgates do aporte (com o ✕ de cada um).
+// O VENCIMENTO (08/11/2026, migration 022): o "Reaplicar" vem com o LÍQUIDO do dia (`venc`: o valor, o IR) e grava o
+// `reaplicado_de`; o aporte que o app reaplicou sozinho abre com a nota do que ele fez, e salvar tira o "conferir".
+// O reaplicado começa no próprio vencimento (sem a regra do sábado: o CDI de sexta já está no valor do de antes).
 
 const MODOS = [{ valor: 'novo', rotulo: 'Dinheiro novo' }, { valor: 'antigo', rotulo: 'Já estava aplicado' }];
+const pctAliq = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+
+// O que o vencimento devolveu: o valor do dia, o IR (e o IOF) e o líquido que entra como o aporte novo
+function NotaVencimento({ venc }) {
+  return (
+    <div className="space-y-1 rounded-md border border-gray-200 bg-hx-f9fafb px-3 py-2.5 text-[12.5px] text-gray-600">
+      <div className="flex justify-between gap-3"><span>Venceu em {formatDate(venc.data)} valendo</span><span className="tabular-nums">{formatBRL(venc.valor)}</span></div>
+      {venc.iof > 0 && <div className="flex justify-between gap-3"><span>IOF ({venc.idade} dias)</span><span className="tabular-nums">− {formatBRL(venc.iof)}</span></div>}
+      <div className="flex justify-between gap-3"><span>IR {venc.aliquota ? pctAliq(venc.aliquota) : '(isento)'}{venc.idade !== null && venc.aliquota ? ` (${venc.idade} dias)` : ''}</span><span className="tabular-nums">− {formatBRL(venc.ir)}</span></div>
+      <div className="flex justify-between gap-3 border-t border-gray-200 pt-1"><span>O aporte novo (o IR dele recomeça)</span><b className="tabular-nums text-gray-900">{formatBRL(venc.liquido)}</b></div>
+    </div>
+  );
+}
 
 function formInicial(inicial, cadastro, hoje) {
   const ap = inicial.aporte;
@@ -111,14 +127,15 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
   })();
   const erro = errosDeTexto ?? r.erro;
 
+  const reaplicado = !!(inicial.reaplicar?.de || inicial.aporte?.reaplicado_de);
   // A PRÉVIA: o aplicado, de quando rende, o IR de hoje e (no aporte de antes de hoje) quanto ele vale hoje pela conta
   const previa = (() => {
     if (!inv || !r.dados) return null;
     const d = r.dados;
     const aplicado = d.valor_centavos - d.rendeu_antes_centavos;
-    const ap = { ...d, id: 'previa' };
+    const ap = { ...d, id: 'previa', reaplicado_de: reaplicado ? 'antes' : null };
     const desde = d.origem === 'novo' ? d.data : d.aplicado_em;
-    const ini = d.origem === 'novo' ? inicioDoAporte(d.data, cal ?? []) : d.data;
+    const ini = d.origem === 'novo' && !reaplicado ? inicioDoAporte(d.data, cal ?? []) : d.data;
     // só com o CDI desde o começo do aporte (o da tela vem de dois anos para cá, ou do aporte mais antigo)
     const pos = cal?.length && cal[0][0] <= ini ? posicaoDoAporte(ap, inv, editando ? resgates : [], cal, hoje) : null;
     return { aplicado, pos, desde, ini };
@@ -130,7 +147,12 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
     if (erro || !r.dados) return;
     setSalvando(true);
     try {
-      if (editando) await atualizarAporte(inicial.aporte.id, r.dados); else await criarAporte(r.dados);
+      const dados = {
+        ...r.dados,
+        ...(inicial.reaplicar?.de ? { reaplicado_de: inicial.reaplicar.de } : {}),
+        ...(editando && inicial.aporte.conferir ? { conferir: false } : {}),
+      };
+      if (editando) await atualizarAporte(inicial.aporte.id, dados); else await criarAporte(dados);
       toast.success(editando ? 'Aporte atualizado.' : `Aporte lançado em ${inv.nome}.`);
       onSalvo();
     } catch (err) { toast.error(/inv_aportes|schema cache|does not exist/i.test(err.message) ? 'Falta aplicar a migration 020 (a carteira do zero).' : err.message); setSalvando(false); }
@@ -147,7 +169,14 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
     <Modal open onClose={onFechar} title={titulo} maxWidth="max-w-lg"
       subtitulo={editando ? `${inv?.nome ?? ''} · ${f.modo === 'novo' ? 'dinheiro novo' : 'já estava aplicado'}` : 'o dinheiro que entrou; o valor de hoje o app calcula pelo CDI de cada dia'}>
       <form onSubmit={salvar} className="space-y-4">
-        {!editando && <SegmentedFiltro opcoes={MODOS} value={f.modo} onChange={(v) => mudar('modo', v)} ariaLabel="De onde veio o dinheiro" />}
+        {!editando && !inicial.reaplicar && <SegmentedFiltro opcoes={MODOS} value={f.modo} onChange={(v) => mudar('modo', v)} ariaLabel="De onde veio o dinheiro" />}
+        {inicial.reaplicar?.venc && <NotaVencimento venc={inicial.reaplicar.venc} />}
+        {editando && inicial.aporte.conferir && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12.5px] text-amber-800">
+            O app lançou este aporte sozinho no vencimento de {formatDate(inicial.aporte.data)} (o investimento reaplica): o valor do dia
+            menos o IR, e o vencimento pelo prazo do cadastro. Confira com o banco, corrija se precisar e salve — a marca "conferir" sai.
+          </div>
+        )}
         <Campo rotulo="Investimento">
           {ativos.length ? (
             <SelectBusca value={f.investimento_id} onChange={(v) => mudar('investimento_id', v)} opcoes={opcoes} placeholder="Escolha o investimento"

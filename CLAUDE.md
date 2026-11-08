@@ -268,6 +268,18 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   conta: `encerrado`). O IR pela idade do aporte (22,5 · 20 · 17,5 · 15%, o IOF nos 30 primeiros dias; LCI e LCA isentas);
   o "já estava aplicado" sem `aplicado_em` vai pelo maior, 22,5% (`semData`: o líquido nunca fica a mais). O mês a mês
   (`mesAMes`): o fim de cada mês pela mesma conta; rendeu = o total − o do mês anterior − o que entrou + o que saiu.
+- O VENCIMENTO: VOLTA PARA A CONTA OU REAPLICA (08/11/2026, a pedido; migration 022): o cadastro tem "No vencimento"
+  (`inv_cadastro.no_vencimento` 'conta' | 'reaplica'; "reaplica" pede o prazo de "Vence em", que é o do aporte novo). No
+  investimento que reaplica, NO DIA DO VENCIMENTO O APP GRAVA UM APORTE NOVO (`reaplicacoesDevidas`, chamada pelo
+  `useCarteira` em qualquer tela que leia a carteira, assim que o CDI chega): a data é o vencimento, o valor é o LÍQUIDO do
+  dia (`noVencimento`: o valor menos o IR e o IOF pela idade — o banco desconta ao reaplicar, então o IR do novo RECOMEÇA em
+  22,5% e o "Rendeu" desse dinheiro volta a zero), o vencimento pelo prazo do cadastro, `reaplicado_de` (índice único: duas
+  telas abertas não gravam duas vezes) e `conferir` (a marca âmbar na linha; abre o ✎; salvar a tira). O reaplicado começa
+  no PRÓPRIO vencimento, sem a regra do sábado (o CDI de sexta já está no valor do de antes; testado: na isenta o dinheiro
+  segue rendendo igual). O de antes vai para os encerrados com "reaplicado" e sem o botão Reaplicar. EXCLUIR o reaplicado
+  marca o de antes `nao_reaplicar` (senão o app o refaria); passar o cadastro a reaplicar marca o que já venceu ANTES DE
+  HOJE (`vencidosAntesDeReaplicar`: vale para os próximos; o passado pelo Reaplicar da linha). O "Reaplicar" manual também
+  vem com o líquido e grava o `reaplicado_de`. Sem a 022, a coluna fica apagada e nada muda.
 - OS DADOS: `api/carteira.js` + `components/patrimonio/useCarteira.js` (o cadastro, os aportes, os resgates, o CDI de cada
   dia de `api/taxas.js` — desde o aporte mais antigo e no MÍNIMO dois anos, porque a prévia do "Lançar aporte" faz a conta
   com ele e, sem aporte nenhum, ficava sem CDI — e o de cada mês de `api/cdi.js`). Sem o Banco Central, o valor fica na partida e a faixa

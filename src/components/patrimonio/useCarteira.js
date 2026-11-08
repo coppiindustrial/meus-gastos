@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '../../context/ToastContext.jsx';
-import { listarCarteira } from '../../api/carteira.js';
+import { gravarReaplicacao, listarCarteira } from '../../api/carteira.js';
 import { taxasDiarias } from '../../api/taxas.js';
 import { cdiMensal } from '../../api/cdi.js';
-import { maisDias, mesAMes, montarCarteira } from '../../lib/carteira.js';
-import { todayISO } from '../../lib/format.js';
+import { maisDias, mesAMes, montarCarteira, reaplicacoesDevidas } from '../../lib/carteira.js';
+import { formatBRL } from '../../lib/dinheiro.js';
+import { formatDate, todayISO } from '../../lib/format.js';
 
 // OS DADOS DA CARTEIRA (07/11/2026, a carteira do zero), que as telas Investimentos, Patrimônio e Indicadores dividem: o
 // cadastro, os aportes e os resgates (migration 020), o CDI de cada dia (para a conta) e o CDI de cada mês (para comparar).
@@ -50,6 +51,32 @@ export default function useCarteira() {
   const base = useMemo(() => ({ cadastro: dados?.cadastro ?? [], aportes: dados?.aportes ?? [], resgates: dados?.resgates ?? [], cdi: cdi ?? [], hoje }), [dados, cdi, hoje]);
   const carteira = useMemo(() => montarCarteira(base), [base]);
   const meses = useMemo(() => mesAMes(base), [base]);
+
+  // A REAPLICAÇÃO NO VENCIMENTO (08/11/2026, migration 022): o investimento que reaplica sozinho ganha, no dia do
+  // vencimento de cada aporte, o APORTE NOVO (o líquido do dia, o prazo do cadastro, "conferir") — gravado por qualquer
+  // tela que leia a carteira, assim que o CDI chega. Recarrega e repete enquanto houver (o novo também pode já ter vencido).
+  // O índice único do `reaplicado_de` impede o repetido; um erro de verdade avisa uma vez e para até recarregar a página.
+  const reaplicando = useRef(false);
+  const parou = useRef(false);
+  useEffect(() => {
+    if (!dados || !cdi?.length || reaplicando.current || parou.current) return;
+    const devidas = reaplicacoesDevidas({ ...base, cal: carteira.cal });
+    if (!devidas.length) return;
+    reaplicando.current = true;
+    (async () => {
+      const feitas = [];
+      try {
+        for (const r of devidas) if (await gravarReaplicacao(r.dados)) feitas.push(r);
+      } catch (err) {
+        parou.current = true;
+        toast.error(`Não reaplicou o vencimento sozinho: ${err.message}`);
+      }
+      reaplicando.current = false;
+      if (feitas.length === 1) toast.success(`${feitas[0].inv.nome} venceu em ${formatDate(feitas[0].venc.data)} e foi reaplicado: ${formatBRL(feitas[0].venc.liquido)}, já sem o IR. Confira com o banco.`);
+      else if (feitas.length > 1) toast.success(`${feitas.length} vencimentos reaplicados (já sem o IR). Confira com o banco os marcados "conferir".`);
+      if (!parou.current) carregar();
+    })();
+  }, [dados, cdi, base, carteira, carregar, toast]);
 
   return {
     carregar, dados, semMigration: dados === null, carregando: dados === undefined, hoje,
