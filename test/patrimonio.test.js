@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { calendario, fator, mesAMes, montarCarteira, posicaoDoAporte } from '../src/lib/carteira.js';
 import {
-  cascataDoPatrimonio, escadaDeLiquidez, filtrarCarteira, parcelasComprometidas, irPorAliquota, linhaDoTempoVencimentos, mesesComMovimento, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
+  cascataDoPatrimonio, escadaDeLiquidez, filtrarCarteira, irPorAliquota, linhaDoTempoVencimentos, mesesComMovimento, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
   textoDoPeriodo, vencimentos,
 } from '../src/lib/patrimonio.js';
 
@@ -181,37 +181,4 @@ test('a evolução em cascata: os meses com aporte, os parados num degrau, por a
   const depois = cascataDoPatrimonio(meses.slice(2));
   assert.deepEqual(depois.colunas.slice(0, 2).map((x) => `${x.tipo}:${x.de}→${x.ate}`), ['inicio:0→1010', 'parado:1010→1020']);
   assert.equal(cascataDoPatrimonio([]), null);
-});
-
-test('já comprometido em parcelas: só as que vêm, por mês e por cartão, e o peso na renda média', () => {
-  const cartoes = [{ id: 'c1', nome: 'Cartão A' }, { id: 'c2', nome: 'Cartão B' }];
-  const parcelas = [
-    { lancamento_id: 'l1', competencia: '2026-11', valor_centavos: 9999, cartao_id: 'c1' }, // já na fatura do mês: fora
-    { lancamento_id: 'l1', competencia: '2026-12', valor_centavos: 10000, cartao_id: 'c1' },
-    { lancamento_id: 'l1', competencia: '2027-01', valor_centavos: 10000, cartao_id: 'c1' },
-    { lancamento_id: 'l2', competencia: '2026-12', valor_centavos: 30000, cartao_id: 'c2' },
-    { lancamento_id: 'l3', competencia: '2027-03', valor_centavos: 5000, cartao_id: 'c2' },
-  ];
-  const resumo = [
-    { competencia: '2025-11', tipo: 'entrada', total_centavos: 999999 }, // 13 meses antes: fora
-    { competencia: '2025-12', tipo: 'entrada', total_centavos: 100000 },
-    { competencia: '2026-06', tipo: 'entrada', total_centavos: 60000 },
-    { competencia: '2026-06', tipo: 'entrada', total_centavos: 40000 },
-    { competencia: '2026-06', tipo: 'saida', total_centavos: 70000 },
-    { competencia: '2026-12', tipo: 'entrada', total_centavos: 999999 }, // o mês de hoje em diante: fora
-  ];
-  const r = parcelasComprometidas({ parcelas, cartoes, resumo, hoje: '2026-12' });
-  assert.equal(r.total, 55000);
-  assert.equal(r.parcelas, 4);
-  assert.equal(r.compras, 3);
-  assert.equal(r.ate, '2027-03');
-  assert.deepEqual(r.meses.map((m) => [m.competencia, m.valor]), [['2026-12', 40000], ['2027-01', 10000], ['2027-03', 5000]]);
-  assert.deepEqual(r.meses[0].porCartao, [{ nome: 'Cartão B', valor: 30000 }, { nome: 'Cartão A', valor: 10000 }]);
-  assert.deepEqual(r.porCartao, [{ nome: 'Cartão B', valor: 35000 }, { nome: 'Cartão A', valor: 20000 }]);
-  // a renda média: dois meses com entrada (dez/25 e jun/26), 100.000 cada
-  assert.equal(r.renda, 100000);
-  assert.equal(r.pctRenda, 0.55);
-  // sem parcelas nem entradas
-  const v = parcelasComprometidas({ hoje: '2026-12' });
-  assert.deepEqual([v.total, v.ate, v.renda, v.pctRenda], [0, null, 0, null]);
 });

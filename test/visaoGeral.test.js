@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  anoAnterior, compsDoHistorico, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaMovelDosFixos, mediaPorMes, periodo, resumoPeriodo, variacao,
+  anoAnterior, compsDoHistorico, custoFixo, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaMovelDosFixos, mediaPorMes, parcelasComprometidas, periodo, resumoPeriodo, variacao,
 } from '../src/lib/visaoGeral.js';
 
 // Linhas no formato da view resumo_mensal (valores fictícios).
@@ -180,4 +180,66 @@ test('jaComprometido: o fixo não lançado conta a MÉDIA MÓVEL dos últimos 6 
   const r2 = jaComprometido({ recorrencias, lancamentos: comNov, hoje: '2026-11', minMeses: 2 });
   // dez: a média de jun a nov — (200 + 200 + 300 + 300 + 600 + 240) / 6 = 306,67
   assert.deepEqual(r2.map((m) => m.fixos), [24000 + 50000, 30667 + 50000]);
+});
+
+test('já comprometido em parcelas: só as que vêm, por mês e por cartão, e o peso na renda média', () => {
+  const cartoes = [{ id: 'c1', nome: 'Cartão A' }, { id: 'c2', nome: 'Cartão B' }];
+  const parcelas = [
+    { lancamento_id: 'l1', competencia: '2026-11', valor_centavos: 9999, cartao_id: 'c1' }, // já na fatura do mês: fora
+    { lancamento_id: 'l1', competencia: '2026-12', valor_centavos: 10000, cartao_id: 'c1' },
+    { lancamento_id: 'l1', competencia: '2027-01', valor_centavos: 10000, cartao_id: 'c1' },
+    { lancamento_id: 'l2', competencia: '2026-12', valor_centavos: 30000, cartao_id: 'c2' },
+    { lancamento_id: 'l3', competencia: '2027-03', valor_centavos: 5000, cartao_id: 'c2' },
+  ];
+  const resumo = [
+    { competencia: '2025-11', tipo: 'entrada', total_centavos: 999999 }, // 13 meses antes: fora
+    { competencia: '2025-12', tipo: 'entrada', total_centavos: 100000 },
+    { competencia: '2026-06', tipo: 'entrada', total_centavos: 60000 },
+    { competencia: '2026-06', tipo: 'entrada', total_centavos: 40000 },
+    { competencia: '2026-06', tipo: 'saida', total_centavos: 70000 },
+    { competencia: '2026-12', tipo: 'entrada', total_centavos: 999999 }, // o mês de hoje em diante: fora
+  ];
+  const r = parcelasComprometidas({ parcelas, cartoes, resumo, hoje: '2026-12' });
+  assert.equal(r.total, 55000);
+  assert.equal(r.parcelas, 4);
+  assert.equal(r.compras, 3);
+  assert.equal(r.ate, '2027-03');
+  assert.deepEqual(r.meses.map((m) => [m.competencia, m.valor]), [['2026-12', 40000], ['2027-01', 10000], ['2027-03', 5000]]);
+  assert.deepEqual(r.meses[0].porCartao, [{ nome: 'Cartão B', valor: 30000 }, { nome: 'Cartão A', valor: 10000 }]);
+  assert.deepEqual(r.porCartao, [{ nome: 'Cartão B', valor: 35000 }, { nome: 'Cartão A', valor: 20000 }]);
+  // a renda média: dois meses com entrada (dez/25 e jun/26), 100.000 cada
+  assert.equal(r.renda, 100000);
+  assert.equal(r.pctRenda, 0.55);
+  // sem parcelas nem entradas
+  const v = parcelasComprometidas({ hoje: '2026-12' });
+  assert.deepEqual([v.total, v.ate, v.renda, v.pctRenda], [0, null, 0, null]);
+});
+
+test('custoFixo: o próximo mês pela média móvel, o de hoje à parte, o histórico dos fixos e o peso na renda', () => {
+  const rec = (id, padrao, extra = {}) => ({ id, descricao: id, dia_do_mes: 1, ativa: true, inicio: '2026-01', fim: null, valor_padrao_centavos: padrao, ...extra });
+  const recorrencias = [rec('luz', 20000), rec('aluguel', 300000), rec('antigo', 9999, { fim: '2026-06' })];
+  const lancamentos = [
+    { recorrencia_id: 'luz', competencia: '2026-09', valor_centavos: 20000 },
+    { recorrencia_id: 'luz', competencia: '2026-10', valor_centavos: 30000 },
+    { recorrencia_id: 'aluguel', competencia: '2026-10', valor_centavos: 300000 },
+    { recorrencia_id: 'aluguel', competencia: '2026-11', valor_centavos: 310000 }, // novembro: só o aluguel lançado
+  ];
+  const resumo = [
+    { competencia: '2026-09', tipo: 'saida', origem: 'fixo', total_centavos: 20000 },
+    { competencia: '2026-10', tipo: 'saida', origem: 'fixo', total_centavos: 330000 },
+    { competencia: '2026-10', tipo: 'saida', origem: 'cartao', total_centavos: 999999 }, // não é fixo
+    { competencia: '2026-11', tipo: 'saida', origem: 'fixo', total_centavos: 310000 }, // o mês de hoje: fora do histórico
+    { competencia: '2026-10', tipo: 'entrada', origem: 'entrada', total_centavos: 1000000 },
+  ];
+  const r = custoFixo({ recorrencias, lancamentos, resumo, hoje: '2026-11' });
+  // dezembro: a luz pela média (25.000) e o aluguel pela média (305.000); o que terminou em junho não conta
+  assert.equal(r.competencia, '2026-12');
+  assert.equal(r.valor, 330000);
+  assert.equal(r.qtd, 2);
+  // novembro: o aluguel lançado (310.000) e a luz a lançar pela média (25.000)
+  assert.deepEqual(r.hoje, { valor: 335000, qtd: 2 });
+  assert.deepEqual(r.historico, [{ competencia: '2026-09', valor: 20000 }, { competencia: '2026-10', valor: 330000 }]);
+  assert.equal(r.renda, 1000000);
+  assert.equal(r.pctRenda, 0.33);
+  assert.equal(custoFixo({ hoje: '2026-11' }).pctRenda, null);
 });

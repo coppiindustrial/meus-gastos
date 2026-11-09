@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
@@ -9,7 +9,6 @@ import CardAutoAltura from '../components/dashboard/CardAutoAltura.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import { CartaoKpi } from '../components/graficos/CartoesResumo.jsx';
-import CartaoParcelas from '../components/graficos/CartaoParcelas.jsx';
 import { COR_ENTRADAS } from '../components/graficos/Graficos.jsx';
 import { RoscaOrigem } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
@@ -23,11 +22,9 @@ import AvisoSemTaxas from '../components/patrimonio/AvisoSemTaxas.jsx';
 import { IconOlho } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { marcarVencimentoVisto } from '../api/carteira.js';
-import { listarCartoes } from '../api/cadastros.js';
-import { listarParcelasFuturas, listarResumoMensal } from '../api/resumo.js';
 import { mesAMes, montarCarteira, nomeDoTipo, rotuloTaxa } from '../lib/carteira.js';
 import {
-  escadaDeLiquidez, filtrarCarteira, parcelasComprometidas, irPorAliquota, linhaDoTempoVencimentos, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
+  escadaDeLiquidez, filtrarCarteira, irPorAliquota, linhaDoTempoVencimentos, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
   textoDoPeriodo, vencimentos,
 } from '../lib/patrimonio.js';
 import { brlCurto, formatBRL } from '../lib/dinheiro.js';
@@ -127,19 +124,6 @@ export default function Patrimonio() {
   const cores = useMemo(() => Object.fromEntries(d.carteira.grupos.map((g, i) => [g.instituicao, CORES_INSTITUICAO[i % CORES_INSTITUICAO.length]])), [d.carteira]);
   const comVisto = d.aportes.some((a) => 'vencimento_visto' in a);
 
-  // JÁ COMPROMETIDO EM PARCELAS (09/11/2026, o mockup "Parcelas no resumo", opção A): as parcelas de cartão que ainda vão
-  // cair nas faturas e o peso delas na renda média. Não é da carteira: os filtros da tela não mexem nele. Falhou a leitura,
-  // o cartão não aparece.
-  const [dadosParc, setDadosParc] = useState(null);
-  useEffect(() => {
-    let vivo = true;
-    Promise.all([listarParcelasFuturas(), listarCartoes(), listarResumoMensal()])
-      .then(([parcelas, cartoes, resumo]) => { if (vivo) setDadosParc({ parcelas, cartoes, resumo }); })
-      .catch(() => {});
-    return () => { vivo = false; };
-  }, []);
-  const parc = useMemo(() => (dadosParc ? parcelasComprometidas({ ...dadosParc, hoje: hojeComp }) : null), [dadosParc, hojeComp]);
-
   if (d.carregando) return (<div><CabecalhoPagina titulo="Patrimônio" /><PageLoading /></div>);
   if (d.semMigration || !d.aportes.length) {
     return (
@@ -210,12 +194,6 @@ export default function Patrimonio() {
           <CartaoKpi compacto icone="liquidez" cor={COR_LIQUIDEZ} rotulo="Livre hoje" valor={formatBRL(livre)} valorCurto={brlCurto(livre)}
             sub={`${t.vale ? Math.round((livre / t.vale) * 100) : 0}% do patrimônio${em30 > 0 ? ` · + ${brlCurto(em30)} em 30 dias` : ''}`}
             titulo="O que tem resgate a qualquer hora. Em 30 dias: o que vence e volta para a conta." />
-          {parc && (
-            // no celular (2 por linha) o quinto ocupa a linha toda
-            <div className="col-span-2 grid sm:col-span-1">
-              <CartaoParcelas parc={parc} onClicar={() => navigate('/cartoes')} />
-            </div>
-          )}
         </div>
       </CardAutoAltura>
     </div>

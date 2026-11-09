@@ -342,12 +342,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   cabeçalho com 👁 · ↻ · Personalizar, áreas `pt_numeros`/`pt_graficos`/`pt_listas`, as miniaturas são as da Visão geral —
   `DO_PATRIMONIO` no `MiniaturaWidget`), a FAIXA DE FILTROS embaixo (Período · Instituição · Tipo · Investimento, o Comparar
   à direita: CDI, IPCA ou nada) e os blocos: o "Agora" (`AgoraPatrimonio`: vencimentos para avaliar e reaplicados para
-  conferir em âmbar; o próximo vencimento e a próxima queda do IR em cinza), os 5 `CartaoKpi` (patrimônio, rendeu no último
-  mês fechado com o % do CDI, rendeu em 12 meses, livre hoje e JÁ COMPROMETIDO EM PARCELAS — 09/11/2026, a opção A do mockup
-  "Parcelas no resumo": as parcelas de cartão que ainda vão cair nas faturas (`parcelas_futuras`, a conta das hachuradas em
-  Cartões), "N% de um mês de renda" (a média das entradas dos 12 meses fechados, só os meses com entrada) e até quando;
-  embaixo, uma barra hachurada por mês (`forma="barras"` do `CartaoKpi`, o balão por cartão); clicar abre os Cartões; os
-  filtros da tela não mexem nele — `parcelasComprometidas` em lib/patrimonio.js), Evolução EM CASCATA (`CascataPatrimonio`, 09/11/2026, a opção B do mockup "Evolução do patrimônio em cascata" com a C na chave Mês | Ano, `patrimonio_evolucao_modo`: cada degrau começa onde o anterior terminou — o aporte em azul, o rendimento em verde, a saída em laranja —, só os meses com movimento e os parados num degrau "N meses rendendo", ou aportes / rendeu / saiu por ano; a última coluna é o patrimônio de hoje, aportado + rendimento; `cascataDoPatrimonio` em lib/patrimonio.js), Onde está o dinheiro (a `RoscaOrigem` da Visão geral, que aceita `cor`/`rotulo`/`dica`; clicar na instituição ou no
+  conferir em âmbar; o próximo vencimento e a próxima queda do IR em cinza), os 4 `CartaoKpi` (patrimônio, rendeu no último
+  mês fechado com o % do CDI, rendeu em 12 meses, livre hoje — as PARCELAS NÃO: não são da carteira, moram na Visão geral,
+  09/11/2026, a pedido), Evolução EM CASCATA (`CascataPatrimonio`, 09/11/2026, a opção B do mockup "Evolução do patrimônio em cascata" com a C na chave Mês | Ano, `patrimonio_evolucao_modo`: cada degrau começa onde o anterior terminou — o aporte em azul, o rendimento em verde, a saída em laranja —, só os meses com movimento e os parados num degrau "N meses rendendo", ou aportes / rendeu / saiu por ano; a última coluna é o patrimônio de hoje, aportado + rendimento; `cascataDoPatrimonio` em lib/patrimonio.js), Onde está o dinheiro (a `RoscaOrigem` da Visão geral, que aceita `cor`/`rotulo`/`dica`; clicar na instituição ou no
   tipo filtra), Quanto rendeu em cada mês (`ColunasRendeu`: em reais, com o tracejado do que o índice daria no mesmo
   dinheiro — o `base` do `mesAMes` × o índice do mês | `ColunasPct`; a prop é `indice`, NUNCA `ref`, que o React engole),
   o IR e quando ele cai, VENCIMENTOS (a linha do tempo por mês — já venceu, volta, reaplica, a marca de hoje, clicar filtra
@@ -496,9 +493,18 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   até 320px (em "Categorias", o grupo em cinza depois, encolhendo primeiro), linha de 30px, cabeçalho das colunas
   (com média/mês), busca e o Total preso embaixo. No bloco, o valor tem largura FIXA (com `auto`, cada linha media
   o seu número e as barras terminavam em pontos diferentes).
-- Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos), e por último o "JÁ COMPROMETIDO EM
-  PARCELAS" (09/11/2026, a pedido: o mesmo do Patrimônio, `components/graficos/CartaoParcelas.jsx`; sem os filtros; no
-  celular, a linha inteira e só quando há parcela). "Entradas × gastos" tem 3 formas
+- Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos): Entradas, Gastos, Saldo, Mês mais caro e
+  O QUE A RENDA JÁ TEM COMPROMETIDO (09/11/2026, a opção A do mockup "Comprometido na Visão geral"; o "Lançamentos" saiu, a
+  pedido; `components/graficos/CartoesComprometido.jsx`; sem os filtros; também no celular, 2 × 3):
+  · CUSTO FIXO — o próximo mês pela régua do "Já comprometido" (a média móvel de cada fixo; `fixosDoMes`), "N fixos · N% da
+    renda", o mês de hoje no balão do cartão e a curva do que os fixos custaram nos 12 meses fechados (`custoFixo`); clicar
+    abre os Gastos fixos.
+  · PARCELAS QUE VÊM — as parcelas de cartão que ainda vão cair nas faturas (`parcelas_futuras`, a conta das hachuradas em
+    Cartões), "N% de um mês de renda" e até quando; a curva desce mês a mês, o balão por cartão (`parcelasComprometidas`);
+    clicar abre os Cartões. Ficou SÓ AQUI (no Patrimônio, a pedido, não: não é da carteira).
+  A RENDA MÉDIA dos dois = as entradas dos 12 meses fechados ÷ os meses com entrada (`rendaMedia`). Tudo em lib/visaoGeral.js,
+  testado. As MINIATURAS do "Personalizar" (`MiniaturaWidget`) seguem o tema (`varCor`; um `#fff` fixo
+  deixava as sem desenho brancas no escuro) e todo bloco tem a sua. "Entradas × gastos" tem 3 formas
   (colunas, linhas, acumulado), escolhidas no próprio bloco. O cartão do Saldo também mostra a média por mês
   (todo mês com lançamento entra, mesmo negativo).
 - O SALDO TEM BLOCO PRÓPRIO, "Saldo do mês" (`vg_saldo`, 29/10/2026, opção A do mockup): a forma "Saldo"

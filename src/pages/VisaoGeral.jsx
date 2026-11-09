@@ -7,8 +7,8 @@ import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../component
 import SegPeriodoFiltro from '../components/filtros/SegPeriodoFiltro.jsx';
 import { SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import { CartaoKpi, CORES_KPI, variacaoSaldo } from '../components/graficos/CartoesResumo.jsx';
-import CartaoParcelas from '../components/graficos/CartaoParcelas.jsx';
-import { parcelasComprometidas } from '../lib/patrimonio.js';
+import { CartaoCustoFixo, CartaoParcelas } from '../components/graficos/CartoesComprometido.jsx';
+
 import { COR_ENTRADAS, COR_GASTOS } from '../components/graficos/Graficos.jsx';
 import {
   BarrasGrupos, COR_ANTERIOR, COR_FALTOU, COR_SALDO, COR_SOBROU, CORES_ORIGEM, ColunasEntradasGastos, ForaDoNormal, HACHURA_PARCELAS, JaComprometido,
@@ -26,7 +26,7 @@ import { lancarFixo, listarLancamentosDeFixos, listarPulados, listarRecorrencias
 import { comprometidoPorMes } from '../lib/resumo.js';
 import { matrizDoAno, pendentesPorMes } from '../lib/fixos.js';
 import {
-  anoAnterior, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaPorMes, resumoPeriodo, variacao,
+  anoAnterior, filtrar, foraDoNormal, gruposPorMes, custoFixo, jaComprometido, mediaPorMes, parcelasComprometidas, resumoPeriodo, variacao,
 } from '../lib/visaoGeral.js';
 import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
@@ -213,7 +213,9 @@ export default function VisaoGeral() {
   // JÁ COMPROMETIDO: como o "Agora", do mês atual em diante e sem os filtros; o NORMAL é a média dos gastos dos 12 meses
   // fechados antes dele (os da tela mudariam com os filtros).
   const comprometido = useMemo(() => jaComprometido({ parcelas, recorrencias: fixos.recs, lancamentos: fixos.lancs, pulados: fixos.pulados, hoje }), [parcelas, fixos, hoje]);
-  // JÁ COMPROMETIDO EM PARCELAS (09/11/2026, a pedido: o do Patrimônio também aqui): o total que vem, sem os filtros
+  // O QUE A RENDA JÁ TEM COMPROMETIDO (09/11/2026, a opção A do mockup "Comprometido na Visão geral"): o custo fixo por mês e
+  // as parcelas de cartão que vêm — dois números da fileira, sem os filtros
+  const custo = useMemo(() => custoFixo({ recorrencias: fixos.recs, lancamentos: fixos.lancs, pulados: fixos.pulados, resumo: linhas ?? [], hoje }), [fixos, linhas, hoje]);
   const parc = useMemo(() => parcelasComprometidas({ parcelas, cartoes, resumo: linhas ?? [], hoje }), [parcelas, cartoes, linhas, hoje]);
   const mediaNormal = useMemo(() => {
     const doze = Array.from({ length: 12 }, (_, i) => addMeses(hoje, i - 12));
@@ -234,7 +236,6 @@ export default function VisaoGeral() {
   const hojeComp = competenciaAtual();
   const mEnt = mediaPorMes(r.porMes, 'entradas', { emAndamento: hojeComp });
   const mGas = mediaPorMes(r.porMes, 'gastos', { emAndamento: hojeComp });
-  const mQtd = mediaPorMes(r.porMes, 'qtd', { emAndamento: hojeComp });
   // O saldo pode ser zero ou negativo: entra todo mês com lançamento (não só os "maiores que zero").
   const mSal = mediaPorMes(r.porMes, 'saldo', { emAndamento: hojeComp, presente: (m) => m.temDado });
   const textoMedia = (m) => (m.meses ? `média ${formatBRL(m.media)}/mês · ${m.meses} ${m.meses === 1 ? 'mês' : 'meses'}` : 'nada no período');
@@ -294,20 +295,19 @@ export default function VisaoGeral() {
           variacao={rAnt ? variacaoSaldo(r.saldo, rAnt.saldo) : null} tituloVariacao={tituloVs}
           sub={[mSal.meses && `média ${formatBRL(mSal.media)}/mês`, r.entradas ? `${Math.round((r.saldo / r.entradas) * 100)}% das entradas` : 'sem entradas no período'].filter(Boolean).join(' · ')}
           serie={serieDe('saldo')} onMes={abrirMes} onClicar={() => setTipo('')} titulo="Clique para ver entradas e gastos" />
-        <CartaoKpi compacto icone="lancamentos" cor={varCor('#6b7280', 'texto')} rotulo="Lançamentos" valor={r.qtd.toLocaleString('pt-BR')}
-          variacao={vsAnt(r.qtd, rAnt?.qtd)} tituloVariacao={tituloVs} sub={`${mQtd.media.toLocaleString('pt-BR')} por mês`}
-          serie={serieDe('qtd')} formatar={(v) => `${v.toLocaleString('pt-BR')} lançamentos`} onMes={abrirMes} />
+        {/* o "Lançamentos" saiu (09/11/2026, a pedido) para o custo fixo e as parcelas */}
         <CartaoKpi compacto icone="mes" cor={varCor('#ca8a04', 'texto')} rotulo="Mês mais caro"
           valor={r.maisCaro ? nomeCompetencia(r.maisCaro.competencia).replace(/ de \d+$/, '') : '—'}
           sub={r.maisCaro ? `${formatBRL(r.maisCaro.gastos)} em gastos` : 'nenhum gasto no período'}
           serie={serieDe('gastos')} onMes={abrirMes} />
+        <CartaoCustoFixo custo={custo} onClicar={() => navigate('/fixos')} />
         <CartaoParcelas parc={parc} onClicar={() => navigate('/cartoes')} />
       </div>
     </CardAutoAltura>
     </div>
   );
 
-  // OS NÚMEROS NO CELULAR: quatro, 2 × 2 (a contagem de lançamentos sai), e a média em número curto — o cheio
+  // OS NÚMEROS NO CELULAR: seis, 2 × 3 (os quatro e, desde 09/11/2026, o custo fixo e as parcelas), e a média em número curto — o cheio
   // ("média R$ 43.564,83/mês") não cabia no cartão de meia largura.
   const mediaCurta = (m) => (m.meses ? `${brlCurto(m.media)}/mês` : 'nada no período');
   const kpisMovel = (
@@ -322,7 +322,8 @@ export default function VisaoGeral() {
       <CartaoKpi compacto icone="mes" cor={varCor('#ca8a04', 'texto')} rotulo="Mês mais caro"
         valor={r.maisCaro ? nomeCompetencia(r.maisCaro.competencia).replace(/ de \d+$/, '') : '—'}
         sub={r.maisCaro ? `${brlCurto(r.maisCaro.gastos)} em gastos` : 'nenhum gasto'} serie={serieDe('gastos')} />
-      {parc.total > 0 && <div className="col-span-2 grid"><CartaoParcelas parc={parc} /></div>}
+      <CartaoCustoFixo custo={custo} />
+      <CartaoParcelas parc={parc} />
     </div>
   );
 

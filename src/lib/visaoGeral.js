@@ -217,27 +217,101 @@ export function jaComprometido({ parcelas = [], recorrencias = [], lancamentos =
   });
   const ultima = [...porComp.keys()].sort().pop();
   const n = Math.min(maxMeses, Math.max(minMeses, ultima ? mesesEntre(hoje, ultima) + 1 : 0));
-  const matrizes = new Map();
-  const media = mediaMovelDosFixos(lancamentos, hoje);
-  const fixosDe = (comp) => {
-    const ano = Number(comp.slice(0, 4));
-    if (!matrizes.has(ano)) matrizes.set(ano, matrizDoAno(recorrencias, lancamentos, ano, hoje, pulados));
-    const mz = matrizes.get(ano);
-    const j = mz.comps.indexOf(comp);
-    return mz.linhas.reduce((s, l) => {
-      const c = l.celulas[j];
-      if (c.estado === 'lancado') return s + c.valor;
-      if (c.estado !== 'pendente' && c.estado !== 'futuro') return s;
-      return s + (media.get(l.rec.id) ?? Number(l.rec.valor_padrao_centavos ?? c.sugerido ?? 0));
-    }, 0);
-  };
+  const fixosDe = fixosDoMes({ recorrencias, lancamentos, pulados, hoje });
   return Array.from({ length: n }, (_, i) => {
     const competencia = addMeses(hoje, i);
     const p = porComp.get(competencia);
-    const fixos = fixosDe(competencia);
+    const fixos = fixosDe(competencia).valor;
     return { competencia, parcelas: p?.valor ?? 0, compras: p?.compras.size ?? 0, fixos, total: (p?.valor ?? 0) + fixos };
   });
 }
 
+// OS FIXOS DE UM MÊS (a régua do "Já comprometido"): o lançado; senão a média móvel do fixo (o padrão sem lançamento);
+// "não teve" e fora da vigência não contam. Devolve (comp) => { valor, qtd } — `qtd`: os fixos que contam no mês.
+export function fixosDoMes({ recorrencias = [], lancamentos = [], pulados = [], hoje }) {
+  const matrizes = new Map();
+  const media = mediaMovelDosFixos(lancamentos, hoje);
+  return (comp) => {
+    const ano = Number(comp.slice(0, 4));
+    if (!matrizes.has(ano)) matrizes.set(ano, matrizDoAno(recorrencias, lancamentos, ano, hoje, pulados));
+    const mz = matrizes.get(ano);
+    const j = mz.comps.indexOf(comp);
+    return mz.linhas.reduce((t, l) => {
+      const c = l.celulas[j];
+      if (c.estado === 'lancado') return { valor: t.valor + c.valor, qtd: t.qtd + 1 };
+      if (c.estado !== 'pendente' && c.estado !== 'futuro') return t;
+      return { valor: t.valor + (media.get(l.rec.id) ?? Number(l.rec.valor_padrao_centavos ?? c.sugerido ?? 0)), qtd: t.qtd + 1 };
+    }, { valor: 0, qtd: 0 });
+  };
+}
+
+// A RENDA MÉDIA: as entradas dos 12 meses fechados antes de `hoje` ÷ os meses com entrada (mês sem entrada lançada não é
+// renda zero, a regra das médias do app). `resumo`: as linhas da `resumo_mensal`.
+export function rendaMedia(resumo = [], hoje) {
+  const desde = addMeses(hoje, -12);
+  const entradas = new Map();
+  resumo.forEach((r) => {
+    if (r.tipo !== 'entrada' || r.competencia < desde || r.competencia >= hoje) return;
+    entradas.set(r.competencia, (entradas.get(r.competencia) ?? 0) + Number(r.total_centavos));
+  });
+  const comEntrada = [...entradas.values()].filter((v) => v > 0);
+  return comEntrada.length ? Math.round(comEntrada.reduce((s, v) => s + v, 0) / comEntrada.length) : 0;
+}
+
+// O CUSTO FIXO (09/11/2026, a opção A do mockup "Comprometido na Visão geral"): quanto os gastos fixos levam por mês — o
+// PRÓXIMO mês pela régua do "Já comprometido" (a média móvel de cada fixo; o mês de hoje pode estar lançado só em parte), e o
+// de hoje à parte. `historico`: o que os fixos custaram em cada um dos 12 meses fechados (a `resumo_mensal`, origem 'fixo';
+// só os meses com fixo). Devolve { valor, qtd, competencia, hoje: { valor, qtd }, historico, renda, pctRenda }.
+export function custoFixo({ recorrencias = [], lancamentos = [], pulados = [], resumo = [], hoje }) {
+  const de = fixosDoMes({ recorrencias, lancamentos, pulados, hoje });
+  const competencia = addMeses(hoje, 1);
+  const prox = de(competencia);
+  const desde = addMeses(hoje, -12);
+  const porMes = new Map();
+  resumo.forEach((r) => {
+    if (r.tipo !== 'saida' || r.origem !== 'fixo' || r.competencia < desde || r.competencia >= hoje) return;
+    porMes.set(r.competencia, (porMes.get(r.competencia) ?? 0) + Number(r.total_centavos));
+  });
+  const historico = [...porMes].filter(([, v]) => v > 0).sort(([a], [b]) => a.localeCompare(b)).map(([c, valor]) => ({ competencia: c, valor }));
+  const renda = rendaMedia(resumo, hoje);
+  return { valor: prox.valor, qtd: prox.qtd, competencia, hoje: de(hoje), historico, renda, pctRenda: renda ? prox.valor / renda : null };
+}
+
 // A variação em % (arredondada), ou null sem base para comparar.
 export const variacao = (atual, antes) => (antes > 0 ? Math.round(((atual - antes) / antes) * 100) : null);
+
+// JÁ COMPROMETIDO EM PARCELAS (09/11/2026, o mockup "Parcelas no resumo", opção A): na Visão geral (09/11/2026, a pedido: no Patrimônio não, não é da carteira) — o total das
+// parcelas de cartão que ainda vão cair nas faturas (a view `parcelas_futuras`, das faturas mais recentes de cada cartão; a
+// mesma conta das colunas hachuradas em Cartões), de `hoje` (competência 'AAAA-MM') em diante. `cartoes`: [{ id, nome }].
+// `resumo` (a `resumo_mensal`): a RENDA MÉDIA = as entradas dos 12 meses fechados antes de hoje ÷ os meses com entrada (mês sem
+// entrada lançada não é renda zero, a regra das médias do app). Devolve { total, parcelas, compras, ate, meses: [{ competencia,
+// valor, porCartao: [{ nome, valor }] }], porCartao: [{ nome, valor }], renda, pctRenda } — `pctRenda` é o total ÷ a renda média
+// (1 = um mês inteiro de renda); null sem entrada.
+export function parcelasComprometidas({ parcelas = [], cartoes = [], resumo = [], hoje }) {
+  const nome = new Map(cartoes.map((c) => [c.id, c.nome]));
+  const vem = parcelas.filter((p) => p.competencia >= hoje);
+  const porMes = new Map();
+  const porCartao = new Map();
+  const compras = new Set();
+  let total = 0;
+  vem.forEach((p) => {
+    const v = Number(p.valor_centavos);
+    const n = nome.get(p.cartao_id) ?? 'Cartão';
+    total += v;
+    compras.add(p.lancamento_id);
+    porCartao.set(n, (porCartao.get(n) ?? 0) + v);
+    const m = porMes.get(p.competencia) ?? new Map();
+    m.set(n, (m.get(n) ?? 0) + v);
+    porMes.set(p.competencia, m);
+  });
+  const ordenar = (mapa) => [...mapa].map(([n, valor]) => ({ nome: n, valor })).sort((a, b) => b.valor - a.valor);
+  const meses = [...porMes.keys()].sort().map((competencia) => {
+    const m = porMes.get(competencia);
+    return { competencia, valor: [...m.values()].reduce((s, v) => s + v, 0), porCartao: ordenar(m) };
+  });
+  const renda = rendaMedia(resumo, hoje);
+  return {
+    total, parcelas: vem.length, compras: compras.size, ate: meses.length ? meses[meses.length - 1].competencia : null,
+    meses, porCartao: ordenar(porCartao), renda, pctRenda: renda ? total / renda : null,
+  };
+}
