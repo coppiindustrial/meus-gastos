@@ -84,6 +84,13 @@ export function fator(cal, de, ate, taxa) {
   }
   return { f, dias, proj };
 }
+// O DIA ÚTIL ANTERIOR a `data` no calendário (o sábado → a sexta; a terça depois do feriado de segunda → a sexta): onde
+// começa o aporte que "rende desde o dia útil anterior" (`rende_dia_antes`, migration 024 — o RDB Planejado do Nubank).
+// Sem dia antes no calendário, a própria data.
+export function diaUtilAntes(data, cal) {
+  const i = inicioNoCal(cal ?? [], data);
+  return i > 0 ? cal[i - 1][0] : data;
+}
 // sábado ou domingo: o aporte desse dia só rende a partir do dia útil seguinte (a prévia e o balão dizem)
 export const fimDeSemana = (iso) => { const s = diaDaSemana(iso); return s === 0 || s === 6; };
 
@@ -111,25 +118,29 @@ export function sugerirVencimento(data, inv) {
 // banco do dinheiro novo: o depósito de fim de semana começa no dia útil seguinte). Vale para UM depósito: o saque parcial tira do
 // aplicado e do rendimento na mesma proporção, então ele não muda a conta. O "Rendimento bruto" da tela do banco, não:
 // ele soma também o que saiu junto com os saques (conferido com o Nubank em 08/11/2026: a conta fechou no centavo o IR
-// que falta pagar). { rendeu, aplicado, f, ini } ou null sem o CDI desde o depósito.
-export function rendeuDoDeposito({ total, deposito, lido, taxa }, cal) {
+// que falta pagar). Com `diaAntes` (o banco contou desde o dia útil anterior), a conta começa nele. { rendeu, aplicado,
+// f, ini } ou null sem o CDI desde o depósito.
+export function rendeuDoDeposito({ total, deposito, lido, taxa, diaAntes = false }, cal) {
   if (!(total > 0) || !deposito || !lido || deposito > lido || !cal?.length) return null;
   if (cal[0][0] > deposito) return null;
-  const { f } = fator(cal, deposito, lido, taxa ?? 100);
+  const ini = diaAntes ? diaUtilAntes(deposito, cal) : deposito;
+  const { f } = fator(cal, ini, lido, taxa ?? 100);
   const aplicado = Math.round(total / f);
-  return { rendeu: total - aplicado, aplicado, f, ini: deposito };
+  return { rendeu: total - aplicado, aplicado, f, ini };
 }
 
 // ------------------------------------------------------------ um aporte
 // A partida: { data (desde quando rende: o CDI dos dias úteis a partir dela), valor, aplicado, desdeIR (a idade, para o
 // IR; null = sem a data) }. O REAPLICADO (`reaplicado_de`) começa no próprio vencimento, como qualquer aporte: o valor do
-// de antes já tem o CDI dos dias úteis antes do vencimento.
-export function partidaDoAporte(ap) {
+// de antes já tem o CDI dos dias úteis antes do vencimento. O dinheiro novo com `rende_dia_antes` começa no dia útil
+// anterior (o IR segue pela data do aporte).
+export function partidaDoAporte(ap, cal = []) {
   const valor = Number(ap.valor_centavos);
   if (ap.origem === 'antigo') {
     return { data: ap.data, valor, aplicado: valor - Number(ap.rendeu_antes_centavos ?? 0), desdeIR: ap.aplicado_em ?? null };
   }
-  return { data: ap.data, valor, aplicado: valor, desdeIR: ap.data };
+  const data = ap.rende_dia_antes && !ap.reaplicado_de ? diaUtilAntes(ap.data, cal) : ap.data;
+  return { data, valor, aplicado: valor, desdeIR: ap.data };
 }
 
 // A POSIÇÃO DE UM APORTE no `dia` (o valor tem o CDI dos dias úteis antes dele), com os eventos ATÉ `eventosAte`
@@ -139,7 +150,7 @@ export function partidaDoAporte(ap) {
 // liquido, aliquota, idade, semData, encerrado: null | { data, motivo, valor }, saidas: [{ data, valor }], partida,
 // conta: { de, f, dias, proj } (o trecho desde o último evento) }.
 export function posicaoDoAporte(ap, inv, resgates, cal, dia, eventosAte = dia) {
-  const p = partidaDoAporte(ap);
+  const p = partidaDoAporte(ap, cal);
   const taxa = inv?.taxa ?? 100;
   let base = p.valor; let de = p.data; let aplicado = p.aplicado;
   const saidas = [];
@@ -212,7 +223,7 @@ export function reaplicacoesDevidas({ cadastro = [], aportes = [], resgates = []
   aportes.forEach((ap) => {
     const inv = invPorId.get(ap.investimento_id);
     if (!inv || inv.no_vencimento !== 'reaplica' || !ap.vencimento || ap.vencimento > hoje || ap.nao_reaplicar || jaVirou.has(ap.id)) return;
-    const p = partidaDoAporte(ap);
+    const p = partidaDoAporte(ap, cal);
     if (!cal.length || cal[0][0] > p.data) return;
     const rs = resgates.filter((r) => r.aporte_id === ap.id).sort((a, b) => (a.data < b.data ? -1 : 1));
     const venc = noVencimento(inv, posicaoDoAporte(ap, inv, rs, cal, hoje));
@@ -302,7 +313,7 @@ export function mesAMes({ cadastro = [], aportes = [], resgates = [], cdi = [], 
       soma += pos.exato.vale; somaAplicado += pos.exato.aplicado;
     });
     const total = Math.round(soma); const aportado = Math.round(somaAplicado);
-    const entradas = aps.filter((a) => a.data.slice(0, 7) === c).map((a) => ({ data: partidaDoAporte(a).data, valor: Number(a.valor_centavos) }));
+    const entradas = aps.filter((a) => a.data.slice(0, 7) === c).map((a) => ({ data: partidaDoAporte(a, cal).data, valor: Number(a.valor_centavos) }));
     const saidasMes = saidas.filter((s) => s.data.slice(0, 7) === c);
     const entrou = entradas.reduce((s, a) => s + a.valor, 0);
     const saiu = saidasMes.reduce((t, s) => t + s.valor, 0);
@@ -323,6 +334,8 @@ export function mesAMes({ cadastro = [], aportes = [], resgates = [], cdi = [], 
 // valores já em centavos ou null).
 export function lerAporte(f, hoje) {
   if (!f.investimento_id) return { erro: 'Escolha o investimento.' };
+  // o "rende desde o dia útil anterior" só vai quando ligado (sem a migration 024, o aporte de antes segue gravando)
+  const diaAntes = f.diaAntes ? { rende_dia_antes: true } : {};
   if (f.modo === 'antigo') {
     if (!f.lido) return { erro: 'Falta o dia em que você olhou o banco.' };
     if (f.lido > hoje) return { erro: 'O dia em que você olhou o banco ainda não chegou.' };
@@ -332,13 +345,13 @@ export function lerAporte(f, hoje) {
     if (rendeu >= f.total) return { erro: 'O rendimento precisa ser menor que o total.' };
     if (f.aplicado_em && f.aplicado_em > f.lido) return { erro: 'A data do depósito não pode ser depois do dia em que você olhou o banco.' };
     if (f.vencimento && f.vencimento <= f.lido) return { erro: 'O vencimento precisa ser depois do dia em que você olhou o banco.' };
-    return { dados: { investimento_id: f.investimento_id, origem: 'antigo', data: f.lido, valor_centavos: f.total, rendeu_antes_centavos: rendeu, aplicado_em: f.aplicado_em || null, vencimento: f.vencimento || null } };
+    return { dados: { investimento_id: f.investimento_id, origem: 'antigo', data: f.lido, valor_centavos: f.total, rendeu_antes_centavos: rendeu, aplicado_em: f.aplicado_em || null, vencimento: f.vencimento || null, ...diaAntes } };
   }
   if (!f.data) return { erro: 'Falta a data do aporte.' };
   if (f.data > hoje) return { erro: 'A data do aporte ainda não chegou.' };
   if (!f.valor || f.valor <= 0) return { erro: 'Falta o valor.' };
   if (f.vencimento && f.vencimento <= f.data) return { erro: 'O vencimento precisa ser depois do aporte.' };
-  return { dados: { investimento_id: f.investimento_id, origem: 'novo', data: f.data, valor_centavos: f.valor, rendeu_antes_centavos: 0, aplicado_em: null, vencimento: f.vencimento || null } };
+  return { dados: { investimento_id: f.investimento_id, origem: 'novo', data: f.data, valor_centavos: f.valor, rendeu_antes_centavos: 0, aplicado_em: null, vencimento: f.vencimento || null, ...diaAntes } };
 }
 
 // O RESGATE de um aporte: { dados } (as colunas de `inv_resgates`) ou { erro }. `vale`: o que o aporte vale no dia.

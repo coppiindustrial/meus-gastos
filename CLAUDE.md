@@ -275,8 +275,11 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   cortado, e arredondando o app ficava 7 centavos acima num investimento de 12 depósitos);
   o "já estava aplicado" sem `aplicado_em` vai pelo maior, 22,5% (`semData`: o líquido nunca fica a mais).
   O RDB PLANEJADO DO NUBANK conta o rendimento desde o DIA ÚTIL ANTES da "Data da aplicação" (os dois depósitos conferidos
-  em 08/11/2026, um de quinta e um de sábado); o RDB Resgate Diário e os CDBs, desde o próprio dia. O app não sabe disso:
-  no "já estava aplicado", digita-se a "Valorização" do banco no "Quanto já rendeu" (sem saques, é o número exato). O mês a mês
+  em 08/11/2026, um de quinta e um de sábado); o RDB Resgate Diário e os CDBs, desde o próprio dia. Por isso o
+  aporte tem "RENDE DESDE O DIA ÚTIL ANTERIOR" (`rende_dia_antes`, migration 024, a pedido): no dinheiro novo, a partida é o
+  dia útil antes da data (`diaUtilAntes`, pelo calendário: o sábado vai à sexta, a terça depois do feriado à sexta); no já
+  estava aplicado, a conta do quanto já rendeu começa nele (`rendeuDoDeposito` com `diaAntes`). O IR segue pela data do
+  aporte; o reaplicado não usa. Sem saques, a "Valorização" do banco digitada no "Quanto já rendeu" também vale. O mês a mês
   (`mesAMes`): o fim de cada mês pela mesma conta; rendeu = o total − o do mês anterior − o que entrou + o que saiu.
 - O VENCIMENTO: VOLTA PARA A CONTA OU REAPLICA (08/11/2026, a pedido; migration 022): o cadastro tem "No vencimento"
   (`inv_cadastro.no_vencimento` 'conta' | 'reaplica'; "reaplica" pede o prazo de "Vence em", que é o do aporte novo). No
@@ -297,7 +300,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - /investimentos (`pages/Investimentos.jsx`): o grupo do DRE (✎ o cadastro · ▾ o CSV da carteira e os encerrados) + o
   destaque "Lançar aporte"; SEM CARTÕES DE RESUMO (08/11/2026, a pedido: os números moram no Patrimônio, onde se analisa;
   o Total da tabela fecha a conta) e a `TabelaCarteira`: a
-  INSTITUIÇÃO é a faixa com a barra da cor (`CORES_INSTITUICAO`), o INVESTIMENTO recuado (tipo · taxa · N aportes; o
+  INSTITUIÇÃO é a faixa com a barra da cor (`CORES_INSTITUICAO`; as colunas com LARGURA FIXA no computador — `largura`
+  em `COLUNAS`, `table-fixed`, mínimo 1280px: pelo conteúdo, abrir um investimento alargava o IR e as outras andavam), o INVESTIMENTO recuado (tipo · taxa · N aportes; o
   "resgate diário" em azul ou o próximo vencimento) e os APORTES no TRILHO (a data e a idade, ou "já estava aplicado ·
   banco em dd/mm"; o vencimento com a pílula âmbar até 45 dias; aplicado; o VALE HOJE com o BALÃO da conta inteira; rendeu;
   o IR com a alíquota e quando ela cai, também no balão; o líquido), "+ aporte em X" no fim de cada um. Recolhe animado

@@ -66,15 +66,20 @@ function Vence({ data, hoje }) {
   return <span className="text-[12.5px] tabular-nums text-gray-700">{formatDate(data)}</span>;
 }
 
+// AS LARGURAS SÃO FIXAS no computador (08/11/2026, a pedido): com a largura pelo conteúdo, abrir um investimento
+// alargava o IR (a pílula da alíquota e o "→ 15% em…" dos aportes) e as outras colunas andavam. `largura` = o caso mais
+// largo (tudo aberto, com centavos, medido); o nome fica com o resto (no mínimo ~280px, pela largura mínima da tabela).
 const COLUNAS = [
   { id: 'nome', rotulo: 'Investimento · aporte', esq: true },
-  { id: 'vence', rotulo: 'Vence', esq: true, desk: true },
-  { id: 'aplicado', rotulo: 'Aplicado', desk: true },
-  { id: 'vale', rotulo: 'Vale hoje' },
-  { id: 'rendeu', rotulo: 'Rendeu' },
-  { id: 'ir', rotulo: 'IR ≈', desk: true },
-  { id: 'liquido', rotulo: 'Líquido ≈', desk: true },
+  { id: 'vence', rotulo: 'Vence', esq: true, desk: true, largura: 170 },
+  { id: 'aplicado', rotulo: 'Aplicado', desk: true, largura: 132 },
+  { id: 'vale', rotulo: 'Vale hoje', largura: 132 },
+  { id: 'rendeu', rotulo: 'Rendeu', largura: 132 },
+  { id: 'ir', rotulo: 'IR ≈', desk: true, largura: 184 },
+  { id: 'liquido', rotulo: 'Líquido ≈', desk: true, largura: 132 },
 ];
+const LARGURA_ACOES = 112;
+const LARGURA_MINIMA = 1280;
 
 export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEncerrados, onEncerrados }) {
   const reais0 = formatos(false);
@@ -150,8 +155,10 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
       itens.push({ rotulo: `O banco em ${formatDate(ap.data)}`, valor: formatBRL(Number(ap.valor_centavos)) });
       itens.push({ rotulo: 'Já tinha rendido', valor: formatBRL(Number(ap.rendeu_antes_centavos)) });
     } else {
-      const fds = !ap.reaplicado_de && fimDeSemana(ap.data);
-      itens.push({ rotulo: ap.reaplicado_de ? `Reaplicado em ${formatDate(ap.data)} (o vencimento, sem o IR)` : `Aplicado em ${formatDate(ap.data)}${fds ? ` (${semana(ap.data)}: rende a partir do dia útil seguinte)` : ''}`, valor: formatBRL(Number(ap.valor_centavos)) });
+      const antes = pos.partida.data < ap.data;
+      const fds = !ap.reaplicado_de && !antes && fimDeSemana(ap.data);
+      const nota = antes ? ` (rende desde ${formatDate(pos.partida.data)}, o dia útil antes)` : fds ? ` (${semana(ap.data)}: rende a partir do dia útil seguinte)` : '';
+      itens.push({ rotulo: ap.reaplicado_de ? `Reaplicado em ${formatDate(ap.data)} (o vencimento, sem o IR)` : `Aplicado em ${formatDate(ap.data)}${nota}`, valor: formatBRL(Number(ap.valor_centavos)) });
     }
     if (c) itens.push({ rotulo: `${c.dias} ${c.dias === 1 ? 'dia útil' : 'dias úteis'} de CDI a ${rotuloTaxa(inv.taxa).replace(' do CDI', '')}`, valor: `× ${c.f.toLocaleString('pt-BR', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}` });
     itens.push({ rotulo: 'Vale hoje', valor: formatBRL(pos.vale), cor: COR_ENTRADAS });
@@ -365,13 +372,18 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
         )}
       </div>
       <div ref={caixaRef} className="min-h-0 overflow-x-auto" onMouseLeave={() => { balao.aoSair(); setSobLinha(null); }}>
-        <table className="w-full border-separate border-spacing-0 text-[13px]" style={{ minWidth: movel ? 0 : 1000 }}>
+        <table className={`w-full border-separate border-spacing-0 text-[13px] ${movel ? '' : 'table-fixed'}`} style={{ minWidth: movel ? 0 : LARGURA_MINIMA }}>
+          {!movel && (
+            <colgroup>
+              {COLUNAS.map((c) => <col key={c.id} style={c.largura ? { width: c.largura } : undefined} />)}
+              <col style={{ width: LARGURA_ACOES }} />
+            </colgroup>
+          )}
           <thead><tr>
             {COLUNAS.map((c) => (
-              <th key={c.id} className={`${th0} ${c.esq ? 'text-left' : 'text-right'} ${desk(c)}`}
-                style={movel ? undefined : c.id === 'nome' ? { width: 320, minWidth: 280 } : c.id === 'vence' ? { width: 170, minWidth: 150 } : undefined}>{c.rotulo}</th>
+              <th key={c.id} className={`${th0} ${c.esq ? 'text-left' : 'text-right'} ${desk(c)}`}>{c.rotulo}</th>
             ))}
-            {!movel && <th className={`${th0} w-[112px]`} aria-label="Ações" />}
+            {!movel && <th className={th0} aria-label="Ações" />}
           </tr></thead>
           <tbody>
             {desenhadas.map(linha)}

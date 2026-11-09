@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, impostos, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
+  aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diaUtilAntes, impostos, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
   linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
   rendeuDoDeposito, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
 } from '../src/lib/carteira.js';
@@ -50,6 +50,29 @@ test('o dia do banco: sábado, domingo e feriado começam no dia útil seguinte'
   assert.deepEqual([f.dias, f.proj], [2, 1]);
   // sem as taxas o valor fica no da partida
   assert.equal(posicaoDoAporte(novo('2026-09-12', 1000000), inv(100), [], [], HOJE).vale, 1000000);
+});
+
+test('rende desde o dia útil anterior (o RDB Planejado): um dia a mais de CDI, o IR pela data do aporte', () => {
+  // o dia útil anterior: a quarta antes da quinta, a sexta antes do sábado, a sexta antes da terça depois do feriado
+  assert.deepEqual(['2026-09-03', '2026-09-12', '2026-10-13'].map((d) => diaUtilAntes(d, cal)), ['2026-09-02', '2026-09-11', '2026-10-09']);
+  assert.equal(diaUtilAntes('2026-01-02', cal), '2026-01-02'); // antes do calendário: a própria data
+  const i = inv(103);
+  const ap = novo('2026-09-03', 1000000, { rende_dia_antes: true });
+  assert.equal(partidaDoAporte(ap, cal).data, '2026-09-02');
+  const p = posicaoDoAporte(ap, i, [], cal, HOJE);
+  assert.equal(p.vale, vale(novo('2026-09-02', 1000000), i, HOJE));
+  assert.equal(p.idade, 65); // o IR pela data do aporte (03/09), não pela do rendimento
+  // o reaplicado não usa (começa no vencimento)
+  assert.equal(partidaDoAporte({ ...ap, reaplicado_de: 'x' }, cal).data, '2026-09-03');
+  // no já estava aplicado, a conta do quanto já rendeu começa no dia útil anterior
+  const total = p.vale;
+  const conta = rendeuDoDeposito({ total, deposito: '2026-09-03', lido: HOJE, taxa: 103, diaAntes: true }, cal);
+  assert.deepEqual([conta.ini, conta.aplicado], ['2026-09-02', 1000000]);
+  assert.equal(rendeuDoDeposito({ total, deposito: '2026-09-03', lido: HOJE, taxa: 103 }, cal).ini, '2026-09-03');
+  // o lerAporte só manda a coluna quando ligada (sem a migration 024, o aporte de antes segue gravando)
+  const f = { modo: 'novo', investimento_id: 'i', data: '2026-09-03', valor: 1000000, vencimento: '' };
+  assert.equal(lerAporte({ ...f, diaAntes: true }, HOJE).dados.rende_dia_antes, true);
+  assert.equal('rende_dia_antes' in lerAporte(f, HOJE).dados, false);
 });
 
 test('já estava aplicado: parte do total do banco, o aplicado é o total menos o que já rendeu', () => {

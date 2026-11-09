@@ -3,6 +3,7 @@ import Modal from '../Modal.jsx';
 import CampoData from '../CampoData.jsx';
 import SelectBusca from '../SelectBusca.jsx';
 import SegmentedFiltro from '../SegmentedFiltro.jsx';
+import Toggle from '../Toggle.jsx';
 import { Campo } from '../Comuns.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
@@ -10,7 +11,7 @@ import { atualizarAporte, criarAporte, excluirResgate } from '../../api/carteira
 import { taxasDiarias } from '../../api/taxas.js';
 import { calcularValor, formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
-import { aliquotaIR, calendario, diasEntre, fimDeSemana, lerAporte, maisDias, posicaoDoAporte, rendeuDoDeposito, rotuloTaxa, sugerirVencimento } from '../../lib/carteira.js';
+import { aliquotaIR, calendario, diaUtilAntes, diasEntre, fimDeSemana, lerAporte, maisDias, posicaoDoAporte, rendeuDoDeposito, rotuloTaxa, sugerirVencimento } from '../../lib/carteira.js';
 
 // LANÇAR UM APORTE (07/11/2026, o mockup "Carteira por aportes"): um pop-up só, com duas abas.
 //   · DINHEIRO NOVO — o investimento, a data, o valor e o vencimento. Ponto final.
@@ -24,6 +25,9 @@ import { aliquotaIR, calendario, diasEntre, fimDeSemana, lerAporte, maisDias, po
 // O VENCIMENTO (08/11/2026, migration 022): o "Reaplicar" vem com o LÍQUIDO do dia (`venc`: o valor, o IR) e grava o
 // `reaplicado_de`; o aporte que o app reaplicou sozinho abre com a nota do que ele fez, e salvar tira o "conferir".
 // O dinheiro novo de sábado ou domingo só rende a partir do dia útil seguinte (a prévia diz).
+// RENDE DESDE O DIA ÚTIL ANTERIOR (08/11/2026, a pedido; migration 024): o banco que conta um dia a mais (o RDB Planejado
+// do Nubank) — no dinheiro novo, o aporte começa no dia útil antes da data; no já estava aplicado, a conta do quanto já
+// rendeu começa nele. O IR segue pela data do aporte.
 
 const MODOS = [{ valor: 'novo', rotulo: 'Dinheiro novo' }, { valor: 'antigo', rotulo: 'Já estava aplicado' }];
 const pctAliq = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
@@ -47,7 +51,7 @@ function formInicial(inicial, cadastro, hoje) {
       modo: ap.origem, investimento_id: ap.investimento_id, data: ap.origem === 'novo' ? ap.data : hoje, valor: ap.origem === 'novo' ? valorParaCampo(ap.valor_centavos) : '',
       vencimento: ap.vencimento ?? '', venceAuto: false, lido: ap.origem === 'antigo' ? ap.data : hoje,
       total: ap.origem === 'antigo' ? valorParaCampo(ap.valor_centavos) : '', rendeu: ap.origem === 'antigo' ? valorParaCampo(ap.rendeu_antes_centavos) : '',
-      aplicado_em: ap.aplicado_em ?? '', rendeuAuto: false,
+      aplicado_em: ap.aplicado_em ?? '', rendeuAuto: false, diaAntes: !!ap.rende_dia_antes,
     };
   }
   const investimento_id = inicial.investimento_id ?? (cadastro.length === 1 ? cadastro[0].id : '');
@@ -56,7 +60,7 @@ function formInicial(inicial, cadastro, hoje) {
   return {
     modo: inicial.modo ?? 'novo', investimento_id, data, valor: inicial.reaplicar ? valorParaCampo(inicial.reaplicar.valor) : '',
     vencimento: inv ? sugerirVencimento(data, inv) ?? '' : '', venceAuto: true,
-    lido: hoje, total: '', rendeu: '', aplicado_em: '', rendeuAuto: true,
+    lido: hoje, total: '', rendeu: '', aplicado_em: '', rendeuAuto: true, diaAntes: false,
   };
 }
 
@@ -98,13 +102,13 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
   const buscandoCdi = precisaCdi && calDep?.de !== f.aplicado_em;
   const calConta = precisaCdi ? (buscandoCdi ? null : calDep.cal) : cal;
   const totalLido = calcularValor(f.total);
-  const conta = f.modo === 'antigo' && inv ? rendeuDoDeposito({ total: totalLido, deposito: f.aplicado_em, lido: f.lido, taxa: inv.taxa }, calConta) : null;
+  const conta = f.modo === 'antigo' && inv ? rendeuDoDeposito({ total: totalLido, deposito: f.aplicado_em, lido: f.lido, taxa: inv.taxa, diaAntes: f.diaAntes }, calConta) : null;
   const rendeuAuto = f.rendeuAuto && !!conta;
   const campoRendeu = rendeuAuto ? valorParaCampo(conta.rendeu) : f.rendeu;
 
   const lido = {
     modo: f.modo, investimento_id: f.investimento_id, data: f.data, valor: calcularValor(f.valor), vencimento: f.vencimento,
-    lido: f.lido, total: totalLido, rendeu: campoRendeu.trim() ? calcularValor(campoRendeu) : 0, aplicado_em: f.aplicado_em,
+    lido: f.lido, total: totalLido, rendeu: campoRendeu.trim() ? calcularValor(campoRendeu) : 0, aplicado_em: f.aplicado_em, diaAntes: f.diaAntes,
   };
   const r = lerAporte(lido, hoje);
   const errosDeTexto = (f.modo === 'novo' && f.valor.trim() && lido.valor === null) ? 'O valor não é um número.'
@@ -134,10 +138,10 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
     const aplicado = d.valor_centavos - d.rendeu_antes_centavos;
     const ap = { ...d, id: 'previa' };
     const desde = d.origem === 'novo' ? d.data : d.aplicado_em;
-    const ini = d.data;
+    const ini = d.origem === 'novo' && d.rende_dia_antes ? diaUtilAntes(d.data, cal ?? []) : d.data;
     // só com o CDI desde o começo do aporte (o da tela vem de dois anos para cá, ou do aporte mais antigo)
     const pos = cal?.length && cal[0][0] <= ini ? posicaoDoAporte(ap, inv, editando ? resgates : [], cal, hoje) : null;
-    return { aplicado, pos, desde, ini, fds: d.origem === 'novo' && fimDeSemana(ini) };
+    return { aplicado, pos, desde, ini, antes: ini < d.data, fds: d.origem === 'novo' && ini === d.data && fimDeSemana(ini) };
   })();
 
   const salvar = async (e) => {
@@ -150,11 +154,16 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
         ...r.dados,
         ...(inicial.reaplicar?.de ? { reaplicado_de: inicial.reaplicar.de } : {}),
         ...(editando && inicial.aporte.conferir ? { conferir: false } : {}),
+        ...(editando && inicial.aporte.rende_dia_antes && !r.dados.rende_dia_antes ? { rende_dia_antes: false } : {}),
       };
       if (editando) await atualizarAporte(inicial.aporte.id, dados); else await criarAporte(dados);
       toast.success(editando ? 'Aporte atualizado.' : `Aporte lançado em ${inv.nome}.`);
       onSalvo();
-    } catch (err) { toast.error(/inv_aportes|schema cache|does not exist/i.test(err.message) ? 'Falta aplicar a migration 020 (a carteira do zero).' : err.message); setSalvando(false); }
+    } catch (err) {
+      toast.error(/rende_dia_antes/i.test(err.message) ? 'Falta aplicar a migration 024 (o "rende desde o dia útil anterior").'
+        : /inv_aportes|schema cache|does not exist/i.test(err.message) ? 'Falta aplicar a migration 020 (a carteira do zero).' : err.message);
+      setSalvando(false);
+    }
   };
   const tirarResgate = async (rg) => {
     const ok = await confirmar({ titulo: 'Excluir o resgate?', texto: `O resgate de ${rg.tudo ? 'tudo' : formatBRL(rg.valor_centavos)} em ${formatDate(rg.data)} sai, e o dinheiro volta a render neste aporte.`, confirmar: 'Excluir', perigo: true });
@@ -214,6 +223,15 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
             </div>
           </>
         )}
+        {!inicial.reaplicar && !inicial.aporte?.reaplicado_de && (
+          <label className="-mt-1 flex cursor-pointer items-start gap-2.5 text-[12.5px] text-gray-700">
+            <span className="pt-0.5"><Toggle compacto checked={f.diaAntes} onChange={(v) => mudar('diaAntes', v)} rotulo="Rende desde o dia útil anterior" /></span>
+            <span>
+              Rende desde o dia útil anterior
+              <span className="block text-[11.5px] text-gray-400">ligue se o banco contou um dia a mais (o RDB Planejado do Nubank conta desde o dia útil antes da aplicação)</span>
+            </span>
+          </label>
+        )}
 
         <Campo rotulo="Vencimento">
           <CampoData value={f.vencimento} onChange={(v) => mudar('vencimento', v)} vazio="sem vencimento" min={f.modo === 'novo' ? f.data : f.lido} />
@@ -234,7 +252,7 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
                 <div className="flex justify-between gap-3"><span>Rendeu desde o depósito</span>
                   <span>+{((conta.f - 1) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% · {rotuloTaxa(inv.taxa)} de {formatDate(conta.ini)} a {formatDate(f.lido)}</span></div>
               )}
-              <div className="flex justify-between gap-3"><span>Rende</span><span>{rotuloTaxa(inv.taxa)} desde {formatDate(previa.ini)}{previa.fds ? ' (fim de semana: a partir do dia útil seguinte)' : ''}</span></div>
+              <div className="flex justify-between gap-3"><span>Rende</span><span>{rotuloTaxa(inv.taxa)} desde {formatDate(previa.ini)}{previa.antes ? ' (o dia útil antes do aporte)' : previa.fds ? ' (fim de semana: a partir do dia útil seguinte)' : ''}</span></div>
               {previa.pos && previa.ini < hoje && <div className="flex justify-between gap-3"><span>Vale hoje, pela conta</span><b className="tabular-nums text-gray-900">{formatBRL(previa.pos.vale)}</b></div>}
               <div className="flex justify-between gap-3"><span>IR se resgatasse hoje</span><span>{previa.desde ? `${(aliquotaIR(Math.max(0, diasEntre(previa.desde, hoje))) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : `22,5% (sem a data do ${f.modo === 'novo' ? 'aporte' : 'depósito'})`}{['lci', 'lca'].includes(inv.tipo) ? ' · isento' : ''}</span></div>
             </div>
