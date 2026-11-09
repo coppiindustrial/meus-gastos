@@ -355,7 +355,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
           <td colSpan={9} className="relative h-[34px] cursor-pointer border-b border-gray-100 py-0 pr-3 text-[12.5px]" onClick={() => acoes.aportar(l.x.inv)}>
             <Trilho ultimo />
             <span className="flex items-center gap-2 font-medium text-gray-500 transition-colors group-hover/add:text-gray-800" style={{ paddingLeft: RECUO_APORTE - 4 }}>
-              <CirculoMais desce borda="text-gray-400" />aporte em {l.x.inv.nome}
+              <CirculoMais borda="text-gray-400" />aporte em {l.x.inv.nome}
             </span>
           </td>
         </tr>

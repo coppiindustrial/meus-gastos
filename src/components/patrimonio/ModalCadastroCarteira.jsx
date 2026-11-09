@@ -270,7 +270,7 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
               <span className="flex-1" />
               <button type="button" onClick={() => adicionar(g.id)}
                 className="inline-flex shrink-0 items-center gap-2 rounded-[5px] px-2 py-1 text-[12px] font-medium text-gray-600 opacity-0 transition-[opacity,color,background-color] hover:bg-gray-200 hover:text-gray-900 focus-visible:opacity-100 group-hover/linha:opacity-100">
-                <CirculoMais desce />investimento
+                <CirculoMais />investimento
               </button>
               {!g.orig && (
                 <Tooltip label="Tirar esta instituição (e os investimentos novos dela)">
@@ -293,7 +293,7 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
           <td colSpan={8} className="border-b border-gray-100 py-1 pl-[66px] pr-2">
             <button type="button" onClick={() => adicionar(x.g.id)}
               className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900">
-              <CirculoMais desce />Adicionar investimento{x.g.nome.trim() ? ` em ${x.g.nome.trim()}` : ''}
+              <CirculoMais />Adicionar investimento{x.g.nome.trim() ? ` em ${x.g.nome.trim()}` : ''}
             </button>
           </td>
         </tr>
@@ -306,7 +306,7 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
             <span className="flex items-center gap-2">
               <button type="button" onClick={novaInstituicao}
                 className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900">
-                <CirculoMais desce borda="text-gray-500" />Nova instituição
+                <CirculoMais borda="text-gray-500" />Nova instituição
               </button>
               <span className="text-[12px] leading-none text-gray-400">o banco ou a corretora (Nubank, XP, Inter…)</span>
             </span>
