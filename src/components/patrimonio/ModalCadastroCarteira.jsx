@@ -121,6 +121,19 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
     setLinhas((ls) => [...ls, { ...linhaNovaDoCadastro(id, ''), grupo: g.id }]);
     focar(`[data-cad-grupo="${g.id}"]`);
   };
+  // TIRAR A INSTITUIÇÃO NOVA (09/11/2026, a pedido: antes só fechando e abrindo o cadastro): os investimentos novos dela
+  // saem junto; um que já existia e foi arrastado para ela volta para a instituição de origem dele
+  const tirarInstituicao = (gid) => {
+    setLinhas((ls) => ls.flatMap((l) => {
+      if (l.grupo !== gid) return [l];
+      if (l.novo) return [];
+      const volta = grupos.find((g) => g.id !== gid && g.orig && g.orig === (l.orig?.instituicao ?? l.instituicao));
+      return [{ ...l, grupo: volta?.id ?? grupos.find((g) => g.id !== gid)?.id ?? gid }];
+    }));
+    setGrupos((gs) => gs.filter((g) => g.id !== gid));
+    setFechadas((s) => { if (!s.has(gid)) return s; const n = new Set(s); n.delete(gid); return n; });
+    setErro(null);
+  };
   const abriu = useRef(false);
   useEffect(() => {
     if (abriu.current) return;
@@ -258,8 +271,18 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
               <span className="flex-1" />
               <button type="button" onClick={() => adicionar(g.id)}
                 className="inline-flex shrink-0 items-center gap-2 rounded-[5px] px-2 py-1 text-[12px] font-medium text-gray-600 opacity-0 transition-[opacity,color,background-color] hover:bg-gray-200 hover:text-gray-900 focus-visible:opacity-100 group-hover/linha:opacity-100">
-                <CirculoMais />investimento
+                <CirculoMais desce />investimento
               </button>
+              {!g.orig && (
+                <Tooltip label="Tirar esta instituição (e os investimentos novos dela)">
+                  <button type="button" aria-label="Tirar esta instituição" onClick={() => tirarInstituicao(g.id)}
+                    className="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-gray-400 transition-colors hover:bg-hx-fdeaea hover:text-hx-c0393d">
+                    <svg viewBox="0 0 24 24" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+                    </svg>
+                  </button>
+                </Tooltip>
+              )}
             </span>
           </td>
         </tr>
@@ -271,7 +294,7 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
           <td colSpan={8} className="border-b border-gray-100 py-1 pl-[66px] pr-2">
             <button type="button" onClick={() => adicionar(x.g.id)}
               className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900">
-              <CirculoMais />Adicionar investimento{x.g.nome.trim() ? ` em ${x.g.nome.trim()}` : ''}
+              <CirculoMais desce />Adicionar investimento{x.g.nome.trim() ? ` em ${x.g.nome.trim()}` : ''}
             </button>
           </td>
         </tr>
@@ -281,11 +304,13 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
       return (
         <tr key={x.id} {...attrs} className="transition-[opacity,transform] duration-200 ease-out">
           <td colSpan={8} className="px-2 py-2.5">
-            <button type="button" onClick={novaInstituicao}
-              className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900">
-              <CirculoMais borda="text-gray-500" />Nova instituição
-            </button>
-            <span className="ml-2 text-[12px] text-gray-400">o banco ou a corretora (Nubank, XP, Inter…)</span>
+            <span className="flex items-center gap-2">
+              <button type="button" onClick={novaInstituicao}
+                className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900">
+                <CirculoMais desce borda="text-gray-500" />Nova instituição
+              </button>
+              <span className="text-[12px] leading-none text-gray-400">o banco ou a corretora (Nubank, XP, Inter…)</span>
+            </span>
           </td>
         </tr>
       );

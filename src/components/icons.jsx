@@ -575,10 +575,12 @@ export const IconColar = ({ className = 'h-[15px] w-[15px]' }) => (
 // o navegador encaixava a BORDA no pixel e o "+" não, e ele parecia fora do centro mesmo com as contas certas. No mesmo
 // SVG os dois andam juntos. 16px (o "+" de 8) ou o `grande`, 18 (o de 10). `borda`: a cor do círculo; `cor`: a do "+"
 // (sem ela, a do texto do botão).
-export const CirculoMais = ({ borda = 'text-gray-400', cor = '', grande = false }) => {
+// `desce`: 1px para baixo, ao lado de um texto em minúsculas ("Adicionar investimento"): o centro das letras fica 1px
+// abaixo do centro da caixa do texto, e o círculo centrado na caixa parecia mais alto (09/11/2026, a pedido)
+export const CirculoMais = ({ borda = 'text-gray-400', cor = '', grande = false, desce = false }) => {
   const t = grande ? 18 : 16; const m = t / 2; const p = grande ? 5 : 4;
   return (
-    <svg viewBox={`0 0 ${t} ${t}`} width={t} height={t} className={`shrink-0 ${cor}`} fill="none" aria-hidden="true">
+    <svg viewBox={`0 0 ${t} ${t}`} width={t} height={t} className={`shrink-0 ${desce ? 'translate-y-px' : ''} ${cor}`} fill="none" aria-hidden="true">
       <circle cx={m} cy={m} r={m - 0.5} className={borda} stroke="currentColor" strokeWidth="1" strokeDasharray="2.2 1.6" />
       <path d={`M${m} ${m - p}v${2 * p}M${m - p} ${m}h${2 * p}`} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
