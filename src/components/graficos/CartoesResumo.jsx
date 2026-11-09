@@ -29,6 +29,8 @@ export const ICONES = {
   patrimonio: <path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6" />,
   tendencia: <path d="M4 18l6-6 4 4 6-8" />,
   liquidez: <><circle cx="12" cy="12" r="8" /><path d="M12 8v8" /></>,
+  // as parcelas de cartão que vêm (09/11/2026): o cartão
+  parcelas: <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 11h18M7 15h3" /></>,
   // os dos Indicadores (06/11/2026): os juros (%), a inflação (a seta que sobe), o dólar e o euro
   juros: <><path d="M19 5 5 19" /><circle cx="7" cy="7" r="2" /><circle cx="17" cy="17" r="2" /></>,
   inflacao: <path d="M4 18l6-6 4 4 6-8M15 8h5v5" />,
@@ -48,13 +50,17 @@ export const variacaoSaldo = (atual, antes) => (antes ? Math.round(((atual - ant
 // `formatar(valor)`: o número no balão. `valor`/`valorCurto`: o que o cartão mostra (o curto, no celular).
 // `variacao` + `sobeBom` (+ `tituloVariacao`): a pílula. `sub`: a linha de baixo. `onClicar`: o cartão
 // inteiro; `onMes(comp)`: clicar na curva. `ativo`: o anel de "filtro ligado". `nota(i)`: rodapé do balão.
+// `forma="barras"`: no lugar da curva, uma barra hachurada por mês (as parcelas que vêm); `itensBalao(i)`: os itens do
+// balão daquele mês (sem ele, o rótulo e o valor).
 export function CartaoKpi({
   icone, cor, rotulo, valor, valorCurto, corValor = 'text-gray-900', variacao: v, sobeBom = true, tituloVariacao,
   sub, serie = [], formatar = formatBRL, onClicar, onMes, ativo = false, compacto = false, titulo, nota,
+  forma = 'curva', itensBalao,
 }) {
   const [hover, setHover] = useState(null); // { i, pos }
   const vals = serie.map((m) => m.valor);
-  const temCurva = vals.length > 1;
+  const barras = forma === 'barras';
+  const temCurva = barras ? vals.length > 0 : vals.length > 1;
   const [caixaIco, desenhoIco] = compacto ? ICONE.compacto : ICONE.normal;
   const H = compacto ? 34 : 54;
   const min = Math.min(0, ...vals);
@@ -68,7 +74,7 @@ export function CartaoKpi({
   const mover = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     const frac = (e.clientX - r.left) / r.width;
-    const i = Math.max(0, Math.min(vals.length - 1, Math.round(frac * (vals.length - 1))));
+    const i = Math.max(0, Math.min(vals.length - 1, barras ? Math.floor(frac * vals.length) : Math.round(frac * (vals.length - 1))));
     setHover({ i, pos: posicaoBalao(e, 230, 96) });
   };
   const mes = hover && serie[hover.i];
@@ -106,6 +112,20 @@ export function CartaoKpi({
       {temCurva ? (
         <div className={`${compacto ? 'mt-1' : 'mt-2'} hidden overflow-hidden rounded-b-[10px] sm:block`} onMouseMove={mover} onMouseLeave={() => setHover(null)}
           onClick={(e) => { if (hover && onMes) { e.stopPropagation(); onMes(serie[hover.i].competencia); } }}>
+          {barras ? (
+            // AS BARRAS (as parcelas que vêm, 09/11/2026): uma por mês, hachuradas como as parcelas em Cartões, na escala
+            // da maior; a do mês sob o cursor fica cheia
+            <div className="flex items-end gap-[3px] px-3 pb-[6px]" style={{ height: H }}>
+              {vals.map((val, i) => (
+                <span key={serie[i].competencia} className="min-w-0 flex-1 rounded-t-[2px] transition-opacity duration-150"
+                  style={{
+                    height: `${Math.max(6, (val / max) * 100)}%`, opacity: hover && hover.i !== i ? 0.45 : 1,
+                    background: `repeating-linear-gradient(135deg, color-mix(in srgb, ${cor} 55%, transparent) 0 2px, color-mix(in srgb, ${cor} 18%, transparent) 2px 5px)`,
+                    boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${cor} 60%, transparent)`,
+                  }} />
+              ))}
+            </div>
+          ) : (
           <div className="relative" style={{ height: H }}>
             <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block w-full overflow-visible" style={{ height: H }} aria-hidden="true">
               <defs>
@@ -121,6 +141,7 @@ export function CartaoKpi({
             <span className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white transition-[left,top,width,height] duration-150 ease-out"
               style={{ left: `${(x(pontoAtivo) / W) * 100}%`, top: `${(y(vals[pontoAtivo]) / H) * 100}%`, width: hover ? 10 : 8, height: hover ? 10 : 8, background: cor }} />
           </div>
+          )}
           {!compacto && (
             <div className="flex justify-between px-2 pb-2 pt-0.5 text-[9.5px] text-gray-400">
               {serie.map((m, i) => (
@@ -132,7 +153,7 @@ export function CartaoKpi({
       ) : <div className={compacto ? 'h-2.5' : 'h-3.5'} />}
       {mes && (
         <BalaoGrafico pos={hover.pos} largura={230} titulo={nomeCompetencia(mes.competencia)}
-          itens={[{ rotulo, valor: formatar(vals[hover.i]), cor }]}
+          itens={itensBalao?.(hover.i) ?? [{ rotulo, valor: formatar(vals[hover.i]), cor }]}
           nota={[vHover !== null && `${vHover > 0 ? '+' : ''}${vHover}% sobre ${competenciaCurta(serie[hover.i - 1].competencia)}`,
             nota?.(hover.i), onMes && 'Clique para abrir o mês'].filter(Boolean).join(' · ')} />
       )}

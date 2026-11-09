@@ -229,3 +229,46 @@ export function cascataDoPatrimonio(meses, modo = 'mes') {
   const ult = meses[meses.length - 1];
   return { colunas, fim: { competencia: ult.competencia, total: ult.total, aportado: ult.aportado, rendimento: ult.rendimentoAcum } };
 }
+
+// JÁ COMPROMETIDO EM PARCELAS (09/11/2026, o mockup "Parcelas no resumo", opção A): o quinto número do Patrimônio — o total das
+// parcelas de cartão que ainda vão cair nas faturas (a view `parcelas_futuras`, das faturas mais recentes de cada cartão; a
+// mesma conta das colunas hachuradas em Cartões), de `hoje` (competência 'AAAA-MM') em diante. `cartoes`: [{ id, nome }].
+// `resumo` (a `resumo_mensal`): a RENDA MÉDIA = as entradas dos 12 meses fechados antes de hoje ÷ os meses com entrada (mês sem
+// entrada lançada não é renda zero, a regra das médias do app). Devolve { total, parcelas, compras, ate, meses: [{ competencia,
+// valor, porCartao: [{ nome, valor }] }], porCartao: [{ nome, valor }], renda, pctRenda } — `pctRenda` é o total ÷ a renda média
+// (1 = um mês inteiro de renda); null sem entrada.
+export function parcelasComprometidas({ parcelas = [], cartoes = [], resumo = [], hoje }) {
+  const nome = new Map(cartoes.map((c) => [c.id, c.nome]));
+  const vem = parcelas.filter((p) => p.competencia >= hoje);
+  const porMes = new Map();
+  const porCartao = new Map();
+  const compras = new Set();
+  let total = 0;
+  vem.forEach((p) => {
+    const v = Number(p.valor_centavos);
+    const n = nome.get(p.cartao_id) ?? 'Cartão';
+    total += v;
+    compras.add(p.lancamento_id);
+    porCartao.set(n, (porCartao.get(n) ?? 0) + v);
+    const m = porMes.get(p.competencia) ?? new Map();
+    m.set(n, (m.get(n) ?? 0) + v);
+    porMes.set(p.competencia, m);
+  });
+  const ordenar = (mapa) => [...mapa].map(([n, valor]) => ({ nome: n, valor })).sort((a, b) => b.valor - a.valor);
+  const meses = [...porMes.keys()].sort().map((competencia) => {
+    const m = porMes.get(competencia);
+    return { competencia, valor: [...m.values()].reduce((s, v) => s + v, 0), porCartao: ordenar(m) };
+  });
+  const desde = addMeses(hoje, -12);
+  const entradas = new Map();
+  resumo.forEach((r) => {
+    if (r.tipo !== 'entrada' || r.competencia < desde || r.competencia >= hoje) return;
+    entradas.set(r.competencia, (entradas.get(r.competencia) ?? 0) + Number(r.total_centavos));
+  });
+  const comEntrada = [...entradas.values()].filter((v) => v > 0);
+  const renda = comEntrada.length ? Math.round(comEntrada.reduce((s, v) => s + v, 0) / comEntrada.length) : 0;
+  return {
+    total, parcelas: vem.length, compras: compras.size, ate: meses.length ? meses[meses.length - 1].competencia : null,
+    meses, porCartao: ordenar(porCartao), renda, pctRenda: renda ? total / renda : null,
+  };
+}

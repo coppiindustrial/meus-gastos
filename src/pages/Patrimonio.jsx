@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
@@ -22,9 +22,11 @@ import AvisoSemTaxas from '../components/patrimonio/AvisoSemTaxas.jsx';
 import { IconOlho } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { marcarVencimentoVisto } from '../api/carteira.js';
+import { listarCartoes } from '../api/cadastros.js';
+import { listarParcelasFuturas, listarResumoMensal } from '../api/resumo.js';
 import { mesAMes, montarCarteira, nomeDoTipo, rotuloTaxa } from '../lib/carteira.js';
 import {
-  escadaDeLiquidez, filtrarCarteira, irPorAliquota, linhaDoTempoVencimentos, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
+  escadaDeLiquidez, filtrarCarteira, parcelasComprometidas, irPorAliquota, linhaDoTempoVencimentos, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
   textoDoPeriodo, vencimentos,
 } from '../lib/patrimonio.js';
 import { brlCurto, formatBRL } from '../lib/dinheiro.js';
@@ -57,6 +59,7 @@ const OPCOES_COMPARAR = [
 ];
 const PALETA = ['var(--serie-gastos)', 'var(--origem-fixo)', 'var(--serie-sobrou)', 'var(--serie-entradas)', 'var(--origem-manual)', 'var(--origem-cartao)'];
 const COR_LIQUIDEZ = varCor('#ca8a04', 'texto');
+const COR_PARCELAS = varCor('#ea580c', 'texto');
 const pct = (f, casas = 2) => (f === null || f === undefined || !Number.isFinite(f) ? '—' : `${(f * 100).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`);
 
 // O CATÁLOGO DO GRID (12 colunas; uma linha = 22px + 16 de vão, como a Visão geral): o "Agora" e os números com a altura
@@ -123,6 +126,19 @@ export default function Patrimonio() {
   // a cor de cada instituição: a da carteira inteira (não muda com o filtro)
   const cores = useMemo(() => Object.fromEntries(d.carteira.grupos.map((g, i) => [g.instituicao, CORES_INSTITUICAO[i % CORES_INSTITUICAO.length]])), [d.carteira]);
   const comVisto = d.aportes.some((a) => 'vencimento_visto' in a);
+
+  // JÁ COMPROMETIDO EM PARCELAS (09/11/2026, o mockup "Parcelas no resumo", opção A): as parcelas de cartão que ainda vão
+  // cair nas faturas e o peso delas na renda média. Não é da carteira: os filtros da tela não mexem nele. Falhou a leitura,
+  // o cartão não aparece.
+  const [dadosParc, setDadosParc] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    Promise.all([listarParcelasFuturas(), listarCartoes(), listarResumoMensal()])
+      .then(([parcelas, cartoes, resumo]) => { if (vivo) setDadosParc({ parcelas, cartoes, resumo }); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+  const parc = useMemo(() => (dadosParc ? parcelasComprometidas({ ...dadosParc, hoje: hojeComp }) : null), [dadosParc, hojeComp]);
 
   if (d.carregando) return (<div><CabecalhoPagina titulo="Patrimônio" /><PageLoading /></div>);
   if (d.semMigration || !d.aportes.length) {
@@ -194,6 +210,32 @@ export default function Patrimonio() {
           <CartaoKpi compacto icone="liquidez" cor={COR_LIQUIDEZ} rotulo="Livre hoje" valor={formatBRL(livre)} valorCurto={brlCurto(livre)}
             sub={`${t.vale ? Math.round((livre / t.vale) * 100) : 0}% do patrimônio${em30 > 0 ? ` · + ${brlCurto(em30)} em 30 dias` : ''}`}
             titulo="O que tem resgate a qualquer hora. Em 30 dias: o que vence e volta para a conta." />
+          {parc && (
+            // no celular (2 por linha) o quinto ocupa a linha toda
+            <div className="col-span-2 grid sm:col-span-1">
+            <CartaoKpi compacto icone="parcelas" cor={COR_PARCELAS} rotulo="Já comprometido em parcelas" valor={formatBRL(parc.total)} valorCurto={brlCurto(parc.total)}
+              corValor={parc.total ? 'text-hx-ea580c' : 'text-gray-900'} forma="barras" onClicar={() => navigate('/cartoes')}
+              sub={!parc.total ? 'nenhuma parcela por vir' : [
+                parc.pctRenda !== null ? `${Math.round(parc.pctRenda * 100)}% de um mês de renda` : null,
+                `até ${competenciaCurta(parc.ate)}`,
+              ].filter(Boolean).join(' · ')}
+              titulo={parc.total ? [
+                `${parc.compras} ${parc.compras === 1 ? 'compra' : 'compras'} parceladas no cartão, ${parc.parcelas} ${parc.parcelas === 1 ? 'parcela' : 'parcelas'} por vir.`,
+                parc.porCartao.map((c) => `${c.nome}: ${formatBRL(c.valor)}`).join(' · '),
+                parc.renda ? `A renda média dos 12 meses: ${formatBRL(parc.renda)} por mês.` : null,
+                'Clique para ver os cartões.',
+              ].filter(Boolean).join('\n') : 'Clique para ver os cartões.'}
+              serie={parc.meses.map((m) => ({ competencia: m.competencia, valor: m.valor }))}
+              itensBalao={(i) => {
+                const m = parc.meses[i];
+                return [{ rotulo: 'Parcelas', valor: formatBRL(m.valor), cor: COR_PARCELAS }, ...(m.porCartao.length > 1 ? m.porCartao.map((c) => ({ rotulo: c.nome, valor: formatBRL(c.valor) })) : [])];
+              }}
+              nota={(i) => [
+                parc.meses[i].porCartao.length === 1 ? parc.meses[i].porCartao[0].nome : null,
+                parc.renda ? `${Math.round((parc.meses[i].valor / parc.renda) * 100)}% da renda média` : null,
+              ].filter(Boolean).join(' · ')} />
+            </div>
+          )}
         </div>
       </CardAutoAltura>
     </div>

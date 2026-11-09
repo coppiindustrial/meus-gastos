@@ -342,8 +342,12 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   cabeçalho com 👁 · ↻ · Personalizar, áreas `pt_numeros`/`pt_graficos`/`pt_listas`, as miniaturas são as da Visão geral —
   `DO_PATRIMONIO` no `MiniaturaWidget`), a FAIXA DE FILTROS embaixo (Período · Instituição · Tipo · Investimento, o Comparar
   à direita: CDI, IPCA ou nada) e os blocos: o "Agora" (`AgoraPatrimonio`: vencimentos para avaliar e reaplicados para
-  conferir em âmbar; o próximo vencimento e a próxima queda do IR em cinza), os 4 `CartaoKpi` (patrimônio, rendeu no último
-  mês fechado com o % do CDI, rendeu em 12 meses, livre hoje), Evolução EM CASCATA (`CascataPatrimonio`, 09/11/2026, a opção B do mockup "Evolução do patrimônio em cascata" com a C na chave Mês | Ano, `patrimonio_evolucao_modo`: cada degrau começa onde o anterior terminou — o aporte em azul, o rendimento em verde, a saída em laranja —, só os meses com movimento e os parados num degrau "N meses rendendo", ou aportes / rendeu / saiu por ano; a última coluna é o patrimônio de hoje, aportado + rendimento; `cascataDoPatrimonio` em lib/patrimonio.js), Onde está o dinheiro (a `RoscaOrigem` da Visão geral, que aceita `cor`/`rotulo`/`dica`; clicar na instituição ou no
+  conferir em âmbar; o próximo vencimento e a próxima queda do IR em cinza), os 5 `CartaoKpi` (patrimônio, rendeu no último
+  mês fechado com o % do CDI, rendeu em 12 meses, livre hoje e JÁ COMPROMETIDO EM PARCELAS — 09/11/2026, a opção A do mockup
+  "Parcelas no resumo": as parcelas de cartão que ainda vão cair nas faturas (`parcelas_futuras`, a conta das hachuradas em
+  Cartões), "N% de um mês de renda" (a média das entradas dos 12 meses fechados, só os meses com entrada) e até quando;
+  embaixo, uma barra hachurada por mês (`forma="barras"` do `CartaoKpi`, o balão por cartão); clicar abre os Cartões; os
+  filtros da tela não mexem nele — `parcelasComprometidas` em lib/patrimonio.js), Evolução EM CASCATA (`CascataPatrimonio`, 09/11/2026, a opção B do mockup "Evolução do patrimônio em cascata" com a C na chave Mês | Ano, `patrimonio_evolucao_modo`: cada degrau começa onde o anterior terminou — o aporte em azul, o rendimento em verde, a saída em laranja —, só os meses com movimento e os parados num degrau "N meses rendendo", ou aportes / rendeu / saiu por ano; a última coluna é o patrimônio de hoje, aportado + rendimento; `cascataDoPatrimonio` em lib/patrimonio.js), Onde está o dinheiro (a `RoscaOrigem` da Visão geral, que aceita `cor`/`rotulo`/`dica`; clicar na instituição ou no
   tipo filtra), Quanto rendeu em cada mês (`ColunasRendeu`: em reais, com o tracejado do que o índice daria no mesmo
   dinheiro — o `base` do `mesAMes` × o índice do mês | `ColunasPct`; a prop é `indice`, NUNCA `ref`, que o React engole),
   o IR e quando ele cai, VENCIMENTOS (a linha do tempo por mês — já venceu, volta, reaplica, a marca de hoje, clicar filtra
@@ -657,7 +661,8 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
 - Git: oferecer commit, mas nunca commitar ou dar push sem o usuário pedir.
 - **Ícone pequeno numa caixa = PX INTEIROS** (06/11/2026): o rem do app é 14px, então `h-3`/`h-4`/`h-5` dão 10,5 / 14 /
   17,5 px, e um ícone de traço fino centrado num desses fica meio pixel fora do lugar (borrado, "esquisito"). O "+" no
-  círculo tracejado é o `CirculoMais` (icons.jsx: 16 e 8 px, ou 18 e 10 no `grande`); a seta de abrir dos investimentos, o
+  círculo tracejado é o `CirculoMais` (icons.jsx: 16 e 8 px, ou 18 e 10 no `grande`; SOBE 1PX — o texto se desenha
+  abaixo do centro da caixa dele, e centrado o círculo ficava baixo: medido nas capturas, 09/11/2026); a seta de abrir dos investimentos, o
   `QUADRADO_SETA` (20 e 12 px). Caixa e ícone em `h-[Npx]` com a diferença PAR.
 - **Ícone** (barras e tendência, 27/10/2026): `public/icon.svg` é a fonte, no MESMO desenho do Coppi Gains (fundo em
   degradê #343434 → #101010, símbolo branco recortado por máscara, a mesma sombra). Os PNGs, o maskable e o
