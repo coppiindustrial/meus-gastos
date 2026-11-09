@@ -9,6 +9,7 @@ import CardAutoAltura from '../components/dashboard/CardAutoAltura.jsx';
 import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import { CartaoKpi } from '../components/graficos/CartoesResumo.jsx';
+import CartaoParcelas from '../components/graficos/CartaoParcelas.jsx';
 import { COR_ENTRADAS } from '../components/graficos/Graficos.jsx';
 import { RoscaOrigem } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
@@ -59,7 +60,6 @@ const OPCOES_COMPARAR = [
 ];
 const PALETA = ['var(--serie-gastos)', 'var(--origem-fixo)', 'var(--serie-sobrou)', 'var(--serie-entradas)', 'var(--origem-manual)', 'var(--origem-cartao)'];
 const COR_LIQUIDEZ = varCor('#ca8a04', 'texto');
-const COR_PARCELAS = varCor('#ea580c', 'texto');
 const pct = (f, casas = 2) => (f === null || f === undefined || !Number.isFinite(f) ? '—' : `${(f * 100).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`);
 
 // O CATÁLOGO DO GRID (12 colunas; uma linha = 22px + 16 de vão, como a Visão geral): o "Agora" e os números com a altura
@@ -213,27 +213,7 @@ export default function Patrimonio() {
           {parc && (
             // no celular (2 por linha) o quinto ocupa a linha toda
             <div className="col-span-2 grid sm:col-span-1">
-            <CartaoKpi compacto icone="parcelas" cor={COR_PARCELAS} rotulo="Já comprometido em parcelas" valor={formatBRL(parc.total)} valorCurto={brlCurto(parc.total)}
-              corValor={parc.total ? 'text-hx-ea580c' : 'text-gray-900'} forma="barras" onClicar={() => navigate('/cartoes')}
-              sub={!parc.total ? 'nenhuma parcela por vir' : [
-                parc.pctRenda !== null ? `${Math.round(parc.pctRenda * 100)}% de um mês de renda` : null,
-                `até ${competenciaCurta(parc.ate)}`,
-              ].filter(Boolean).join(' · ')}
-              titulo={parc.total ? [
-                `${parc.compras} ${parc.compras === 1 ? 'compra' : 'compras'} parceladas no cartão, ${parc.parcelas} ${parc.parcelas === 1 ? 'parcela' : 'parcelas'} por vir.`,
-                parc.porCartao.map((c) => `${c.nome}: ${formatBRL(c.valor)}`).join(' · '),
-                parc.renda ? `A renda média dos 12 meses: ${formatBRL(parc.renda)} por mês.` : null,
-                'Clique para ver os cartões.',
-              ].filter(Boolean).join('\n') : 'Clique para ver os cartões.'}
-              serie={parc.meses.map((m) => ({ competencia: m.competencia, valor: m.valor }))}
-              itensBalao={(i) => {
-                const m = parc.meses[i];
-                return [{ rotulo: 'Parcelas', valor: formatBRL(m.valor), cor: COR_PARCELAS }, ...(m.porCartao.length > 1 ? m.porCartao.map((c) => ({ rotulo: c.nome, valor: formatBRL(c.valor) })) : [])];
-              }}
-              nota={(i) => [
-                parc.meses[i].porCartao.length === 1 ? parc.meses[i].porCartao[0].nome : null,
-                parc.renda ? `${Math.round((parc.meses[i].valor / parc.renda) * 100)}% da renda média` : null,
-              ].filter(Boolean).join(' · ')} />
+              <CartaoParcelas parc={parc} onClicar={() => navigate('/cartoes')} />
             </div>
           )}
         </div>

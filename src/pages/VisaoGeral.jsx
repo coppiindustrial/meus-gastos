@@ -7,6 +7,8 @@ import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../component
 import SegPeriodoFiltro from '../components/filtros/SegPeriodoFiltro.jsx';
 import { SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import { CartaoKpi, CORES_KPI, variacaoSaldo } from '../components/graficos/CartoesResumo.jsx';
+import CartaoParcelas from '../components/graficos/CartaoParcelas.jsx';
+import { parcelasComprometidas } from '../lib/patrimonio.js';
 import { COR_ENTRADAS, COR_GASTOS } from '../components/graficos/Graficos.jsx';
 import {
   BarrasGrupos, COR_ANTERIOR, COR_FALTOU, COR_SALDO, COR_SOBROU, CORES_ORIGEM, ColunasEntradasGastos, ForaDoNormal, HACHURA_PARCELAS, JaComprometido,
@@ -211,6 +213,8 @@ export default function VisaoGeral() {
   // JÁ COMPROMETIDO: como o "Agora", do mês atual em diante e sem os filtros; o NORMAL é a média dos gastos dos 12 meses
   // fechados antes dele (os da tela mudariam com os filtros).
   const comprometido = useMemo(() => jaComprometido({ parcelas, recorrencias: fixos.recs, lancamentos: fixos.lancs, pulados: fixos.pulados, hoje }), [parcelas, fixos, hoje]);
+  // JÁ COMPROMETIDO EM PARCELAS (09/11/2026, a pedido: o do Patrimônio também aqui): o total que vem, sem os filtros
+  const parc = useMemo(() => parcelasComprometidas({ parcelas, cartoes, resumo: linhas ?? [], hoje }), [parcelas, cartoes, linhas, hoje]);
   const mediaNormal = useMemo(() => {
     const doze = Array.from({ length: 12 }, (_, i) => addMeses(hoje, i - 12));
     return mediaPorMes(resumoPeriodo(linhas ?? [], doze).porMes, 'gastos').media;
@@ -297,6 +301,7 @@ export default function VisaoGeral() {
           valor={r.maisCaro ? nomeCompetencia(r.maisCaro.competencia).replace(/ de \d+$/, '') : '—'}
           sub={r.maisCaro ? `${formatBRL(r.maisCaro.gastos)} em gastos` : 'nenhum gasto no período'}
           serie={serieDe('gastos')} onMes={abrirMes} />
+        <CartaoParcelas parc={parc} onClicar={() => navigate('/cartoes')} />
       </div>
     </CardAutoAltura>
     </div>
@@ -317,6 +322,7 @@ export default function VisaoGeral() {
       <CartaoKpi compacto icone="mes" cor={varCor('#ca8a04', 'texto')} rotulo="Mês mais caro"
         valor={r.maisCaro ? nomeCompetencia(r.maisCaro.competencia).replace(/ de \d+$/, '') : '—'}
         sub={r.maisCaro ? `${brlCurto(r.maisCaro.gastos)} em gastos` : 'nenhum gasto'} serie={serieDe('gastos')} />
+      {parc.total > 0 && <div className="col-span-2 grid"><CartaoParcelas parc={parc} /></div>}
     </div>
   );
 

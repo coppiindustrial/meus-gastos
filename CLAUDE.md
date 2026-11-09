@@ -496,7 +496,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   até 320px (em "Categorias", o grupo em cinza depois, encolhendo primeiro), linha de 30px, cabeçalho das colunas
   (com média/mês), busca e o Total preso embaixo. No bloco, o valor tem largura FIXA (com `auto`, cada linha media
   o seu número e as barras terminavam em pontos diferentes).
-- Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos). "Entradas × gastos" tem 3 formas
+- Indicadores = `CartaoKpi compacto` (o mesmo cartão do resumo dos Lançamentos), e por último o "JÁ COMPROMETIDO EM
+  PARCELAS" (09/11/2026, a pedido: o mesmo do Patrimônio, `components/graficos/CartaoParcelas.jsx`; sem os filtros; no
+  celular, a linha inteira e só quando há parcela). "Entradas × gastos" tem 3 formas
   (colunas, linhas, acumulado), escolhidas no próprio bloco. O cartão do Saldo também mostra a média por mês
   (todo mês com lançamento entra, mesmo negativo).
 - O SALDO TEM BLOCO PRÓPRIO, "Saldo do mês" (`vg_saldo`, 29/10/2026, opção A do mockup): a forma "Saldo"
