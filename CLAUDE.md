@@ -270,8 +270,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   com a taxa dele (`calendario`, o `proj`). O TOTAL de um investimento soma os valores EXATOS e arredonda no fim
   (`somarPosicoes`), como o banco — arredondando cada aporte, o RDB Planejado dava 1 centavo a mais. O resgate parcial tira
   do valor e o aplicado diminui na mesma proporção; "tudo", ou o vencimento, ENCERRA o aporte (o valor do dia volta para a
-  conta: `encerrado`). O IR pela idade do aporte (22,5 · 20 · 17,5 · 15%, o IOF nos 30 primeiros dias; LCI e LCA isentas);
-  o "já estava aplicado" sem `aplicado_em` vai pelo maior, 22,5% (`semData`: o líquido nunca fica a mais). O mês a mês
+  conta: `encerrado`). O IR pela idade do aporte (22,5 · 20 · 17,5 · 15%, o IOF nos 30 primeiros dias; LCI e LCA isentas),
+  CORTANDO A FRAÇÃO DE CENTAVO como o banco (`impostos`, conta inteira em milésimos; 08/11/2026: o Nubank cobra o IR
+  cortado, e arredondando o app ficava 7 centavos acima num investimento de 12 depósitos);
+  o "já estava aplicado" sem `aplicado_em` vai pelo maior, 22,5% (`semData`: o líquido nunca fica a mais).
+  O RDB PLANEJADO DO NUBANK conta o rendimento desde o DIA ÚTIL ANTES da "Data da aplicação" (os dois depósitos conferidos
+  em 08/11/2026, um de quinta e um de sábado); o RDB Resgate Diário e os CDBs, desde o próprio dia. O app não sabe disso:
+  no "já estava aplicado", digita-se a "Valorização" do banco no "Quanto já rendeu" (sem saques, é o número exato). O mês a mês
   (`mesAMes`): o fim de cada mês pela mesma conta; rendeu = o total − o do mês anterior − o que entrou + o que saiu.
 - O VENCIMENTO: VOLTA PARA A CONTA OU REAPLICA (08/11/2026, a pedido; migration 022): o cadastro tem "No vencimento"
   (`inv_cadastro.no_vencimento` 'conta' | 'reaplica'; "reaplica" pede o prazo de "Vence em", que é o do aporte novo). No

@@ -36,6 +36,15 @@ export const FAIXAS_IR = [{ ate: 180, aliquota: 0.225 }, { ate: 360, aliquota: 0
 export const aliquotaIR = (dias) => FAIXAS_IR.find((f) => dias <= f.ate).aliquota;
 const IOF = [96, 93, 90, 86, 83, 80, 76, 73, 70, 66, 63, 60, 56, 53, 50, 46, 43, 40, 36, 33, 30, 26, 23, 20, 16, 13, 10, 6, 3];
 export const aliquotaIOF = (dias) => (dias >= 30 ? 0 : IOF[Math.max(0, dias - 1)] / 100);
+// O IOF E O IR EM CENTAVOS, CORTANDO A FRAÇÃO DE CENTAVO, como o banco (08/11/2026: o Nubank mostra o IR cortado — um
+// rendimento de R$ 100,04 a 22,5% dá 22,509 e o banco cobra R$ 22,50; arredondando, o app dava 1 centavo a mais por
+// aporte, e um investimento de 12 depósitos ficava 7 centavos acima). A conta é inteira (a alíquota em milésimos): no
+// ponto flutuante, 3.640 × 0,225 dá 818,999… e o corte tiraria 1 centavo que não existe.
+export function impostos(ganho, idade, aliquota) {
+  const iof = idade !== null && idade < 30 ? Math.floor((ganho * Math.round(aliquotaIOF(idade) * 1000)) / 1000) : 0;
+  const ir = Math.floor(((ganho - iof) * Math.round(aliquota * 1000)) / 1000);
+  return { iof, ir };
+}
 // a próxima vez que a alíquota cai (no dia seguinte ao fim da faixa): { data, para } ou null (já na menor)
 export function proximaQueda(desde, hoje) {
   const dias = diasEntre(desde, hoje);
@@ -166,8 +175,7 @@ export function posicaoDoAporte(ap, inv, resgates, cal, dia, eventosAte = dia) {
   const idade = semData ? null : diasEntre(p.desdeIR, dia);
   const aliquota = ehIsento(inv?.tipo) ? 0 : semData ? FAIXAS_IR[0].aliquota : aliquotaIR(idade);
   const ganho = Math.max(0, rendeu);
-  const iof = idade !== null && idade < 30 ? Math.round(ganho * aliquotaIOF(idade)) : 0;
-  const ir = Math.round((ganho - iof) * aliquota);
+  const { iof, ir } = impostos(ganho, idade, aliquota);
   return { vale, aplicado: apl, rendeu, ir, iof, liquido: vale - ir - iof, aliquota, idade, semData, encerrado: null, saidas, partida: p, conta, exato };
 }
 
@@ -181,8 +189,7 @@ export function noVencimento(inv, pos) {
   const desde = pos.partida?.desdeIR ?? null;
   const idade = desde ? diasEntre(desde, e.data) : null;
   const aliquota = ehIsento(inv?.tipo) ? 0 : idade === null ? FAIXAS_IR[0].aliquota : aliquotaIR(idade);
-  const iof = idade !== null && idade < 30 ? Math.round(ganho * aliquotaIOF(idade)) : 0;
-  const ir = Math.round((ganho - iof) * aliquota);
+  const { iof, ir } = impostos(ganho, idade, aliquota);
   return { data: e.data, valor: e.valor, aplicado: e.aplicado, ir, iof, liquido: e.valor - ir - iof, aliquota, idade };
 }
 

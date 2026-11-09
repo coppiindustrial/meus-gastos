@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
+  aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, impostos, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
   linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
   rendeuDoDeposito, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
 } from '../src/lib/carteira.js';
@@ -93,13 +93,24 @@ test('já estava aplicado: o que rendeu sai da conta do CDI desde o depósito, t
   assert.equal(conta(null, '2026-04-07'), null);
 });
 
+test('o IR e o IOF cortam a fração de centavo, como o banco (sem o erro do ponto flutuante)', () => {
+  assert.deepEqual(impostos(10004, 60, 0.225), { iof: 0, ir: 2250 }); // 2250,9: o banco cobra 2250
+  assert.deepEqual(impostos(3640, 60, 0.225), { iof: 0, ir: 819 }); // 819 exato (no ponto flutuante, 818,999…)
+  assert.deepEqual(impostos(1000, 10, 0.225), { iof: 660, ir: 76 }); // IOF de 66%; o IR sobre os 340 que sobram (76,5)
+  assert.deepEqual(impostos(10004, null, 0.225), { iof: 0, ir: 2250 }); // sem a data: sem IOF, o IR pelo maior
+  assert.deepEqual(impostos(5000, 800, 0), { iof: 0, ir: 0 }); // isenta
+  // a posição de um aporte usa a mesma conta
+  const ap = { id: 'x', investimento_id: 'i', origem: 'antigo', data: HOJE, valor_centavos: 1010004, rendeu_antes_centavos: 10004, aplicado_em: '2026-09-01', vencimento: null };
+  assert.deepEqual([posicaoDoAporte(ap, inv(100), [], cal, HOJE).ir, posicaoDoAporte(ap, inv(100), [], cal, HOJE).liquido], [2250, 1010004 - 2250]);
+});
+
 test('o IR, o IOF e as isentas', () => {
   assert.deepEqual([aliquotaIR(180), aliquotaIR(181), aliquotaIR(360), aliquotaIR(361), aliquotaIR(720), aliquotaIR(721)], [0.225, 0.2, 0.2, 0.175, 0.175, 0.15]);
   assert.deepEqual([aliquotaIOF(1), aliquotaIOF(27), aliquotaIOF(29), aliquotaIOF(30)], [0.96, 0.1, 0.03, 0]);
   const p = posicaoDoAporte(novo('2026-10-11', 1500000), inv(102.5), [], cal, HOJE); // 27 dias: IOF de 10%
   assert.equal(p.idade, 27);
-  assert.equal(p.iof, Math.round(p.rendeu * 0.1));
-  assert.equal(p.ir, Math.round((p.rendeu - p.iof) * 0.225));
+  assert.equal(p.iof, Math.floor(p.rendeu * 0.1));
+  assert.equal(p.ir, Math.floor((p.rendeu - p.iof) * 0.225));
   assert.equal(p.liquido, p.vale - p.ir - p.iof);
   const lci = posicaoDoAporte(novo('2026-04-07', 100000), inv(95, { tipo: 'lci' }), [], cal, HOJE);
   assert.equal(lci.ir, 0);
@@ -247,7 +258,7 @@ test('o vencimento que reaplica: um aporte novo com o líquido do dia, o IR reco
   const noDia = posicaoDoAporte({ ...ap, vencimento: null }, i, [], cal, '2026-10-07').vale;
   assert.equal(venc.valor, noDia);
   assert.equal(venc.aliquota, 0.2);
-  assert.equal(venc.ir, Math.round((noDia - 1000000) * 0.2));
+  assert.equal(venc.ir, Math.floor((noDia - 1000000) * 0.2));
   assert.deepEqual(dados, {
     investimento_id: 'i', origem: 'novo', data: '2026-10-07', valor_centavos: noDia - venc.ir, rendeu_antes_centavos: 0, aplicado_em: null,
     vencimento: '2027-01-07', reaplicado_de: ap.id, conferir: true,
