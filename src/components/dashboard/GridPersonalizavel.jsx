@@ -439,6 +439,10 @@ const AREA_LABEL = {
   vg_numeros: 'Números',
   vg_graficos: 'Gráficos',
   vg_tabelas: 'Tabelas',
+  // o Patrimônio (09/11/2026)
+  pt_numeros: 'Números',
+  pt_graficos: 'Gráficos',
+  pt_listas: 'Listas',
 };
 
 // Modal "Widgets": liga/desliga numa GRADE de cards com miniatura — só o título não dizia o que é

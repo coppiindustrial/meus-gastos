@@ -32,7 +32,7 @@ export default function useCarteira() {
   // "Vale hoje, pela conta" sumia); com um aporte mais antigo que todos, faltavam os dias do começo.
   const desde = useMemo(() => {
     if (!dados) return null;
-    const d = [maisDias(hoje, -731), ...(dados.aportes ?? []).map((a) => a.data)].sort()[0];
+    const d = [maisDias(hoje, -731), ...(dados.aportes ?? []).map((a) => a.aplicado_em ?? a.data)].sort()[0];
     return maisDias(d, -3);
   }, [dados, hoje]);
   useEffect(() => {
@@ -82,6 +82,6 @@ export default function useCarteira() {
   return {
     carregar, dados, semMigration: dados === null, carregando: dados === undefined, hoje,
     cadastro: base.cadastro, aportes: base.aportes, resgates: base.resgates,
-    carteira, meses, cdi, cdiMes, semTaxas: falhou && !cdi && base.aportes.length > 0, tentarTaxas,
+    carteira, meses, cdi, ipca, cdiMes, semTaxas: falhou && !cdi && base.aportes.length > 0, tentarTaxas,
   };
 }

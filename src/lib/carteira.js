@@ -325,9 +325,13 @@ const fimDoMes = (c) => maisDias(`${proximoMes(c)}-01`, -1);
 // (o que entrou), resgates (o que saiu: resgates e vencimentos), rendeu, pct }. O passado vale no 1º dia do mês seguinte
 // (com todo o CDI do mês); o mês corrente, hoje. Rendeu = total − total do mês anterior − o que entrou + o que saiu; o % =
 // rendeu ÷ o capital do mês: o total anterior + cada entrada (− cada saída) pesada pelos DIAS ÚTEIS do mês em que ficou
-// aplicada (o aporte de 07/04 conta 18 dos 20 dias úteis de abril; com "metade", abril dava 1,86% contra 1,09% do CDI). O
-// dinheiro que já estava aplicado entra como dinheiro novo no mês em que você o lançou (o que ele já tinha rendido não é
-// rendimento daquele mês; lido hoje, ele ainda não pesa no capital).
+// aplicada (o aporte de 07/04 conta 18 dos 20 dias úteis de abril; com "metade", abril dava 1,86% contra 1,09% do CDI).
+// `base`: esse capital (o Patrimônio compara o que rendeu com o que o CDI daria nele).
+// O PASSADO PELA CONTA (09/11/2026, a tela nova do Patrimônio): o "já estava aplicado" COM A DATA DO DEPÓSITO entra no mês
+// do depósito, com o que foi aplicado (o total − o que já tinha rendido), e até o dia em que você olhou o banco vale o
+// número dele descontado o CDI de cada dia até lá (o fator do índice, `fator`). É o que AINDA ESTÁ aplicado: o depósito
+// que teve saques aparece no passado só com o que sobrou. Sem a data do depósito, ele entra como dinheiro novo no mês em
+// que você o lançou, com o total (como antes).
 export function mesAMes({ cadastro = [], aportes = [], resgates = [], cdi = [], ipca = null, hoje }) {
   const cal = calendario(cdi, hoje, ipca);
   const invPorId = new Map(cadastro.map((i) => [i.id, i]));
@@ -335,7 +339,12 @@ export function mesAMes({ cadastro = [], aportes = [], resgates = [], cdi = [], 
   const aps = aportes.filter((a) => invPorId.has(a.investimento_id));
   if (!aps.length) return [];
   const saidas = aps.flatMap((ap) => posicaoDoAporte(ap, invPorId.get(ap.investimento_id), rsDe(ap.id), cal, hoje).saidas);
-  const inicio = aps.map((a) => a.data).sort()[0].slice(0, 7);
+  const comDeposito = (ap) => ap.origem === 'antigo' && !!ap.aplicado_em;
+  const desde = (ap) => (comDeposito(ap) ? ap.aplicado_em : ap.data);
+  const entradaDe = (ap) => (comDeposito(ap)
+    ? { data: ap.aplicado_em, valor: Number(ap.valor_centavos) - Number(ap.rendeu_antes_centavos ?? 0) }
+    : { data: partidaDoAporte(ap, cal).data, valor: Number(ap.valor_centavos) });
+  const inicio = aps.map(desde).sort()[0].slice(0, 7);
   const atual = hoje.slice(0, 7);
   const out = [];
   let anterior = 0;
@@ -343,12 +352,19 @@ export function mesAMes({ cadastro = [], aportes = [], resgates = [], cdi = [], 
     const corte = c === atual ? hoje : fimDoMes(c);
     const dia = c === atual ? hoje : maisDias(corte, 1);
     let soma = 0; let somaAplicado = 0;
-    aps.filter((a) => a.data <= corte).forEach((ap) => {
-      const pos = posicaoDoAporte(ap, invPorId.get(ap.investimento_id), rsDe(ap.id), cal, dia, corte);
+    aps.filter((a) => desde(a) <= corte).forEach((ap) => {
+      const inv = invPorId.get(ap.investimento_id);
+      if (comDeposito(ap) && dia < ap.data) {
+        // antes do dia em que você olhou o banco: o número dele, descontado o rendimento de cada dia útil até lá
+        soma += Number(ap.valor_centavos) / fator(cal, dia, ap.data, inv.taxa ?? 100, inv.indexador ?? 'cdi').f;
+        somaAplicado += Number(ap.valor_centavos) - Number(ap.rendeu_antes_centavos ?? 0);
+        return;
+      }
+      const pos = posicaoDoAporte(ap, inv, rsDe(ap.id), cal, dia, corte);
       soma += pos.exato.vale; somaAplicado += pos.exato.aplicado;
     });
     const total = Math.round(soma); const aportado = Math.round(somaAplicado);
-    const entradas = aps.filter((a) => a.data.slice(0, 7) === c).map((a) => ({ data: partidaDoAporte(a, cal).data, valor: Number(a.valor_centavos) }));
+    const entradas = aps.filter((a) => desde(a).slice(0, 7) === c).map(entradaDe);
     const saidasMes = saidas.filter((s) => s.data.slice(0, 7) === c);
     const entrou = entradas.reduce((s, a) => s + a.valor, 0);
     const saiu = saidasMes.reduce((t, s) => t + s.valor, 0);
@@ -357,7 +373,7 @@ export function mesAMes({ cadastro = [], aportes = [], resgates = [], cdi = [], 
     const diasMes = fator(cal, `${c}-01`, dia, 100).dias;
     const peso = (d) => (diasMes ? fator(cal, d < `${c}-01` ? `${c}-01` : d, dia, 100).dias / diasMes : 0.5);
     const base = anterior + entradas.reduce((s, e) => s + e.valor * peso(e.data), 0) - saidasMes.reduce((s, e) => s + e.valor * peso(e.data), 0);
-    out.push({ competencia: c, total, aportado, rendimentoAcum: total - aportado, aportes: entrou, resgates: saiu, rendeu, pct: base > 0 ? rendeu / base : null });
+    out.push({ competencia: c, total, aportado, rendimentoAcum: total - aportado, aportes: entrou, resgates: saiu, rendeu, base, pct: base > 0 ? rendeu / base : null });
     anterior = total;
   }
   return out;

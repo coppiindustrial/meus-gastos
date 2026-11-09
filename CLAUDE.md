@@ -323,10 +323,27 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   `ModalResgate` (a data e o valor, ou "Tudo"; mostra o que fica rendendo) e `ModalCadastroCarteira` (a tabela de formulário
   dos fixos, agrupada pela instituição — o nome do grupo é um campo; o investimento com aportes não se exclui, desativa).
   No celular, só ler.
-- /patrimonio (`pages/Patrimonio.jsx`), só de ler: os 4 `CartaoKpi` (patrimônio com o líquido e o IR, rendeu no último mês
-  fechado com o % do CDI, rendeu até hoje, resgate a qualquer hora), o `GraficoPatrimonio` (aportado × rendimento | % do mês
-  × CDI), "Onde está o dinheiro" (instituição, tipo, resgate) e "Próximos vencimentos" (cada aporte). Os Indicadores leem
-  o mesmo mês a mês ("Sua carteira × CDI × IPCA").
+- /patrimonio (`pages/Patrimonio.jsx`), só de ler, É A VISÃO GERAL (09/11/2026, o mockup "Patrimônio · o grid de widgets", a
+  pedido: "igual à Visão geral", os lugares e a disposição de lá): o `GridPersonalizavel` (escopo `patrimonio_v1`, o
+  cabeçalho com 👁 · ↻ · Personalizar, áreas `pt_numeros`/`pt_graficos`/`pt_listas`, as miniaturas são as da Visão geral —
+  `DO_PATRIMONIO` no `MiniaturaWidget`), a FAIXA DE FILTROS embaixo (Período · Instituição · Tipo · Investimento, o Comparar
+  à direita: CDI, IPCA ou nada) e os blocos: o "Agora" (`AgoraPatrimonio`: vencimentos para avaliar e reaplicados para
+  conferir em âmbar; o próximo vencimento e a próxima queda do IR em cinza), os 4 `CartaoKpi` (patrimônio, rendeu no último
+  mês fechado com o % do CDI, rendeu em 12 meses, livre hoje), Evolução (`ColunasAportado`; uma série FIXADA na escala
+  dela), Onde está o dinheiro (a `RoscaOrigem` da Visão geral, que aceita `cor`/`rotulo`/`dica`; clicar na instituição ou no
+  tipo filtra), Quanto rendeu em cada mês (`ColunasRendeu`: em reais, com o tracejado do que o índice daria no mesmo
+  dinheiro — o `base` do `mesAMes` × o índice do mês | `ColunasPct`; a prop é `indice`, NUNCA `ref`, que o React engole),
+  o IR e quando ele cai, VENCIMENTOS (a linha do tempo por mês — já venceu, volta, reaplica, a marca de hoje, clicar filtra
+  — e as abas Próximos | Histórico: o valor do dia, o IR, o líquido e para onde foi; o que venceu há até 30 dias fica PARA
+  AVALIAR até o "Visto", `inv_aportes.vencimento_visto`, migration 026), o dinheiro que entrou e saiu (barras divergentes),
+  quando o dinheiro fica livre (o % é do último degrau) e cada investimento (a tabela que ordena, com a taxa ao ano
+  equivalente). Contas em `lib/patrimonio.js` (testada em `test/patrimonio.test.js`), desenho em
+  `components/patrimonio/BlocosPatrimonio.jsx` e `GraficoPatrimonio.jsx`. O FILTRO refaz a carteira e o mês a mês só com os
+  investimentos que passam. No celular, os blocos em ordem fixa (`BLOCOS_MOVEL`), sem o grid.
+  O PASSADO PELA CONTA (`mesAMes`): o "já estava aplicado" com a data do depósito entra no mês do depósito, com o aplicado,
+  e até o dia em que você olhou o banco vale o número dele descontado o índice de cada dia — é o que AINDA está lá (o
+  depósito que teve saques aparece no passado só com o que sobrou) e, por construção, rende exatamente a taxa nesses meses.
+  O `useCarteira` busca o CDI desde o depósito mais antigo. Os Indicadores leem o mesmo mês a mês ("Sua carteira × CDI × IPCA").
 - O EXTRATO do Nubank: RDB e "dinheiro guardado" voltam a ficar só como "Fora: investimento" (não viram aporte).
 
 ## Indicadores (06/11/2026, o mockup aprovado "Indicadores e importações", opção A)

@@ -9,7 +9,14 @@ const Caixa = ({ children }) => (
   <svg viewBox="0 0 120 64" className="block h-auto w-full rounded-[6px] bg-hx-f6f7f8 text-gray-300" aria-hidden="true">{children}</svg>
 );
 
-export default function MiniaturaWidget({ id }) {
+// O PATRIMÔNIO (09/11/2026) usa as mesmas: os números, o "Agora", as colunas, a rosca, as barras deitadas e a tabela.
+const DO_PATRIMONIO = {
+  pt_kpis: 'vg_kpis', pt_agora: 'vg_agora', pt_evolucao: 'vg_meses', pt_rendeu: 'vg_meses', pt_entrou: 'vg_meses',
+  pt_onde: 'vg_origem', pt_ir: 'vg_grupos', pt_livre: 'vg_grupos', pt_vencimentos: 'vg_meses', pt_investimentos: 'vg_tabela',
+};
+
+export default function MiniaturaWidget({ id: idPedido }) {
+  const id = DO_PATRIMONIO[idPedido] ?? idPedido;
   switch (id) {
     case 'vg_kpis':
       return (

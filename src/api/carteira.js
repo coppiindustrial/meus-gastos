@@ -32,6 +32,8 @@ export const atualizarAporte = (id, mudancas) => exigir(supabase.from('inv_aport
 export const excluirAporte = (id) => exigir(supabase.from('inv_aportes').delete().eq('id', id));
 // o aporte que venceu e voltou para a conta, mesmo num investimento que reaplica (migration 022)
 export const marcarNaoReaplicar = (ids) => (ids.length ? exigir(supabase.from('inv_aportes').update({ nao_reaplicar: true }).in('id', ids)) : null);
+// o vencimento que você já viu (o "Visto" do histórico do Patrimônio; migration 026)
+export const marcarVencimentoVisto = (ids) => (ids.length ? exigir(supabase.from('inv_aportes').update({ vencimento_visto: true }).in('id', ids)) : null);
 // A REAPLICAÇÃO AUTOMÁTICA: grava o aporte novo; o índice único de `reaplicado_de` recusa o repetido (duas telas abertas
 // ao mesmo tempo) — devolve false nesse caso, em vez de erro.
 export async function gravarReaplicacao(dados) {
