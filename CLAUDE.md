@@ -361,7 +361,7 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 
 ## Indicadores (06/11/2026, o mockup aprovado "Indicadores e importações", opção A)
 
-- `pages/Indicadores.jsx` (/indicadores, em Análises, depois de Patrimônio e Investimentos): o MERCADO, à parte do seu
+- `pages/Indicadores.jsx` (/indicadores, em Análises, entre Patrimônio e Investimentos — os painéis antes da tabela, 09/11/2026): o MERCADO, à parte do seu
   dinheiro. O grid da Visão geral (`GridPersonalizavel`, escopo `indicadores_v1`): os cinco números (Selic meta, CDI, IPCA
   de 12 meses, dólar e euro PTAX, com a variação no dia e em 12 meses), "Selic, IPCA e o juro real" (a Selic em degraus, o
   IPCA de 12 meses e a área entre os dois), "O que o mercado espera" (a Focus: IPCA, Selic e dólar do ano e dos dois

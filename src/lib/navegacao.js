@@ -41,10 +41,11 @@ export const GRUPOS = [
     items: [
       // O PAINEL e a TABELA separados (06/11/2026, como a Visão geral e os Lançamentos). Sem número nos Investimentos desde
       // a carteira do zero (07/11/2026): não há mais valor a atualizar, o valor de hoje é a conta de cada aporte.
+      // A ORDEM (09/11/2026, a pedido): os dois painéis primeiro (Patrimônio e Indicadores), a tabela da carteira por último.
       { to: '/patrimonio', label: 'Patrimônio' },
-      { to: '/investimentos', label: 'Investimentos' },
       // o do MERCADO (06/11/2026, o mockup "Indicadores e importações", opção A): Selic, CDI, IPCA, dólar, euro e a Focus
       { to: '/indicadores', label: 'Indicadores' },
+      { to: '/investimentos', label: 'Investimentos' },
     ],
   },
 ];
