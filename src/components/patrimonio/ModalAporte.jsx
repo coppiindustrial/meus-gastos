@@ -117,7 +117,7 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
 
   // a dica embaixo do Quanto já rendeu: a conta, o que falta para ela, ou (digitado diferente) a conta para usar
   const dicaRendeu = (() => {
-    if (rendeuAuto) return 'pela conta do CDI desde o depósito';
+    if (rendeuAuto) return conta.rendeu === 0 ? 'ainda não rendeu (depositado no dia em que você olhou)' : 'pela conta do CDI desde o depósito; sem saques, a "Valorização" do banco também vale';
     if (conta) {
       return lido.rendeu === conta.rendeu ? 'igual à conta do CDI desde o depósito' : (
         <>pela conta: {formatBRL(conta.rendeu)} · <button type="button" className="font-medium text-brand-600 hover:underline" onClick={() => setF((g) => ({ ...g, rendeuAuto: true, rendeu: valorParaCampo(conta.rendeu) }))}>usar</button></>
@@ -207,7 +207,7 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
             <div className="grid grid-cols-2 gap-3">
               <Campo rotulo="Quanto tem hoje no banco">
                 <input className="input text-right tabular-nums" inputMode="decimal" autoFocus={!!f.investimento_id && !editando} placeholder="0,00" value={f.total} onChange={(e) => mudar('total', e.target.value)} />
-                <p className="mt-1 text-[11.5px] text-gray-400">o "Valor Bruto"</p>
+                <p className="mt-1 text-[11.5px] text-gray-400">o "Valor Bruto" (num depósito de hoje, o que você depositou)</p>
               </Campo>
               <Campo rotulo="Em que dia você olhou"><CampoData value={f.lido} onChange={(v) => mudar('lido', v)} max={hoje} /></Campo>
             </div>
