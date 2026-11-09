@@ -10,7 +10,7 @@ import useLinhasAnimadas, { atributosLinha } from '../../lib/useLinhasAnimadas.j
 import { formatBRL } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
 import { lsGet, lsSet } from '../../lib/storage.js';
-import { diasEntre, ehIsento, fimDeSemana, nomeDoTipo, proximaQueda, rotuloTaxa } from '../../lib/carteira.js';
+import { aliquotaIOF, diasEntre, ehIsento, fimDeSemana, fimDoIOF, nomeDoTipo, proximaQueda, rotuloTaxa } from '../../lib/carteira.js';
 
 // A CARTEIRA (07/11/2026, a tabela A do mockup "Carteira por aportes"): a INSTITUIÇÃO é a faixa (a barra da cor dela, o
 // nome e os totais), o INVESTIMENTO recuado em duas linhas (o nome; o tipo, a taxa e quantos aportes) e os APORTES
@@ -22,6 +22,9 @@ import { diasEntre, ehIsento, fimDeSemana, nomeDoTipo, proximaQueda, rotuloTaxa 
 // O VENCIMENTO (08/11/2026, migration 022): o investimento que REAPLICA diz isso na linha dele e embaixo do vencimento de
 // cada aporte; o aporte que o app reaplicou sozinho tem "reaplicado" e a marca âmbar "conferir" (abre o ✎) até a pessoa
 // salvar; o encerrado que virou outro diz "reaplicado" no lugar de "voltou" e não tem mais o botão Reaplicar.
+// O IOF NA COLUNA DELE (09/11/2026, a pedido, o mockup "O IOF na carteira"): entre o IR e o Líquido, a alíquota do dia na
+// pílula âmbar, o valor e quando zera (o 30º dia); sem IOF, o traço. O IR fica só com o IR (sobre o que sobra depois do
+// IOF) e a queda dele. O balão do IOF tem a curva dos 30 dias com o dia de hoje aceso.
 
 export const CORES_INSTITUICAO = ['var(--serie-gastos)', 'var(--origem-fixo)', 'var(--serie-sobrou)', 'var(--serie-entradas)', 'var(--origem-manual)', 'var(--origem-cartao)'];
 const comCentavos = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -34,6 +37,24 @@ const dataCurta = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2
 const lerSet = (k) => { try { return new Set(JSON.parse(lsGet(k) ?? '[]')); } catch { return new Set(); } };
 const DIA_SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 const semana = (iso) => DIA_SEMANA[new Date(`${iso}T12:00:00Z`).getUTCDay()];
+const pctIOF = (idade) => `${Math.round(aliquotaIOF(idade) * 100)}%`;
+
+// A CURVA DO IOF: os 30 dias (96% no 1º … 3% no 29º, zero no 30º), o dia de hoje aceso
+function CurvaIOF({ idade }) {
+  return (
+    <div className="mt-2">
+      <div className="flex h-[30px] items-end gap-[1.5px]" aria-hidden="true">
+        {Array.from({ length: 30 }, (_, i) => {
+          const d = i + 1;
+          const p = aliquotaIOF(d);
+          const cor = d === idade ? '#d97706' : p ? 'color-mix(in srgb, #d97706 32%, transparent)' : 'color-mix(in srgb, currentColor 18%, transparent)';
+          return <span key={d} className="min-w-0 flex-1 rounded-t-[1px]" style={{ height: p ? `${(p / 0.96) * 100}%` : 2, background: cor }} />;
+        })}
+      </div>
+      <div className="mt-0.5 flex justify-between text-[10px] text-gray-400"><span>1º dia · 96%</span><span>hoje · {pctIOF(idade)}</span><span>30º · 0%</span></div>
+    </div>
+  );
+}
 
 const ACAO_ICONE = 'grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[7px] border border-gray-300 bg-white text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 active:bg-gray-200';
 const BotaoLinha = ({ titulo, onClick, children, perigo = false }) => (
@@ -75,11 +96,12 @@ const COLUNAS = [
   { id: 'aplicado', rotulo: 'Aplicado', desk: true, largura: 132 },
   { id: 'vale', rotulo: 'Vale hoje', largura: 132 },
   { id: 'rendeu', rotulo: 'Rendeu', largura: 132 },
-  { id: 'ir', rotulo: 'IR ≈', desk: true, largura: 184 },
+  { id: 'ir', rotulo: 'IR ≈', desk: true, largura: 168 },
+  { id: 'iof', rotulo: 'IOF ≈', desk: true, largura: 150 },
   { id: 'liquido', rotulo: 'Líquido ≈', desk: true, largura: 132 },
 ];
 const LARGURA_ACOES = 112;
-const LARGURA_MINIMA = 1280;
+const LARGURA_MINIMA = 1400;
 
 export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEncerrados, onEncerrados }) {
   const reais0 = formatos(false);
@@ -131,19 +153,31 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
     if (!l || l.tipo !== 'aporte') return null;
     const { ap, inv, pos, resgates } = l.item;
     const titulo = `${inv.nome} · ${formatDate(ap.origem === 'antigo' ? ap.aplicado_em ?? ap.data : ap.data)}`;
+    if (a.col === 'iof') {
+      const zera = fimDoIOF(pos.partida.desdeIR);
+      return {
+        titulo: `${titulo} · se resgatasse hoje`,
+        itens: [
+          { rotulo: 'Rendeu', valor: formatBRL(pos.rendeu), cor: COR_ENTRADAS },
+          { rotulo: `IOF ${pctIOF(pos.idade)} (${pos.idade} ${pos.idade === 1 ? 'dia' : 'dias'})`, valor: formatBRL(pos.iof) },
+        ],
+        extra: <CurvaIOF idade={pos.idade} />,
+        nota: `O IOF cai todo dia e zera em ${formatDate(zera)}, o 30º dia${pos.idade < 29 ? `; amanhã, ${pctIOF(pos.idade + 1)}` : ''}.${ehIsento(inv.tipo) ? ` ${nomeDoTipo(inv.tipo)} é isenta de IR, mas não de IOF.` : ''}`,
+      };
+    }
     if (a.col === 'ir') {
-      if (ehIsento(inv.tipo)) return { titulo, itens: [{ rotulo: 'Rendeu', valor: formatBRL(pos.rendeu) }, { rotulo: 'IR', valor: 'isento' }], nota: `${nomeDoTipo(inv.tipo)} é isenta de IR para pessoa física.` };
+      if (ehIsento(inv.tipo)) return { titulo, itens: [{ rotulo: 'Rendeu', valor: formatBRL(pos.rendeu) }, { rotulo: 'IR', valor: 'isento' }], nota: `${nomeDoTipo(inv.tipo)} é isenta de IR para pessoa física.${pos.iof ? ' O IOF dos 30 primeiros dias vale para ela também (a coluna ao lado).' : ''}` };
       const q = pos.semData ? null : proximaQueda(ap.origem === 'antigo' ? ap.aplicado_em : ap.data, hoje);
       return {
         titulo: `${titulo} · se resgatasse hoje`,
         itens: [
           { rotulo: 'Rendeu', valor: formatBRL(pos.rendeu), cor: COR_ENTRADAS },
-          ...(pos.iof ? [{ rotulo: `IOF (${pos.idade} ${pos.idade === 1 ? 'dia' : 'dias'}: menos de 30)`, valor: formatBRL(pos.iof) }] : []),
+          ...(pos.iof ? [{ rotulo: 'menos o IOF', valor: `− ${formatBRL(pos.iof)}` }, { rotulo: 'Base do IR', valor: formatBRL(Math.max(0, pos.rendeu) - pos.iof) }] : []),
           { rotulo: `IR ${pctAliq(pos.aliquota)}${pos.semData ? ' (pelo maior)' : ` (${pos.idade} dias)`}`, valor: formatBRL(pos.ir) },
           { rotulo: 'Líquido ≈', valor: formatBRL(pos.liquido) },
         ],
         nota: pos.semData ? 'Sem a data do depósito o IR vai pelo maior (22,5%): o líquido nunca fica a mais. Ponha a data no ✎ do aporte para acertar.'
-          : q ? `Em ${formatDate(q.data)} a alíquota cai para ${pctAliq(q.para)}.` : 'Já na menor alíquota (15%).',
+          : `${pos.iof ? 'O IR é sobre o que sobra do rendimento depois do IOF. ' : ''}${q ? `Em ${formatDate(q.data)} a alíquota cai para ${pctAliq(q.para)}.` : 'Já na menor alíquota (15%).'}`,
       };
     }
     const c = pos.conta;
@@ -180,6 +214,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
   ));
   const numTd = 'px-3 text-right tabular-nums';
   const ir = (t) => (t.ir > 0 ? reais(t.ir) : <span className="font-normal text-gray-400">—</span>);
+  const iof = (t) => (t.iof > 0 ? <span className="text-amber-700">{reais(t.iof)}</span> : <span className="font-normal text-gray-400">—</span>);
 
   const linha = ({ linha: l, estado }) => {
     const attrs = atributosLinha(l.id, estado);
@@ -203,6 +238,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
           <td className={`${faixa} ${numTd} text-[13.5px] font-semibold text-gray-900`}>{reais(g.totais.vale)}</td>
           <td className={`${faixa} ${numTd} font-semibold`}><span className={g.totais.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(g.totais.rendeu)}{reais(Math.abs(g.totais.rendeu))}</span></td>
           <td className={`${faixa} ${numTd} font-semibold text-gray-700 ${movel ? 'hidden' : ''}`}>{ir(g.totais)}</td>
+          <td className={`${faixa} ${numTd} font-semibold ${movel ? 'hidden' : ''}`}>{iof(g.totais)}</td>
           <td className={`${faixa} ${numTd} font-semibold text-gray-900 ${movel ? 'hidden' : ''}`}>{reais(g.totais.liquido)}</td>
           {acoesTd(faixa)}
         </tr>
@@ -244,6 +280,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
               <span className="block text-[11.5px] text-gray-500">{pctTexto(x.totais.aplicado ? x.totais.rendeu / x.totais.aplicado : null)}</span></>) : null}
           </td>
           <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{n ? (ehIsento(x.inv.tipo) ? <span className="text-gray-400">isento</span> : ir(x.totais)) : null}</td>
+          <td className={`${td} ${numTd} ${movel ? 'hidden' : ''}`}>{n ? iof(x.totais) : null}</td>
           <td className={`${td} ${numTd} font-semibold text-gray-900 ${movel ? 'hidden' : ''}`}>{n ? reais(x.totais.liquido) : null}</td>
           {acoesTd(`${td} px-2`, acoes && x.inv.ativo !== false && (
             <BotaoLinha titulo={`Aportar em ${x.inv.nome}`} onClick={() => acoes.aportar(x.inv)}><IconAplicar /></BotaoLinha>
@@ -288,13 +325,19 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
           <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`} onMouseMove={mover(l.id, 'ir')} onMouseLeave={balao.aoSair}>
             {ehIsento(inv.tipo) ? <span className="text-gray-400">isento</span> : (
               <span className="inline-flex items-center justify-end gap-1.5">
-                <Etiqueta tom={pos.semData ? 'ambar' : TOM_ALIQUOTA[pos.aliquota] ?? 'cinza'}>{pctAliq(pos.aliquota)}{pos.iof ? ' + IOF' : ''}</Etiqueta>
-                {reais(pos.ir + pos.iof)}
+                <Etiqueta tom={pos.semData ? 'ambar' : TOM_ALIQUOTA[pos.aliquota] ?? 'cinza'}>{pctAliq(pos.aliquota)}</Etiqueta>
+                {reais(pos.ir)}
               </span>
             )}
             {pos.semData ? <span className="block text-[11px] text-gray-400">sem a data do depósito</span>
               : queda && <span className="block text-[11px] text-gray-400">→ {pctAliq(queda.para)} em {dataCurta(queda.data)}</span>}
           </td>
+          {pos.iof > 0 ? (
+            <td className={`${td} ${numTd} cursor-help text-gray-600 ${movel ? 'hidden' : ''}`} onMouseMove={mover(l.id, 'iof')} onMouseLeave={balao.aoSair}>
+              <span className="inline-flex items-center justify-end gap-1.5"><Etiqueta tom="ambar">{pctIOF(pos.idade)}</Etiqueta>{reais(pos.iof)}</span>
+              <span className="block text-[11px] font-medium text-amber-700">zera em {dataCurta(fimDoIOF(pos.partida.desdeIR)).slice(0, 5)} · {30 - pos.idade} {30 - pos.idade === 1 ? 'dia' : 'dias'}</span>
+            </td>
+          ) : <td className={`${td} ${numTd} text-gray-400 ${movel ? 'hidden' : ''}`}>—</td>}
           <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{reais(pos.liquido)}</td>
           {acoesTd(`${td} px-2`, acoes && (
             <>
@@ -309,7 +352,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
     if (l.tipo === 'novo') {
       return (
         <tr key={l.id} {...attrs} className="group/add">
-          <td colSpan={8} className="relative h-[34px] cursor-pointer border-b border-gray-100 py-0 pr-3 text-[12.5px]" onClick={() => acoes.aportar(l.x.inv)}>
+          <td colSpan={9} className="relative h-[34px] cursor-pointer border-b border-gray-100 py-0 pr-3 text-[12.5px]" onClick={() => acoes.aportar(l.x.inv)}>
             <Trilho ultimo />
             <span className="flex items-center gap-2 font-medium text-gray-500 transition-colors group-hover/add:text-gray-800" style={{ paddingLeft: RECUO_APORTE - 4 }}>
               <CirculoMais borda="text-gray-400" />aporte em {l.x.inv.nome}
@@ -321,7 +364,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
     if (l.tipo === 'encCab') {
       return (
         <tr key={l.id} {...attrs}>
-          <td colSpan={8} className="h-[38px] border-b border-gray-200 bg-hx-f9fafb px-3 text-[12px] font-semibold text-gray-600">
+          <td colSpan={9} className="h-[38px] border-b border-gray-200 bg-hx-f9fafb px-3 text-[12px] font-semibold text-gray-600">
             Encerrados <span className="font-normal text-gray-400">· venceram (o dinheiro voltou para a conta ou virou um aporte novo) ou foram resgatados inteiros</span>
           </td>
         </tr>
@@ -338,6 +381,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
         <td className={`${td} ${numTd} ${movel ? 'hidden' : ''}`}>{reais(e.aplicado)}</td>
         <td className={`${td} ${numTd}`}>{reais(e.valor)}<span className="block text-[11px] text-gray-400">{seguinte ? 'reaplicado' : 'voltou'}</span></td>
         <td className={`${td} ${numTd}`}>{sinal(e.valor - e.aplicado)}{reais(Math.abs(e.valor - e.aplicado))}</td>
+        <td className={`${td} ${movel ? 'hidden' : ''}`} />
         <td className={`${td} ${movel ? 'hidden' : ''}`} />
         <td className={`${td} ${movel ? 'hidden' : ''}`} />
         {acoesTd(`${td} px-2`, acoes && (
@@ -400,7 +444,8 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
                 <span className={total.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(total.rendeu)}{reais(Math.abs(total.rendeu))}</span>
                 <span className="block text-[11.5px] font-normal text-gray-500">{pctTexto(total.aplicado ? total.rendeu / total.aplicado : null)}</span>
               </td>
-              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{reais(total.ir)}</td>
+              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{ir(total)}</td>
+              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} ${movel ? 'hidden' : ''}`}>{iof(total)}</td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-900 ${movel ? 'hidden' : ''}`}>{reais(total.liquido)}</td>
               {!movel && <td className="border-t border-gray-200 bg-hx-f9fafb" />}
             </tr>
@@ -409,7 +454,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
       </div>
       {(encerrados.length > 0 || !movel) && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-100 bg-hx-fafbfc px-4 py-2 text-[11.5px] text-gray-500">
-          {!movel && <span>Passe o mouse no <b className="font-semibold text-gray-700">Vale hoje</b> de um aporte para ver a conta, e no <b className="font-semibold text-gray-700">IR</b> para ver a alíquota.</span>}
+          {!movel && <span>Passe o mouse no <b className="font-semibold text-gray-700">Vale hoje</b> de um aporte para ver a conta, e no <b className="font-semibold text-gray-700">IR</b> e no <b className="font-semibold text-gray-700">IOF</b> para ver o imposto.</span>}
           <span className="flex-1" />
           {encerrados.length > 0 && (
             <button type="button" onClick={onEncerrados} className="text-[12px] font-medium text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline">
@@ -418,7 +463,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
           )}
         </div>
       )}
-      {info && <BalaoGrafico pos={balao.pos} largura={300} titulo={info.titulo} itens={info.itens} nota={info.nota} />}
+      {info && <BalaoGrafico pos={balao.pos} largura={300} titulo={info.titulo} itens={info.itens} nota={info.nota}>{info.extra}</BalaoGrafico>}
     </section>
   );
 }

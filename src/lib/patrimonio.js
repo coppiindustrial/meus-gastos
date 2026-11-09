@@ -3,7 +3,7 @@
 // da tela, o período dos gráficos de meses, os VENCIMENTOS (os próximos, pela conta, e o HISTÓRICO, com o que aconteceu),
 // a linha do tempo deles, quando o dinheiro fica livre, o IR por alíquota e as próximas quedas, e cada investimento.
 // Valores em centavos; datas 'AAAA-MM-DD'; competência 'AAAA-MM'.
-import { calendario, diasEntre, maisDias, noVencimento, posicaoDoAporte, proximaQueda, sugerirVencimento } from './carteira.js';
+import { aliquotaIOF, calendario, diasEntre, fimDoIOF, impostos, maisDias, noVencimento, posicaoDoAporte, proximaQueda, sugerirVencimento } from './carteira.js';
 import { addMeses, competenciaCurta } from './format.js';
 
 const compDe = (iso) => iso.slice(0, 7);
@@ -113,20 +113,28 @@ export function irPorAliquota(abertos) {
   const m = new Map();
   abertos.forEach((x) => {
     const a = x.pos.aliquota ?? 0;
-    const g = m.get(a) ?? { aliquota: a, vale: 0, ir: 0, aportes: 0 };
-    g.vale += x.pos.vale; g.ir += x.pos.ir + x.pos.iof; g.aportes += 1;
+    const g = m.get(a) ?? { aliquota: a, vale: 0, ir: 0, iof: 0, aportes: 0 };
+    g.vale += x.pos.vale; g.ir += x.pos.ir; g.iof += x.pos.iof; g.aportes += 1;
     m.set(a, g);
   });
   return [...m.values()].sort((a, b) => b.aliquota - a.aliquota);
 }
-// AS PRÓXIMAS QUEDAS DO IR: cada aporte que ainda vai para uma alíquota menor, na data em que cai, com quanto de imposto
-// isso tira sobre o que JÁ rendeu (a economia cresce até a data). O isento, o sem data e o que não rendeu ficam de fora.
+// AS PRÓXIMAS QUEDAS DO IMPOSTO: cada aporte que ainda vai para uma alíquota menor, na data em que cai, com quanto de
+// imposto isso tira sobre o que JÁ rendeu (a economia cresce até a data). O isento, o sem data e o que não rendeu ficam de
+// fora. O FIM DO IOF (09/11/2026, a pedido) também é uma queda (`tipo` 'iof': `de` = o IOF de hoje, `para` 0), a do 30º dia,
+// com o imposto que deixa de sair (o IOF menos o IR que passa a valer sobre ele) — vale também para a LCI e a LCA.
 export function proximasQuedas(abertos, hoje, n = 6) {
-  return abertos.filter((x) => x.pos.aliquota > 0 && !x.pos.semData && x.pos.rendeu > 0)
+  const doIR = abertos.filter((x) => x.pos.aliquota > 0 && !x.pos.semData && x.pos.rendeu > 0)
     .map((x) => {
       const q = proximaQueda(x.pos.partida.desdeIR, hoje);
-      return q && { data: q.data, item: x, de: x.pos.aliquota, para: q.para, economia: Math.round((x.pos.rendeu - x.pos.iof) * (x.pos.aliquota - q.para)) };
-    })
+      return q && { tipo: 'ir', data: q.data, item: x, de: x.pos.aliquota, para: q.para, economia: Math.round((x.pos.rendeu - x.pos.iof) * (x.pos.aliquota - q.para)) };
+    });
+  const doIOF = abertos.filter((x) => x.pos.iof > 0 && x.pos.partida.desdeIR)
+    .map((x) => {
+      const sem = impostos(Math.max(0, x.pos.rendeu), 30, x.pos.aliquota).ir;
+      return { tipo: 'iof', data: fimDoIOF(x.pos.partida.desdeIR), item: x, de: aliquotaIOF(x.pos.idade), para: 0, economia: x.pos.iof + x.pos.ir - sem };
+    });
+  return [...doIR, ...doIOF]
     .filter(Boolean)
     .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : b.economia - a.economia))
     .slice(0, n);

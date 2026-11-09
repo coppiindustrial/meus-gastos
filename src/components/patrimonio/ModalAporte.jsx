@@ -11,7 +11,7 @@ import { atualizarAporte, criarAporte, excluirResgate } from '../../api/carteira
 import { taxasDiarias } from '../../api/taxas.js';
 import { calcularValor, formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
-import { aliquotaIR, calendario, diaUtilAntes, diasEntre, fimDeSemana, lerAporte, maisDias, posicaoDoAporte, rendeuDoDeposito, rotuloTaxa, sugerirVencimento } from '../../lib/carteira.js';
+import { aliquotaIOF, aliquotaIR, calendario, fimDoIOF, diaUtilAntes, diasEntre, fimDeSemana, lerAporte, maisDias, posicaoDoAporte, rendeuDoDeposito, rotuloTaxa, sugerirVencimento } from '../../lib/carteira.js';
 
 // LANÇAR UM APORTE (07/11/2026, o mockup "Carteira por aportes"): um pop-up só, com duas abas.
 //   · DINHEIRO NOVO — o investimento, a data, o valor e o vencimento. Ponto final.
@@ -144,6 +144,19 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
     return { aplicado, pos, desde, ini, antes: ini < d.data, fds: d.origem === 'novo' && ini === d.data && fimDeSemana(ini) };
   })();
 
+  // O IMPOSTO DA PRÉVIA (09/11/2026): o IR e, nos 29 primeiros dias, o IOF do dia (de 96% a 3% do rendimento) e quando zera
+  const idadeHoje = previa?.desde ? Math.max(0, diasEntre(previa.desde, hoje)) : null;
+  const isentoPrevia = !!inv && ['lci', 'lca'].includes(inv.tipo);
+  const pctTxt = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+  const iofAte = previa?.desde && idadeHoje < 30 ? fimDoIOF(previa.desde) : null;
+  const textoImposto = (() => {
+    if (!previa) return '';
+    const ir = isentoPrevia ? 'isenta de IR' : previa.desde ? `IR ${pctTxt(aliquotaIR(idadeHoje))}` : `IR 22,5% (sem a data do ${f.modo === 'novo' ? 'aporte' : 'depósito'})`;
+    if (!iofAte) return ir;
+    const iof = idadeHoje === 0 ? 'IOF de 96% a 3% nos 29 primeiros dias' : `IOF ${pctTxt(aliquotaIOF(idadeHoje))}`;
+    return isentoPrevia ? `${ir} · ${iof}` : `${iof} + ${ir} do rendimento`;
+  })();
+
   const salvar = async (e) => {
     e?.preventDefault();
     setTentou(true);
@@ -254,7 +267,8 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
               )}
               <div className="flex justify-between gap-3"><span>Rende</span><span>{rotuloTaxa(inv.taxa, inv.indexador)} desde {formatDate(previa.ini)}{previa.antes ? ' (o dia útil antes do aporte)' : previa.fds ? ' (fim de semana: a partir do dia útil seguinte)' : ''}</span></div>
               {previa.pos && previa.ini < hoje && <div className="flex justify-between gap-3"><span>Vale hoje, pela conta</span><b className="tabular-nums text-gray-900">{formatBRL(previa.pos.vale)}</b></div>}
-              <div className="flex justify-between gap-3"><span>IR se resgatasse hoje</span><span>{previa.desde ? `${(aliquotaIR(Math.max(0, diasEntre(previa.desde, hoje))) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : `22,5% (sem a data do ${f.modo === 'novo' ? 'aporte' : 'depósito'})`}{['lci', 'lca'].includes(inv.tipo) ? ' · isento' : ''}</span></div>
+              <div className="flex justify-between gap-3"><span>Imposto se resgatasse hoje</span><span className="text-right">{textoImposto}</span></div>
+              {iofAte && <div className="flex justify-between gap-3"><span>O IOF zera em</span><span>{formatDate(iofAte)} (o 30º dia)</span></div>}
             </div>
           )}
         </div>

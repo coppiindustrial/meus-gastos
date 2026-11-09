@@ -280,6 +280,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   CORTANDO A FRAÇÃO DE CENTAVO como o banco (`impostos`, conta inteira em milésimos; 08/11/2026: o Nubank cobra o IR
   cortado, e arredondando o app ficava 7 centavos acima num investimento de 12 depósitos);
   o "já estava aplicado" sem `aplicado_em` vai pelo maior, 22,5% (`semData`: o líquido nunca fica a mais).
+  O IOF À VISTA (09/11/2026, o mockup "O IOF na carteira"): regressivo pela idade (96% no 1º dia … 3% no 29º, zero no 30º
+  — `fimDoIOF`), sai do rendimento ANTES do IR e vale também na LCI e na LCA. `somarPosicoes` devolve o `ir` e o `iof`
+  SEPARADOS (antes o `ir` era os dois). A carteira tem a COLUNA IOF (a pílula âmbar com o % do dia, o valor, "zera em
+  dd/mm · N dias"; o balão com a curva dos 30 dias; LARGURA_MINIMA 1400); o RESGATAR mostra o rendimento que sai junto,
+  o IOF, o IR e quanto chega na conta — o valor digitado é o que SAI, bruto (`impostoDoResgate`, testada) — e, com IOF,
+  quando zera e quanto chegaria a mais; a prévia do aporte diz o IOF do dia; o Patrimônio conta o fim do IOF como uma
+  queda (`proximasQuedas`, `tipo` 'iof').
   O RDB PLANEJADO DO NUBANK conta o rendimento desde o DIA ÚTIL ANTES da "Data da aplicação" (os dois depósitos conferidos
   em 08/11/2026, um de quinta e um de sábado); o RDB Resgate Diário e os CDBs, desde o próprio dia. Por isso o
   aporte tem "RENDE DESDE O DIA ÚTIL ANTERIOR" (`rende_dia_antes`, migration 024, a pedido): no dinheiro novo, a partida é o

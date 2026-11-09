@@ -105,7 +105,8 @@ export default function Investimentos() {
       { key: 'aplicado', label: 'Aplicado', tipo: 'dinheiro', map: (r) => r.item.pos.aplicado / 100 },
       { key: 'vale', label: 'Vale hoje', tipo: 'dinheiro', map: (r) => r.item.pos.vale / 100 },
       { key: 'rendeu', label: 'Rendeu', tipo: 'dinheiro', map: (r) => r.item.pos.rendeu / 100 },
-      { key: 'ir', label: 'IR ≈', tipo: 'dinheiro', map: (r) => (r.item.pos.ir + r.item.pos.iof) / 100 },
+      { key: 'ir', label: 'IR ≈', tipo: 'dinheiro', map: (r) => r.item.pos.ir / 100 },
+      { key: 'iof', label: 'IOF ≈', tipo: 'dinheiro', map: (r) => r.item.pos.iof / 100 },
       { key: 'liq', label: 'Líquido ≈', tipo: 'dinheiro', map: (r) => r.item.pos.liquido / 100 },
     ]);
   };

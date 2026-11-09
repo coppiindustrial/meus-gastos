@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diaUtilAntes, impostos, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
+  aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diaUtilAntes, fimDoIOF, impostoDoResgate, impostos, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
   linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
   rendeuDoDeposito, rotuloTaxa, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
 } from '../src/lib/carteira.js';
@@ -376,4 +376,34 @@ test('o vencimento: o líquido do dia (IR e IOF pela idade) e o que já tinha ve
     novo('2026-04-07', 100, { id: 'e', vencimento: '2026-09-07', nao_reaplicar: true }),
   ];
   assert.deepEqual(vencidosAntesDeReaplicar(aportes, 'i', HOJE), ['a']);
+});
+
+test('o IOF: o dia em que zera, o imposto do resgate (bruto) e os totais com o IR e o IOF separados', () => {
+  assert.equal(fimDoIOF('2026-10-11'), '2026-11-10'); // a idade 30
+  assert.equal(aliquotaIOF(29), 0.03);
+  const a = novo('2026-10-11', 1500000); // 27 dias em 07/11: IOF de 10%
+  const p = posicaoDoAporte(a, inv(102.5), [], cal, HOJE);
+  // tudo: o mesmo imposto da posição
+  const tudo = impostoDoResgate(p);
+  assert.deepEqual([tudo.sai, tudo.rendimento, tudo.iof, tudo.ir, tudo.chega], [p.vale, p.rendeu, p.iof, p.ir, p.liquido]);
+  assert.equal(tudo.aliquotaIOF, 0.1);
+  assert.equal(tudo.fimIOF, '2026-11-10');
+  assert.equal(tudo.semIOF, Math.floor(p.rendeu * 0.225)); // sem o IOF, o IR sobre o rendimento inteiro
+  assert.ok(tudo.semIOF < tudo.iof + tudo.ir);
+  // a metade: a metade do rendimento, e o imposto sobre ela
+  const metade = impostoDoResgate(p, Math.round(p.vale / 2));
+  assert.equal(metade.rendimento, Math.round(p.rendeu / 2));
+  assert.deepEqual([metade.iof, metade.ir], [Math.floor(metade.rendimento * 0.1), Math.floor((metade.rendimento - metade.iof) * 0.225)]);
+  assert.equal(metade.chega, metade.sai - metade.iof - metade.ir);
+  // sem IOF (mais de 30 dias): nada de IOF nem de "a partir de"
+  const velho = impostoDoResgate(posicaoDoAporte(novo('2026-06-03', 1000000), inv(100), [], cal, HOJE), 100000);
+  assert.deepEqual([velho.iof, velho.semIOF, velho.fimIOF], [0, null, null]);
+  // a LCI paga o IOF, não o IR
+  const lci = impostoDoResgate(posicaoDoAporte(novo('2026-10-11', 1000000), inv(95, { tipo: 'lci' }), [], cal, HOJE));
+  assert.ok(lci.iof > 0);
+  assert.equal(lci.ir, 0);
+  // os totais: cada imposto na sua soma, o líquido sem os dois
+  const t = somarPosicoes([{ pos: p }, { pos: posicaoDoAporte(novo('2026-06-03', 1000000), inv(100), [], cal, HOJE) }]);
+  assert.equal(t.iof, p.iof);
+  assert.equal(t.liquido, t.vale - t.ir - t.iof);
 });

@@ -77,7 +77,8 @@ export function AgoraPatrimonio({ historico, proximos, quedas, onHistorico, onPr
       {queda && (
         <span className={`${PILULA} cursor-default`} style={{ background: ESTADO.bg, color: ESTADO.cor }}
           title={`Sobre o que já rendeu, o imposto cai ≈ ${formatBRL(queda.economia)}.`}>
-          O IR cai em {formatDate(queda.data).slice(0, 5)} ({queda.item.inv.nome}, {aliqTexto(queda.de)} → {aliqTexto(queda.para)})
+          {queda.tipo === 'iof' ? `O IOF zera em ${formatDate(queda.data).slice(0, 5)} (${queda.item.inv.nome}, hoje ${aliqTexto(queda.de)})`
+            : `O IR cai em ${formatDate(queda.data).slice(0, 5)} (${queda.item.inv.nome}, ${aliqTexto(queda.de)} → ${aliqTexto(queda.para)})`}
         </span>
       )}
     </>
@@ -252,12 +253,12 @@ export function BlocoVencimentos({ venc, linha, aba, onAba, cores, comVisto, onV
 
 // ------------------------------------------------------------ o IR
 // O IR E QUANDO ELE CAI: o patrimônio por alíquota (a barra e a legenda, que acendem juntas) e as próximas quedas, cada
-// uma com quanto de imposto ela tira sobre o que já rendeu.
-export function BlocoIR({ grupos, quedas, total, irTotal }) {
+// uma com quanto de imposto ela tira sobre o que já rendeu. O FIM DO IOF (09/11/2026) é uma queda também, com a marca âmbar.
+export function BlocoIR({ grupos, quedas, total, irTotal, iofTotal = 0 }) {
   const [realce, setRealce] = useState(null);
   return (
     <section className="card flex flex-col overflow-hidden p-5">
-      <TituloBloco titulo="O IR e quando ele cai" sub={`se resgatasse tudo hoje: ${formatBRL(irTotal)}`} />
+      <TituloBloco titulo="O IR e quando ele cai" sub={`se resgatasse tudo hoje: ${formatBRL(irTotal)} de IR${iofTotal ? ` e ${formatBRL(iofTotal)} de IOF` : ''}`} />
       <div className="min-h-0 flex-1 overflow-auto">
         <div className="flex h-3 overflow-hidden rounded-full bg-gray-100" onMouseLeave={() => setRealce(null)}>
           {grupos.map((g) => (
@@ -271,17 +272,19 @@ export function BlocoIR({ grupos, quedas, total, irTotal }) {
               className={`flex min-w-0 items-center gap-2 rounded-[6px] px-1.5 py-1 text-left text-[12px] transition-[background-color,opacity] ${realce === g.aliquota ? 'bg-gray-100' : 'hover:bg-gray-50'} ${realce !== null && realce !== g.aliquota ? 'opacity-50' : ''}`}>
               <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: CORES_ALIQUOTA[g.aliquota] ?? CORES_ALIQUOTA[0] }} />
               <b className="font-semibold text-gray-800">{aliqTexto(g.aliquota)}</b>
-              <span className="min-w-0 truncate tabular-nums text-gray-500">{brlCurto(g.vale)} · IR {brlCurto(g.ir)}</span>
+              <span className="min-w-0 truncate tabular-nums text-gray-500">{brlCurto(g.vale)} · IR {brlCurto(g.ir)}{g.iof ? ` · IOF ${brlCurto(g.iof)}` : ''}</span>
             </button>
           ))}
         </div>
         <div className="mb-1 mt-3 text-[10.5px] font-semibold uppercase tracking-[0.05em] text-gray-500">As próximas quedas</div>
-        {!quedas.length ? <p className="py-2 text-[12.5px] text-gray-500">Nada cai de alíquota daqui para a frente.</p> : (
+        {!quedas.length ? <p className="py-2 text-[12.5px] text-gray-500">Nada cai de imposto daqui para a frente.</p> : (
           <ul className="divide-y divide-gray-100">
             {quedas.map((q) => (
-              <li key={q.item.ap.id} className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-[12.5px]">
+              <li key={`${q.tipo}:${q.item.ap.id}`} className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-2 py-1.5 text-[12.5px]">
                 <span className="tabular-nums text-gray-700">{dataCurta(q.data)}</span>
-                <span className="min-w-0 truncate text-gray-800">{q.item.inv.nome}<span className="text-gray-400"> · {aliqTexto(q.de)} → {aliqTexto(q.para)}</span></span>
+                {q.tipo === 'iof' ? (
+                  <span className="flex min-w-0 items-center gap-1.5 text-gray-800"><span className="truncate">{q.item.inv.nome}<span className="text-gray-400"> · o IOF zera (hoje {aliqTexto(q.de)})</span></span><Etiqueta tom="ambar">IOF</Etiqueta></span>
+                ) : <span className="min-w-0 truncate text-gray-800">{q.item.inv.nome}<span className="text-gray-400"> · {aliqTexto(q.de)} → {aliqTexto(q.para)}</span></span>}
                 <span className="whitespace-nowrap tabular-nums text-green-700" title="O imposto a menos sobre o que já rendeu (cresce até a data)">≈ −{formatBRL(q.economia)}</span>
               </li>
             ))}

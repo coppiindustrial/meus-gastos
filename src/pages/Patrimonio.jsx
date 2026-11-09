@@ -177,7 +177,7 @@ export default function Patrimonio() {
       <CardAutoAltura id="pt_kpis">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
           <CartaoKpi compacto icone="patrimonio" cor="var(--serie-gastos)" rotulo="Patrimônio" valor={formatBRL(t.vale)} valorCurto={brlCurto(t.vale)}
-            sub={`≈ ${brlCurto(t.liquido)} líquido · IR ≈ ${brlCurto(t.ir)}`} serie={ultimos.map((m) => ({ competencia: m.competencia, valor: m.total }))} />
+            sub={`≈ ${brlCurto(t.liquido)} líquido · IR ≈ ${brlCurto(t.ir)}${t.iof ? ` · IOF ≈ ${brlCurto(t.iof)}` : ''}`} serie={ultimos.map((m) => ({ competencia: m.competencia, valor: m.total }))} />
           <CartaoKpi compacto icone="entradas" cor={COR_ENTRADAS} rotulo={ult ? `Rendeu em ${competenciaCurta(ult.competencia)}` : 'Rendeu no mês'}
             valor={ult ? formatBRL(ult.rendeu) : '—'} valorCurto={ult ? brlCurto(ult.rendeu) : '—'} corValor={ult && ult.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}
             sub={ult ? [`${pct(ult.pct)} no mês`, d.cdiMes?.[ult.competencia] ? `${Math.round((ult.pct / d.cdiMes[ult.competencia]) * 100)}% do CDI` : null].filter(Boolean).join(' · ') : 'no fim do 1º mês fechado'}
@@ -249,7 +249,7 @@ export default function Patrimonio() {
             </div>
           </section>
         );
-      case 'pt_ir': return <BlocoIR grupos={irPorAliquota(abertos)} quedas={quedas} total={t.vale} irTotal={t.ir} />;
+      case 'pt_ir': return <BlocoIR grupos={irPorAliquota(abertos)} quedas={quedas} total={t.vale} irTotal={t.ir} iofTotal={t.iof} />;
       case 'pt_vencimentos':
         return <BlocoVencimentos venc={venc} linha={linha} aba={vencAba} onAba={setVencAba} cores={cores} comVisto={comVisto} onVisto={marcarVisto} onInvestimentos={movel ? undefined : ir} />;
       case 'pt_entrou':

@@ -50,6 +50,24 @@ export function impostos(ganho, idade, aliquota) {
   const ir = Math.floor(((ganho - iof) * Math.round(aliquota * 1000)) / 1000);
   return { iof, ir };
 }
+// O DIA EM QUE O IOF ZERA: o 30º dia depois da data do aporte (a idade 30; até a 29ª, 96% … 3% do rendimento).
+export const fimDoIOF = (desde) => maisDias(desde, 30);
+// O IMPOSTO DE UM RESGATE (09/11/2026, a pedido): o valor digitado é o que SAI do aporte (bruto, o que se grava). Sai junto
+// a mesma fração do rendimento (o aplicado e o rendido diminuem na mesma proporção), e o IOF e o IR são sobre ela, pela
+// idade e alíquota da posição no dia. `valor` null = tudo. Devolve { sai, rendimento, iof, ir, chega, aliquotaIOF,
+// semIOF: o imposto se fosse a partir do fim do IOF (o IR sobre o rendimento inteiro), fimIOF }.
+export function impostoDoResgate(pos, valor = null) {
+  if (!pos || pos.encerrado || !(pos.vale > 0)) return null;
+  const sai = valor === null ? pos.vale : Math.min(valor, pos.vale);
+  const rendimento = Math.max(0, Math.round(Math.max(0, pos.rendeu) * (sai / pos.vale)));
+  const aliquota = pos.aliquota ?? 0;
+  const { iof, ir } = impostos(rendimento, pos.idade, aliquota);
+  const semIOF = iof ? impostos(rendimento, 30, aliquota).ir : null;
+  return {
+    sai, rendimento, iof, ir, chega: sai - iof - ir, aliquota, aliquotaIOF: iof ? aliquotaIOF(pos.idade) : 0,
+    semIOF, fimIOF: iof && pos.partida?.desdeIR ? fimDoIOF(pos.partida.desdeIR) : null,
+  };
+}
 // a próxima vez que a alíquota cai (no dia seguinte ao fim da faixa): { data, para } ou null (já na menor)
 export function proximaQueda(desde, hoje) {
   const dias = diasEntre(desde, hoje);
@@ -276,12 +294,13 @@ export function vencidosAntesDeReaplicar(aportes, investimentoId, hoje) {
 }
 
 // ------------------------------------------------------------ a carteira
-// Os totais de uma lista de aportes: o vale e o aplicado pelos EXATOS, arredondados no fim; o IR, a soma dos de cada um.
+// Os totais de uma lista de aportes: o vale e o aplicado pelos EXATOS, arredondados no fim; o IR e o IOF, cada um a soma
+// dos de cada aporte (09/11/2026: SEPARADOS — a tabela tem uma coluna para cada; antes o `ir` era os dois juntos).
 export function somarPosicoes(lista) {
-  let vale = 0; let aplicado = 0; let ir = 0;
-  lista.forEach((x) => { vale += x.pos.exato.vale; aplicado += x.pos.exato.aplicado; ir += x.pos.ir + x.pos.iof; });
+  let vale = 0; let aplicado = 0; let ir = 0; let iof = 0;
+  lista.forEach((x) => { vale += x.pos.exato.vale; aplicado += x.pos.exato.aplicado; ir += x.pos.ir; iof += x.pos.iof; });
   const v = Math.round(vale); const a = Math.round(aplicado);
-  return { aplicado: a, vale: v, rendeu: v - a, ir, liquido: v - ir };
+  return { aplicado: a, vale: v, rendeu: v - a, ir, iof, liquido: v - ir - iof };
 }
 const somar = somarPosicoes;
 const ordemAporte = (a) => (a.origem === 'antigo' ? a.aplicado_em ?? a.data : a.data);
