@@ -114,11 +114,10 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
     setLinhas((ls) => [...ls, { ...linhaNovaDoCadastro(id, nomeDoGrupo(grupoId)), grupo: grupoId }]);
     focar(`[data-cad-linha="${id}"][data-cad-col="nome"]`);
   };
+  // a instituição nova vem VAZIA (09/11/2026, a pedido): o investimento entra pelo "Adicionar investimento" dela
   const novaInstituicao = () => {
     const g = { id: novoId('g'), nome: '', orig: '' };
     setGrupos((gs) => [...gs, g]);
-    const id = novoId('novo');
-    setLinhas((ls) => [...ls, { ...linhaNovaDoCadastro(id, ''), grupo: g.id }]);
     focar(`[data-cad-grupo="${g.id}"]`);
   };
   // TIRAR A INSTITUIÇÃO NOVA (09/11/2026, a pedido: antes só fechando e abrindo o cadastro): os investimentos novos dela
