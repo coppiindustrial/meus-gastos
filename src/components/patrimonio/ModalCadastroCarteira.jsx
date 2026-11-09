@@ -8,7 +8,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { atualizarInvestimento, criarInvestimento, excluirInvestimento, marcarNaoReaplicar } from '../../api/carteira.js';
 import {
-  TIPOS, dadosDoCadastro, diferencaDoCadastro, linhaDoCadastro, linhaNovaDoCadastro, linhaVaziaDoCadastro, validarCadastro,
+  INDEXADORES, TIPOS, dadosDoCadastro, diferencaDoCadastro, linhaDoCadastro, linhaNovaDoCadastro, linhaVaziaDoCadastro, validarCadastro,
   vencidosAntesDeReaplicar,
 } from '../../lib/carteira.js';
 
@@ -26,6 +26,8 @@ import {
 // O FIM DE SEMANA (08/11/2026, migration 023): ao lado do "um dia antes", "fim de semana → seg." — a XP passa o vencimento
 // do sábado ou do domingo para a segunda; o Nubank vence no dia. Só muda a sugestão do vencimento. `com023`: sem a
 // migration, o interruptor fica apagado.
+// O ÍNDICE (08/11/2026, migration 025): "Rende" é o índice (% do CDI · IPCA + · Prefixado) e a taxa, que muda de sentido
+// com ele (102,5% do CDI · IPCA + 6,5% ao ano · 12% ao ano). `com025`: sem a migration, o índice fica no CDI.
 
 // O id da linha nova leva a hora: o contador volta a 0 quando o Vite recarrega o arquivo, e o pop-up aberto guardava as
 // linhas de antes — duas com o mesmo id, e digitar numa mudava as duas.
@@ -36,7 +38,7 @@ const PRAZOS = [{ value: '', label: 'sem sugestão' }, ...[3, 6, 12, 18, 24, 36,
 const RESGATES = [{ value: 'diaria', label: 'a qualquer hora' }, { value: 'vencimento', label: 'só no vencimento' }];
 const NO_VENCIMENTO = [{ value: 'conta', label: 'volta para a conta' }, { value: 'reaplica', label: 'reaplica sozinho' }];
 
-export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesPorInv = {}, hoje, com022 = true, com023 = true, onFechar, onSalvo }) {
+export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesPorInv = {}, hoje, com022 = true, com023 = true, com025 = true, onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   // os grupos: cada instituição, com o nome editável (`orig` = o de antes)
@@ -111,7 +113,8 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
       const reaplica = passamAReaplicar.length ? ` Os próximos vencimentos de ${passamAReaplicar.map((l) => `"${l.nome.trim()}"`).join(', ')} o app reaplica sozinho.` : '';
       toast.success(`${nAlt === 1 ? 'Alteração salva.' : `${nAlt} alterações salvas.`}${reaplica}`);
     } catch (err) {
-      toast.error(/vence_dia_util/i.test(err.message) ? 'Falta aplicar a migration 023 (o vencimento no fim de semana).'
+      toast.error(/indexador/i.test(err.message) ? 'Falta aplicar a migration 025 (o índice do investimento).'
+        : /vence_dia_util/i.test(err.message) ? 'Falta aplicar a migration 023 (o vencimento no fim de semana).'
         : /no_vencimento|nao_reaplicar/i.test(err.message) ? 'Falta aplicar a migration 022 (o que acontece no vencimento).'
         : /inv_cadastro|schema cache|does not exist/i.test(err.message) ? 'Falta aplicar a migration 020 (a carteira do zero).' : err.message);
     }
@@ -134,16 +137,16 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
   const ativos = linhas.filter((l) => !l.excluir && l.ativo && !linhaVaziaDoCadastro(l)).length;
 
   return (
-    <Modal open onClose={fechar} title="Cadastro dos investimentos" maxWidth="max-w-[1440px]" padding="p-0"
+    <Modal open onClose={fechar} title="Cadastro dos investimentos" maxWidth="max-w-[1560px]" padding="p-0"
       subtitulo={`${plural(ativos, 'ativo', 'ativos')} · o que cada um é; o dinheiro entra pelos aportes`}>
       <div ref={caixaRef} className="max-h-[66vh] overflow-auto [scrollbar-gutter:stable]">
-        <table className="w-full min-w-[1350px] table-fixed border-separate border-spacing-0 text-[12.5px]">
+        <table className="w-full min-w-[1480px] table-fixed border-separate border-spacing-0 text-[12.5px]">
           <colgroup>
-            <col /><col style={{ width: 124 }} /><col style={{ width: 124 }} /><col style={{ width: 160 }} />
+            <col /><col style={{ width: 124 }} /><col style={{ width: 252 }} /><col style={{ width: 160 }} />
             <col style={{ width: 444 }} /><col style={{ width: 176 }} /><col style={{ width: 64 }} /><col style={{ width: 70 }} />
           </colgroup>
           <thead className="sticky top-0 z-10"><tr>
-            <th className={th}>Nome</th><th className={th}>Tipo</th><th className={th}>Rende (% do CDI)</th><th className={th}>Resgate</th>
+            <th className={th}>Nome</th><th className={th}>Tipo</th><th className={th}><Tooltip label="O índice e a taxa: 102,5% do CDI · IPCA + 6,5% ao ano · prefixado a 12% ao ano. LCI e LCA (o Tipo) são isentas de IR em qualquer índice."><span className="cursor-help">Rende</span></Tooltip></th><th className={th}>Resgate</th>
             <th className={th}>Vence em</th>
             <th className={th}><Tooltip label={'Volta para a conta: o aporte encerra no dia. Reaplica sozinho: no dia, o app lança o aporte novo com o valor menos o IR (o IR recomeça) e o prazo de "Vence em".'}><span className="cursor-help">No vencimento</span></Tooltip></th>
             <th className={`${th} text-right`}>Aportes</th><th className={th} />
@@ -176,9 +179,13 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
                       <td className={td}><SelectSimples value={l.tipo} onChange={(v) => muda(l.id, 'tipo', v)} opcoes={TIPOS} disabled={l.excluir} compacto /></td>
                       <td className={td}>
                         <span className="flex items-center gap-1.5">
-                          <input data-cad-col="taxa" onKeyDown={aoTeclar} className={`${inp} !w-[84px] text-right tabular-nums ${ver(l.id, 'taxa')}`} inputMode="decimal"
-                            value={l.taxa} placeholder="100" disabled={l.excluir} onChange={(e) => muda(l.id, 'taxa', e.target.value)} aria-label={`Taxa de ${l.nome || 'investimento'}`} />
-                          <span className="whitespace-nowrap text-[12px] text-gray-500">%</span>
+                          <div className="w-[112px] shrink-0">
+                            {com025 ? <SelectSimples value={l.indexador ?? 'cdi'} onChange={(v) => muda(l.id, 'indexador', v)} opcoes={INDEXADORES} disabled={l.excluir} compacto />
+                              : <Tooltip label="Falta aplicar a migration 025 (o índice do investimento)"><span className="flex h-8 items-center px-2 text-[12px] text-gray-400">% do CDI</span></Tooltip>}
+                          </div>
+                          <input data-cad-col="taxa" onKeyDown={aoTeclar} className={`${inp} !w-[72px] text-right tabular-nums ${ver(l.id, 'taxa')}`} inputMode="decimal"
+                            value={l.taxa} placeholder={l.indexador === 'ipca' ? '6,5' : l.indexador === 'pre' ? '12' : '100'} disabled={l.excluir} onChange={(e) => muda(l.id, 'taxa', e.target.value)} aria-label={`Taxa de ${l.nome || 'investimento'}`} />
+                          <span className="whitespace-nowrap text-[12px] text-gray-500">{l.indexador === 'cdi' || !l.indexador ? '%' : '% a.a.'}</span>
                         </span>
                       </td>
                       <td className={td}><SelectSimples value={l.resgate} onChange={(v) => muda(l.id, 'resgate', v)} opcoes={RESGATES} disabled={l.excluir} compacto /></td>

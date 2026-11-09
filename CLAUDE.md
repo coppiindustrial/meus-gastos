@@ -251,7 +251,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   `movimentos_investimento`, `depositos_investimento`) SAEM DO BANCO pela migration 021 (08/11/2026, com o OK do usuário;
   sem `cascade`); a cópia do que havia nelas está em `dados/backup-carteira-antiga-2026-11-08.json`, fora do git.
 - O MODELO (migration 020): `inv_cadastro` = o que o investimento É (nome, a instituição em TEXTO, tipo cdb/rdb/lci/lca/outro,
-  a taxa em % do CDI, resgate `diaria` | `vencimento`, `prazo_meses` + `vence_dia_antes` + `vence_dia_util` que só SUGEREM o
+  o ÍNDICE e a taxa — `indexador` (migration 025, 08/11/2026, a pedido: LCI e LCA prefixadas e IPCA+) 'cdi' (a taxa é o %
+  do CDI; o padrão) | 'pre' (prefixado: (1 + taxa)^(1/252) por dia útil, exato) | 'ipca' (IPCA + taxa: isso vezes o IPCA do
+  mês repartido pelos dias úteis dele, (1 + IPCA)^(1/du) — o mês fecha no índice; o mês sem IPCA publicado vai com o
+  último, `proj`, e pode diferir do banco, que usa a projeção dele e às vezes o IPCA com defasagem; no Tesouro IPCA+, a
+  CURVA, não o preço de venda). O IPCA mora no calendário (`calendario(cdi, ate, ipca)`: `[d, cdi, proj, ipcaDia,
+  ipcaProj]`, cada dia COPIADO — anotar o dia na série de entrada vazava o IPCA para outros calendários); `fator(cal, de,
+  ate, taxa, indexador)`; `rotuloTaxa(taxa, indexador)`. resgate `diaria` | `vencimento`, `prazo_meses` + `vence_dia_antes` + `vence_dia_util` que só SUGEREM o
   vencimento do aporte, ativo, ordem; o `vence_dia_util` — migration 023, 08/11/2026 — passa o sábado e o domingo para a
   segunda, como a XP; desligado, o padrão, vence no dia, como o Nubank: antes era sempre a segunda, e o Nubank saía um ou
   dois dias depois do banco) · `inv_aportes` = o dinheiro que entrou: origem `novo` (a data e o valor aplicado) ou `antigo` =

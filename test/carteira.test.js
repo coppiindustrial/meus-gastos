@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diaUtilAntes, impostos, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
   linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
-  rendeuDoDeposito, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
+  rendeuDoDeposito, rotuloTaxa, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
 } from '../src/lib/carteira.js';
 
 // O CDI de cada dia útil de 01/04 a 05/11/2026 (a série 12 do Banco Central, dado público), como `api/taxas.js` entrega.
@@ -50,6 +50,47 @@ test('o dia do banco: sábado, domingo e feriado começam no dia útil seguinte'
   assert.deepEqual([f.dias, f.proj], [2, 1]);
   // sem as taxas o valor fica no da partida
   assert.equal(posicaoDoAporte(novo('2026-09-12', 1000000), inv(100), [], [], HOJE).vale, 1000000);
+});
+
+test('o índice: prefixado e IPCA + taxa, dia útil a dia útil (migration 025)', () => {
+  // prefixado a 12% ao ano: n dias úteis = 1,12^(n/252)
+  const pre = fator(cal, '2026-09-01', '2026-10-01', 12, 'pre');
+  assert.ok(Math.abs(pre.f - Math.pow(1.12, pre.dias / 252)) < 1e-12);
+  const ap = novo('2026-09-01', 1000000);
+  assert.equal(posicaoDoAporte(ap, inv(12, { indexador: 'pre' }), [], cal, '2026-10-01').vale, Math.round(1000000 * Math.pow(1.12, pre.dias / 252)));
+  // IPCA+: o mês fechado sobe exatamente o IPCA dele (vezes a taxa ao ano pelos dias úteis)
+  const ipca = { '2026-08': 0.002, '2026-09': 0.0048, '2026-10': -0.001 };
+  const c = calendario(CDI, HOJE, ipca);
+  const set = fator(c, '2026-09-01', '2026-10-01', 0, 'ipca');
+  assert.ok(Math.abs(set.f - 1.0048) < 1e-12);
+  assert.equal(set.proj, 0);
+  const comTaxa = fator(c, '2026-09-01', '2026-10-01', 6.5, 'ipca');
+  assert.ok(Math.abs(comTaxa.f - 1.0048 * Math.pow(1.065, comTaxa.dias / 252)) < 1e-12);
+  assert.ok(Math.abs(fator(c, '2026-10-01', '2026-11-01', 0, 'ipca').f - 0.999) < 1e-12); // deflação também
+  // novembro ainda sem IPCA: vai com o último (outubro) e conta como projetado
+  const nov = fator(c, '2026-11-03', HOJE, 0, 'ipca');
+  assert.ok(nov.dias > 0 && nov.proj === nov.dias);
+  // sem o IPCA (o Banco Central não respondeu): só a taxa, tudo projetado
+  const semIpca = fator(cal, '2026-09-01', '2026-10-01', 6.5, 'ipca');
+  assert.ok(Math.abs(semIpca.f - Math.pow(1.065, semIpca.dias / 252)) < 1e-12);
+  assert.equal(semIpca.proj, semIpca.dias);
+  // o CDI segue igual com o IPCA no calendário
+  assert.equal(fator(c, '2026-09-01', '2026-10-01', 100).f, fator(cal, '2026-09-01', '2026-10-01', 100).f);
+  // o quanto já rendeu de um depósito IPCA+ pela mesma conta
+  const pos = posicaoDoAporte(ap, inv(6.5, { indexador: 'ipca', tipo: 'lci' }), [], c, HOJE);
+  const r = rendeuDoDeposito({ total: pos.vale, deposito: '2026-09-01', lido: HOJE, taxa: 6.5, indexador: 'ipca' }, c);
+  assert.ok(Math.abs(r.aplicado - 1000000) <= 1);
+  assert.equal(pos.ir, 0); // LCI: isenta em qualquer índice
+  // os rótulos e o cadastro
+  assert.deepEqual([rotuloTaxa(102.5), rotuloTaxa(6.5, 'ipca'), rotuloTaxa(12, 'pre')], ['102,5% do CDI', 'IPCA + 6,5%', '12% ao ano']);
+  const orig = { id: 'x', nome: 'LCI', instituicao: 'XP', tipo: 'lci', taxa: 6.5, resgate: 'vencimento', prazo_meses: 24, ativo: true };
+  const l = linhaDoCadastro(orig);
+  assert.equal(l.indexador, 'cdi');
+  assert.equal('indexador' in dadosDoCadastro(l), false);
+  assert.equal(dadosDoCadastro({ ...l, indexador: 'ipca' }).indexador, 'ipca');
+  assert.deepEqual(diferencaDoCadastro({ ...l, indexador: 'ipca' }), { indexador: 'ipca' });
+  assert.deepEqual(diferencaDoCadastro(linhaDoCadastro({ ...orig, indexador: 'pre' })), {});
+  assert.deepEqual(diferencaDoCadastro({ ...linhaDoCadastro({ ...orig, indexador: 'pre' }), indexador: 'cdi' }), { indexador: 'cdi' });
 });
 
 test('rende desde o dia útil anterior (o RDB Planejado): um dia a mais de CDI, o IR pela data do aporte', () => {

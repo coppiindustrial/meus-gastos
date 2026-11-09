@@ -96,13 +96,13 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
     if (!precisaCdi) return undefined;
     let vivo = true;
     const de = f.aplicado_em;
-    taxasDiarias(maisDias(de, -7)).then((t) => { if (vivo) setCalDep({ de, cal: t?.cdi?.length ? calendario(t.cdi, hoje) : [] }); });
+    taxasDiarias(maisDias(de, -7)).then((t) => { if (vivo) setCalDep({ de, cal: t?.cdi?.length ? calendario(t.cdi, hoje, t.ipca) : [] }); });
     return () => { vivo = false; };
   }, [precisaCdi, f.aplicado_em, hoje]);
   const buscandoCdi = precisaCdi && calDep?.de !== f.aplicado_em;
   const calConta = precisaCdi ? (buscandoCdi ? null : calDep.cal) : cal;
   const totalLido = calcularValor(f.total);
-  const conta = f.modo === 'antigo' && inv ? rendeuDoDeposito({ total: totalLido, deposito: f.aplicado_em, lido: f.lido, taxa: inv.taxa, diaAntes: f.diaAntes }, calConta) : null;
+  const conta = f.modo === 'antigo' && inv ? rendeuDoDeposito({ total: totalLido, deposito: f.aplicado_em, lido: f.lido, taxa: inv.taxa, indexador: inv.indexador ?? 'cdi', diaAntes: f.diaAntes }, calConta) : null;
   const rendeuAuto = f.rendeuAuto && !!conta;
   const campoRendeu = rendeuAuto ? valorParaCampo(conta.rendeu) : f.rendeu;
 
@@ -171,7 +171,7 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
     try { await excluirResgate(rg.id); toast.success('Resgate excluído.'); onSalvo(true); } catch (err) { toast.error(err.message); }
   };
 
-  const opcoes = ativos.map((i) => ({ value: i.id, label: `${i.nome} · ${rotuloTaxa(i.taxa)}`, grupo: { nome: i.instituicao } }));
+  const opcoes = ativos.map((i) => ({ value: i.id, label: `${i.nome} · ${rotuloTaxa(i.taxa, i.indexador)}`, grupo: { nome: i.instituicao } }));
   const titulo = editando ? 'Editar aporte' : inicial.reaplicar ? 'Reaplicar' : 'Lançar aporte';
   return (
     <Modal open onClose={onFechar} title={titulo} maxWidth="max-w-lg"
@@ -250,9 +250,9 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
               <div className="flex justify-between gap-3"><span>{f.modo === 'novo' ? 'Aplicado' : `Aplicado = ${formatBRL(r.dados.valor_centavos)} − ${formatBRL(r.dados.rendeu_antes_centavos)}`}</span><b className="tabular-nums text-gray-900">{formatBRL(previa.aplicado)}</b></div>
               {rendeuAuto && (
                 <div className="flex justify-between gap-3"><span>Rendeu desde o depósito</span>
-                  <span>+{((conta.f - 1) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% · {rotuloTaxa(inv.taxa)} de {formatDate(conta.ini)} a {formatDate(f.lido)}</span></div>
+                  <span>+{((conta.f - 1) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% · {rotuloTaxa(inv.taxa, inv.indexador)} de {formatDate(conta.ini)} a {formatDate(f.lido)}</span></div>
               )}
-              <div className="flex justify-between gap-3"><span>Rende</span><span>{rotuloTaxa(inv.taxa)} desde {formatDate(previa.ini)}{previa.antes ? ' (o dia útil antes do aporte)' : previa.fds ? ' (fim de semana: a partir do dia útil seguinte)' : ''}</span></div>
+              <div className="flex justify-between gap-3"><span>Rende</span><span>{rotuloTaxa(inv.taxa, inv.indexador)} desde {formatDate(previa.ini)}{previa.antes ? ' (o dia útil antes do aporte)' : previa.fds ? ' (fim de semana: a partir do dia útil seguinte)' : ''}</span></div>
               {previa.pos && previa.ini < hoje && <div className="flex justify-between gap-3"><span>Vale hoje, pela conta</span><b className="tabular-nums text-gray-900">{formatBRL(previa.pos.vale)}</b></div>}
               <div className="flex justify-between gap-3"><span>IR se resgatasse hoje</span><span>{previa.desde ? `${(aliquotaIR(Math.max(0, diasEntre(previa.desde, hoje))) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : `22,5% (sem a data do ${f.modo === 'novo' ? 'aporte' : 'depósito'})`}{['lci', 'lca'].includes(inv.tipo) ? ' · isento' : ''}</span></div>
             </div>

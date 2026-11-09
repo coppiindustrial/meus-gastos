@@ -16,6 +16,7 @@ export default function useCarteira() {
   const toast = useToast();
   const [dados, setDados] = useState(undefined);
   const [cdi, setCdi] = useState(null); // o CDI de cada dia: [['AAAA-MM-DD', fração]]
+  const [ipca, setIpca] = useState(null); // o IPCA de cada mês: { 'AAAA-MM': fração } (o IPCA+ do cadastro, migration 025)
   const [cdiMes, setCdiMes] = useState(null); // o de cada mês: { 'AAAA-MM': fração }
   const [falhou, setFalhou] = useState(false);
   const [tentativa, setTentativa] = useState(0);
@@ -37,7 +38,7 @@ export default function useCarteira() {
   useEffect(() => {
     if (!desde) return undefined;
     let vivo = true;
-    taxasDiarias(desde).then((t) => { if (!vivo) return; if (t?.cdi?.length) setCdi(t.cdi); setFalhou(!t?.cdi?.length); });
+    taxasDiarias(desde).then((t) => { if (!vivo) return; if (t?.cdi?.length) setCdi(t.cdi); if (t?.ipca) setIpca(t.ipca); setFalhou(!t?.cdi?.length); });
     cdiMensal(desde.slice(0, 7)).then((c) => { if (vivo && c) setCdiMes(c); });
     return () => { vivo = false; };
   }, [desde, tentativa]);
@@ -48,7 +49,7 @@ export default function useCarteira() {
   }, [falhou, tentativa]);
   const tentarTaxas = useCallback(() => setTentativa((n) => n + 1), []);
 
-  const base = useMemo(() => ({ cadastro: dados?.cadastro ?? [], aportes: dados?.aportes ?? [], resgates: dados?.resgates ?? [], cdi: cdi ?? [], hoje }), [dados, cdi, hoje]);
+  const base = useMemo(() => ({ cadastro: dados?.cadastro ?? [], aportes: dados?.aportes ?? [], resgates: dados?.resgates ?? [], cdi: cdi ?? [], ipca, hoje }), [dados, cdi, ipca, hoje]);
   const carteira = useMemo(() => montarCarteira(base), [base]);
   const meses = useMemo(() => mesAMes(base), [base]);
 

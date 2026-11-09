@@ -160,12 +160,16 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
       const nota = antes ? ` (rende desde ${formatDate(pos.partida.data)}, o dia útil antes)` : fds ? ` (${semana(ap.data)}: rende a partir do dia útil seguinte)` : '';
       itens.push({ rotulo: ap.reaplicado_de ? `Reaplicado em ${formatDate(ap.data)} (o vencimento, sem o IR)` : `Aplicado em ${formatDate(ap.data)}${nota}`, valor: formatBRL(Number(ap.valor_centavos)) });
     }
-    if (c) itens.push({ rotulo: `${c.dias} ${c.dias === 1 ? 'dia útil' : 'dias úteis'} de CDI a ${rotuloTaxa(inv.taxa).replace(' do CDI', '')}`, valor: `× ${c.f.toLocaleString('pt-BR', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}` });
+    const idx = inv.indexador ?? 'cdi';
+    const de = idx === 'cdi' ? `de CDI a ${rotuloTaxa(inv.taxa).replace(' do CDI', '')}` : idx === 'pre' ? `a ${rotuloTaxa(inv.taxa, 'pre')}` : `de ${rotuloTaxa(inv.taxa, 'ipca')} ao ano`;
+    if (c) itens.push({ rotulo: `${c.dias} ${c.dias === 1 ? 'dia útil' : 'dias úteis'} ${de}`, valor: `× ${c.f.toLocaleString('pt-BR', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}` });
     itens.push({ rotulo: 'Vale hoje', valor: formatBRL(pos.vale), cor: COR_ENTRADAS });
     const notas = [];
     if (resgates.length) notas.push(`Resgates: ${resgates.map((r) => `${r.tudo ? 'tudo' : formatBRL(r.valor_centavos)} em ${formatDate(r.data)}`).join(', ')}.`);
     if (c && !c.dias && ap.origem === 'antigo') notas.push(`Lido no banco hoje (${semana(ap.data)}): o número já tem o CDI dos dias úteis antes dele.`);
-    if (c?.proj) notas.push(`O Banco Central publica o CDI no dia útil seguinte: ${c.proj === 1 ? 'o último dia útil foi' : `os últimos ${c.proj} dias úteis foram`} com a taxa do último publicado.`);
+    if (idx === 'pre') notas.push('Prefixado: a taxa ao ano vira a de cada dia útil, (1 + taxa)^(1/252).');
+    else if (idx === 'ipca') notas.push(c?.proj ? `O IPCA do mês sai no mês seguinte: ${c.proj === 1 ? '1 dia útil foi' : `${c.proj} dias úteis foram`} com o último IPCA publicado (estimado; o banco usa a projeção dele).` : 'O IPCA de cada mês vem do Banco Central, repartido pelos dias úteis do mês.');
+    else if (c?.proj) notas.push(`O Banco Central publica o CDI no dia útil seguinte: ${c.proj === 1 ? 'o último dia útil foi' : `os últimos ${c.proj} dias úteis foram`} com a taxa do último publicado.`);
     else notas.push('O CDI de cada dia vem do Banco Central.');
     return { titulo, itens, nota: notas.join(' ') };
   })();
@@ -221,7 +225,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
                   <span className="truncate">{x.inv.nome}</span>
                   {!n && <span className="shrink-0 whitespace-nowrap"><Etiqueta tom="ambar">sem aporte</Etiqueta></span>}
                 </span>
-                <span className="block truncate text-[11.5px] text-gray-500">{nomeDoTipo(x.inv.tipo)} · {rotuloTaxa(x.inv.taxa)}{n ? ` · ${n} ${n === 1 ? 'aporte' : 'aportes'}` : ''}{x.inv.no_vencimento === 'reaplica' ? ' · reaplica no vencimento' : ''}</span>
+                <span className="block truncate text-[11.5px] text-gray-500">{nomeDoTipo(x.inv.tipo)} · {rotuloTaxa(x.inv.taxa, x.inv.indexador)}{n ? ` · ${n} ${n === 1 ? 'aporte' : 'aportes'}` : ''}{x.inv.no_vencimento === 'reaplica' ? ' · reaplica no vencimento' : ''}</span>
               </span>
             </span>
           </td>

@@ -59,6 +59,7 @@ export default function Investimentos() {
   const aportesPorInv = d.aportes.reduce((m, a) => ({ ...m, [a.investimento_id]: (m[a.investimento_id] ?? 0) + 1 }), {});
   const com022 = d.cadastro.some((i) => 'no_vencimento' in i);
   const com023 = d.cadastro.some((i) => 'vence_dia_util' in i);
+  const com025 = d.cadastro.some((i) => 'indexador' in i);
   const qtdInv = carteira.grupos.reduce((s, g) => s + g.investimentos.length, 0);
   const qtdAportes = carteira.grupos.reduce((s, g) => s + g.investimentos.reduce((t, x) => t + x.aportes.length, 0), 0);
   const t = carteira.total;
@@ -97,7 +98,7 @@ export default function Investimentos() {
       { key: 'inst', label: 'Instituição', map: (r) => r.g.instituicao },
       { key: 'inv', label: 'Investimento', map: (r) => r.x.inv.nome },
       { key: 'tipo', label: 'Tipo', map: (r) => nomeDoTipo(r.x.inv.tipo) },
-      { key: 'taxa', label: 'Rende', map: (r) => rotuloTaxa(r.x.inv.taxa) },
+      { key: 'taxa', label: 'Rende', map: (r) => rotuloTaxa(r.x.inv.taxa, r.x.inv.indexador) },
       { key: 'origem', label: 'Aporte', map: (r) => (r.item.ap.origem === 'antigo' ? 'já estava aplicado' : 'dinheiro novo') },
       { key: 'data', label: 'Data do aporte', tipo: 'data', map: (r) => (r.item.ap.origem === 'antigo' ? r.item.ap.aplicado_em ?? '' : r.item.ap.data) },
       { key: 'venc', label: 'Vencimento', tipo: 'data', map: (r) => r.item.ap.vencimento ?? '' },
@@ -163,7 +164,7 @@ export default function Investimentos() {
 
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
       {cadastro && (
-        <ModalCadastroCarteira cadastro={d.cadastro} aportes={d.aportes} aportesPorInv={aportesPorInv} hoje={d.hoje} com022={com022 || !d.cadastro.length} com023={com023 || !d.cadastro.length}
+        <ModalCadastroCarteira cadastro={d.cadastro} aportes={d.aportes} aportesPorInv={aportesPorInv} hoje={d.hoje} com022={com022 || !d.cadastro.length} com023={com023 || !d.cadastro.length} com025={com025 || !d.cadastro.length}
           onFechar={() => setCadastro(false)} onSalvo={() => { setCadastro(false); recarregar(); }} />
       )}
       {aporte && (

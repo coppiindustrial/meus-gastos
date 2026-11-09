@@ -29,7 +29,12 @@ export const TIPOS = [
 ];
 export const nomeDoTipo = (t) => ({ cdb: 'CDB', rdb: 'RDB', lci: 'LCI', lca: 'LCA', outro: 'Outro' })[t] ?? t;
 export const ehIsento = (tipo) => tipo === 'lci' || tipo === 'lca';
-export const rotuloTaxa = (taxa) => `${Number(taxa).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}% do CDI`;
+// O ÍNDICE (08/11/2026, migration 025): 'cdi' — a taxa é o % do CDI; 'pre' — prefixado, a taxa é o % ao ano; 'ipca' —
+// IPCA + a taxa ao ano. Sem a coluna, 'cdi'.
+export const INDEXADORES = [{ value: 'cdi', label: '% do CDI' }, { value: 'ipca', label: 'IPCA +' }, { value: 'pre', label: 'Prefixado' }];
+const numTaxa = (taxa) => Number(taxa).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+export const rotuloTaxa = (taxa, indexador = 'cdi') => (indexador === 'pre' ? `${numTaxa(taxa)}% ao ano`
+  : indexador === 'ipca' ? `IPCA + ${numTaxa(taxa)}%` : `${numTaxa(taxa)}% do CDI`);
 
 // ------------------------------------------------------------ o IR e o IOF
 export const FAIXAS_IR = [{ ate: 180, aliquota: 0.225 }, { ate: 360, aliquota: 0.2 }, { ate: 720, aliquota: 0.175 }, { ate: Infinity, aliquota: 0.15 }];
@@ -57,15 +62,39 @@ export function proximaQueda(desde, hoje) {
 // ------------------------------------------------------------ o calendário do CDI
 // `cdi`: [['AAAA-MM-DD', fração ao dia]] (a série 12 do Banco Central, só os dias úteis). Devolve a série mais os dias de
 // semana depois do último publicado até `ate` (exclusive), com a taxa do último (`[d, r, true]`).
-export function calendario(cdi, ate) {
-  const cal = (cdi ?? []).slice().sort((a, b) => (a[0] < b[0] ? -1 : 1));
+// Com `ipca` ({ 'AAAA-MM': fração do mês }, a série 433), cada dia ganha o IPCA DO DIA e se ele é projetado:
+// `[d, r, proj, ipcaDia, ipcaProj]` — o IPCA do mês repartido pelos dias úteis dele, (1 + IPCA)^(1/du), para o mês fechar
+// exatamente no índice; o mês ainda sem IPCA publicado vai com o último publicado (`ipcaProj`). Os dias úteis de um mês
+// são os do calendário; nas pontas (antes do primeiro dia e depois do último), os dias de semana que faltam.
+export function calendario(cdi, ate, ipca = null) {
+  // cada dia COPIADO: o IPCA anota o dia, e a série que entrou é a mesma de outros calendários
+  const cal = (cdi ?? []).map((e) => [...e]).sort((a, b) => (a[0] < b[0] ? -1 : 1));
   if (!cal.length || !ate) return cal;
   const [ult, r] = cal[cal.length - 1];
   for (let d = maisDias(ult, 1); d < ate; d = maisDias(d, 1)) {
     const s = diaDaSemana(d);
     if (s !== 0 && s !== 6) cal.push([d, r, true]);
   }
+  if (ipca) comIpca(cal, ipca);
   return cal;
+}
+const ehDiaDeSemana = (d) => { const s = diaDaSemana(d); return s !== 0 && s !== 6; };
+function comIpca(cal, ipca) {
+  const meses = Object.keys(ipca).filter((m) => Number.isFinite(ipca[m])).sort();
+  const ultimo = meses.length ? ipca[meses[meses.length - 1]] : null;
+  const du = new Map();
+  cal.forEach(([d]) => du.set(d.slice(0, 7), (du.get(d.slice(0, 7)) ?? 0) + 1));
+  // as pontas: os dias de semana do primeiro mês antes do calendário e do último depois dele
+  const primeiro = cal[0][0]; const fim = cal[cal.length - 1][0];
+  for (let d = `${primeiro.slice(0, 7)}-01`; d < primeiro; d = maisDias(d, 1)) if (ehDiaDeSemana(d)) du.set(primeiro.slice(0, 7), du.get(primeiro.slice(0, 7)) + 1);
+  for (let d = maisDias(fim, 1); d.slice(0, 7) === fim.slice(0, 7); d = maisDias(d, 1)) if (ehDiaDeSemana(d)) du.set(fim.slice(0, 7), du.get(fim.slice(0, 7)) + 1);
+  cal.forEach((e) => {
+    const m = e[0].slice(0, 7);
+    const doMes = Number.isFinite(ipca[m]) ? ipca[m] : null;
+    const taxa = doMes ?? ultimo;
+    e[3] = taxa === null ? 0 : Math.pow(1 + taxa, 1 / du.get(m)) - 1;
+    e[4] = doMes === null;
+  });
 }
 // o índice do primeiro dia do calendário em `d` ou depois
 function inicioNoCal(cal, d) {
@@ -73,14 +102,19 @@ function inicioNoCal(cal, d) {
   while (lo < hi) { const m = (lo + hi) >> 1; if (cal[m][0] < d) lo = m + 1; else hi = m; }
   return lo;
 }
-// O fator de `de` (inclusive) a `ate` (exclusive), dia útil a dia útil, a `taxa`% do CDI: { f, dias, proj }.
-export function fator(cal, de, ate, taxa) {
+// O fator de `de` (inclusive) a `ate` (exclusive), dia útil a dia útil, pelo `indexador`: 'cdi' — 1 + CDI do dia × `taxa`%;
+// 'pre' — (1 + `taxa`% ao ano)^(1/252); 'ipca' — (1 + IPCA do dia) × (1 + `taxa`% ao ano)^(1/252). { f, dias, proj }:
+// `proj` = os dias com a taxa projetada (o CDI depois do último publicado; no IPCA+, também o mês sem IPCA).
+export function fator(cal, de, ate, taxa, indexador = 'cdi') {
   let f = 1; let dias = 0; let proj = 0;
   if (!de || !ate || ate <= de) return { f, dias, proj };
+  const t = Number(taxa) / 100;
+  const anoDia = indexador === 'cdi' ? 1 : Math.pow(1 + t, 1 / 252);
   for (let i = inicioNoCal(cal, de); i < cal.length && cal[i][0] < ate; i += 1) {
-    f *= 1 + cal[i][1] * (Number(taxa) / 100);
+    const e = cal[i];
+    f *= indexador === 'pre' ? anoDia : indexador === 'ipca' ? (1 + (e[3] ?? 0)) * anoDia : 1 + e[1] * t;
     dias += 1;
-    if (cal[i][2]) proj += 1;
+    if (e[2] || (indexador === 'ipca' && e[4] !== false)) proj += 1;
   }
   return { f, dias, proj };
 }
@@ -120,11 +154,11 @@ export function sugerirVencimento(data, inv) {
 // ele soma também o que saiu junto com os saques (conferido com o Nubank em 08/11/2026: a conta fechou no centavo o IR
 // que falta pagar). Com `diaAntes` (o banco contou desde o dia útil anterior), a conta começa nele. { rendeu, aplicado,
 // f, ini } ou null sem o CDI desde o depósito.
-export function rendeuDoDeposito({ total, deposito, lido, taxa, diaAntes = false }, cal) {
+export function rendeuDoDeposito({ total, deposito, lido, taxa, indexador = 'cdi', diaAntes = false }, cal) {
   if (!(total > 0) || !deposito || !lido || deposito > lido || !cal?.length) return null;
   if (cal[0][0] > deposito) return null;
   const ini = diaAntes ? diaUtilAntes(deposito, cal) : deposito;
-  const { f } = fator(cal, ini, lido, taxa ?? 100);
+  const { f } = fator(cal, ini, lido, taxa ?? 100, indexador ?? 'cdi');
   const aplicado = Math.round(total / f);
   return { rendeu: total - aplicado, aplicado, f, ini };
 }
@@ -152,10 +186,11 @@ export function partidaDoAporte(ap, cal = []) {
 export function posicaoDoAporte(ap, inv, resgates, cal, dia, eventosAte = dia) {
   const p = partidaDoAporte(ap, cal);
   const taxa = inv?.taxa ?? 100;
+  const idx = inv?.indexador ?? 'cdi';
   let base = p.valor; let de = p.data; let aplicado = p.aplicado;
   const saidas = [];
   let encerrado = null;
-  const valorEm = (d) => base * fator(cal, de, d, taxa).f;
+  const valorEm = (d) => base * fator(cal, de, d, taxa, idx).f;
   const eventos = [
     ...(resgates ?? []).filter((r) => r.data <= eventosAte).map((r) => ({ tipo: 'resgate', data: r.data < p.data ? p.data : r.data, r })),
     ...(ap.vencimento && ap.vencimento <= eventosAte ? [{ tipo: 'vencimento', data: ap.vencimento }] : []),
@@ -175,7 +210,7 @@ export function posicaoDoAporte(ap, inv, resgates, cal, dia, eventosAte = dia) {
   if (encerrado) {
     return { vale: 0, aplicado: 0, rendeu: 0, ir: 0, iof: 0, liquido: 0, aliquota: null, idade: null, semData: false, encerrado, saidas, partida: p, conta: null, exato: { vale: 0, aplicado: 0 } };
   }
-  const conta = { de, ...fator(cal, de, dia, taxa) };
+  const conta = { de, ...fator(cal, de, dia, taxa, idx) };
   // `exato`: sem arredondar — o TOTAL do investimento soma os exatos e arredonda no fim, como o banco (arredondando cada
   // aporte, um total do Nubank dava 1 centavo a mais)
   const exato = { vale: base * conta.f, aplicado };
@@ -254,8 +289,8 @@ const ordemAporte = (a) => (a.origem === 'antigo' ? a.aplicado_em ?? a.data : a.
 // A CARTEIRA DE HOJE: as instituições (em ordem alfabética), os investimentos de cada uma (pela `ordem` e o nome) e os
 // aportes de cada investimento (do mais antigo ao mais novo), cada um com a posição; os encerrados (vencidos ou resgatados
 // inteiros) à parte. O investimento desativado sem aporte aberto não aparece.
-export function montarCarteira({ cadastro = [], aportes = [], resgates = [], cdi = [], hoje }) {
-  const cal = calendario(cdi, hoje);
+export function montarCarteira({ cadastro = [], aportes = [], resgates = [], cdi = [], ipca = null, hoje }) {
+  const cal = calendario(cdi, hoje, ipca);
   const porAporte = new Map();
   resgates.forEach((r) => { if (!porAporte.has(r.aporte_id)) porAporte.set(r.aporte_id, []); porAporte.get(r.aporte_id).push(r); });
   const invPorId = new Map(cadastro.map((i) => [i.id, i]));
@@ -293,8 +328,8 @@ const fimDoMes = (c) => maisDias(`${proximoMes(c)}-01`, -1);
 // aplicada (o aporte de 07/04 conta 18 dos 20 dias úteis de abril; com "metade", abril dava 1,86% contra 1,09% do CDI). O
 // dinheiro que já estava aplicado entra como dinheiro novo no mês em que você o lançou (o que ele já tinha rendido não é
 // rendimento daquele mês; lido hoje, ele ainda não pesa no capital).
-export function mesAMes({ cadastro = [], aportes = [], resgates = [], cdi = [], hoje }) {
-  const cal = calendario(cdi, hoje);
+export function mesAMes({ cadastro = [], aportes = [], resgates = [], cdi = [], ipca = null, hoje }) {
+  const cal = calendario(cdi, hoje, ipca);
   const invPorId = new Map(cadastro.map((i) => [i.id, i]));
   const rsDe = (id) => resgates.filter((r) => r.aporte_id === id).sort((a, b) => (a.data < b.data ? -1 : 1));
   const aps = aportes.filter((a) => invPorId.has(a.investimento_id));
@@ -369,11 +404,11 @@ export function lerResgate({ aporte, data, valor, tudo }, partidaData, vale, hoj
 export const linhaDoCadastro = (i) => ({
   id: i.id, novo: false, orig: i, nome: i.nome, instituicao: i.instituicao, tipo: i.tipo, taxa: String(i.taxa).replace('.', ','),
   resgate: i.resgate, prazo_meses: i.prazo_meses ? String(i.prazo_meses) : '', vence_dia_antes: !!i.vence_dia_antes,
-  vence_dia_util: !!i.vence_dia_util, no_vencimento: i.no_vencimento ?? 'conta', ativo: i.ativo !== false, excluir: false,
+  indexador: i.indexador ?? 'cdi', vence_dia_util: !!i.vence_dia_util, no_vencimento: i.no_vencimento ?? 'conta', ativo: i.ativo !== false, excluir: false,
 });
 export const linhaNovaDoCadastro = (id, instituicao) => ({
   id, novo: true, orig: null, nome: '', instituicao, tipo: 'cdb', taxa: '100', resgate: 'diaria', prazo_meses: '', vence_dia_antes: false,
-  vence_dia_util: false, no_vencimento: 'conta', ativo: true, excluir: false,
+  indexador: 'cdi', vence_dia_util: false, no_vencimento: 'conta', ativo: true, excluir: false,
 });
 export const linhaVaziaDoCadastro = (l) => l.novo && !l.nome.trim();
 const lerTaxa = (t) => { const n = Number(String(t ?? '').replace(/\s|%/g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
@@ -385,18 +420,20 @@ export function dadosDoCadastro(l) {
     prazo_meses: l.prazo_meses ? Number(l.prazo_meses) : null, vence_dia_antes: !!l.vence_dia_antes, ativo: !!l.ativo,
     ...(l.no_vencimento === 'reaplica' ? { no_vencimento: 'reaplica' } : {}),
     ...(l.vence_dia_util ? { vence_dia_util: true } : {}),
+    ...(l.indexador && l.indexador !== 'cdi' ? { indexador: l.indexador } : {}),
   };
 }
 // O que mudou numa linha que já existia ({} = nada).
 export function diferencaDoCadastro(l) {
   if (l.novo) return dadosDoCadastro(l);
-  const { no_vencimento: _nv, vence_dia_util: _du, ...d } = dadosDoCadastro(l); const o = l.orig; const out = {};
+  const { no_vencimento: _nv, vence_dia_util: _du, indexador: _ix, ...d } = dadosDoCadastro(l); const o = l.orig; const out = {};
   Object.entries(d).forEach(([k, v]) => {
     const antes = k === 'taxa' ? Number(o.taxa) : k === 'prazo_meses' ? (o.prazo_meses ?? null) : k === 'ativo' ? o.ativo !== false : k === 'vence_dia_antes' ? !!o.vence_dia_antes : o[k];
     if (v !== antes) out[k] = v;
   });
   if ((l.no_vencimento ?? 'conta') !== (o.no_vencimento ?? 'conta')) out.no_vencimento = l.no_vencimento;
   if (!!l.vence_dia_util !== !!o.vence_dia_util) out.vence_dia_util = !!l.vence_dia_util;
+  if ((l.indexador ?? 'cdi') !== (o.indexador ?? 'cdi')) out.indexador = l.indexador ?? 'cdi';
   return out;
 }
 // O primeiro problema das linhas que vão ser gravadas: { id, campo, motivo } ou null.
