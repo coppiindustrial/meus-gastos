@@ -5,6 +5,7 @@ import {
   aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diaUtilAntes, fimDoIOF, impostoDoResgate, impostos, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
   linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
   rendeuDoDeposito, rotuloTaxa, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
+  arrastoDoCadastro, instituicoesEmOrdem, investimentosEmOrdem, ordensDoCadastro,
 } from '../src/lib/carteira.js';
 
 // O CDI de cada dia útil de 01/04 a 05/11/2026 (a série 12 do Banco Central, dado público), como `api/taxas.js` entrega.
@@ -406,4 +407,44 @@ test('o IOF: o dia em que zera, o imposto do resgate (bruto) e os totais com o I
   const t = somarPosicoes([{ pos: p }, { pos: posicaoDoAporte(novo('2026-06-03', 1000000), inv(100), [], cal, HOJE) }]);
   assert.equal(t.iof, p.iof);
   assert.equal(t.liquido, t.vale - t.ir - t.iof);
+});
+
+// ------------------------------------------------------------ a ordem do cadastro (09/11/2026)
+const CAD = [
+  { id: 'a', nome: 'RDB Planejado', instituicao: 'Nubank', ordem: 2 },
+  { id: 'b', nome: 'RDB Diário', instituicao: 'Nubank', ordem: 1 },
+  { id: 'c', nome: 'CDB Volks', instituicao: 'XP ', ordem: 3 },
+];
+
+test('a ordem: a instituição vai pela menor ordem dos investimentos dela; com tudo em 0, pelo nome', () => {
+  assert.deepEqual(instituicoesEmOrdem(CAD), ['Nubank', 'XP']);
+  assert.deepEqual(instituicoesEmOrdem([{ ...CAD[2], ordem: 0 }, CAD[0], CAD[1]]), ['XP', 'Nubank']);
+  assert.deepEqual(instituicoesEmOrdem(CAD.map((i) => ({ ...i, ordem: 0 }))), ['Nubank', 'XP']);
+  assert.deepEqual(investimentosEmOrdem(CAD, 'Nubank').map((i) => i.id), ['b', 'a']);
+  assert.deepEqual(investimentosEmOrdem(CAD.map((i) => ({ ...i, ordem: 0 })), 'Nubank').map((i) => i.id), ['b', 'a']); // empate: o nome
+});
+
+test('a ordem que o cadastro grava: sem mexer, só os novos (depois da maior); mexendo, renumera tudo', () => {
+  assert.deepEqual([...ordensDoCadastro(['b', 'a', 'c'], CAD)], []);
+  assert.deepEqual([...ordensDoCadastro(['b', 'a', 'n1', 'c', 'n2'], CAD)], [['n1', 4], ['n2', 5]]);
+  // a XP subiu para o topo: todos renumeram, menos quem já estava no número
+  assert.deepEqual([...ordensDoCadastro(['c', 'b', 'a'], CAD)], [['c', 1], ['b', 2], ['a', 3]]);
+  assert.deepEqual([...ordensDoCadastro(['a', 'b', 'c'], CAD)], [['a', 1], ['b', 2]]);
+});
+
+test('o arrasto do cadastro: o investimento muda de grupo; a instituição leva os dela', () => {
+  const antes = ['g:nu', 'i:b', 'i:a', 'g:xp', 'i:c'];
+  // o RDB Planejado solto embaixo do CDB da XP: vai para a XP
+  assert.deepEqual(arrastoDoCadastro(['g:nu', 'i:b', 'g:xp', 'i:c', 'i:a'], 'i:a', antes),
+    { grupos: ['nu', 'xp'], linhas: [{ id: 'b', grupo: 'nu' }, { id: 'c', grupo: 'xp' }, { id: 'a', grupo: 'xp' }] });
+  // acima da primeira instituição: não vale
+  assert.equal(arrastoDoCadastro(['i:a', 'g:nu', 'i:b', 'g:xp', 'i:c'], 'i:a', antes), null);
+  // a XP subindo: caiu dentro do bloco do Nubank → antes dele, com o CDB junto
+  const xpSobe = arrastoDoCadastro(['g:nu', 'g:xp', 'i:b', 'i:a', 'i:c'], 'g:xp', antes);
+  assert.deepEqual(xpSobe.grupos, ['xp', 'nu']);
+  assert.deepEqual(xpSobe.linhas.find((l) => l.id === 'c'), { id: 'c', grupo: 'xp' });
+  // o Nubank descendo: caiu no bloco da XP → depois dela
+  assert.deepEqual(arrastoDoCadastro(['i:b', 'i:a', 'g:xp', 'i:c', 'g:nu'], 'g:nu', antes).grupos, ['xp', 'nu']);
+  // o Nubank acima de tudo, onde já estava: nada muda
+  assert.deepEqual(arrastoDoCadastro(antes, 'g:nu', antes).grupos, ['nu', 'xp']);
 });

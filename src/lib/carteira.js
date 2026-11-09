@@ -305,7 +305,7 @@ export function somarPosicoes(lista) {
 const somar = somarPosicoes;
 const ordemAporte = (a) => (a.origem === 'antigo' ? a.aplicado_em ?? a.data : a.data);
 
-// A CARTEIRA DE HOJE: as instituições (em ordem alfabética), os investimentos de cada uma (pela `ordem` e o nome) e os
+// A CARTEIRA DE HOJE: as instituições (na ordem do cadastro, `instituicoesEmOrdem`), os investimentos de cada uma (pela `ordem` e o nome) e os
 // aportes de cada investimento (do mais antigo ao mais novo), cada um com a posição; os encerrados (vencidos ou resgatados
 // inteiros) à parte. O investimento desativado sem aporte aberto não aparece.
 export function montarCarteira({ cadastro = [], aportes = [], resgates = [], cdi = [], ipca = null, hoje }) {
@@ -321,10 +321,8 @@ export function montarCarteira({ cadastro = [], aportes = [], resgates = [], cdi
     return { ap, inv, resgates: rs, pos: posicaoDoAporte(ap, inv, rs, cal, hoje), seguinte: seguintes.get(ap.id) ?? null };
   });
   const abertos = itens.filter((x) => !x.pos.encerrado);
-  const nomes = [...new Set(cadastro.map((i) => i.instituicao.trim()))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const grupos = nomes.map((nome) => {
-    const invs = cadastro.filter((i) => i.instituicao.trim() === nome)
-      .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0) || a.nome.localeCompare(b.nome, 'pt-BR'))
+  const grupos = instituicoesEmOrdem(cadastro).map((nome) => {
+    const invs = investimentosEmOrdem(cadastro, nome)
       .map((inv) => {
         const aps = abertos.filter((x) => x.inv.id === inv.id).sort((a, b) => (ordemAporte(a.ap) < ordemAporte(b.ap) ? -1 : 1));
         const vence = aps.map((x) => x.ap.vencimento).filter(Boolean).sort()[0] ?? null;
@@ -436,6 +434,69 @@ export function lerResgate({ aporte, data, valor, tudo }, partidaData, vale, hoj
 }
 
 // ------------------------------------------------------------ o cadastro em tabela
+// A ORDEM (09/11/2026, a opção A do mockup "Cadastro dos investimentos"): a INSTITUIÇÃO não tem tabela (é o texto do
+// cadastro), então a ordem dela é a do PRIMEIRO investimento dela, a menor `ordem` (no empate, o nome: com tudo em 0,
+// segue alfabética, como era). Arrastar no cadastro renumera os investimentos 1, 2, 3… na ordem da tela, e as
+// instituições seguem. Os investimentos de cada uma pela `ordem` e o nome. Vale na carteira, no painel e no cadastro.
+const porOrdem = (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0) || a.nome.localeCompare(b.nome, 'pt-BR');
+export function instituicoesEmOrdem(cadastro) {
+  const menor = new Map();
+  cadastro.forEach((i) => {
+    const n = i.instituicao.trim();
+    const o = i.ordem ?? 0;
+    if (!menor.has(n) || o < menor.get(n)) menor.set(n, o);
+  });
+  return [...menor.keys()].sort((a, b) => menor.get(a) - menor.get(b) || a.localeCompare(b, 'pt-BR'));
+}
+export const investimentosEmOrdem = (cadastro, nome) => cadastro.filter((i) => i.instituicao.trim() === nome).sort(porOrdem);
+
+// A `ordem` que o cadastro grava. `ids`: os investimentos na ordem da tela (os novos também). Se os que já existiam
+// seguem na ordem de quando abriu, só os novos ganham ordem (depois da maior, na ordem da tela); se a ordem mudou,
+// TODOS renumeram 1, 2, 3…. Devolve Map id → ordem só com o que muda (os novos sempre).
+export function ordensDoCadastro(ids, cadastro) {
+  const porId = new Map(cadastro.map((i) => [i.id, i]));
+  const antes = instituicoesEmOrdem(cadastro).flatMap((n) => investimentosEmOrdem(cadastro, n).map((i) => i.id));
+  const existentes = ids.filter((id) => porId.has(id));
+  const igual = existentes.length === antes.length && existentes.every((id, k) => id === antes[k]);
+  const out = new Map();
+  if (igual) {
+    let o = Math.max(0, ...cadastro.map((i) => i.ordem ?? 0));
+    ids.forEach((id) => { if (!porId.has(id)) { o += 1; out.set(id, o); } });
+    return out;
+  }
+  ids.forEach((id, k) => { const i = porId.get(id); if (!i || (i.ordem ?? 0) !== k + 1) out.set(id, k + 1); });
+  return out;
+}
+
+// O ARRASTO DO CADASTRO. `ids`: a lista da tela como o `useListaArrastavel` devolve (`g:<grupo>` e `i:<investimento>`,
+// com o arrastado no lugar novo); `arrastado`: o id que se move; `antes`: a lista de antes. Devolve { grupos: [id do
+// grupo], linhas: [{ id, grupo }] } na ordem nova, ou null quando nada vale (o investimento acima da primeira instituição).
+// O INVESTIMENTO fica no grupo do cabeçalho acima dele (é assim que ele muda de instituição). A INSTITUIÇÃO leva os
+// investimentos dela junto; o hook só move o cabeçalho, então o lugar dela é decidido pelo bloco em que ele caiu:
+// descendo, depois desse bloco; subindo, antes dele (acima de tudo = a primeira).
+const semPrefixo = (x) => x.slice(2);
+function investimentosPorGrupo(lista) {
+  let g = null;
+  const out = [];
+  lista.forEach((x) => { if (x.startsWith('g:')) g = semPrefixo(x); else out.push({ id: semPrefixo(x), grupo: g }); });
+  return out;
+}
+export function arrastoDoCadastro(ids, arrastado, antes) {
+  const gruposAntes = antes.filter((x) => x.startsWith('g:'));
+  if (arrastado.startsWith('g:')) {
+    const pos = ids.indexOf(arrastado);
+    let dono = null;
+    for (let k = pos - 1; k >= 0; k -= 1) if (ids[k].startsWith('g:')) { dono = ids[k]; break; }
+    const outros = gruposAntes.filter((g) => g !== arrastado);
+    let at = 0;
+    if (dono) at = outros.indexOf(dono) + (gruposAntes.indexOf(dono) > gruposAntes.indexOf(arrastado) ? 1 : 0);
+    const grupos = [...outros.slice(0, at), arrastado, ...outros.slice(at)];
+    return { grupos: grupos.map(semPrefixo), linhas: investimentosPorGrupo(antes) };
+  }
+  if (!ids[0]?.startsWith('g:')) return null;
+  return { grupos: ids.filter((x) => x.startsWith('g:')).map(semPrefixo), linhas: investimentosPorGrupo(ids) };
+}
+
 export const linhaDoCadastro = (i) => ({
   id: i.id, novo: false, orig: i, nome: i.nome, instituicao: i.instituicao, tipo: i.tipo, taxa: String(i.taxa).replace('.', ','),
   resgate: i.resgate, prazo_meses: i.prazo_meses ? String(i.prazo_meses) : '', vence_dia_antes: !!i.vence_dia_antes,

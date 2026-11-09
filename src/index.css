@@ -807,3 +807,12 @@ html[data-tema='escuro'] { --grade-sel: #5b8def; }
 .grade-hachura {
   background: repeating-linear-gradient(135deg, transparent 0 4px, rgb(156 163 175 / 0.22) 4px 8px);
 }
+
+/* O CAMPO QUIETO (09/11/2026, a opção A do mockup "Cadastro dos investimentos"): numa tabela `.quieto` o campo é só o
+   texto (sem borda, sem fundo e sem a seta) até o hover da linha, o foco ou a lista aberta — a hierarquia (a faixa da
+   instituição, o nome, os campos) aparece em vez de uma parede de caixas. A borda de erro (`!border-…`) vence. */
+.quieto tr:not(:hover) .input:not(:focus):not([aria-expanded="true"]) {
+  border-color: transparent;
+  background-color: transparent;
+}
+.quieto tr:not(:hover) .input:not(:focus):not([aria-expanded="true"]) > svg { opacity: 0; }
