@@ -162,3 +162,70 @@ export function porInvestimento(abertos, proximos, hoje) {
     };
   });
 }
+
+// ------------------------------------------------------------ o dinheiro que entrou e saiu
+// SÓ OS MESES COM MOVIMENTO (09/11/2026, a opção A do mockup "O dinheiro que entrou e saiu", a pedido: 24 meses com 13
+// vazios, e os nomes se sobrepunham): as colunas são os meses em que entrou (`aportes`) ou saiu (`resgates`) dinheiro, e
+// entre dois deles distantes uma QUEBRA com quantos meses ficaram sem nada. `k` é o índice do mês em `meses` (o balão).
+// Sem movimento no período, [].
+const ordemDoMes = (c) => { const [y, m] = c.split('-').map(Number); return y * 12 + m; };
+export function mesesComMovimento(meses) {
+  const out = [];
+  let antes = null;
+  meses.forEach((m, k) => {
+    if (!(m.aportes > 0) && !(m.resgates > 0)) return;
+    if (antes) {
+      const vazios = ordemDoMes(m.competencia) - ordemDoMes(antes.competencia) - 1;
+      if (vazios > 0) out.push({ tipo: 'quebra', id: `q:${m.competencia}`, vazios });
+    }
+    out.push({ tipo: 'mes', id: m.competencia, m, k, ano: !antes || antes.competencia.slice(0, 4) !== m.competencia.slice(0, 4) });
+    antes = m;
+  });
+  return out;
+}
+
+// ------------------------------------------------------------ a evolução em cascata
+// A CASCATA DA EVOLUÇÃO (09/11/2026, a opção B do mockup "Evolução do patrimônio em cascata", e a C no "Ano"): cada
+// coluna é um DEGRAU que começa onde o anterior terminou (`de` → `ate`, centavos), e a última é o patrimônio do fim do
+// período, dividido em aportado e rendimento (`fim`). `meses`: o `mesAMes` do período (total, aportes, resgates, rendeu,
+// aportado, rendimentoAcum).
+//   · 'mes': os meses com aporte ou saída são colunas (`mes`: o que entrou, o que rendeu nele e o que saiu); os meses
+//     parados entre eles viram UM degrau (`parado`: quantos e o que renderam juntos) — a régua do "Entrou e saiu";
+//   · 'ano': três degraus por ano (`aportes`, `rendeu`, `saiu`; o que é zero não entra).
+// O período que não começa no primeiro aporte abre com `inicio` (o patrimônio de antes, do zero). `ano` marca a primeira
+// coluna de cada ano (a régua escreve o ano embaixo dela). Sem meses, null.
+const antesDoMes = (m) => m.total - m.aportes - m.rendeu + m.resgates;
+export function cascataDoPatrimonio(meses, modo = 'mes') {
+  if (!meses.length) return null;
+  const inicio = antesDoMes(meses[0]);
+  const colunas = inicio > 0 ? [{ tipo: 'inicio', id: 'inicio', de: 0, ate: inicio, antesDe: meses[0].competencia }] : [];
+  if (modo === 'ano') {
+    let nivel = inicio;
+    [...new Set(meses.map((m) => m.competencia.slice(0, 4)))].forEach((ano) => {
+      const ms = meses.filter((m) => m.competencia.startsWith(ano));
+      const fimDoAno = ms[ms.length - 1].total;
+      const soma = (k) => ms.reduce((s, m) => s + m[k], 0);
+      [['aportes', soma('aportes'), 1], ['rendeu', soma('rendeu'), 1], ['saiu', soma('resgates'), -1]].forEach(([tipo, valor, sinal]) => {
+        if (!valor) return;
+        colunas.push({ tipo, id: `${tipo}:${ano}`, anoDe: ano, valor, de: nivel, ate: nivel + sinal * valor, meses: ms.length, fimDoAno });
+        nivel += sinal * valor;
+      });
+    });
+  } else {
+    let parado = null;
+    meses.forEach((m) => {
+      if (m.aportes > 0 || m.resgates > 0) {
+        if (parado) { colunas.push(parado); parado = null; }
+        colunas.push({ tipo: 'mes', id: m.competencia, m, anoDe: m.competencia.slice(0, 4), de: antesDoMes(m), entrou: m.aportes, rendeu: m.rendeu, saiu: m.resgates, ate: m.total });
+        return;
+      }
+      if (!parado) parado = { tipo: 'parado', id: `p:${m.competencia}`, anoDe: m.competencia.slice(0, 4), desde: m.competencia, n: 0, rendeu: 0, de: antesDoMes(m) };
+      parado.n += 1; parado.rendeu += m.rendeu; parado.ateMes = m.competencia; parado.ate = m.total;
+    });
+    if (parado) colunas.push(parado);
+  }
+  let anoAntes = null;
+  colunas.forEach((c) => { c.ano = !!c.anoDe && c.anoDe !== anoAntes; if (c.anoDe) anoAntes = c.anoDe; });
+  const ult = meses[meses.length - 1];
+  return { colunas, fim: { competencia: ult.competencia, total: ult.total, aportado: ult.aportado, rendimento: ult.rendimentoAcum } };
+}

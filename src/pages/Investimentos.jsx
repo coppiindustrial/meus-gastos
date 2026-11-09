@@ -4,7 +4,7 @@ import Tooltip from '../components/Tooltip.jsx';
 import MenuContexto from '../components/MenuContexto.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
-import { IconLapis, IconSeta } from '../components/icons.jsx';
+import { IconLapis, IconMais, IconSeta } from '../components/icons.jsx';
 import TabelaCarteira from '../components/patrimonio/TabelaCarteira.jsx';
 import ModalAporte from '../components/patrimonio/ModalAporte.jsx';
 import ModalResgate from '../components/patrimonio/ModalResgate.jsx';
@@ -140,7 +140,7 @@ export default function Investimentos() {
           </div>
           {vazio
             ? <button type="button" className="btn-primary" onClick={() => setCadastro(true)}>Cadastrar investimentos</button>
-            : <button type="button" className="btn-primary" onClick={() => setAporte({})}>Lançar aporte</button>}
+            : <button type="button" className="btn-primary" onClick={() => setAporte({})}><IconMais className="h-[11px] w-[11px]" />Lançar aporte</button>}
         </>} />
 
       {d.semTaxas && <AvisoSemTaxas onTentar={d.tentarTaxas} className="mt-4" />}

@@ -12,7 +12,7 @@ import { CartaoKpi } from '../components/graficos/CartoesResumo.jsx';
 import { COR_ENTRADAS } from '../components/graficos/Graficos.jsx';
 import { RoscaOrigem } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
-import { COR_APORTADO, COR_CDI, ColunasAportado, ColunasPct, ColunasRendeu } from '../components/patrimonio/GraficoPatrimonio.jsx';
+import { COR_APORTADO, COR_CDI, CascataPatrimonio, ColunasPct, ColunasRendeu } from '../components/patrimonio/GraficoPatrimonio.jsx';
 import {
   AgoraPatrimonio, BlocoIR, BlocoLiquidez, BlocoVencimentos, EntrouSaiu, TabelaInvestimentos, TituloBloco,
 } from '../components/patrimonio/BlocosPatrimonio.jsx';
@@ -49,6 +49,7 @@ import { varCor } from '../lib/varCor.js';
 const LS_OCULTAR = 'patrimonio_ocultar';
 const LS_COMPARAR = 'patrimonio_comparar';
 const LS_FORMA = 'patrimonio_rendeu_forma';
+const LS_EVOLUCAO = 'patrimonio_evolucao_modo';
 const OPCOES_COMPARAR = [
   { value: 'cdi', label: 'CDI', chip: 'Comparar: CDI' },
   { value: 'ipca', label: 'IPCA (a inflação)', chip: 'Comparar: IPCA' },
@@ -92,6 +93,9 @@ export default function Patrimonio() {
   const setComparar = (v) => { setCompararEstado(v); lsSet(LS_COMPARAR, v); };
   const [forma, setFormaEstado] = useState(() => (lsGet(LS_FORMA) === 'pct' ? 'pct' : 'reais'));
   const setForma = (v) => { setFormaEstado(v); lsSet(LS_FORMA, v); };
+  // A EVOLUÇÃO EM CASCATA: por mês (só os com aporte, os parados num degrau) ou por ano
+  const [modoEvo, setModoEvoEstado] = useState(() => (lsGet(LS_EVOLUCAO) === 'ano' ? 'ano' : 'mes'));
+  const setModoEvo = (v) => { setModoEvoEstado(v); lsSet(LS_EVOLUCAO, v); };
   const [ondePor, setOndePor] = useState('inst');
   const [vencAba, setVencAba] = useState('prox');
   // O OLHO (o da Visão geral): fechado, todo valor vira "•••"; para mostrar de novo os blocos remontam (`versao`).
@@ -210,9 +214,16 @@ export default function Patrimonio() {
       case 'pt_evolucao':
         return (
           <section className="card flex flex-col overflow-hidden p-5">
-            <TituloBloco titulo="Evolução do patrimônio" sub={`o fim de cada mês · ${textoPer}${ctrlEvo.fixas.length === 1 ? ' · na escala do que está marcado' : ''}`} />
-            <div className="min-h-0 flex-1">{mesesP.length ? <ColunasAportado meses={mesesP} ctrl={ctrlEvo} auto /> : <p className="py-6 text-center text-sm text-gray-400">Nada no período.</p>}</div>
-            <LegendaSeries ctrl={ctrlEvo} series={[{ key: 'aportado', rotulo: 'Dinheiro aportado', cor: COR_APORTADO }, { key: 'rendimento', rotulo: 'Rendimento acumulado', cor: COR_ENTRADAS }]} />
+            <TituloBloco titulo="Evolução do patrimônio"
+              sub={`${modoEvo === 'ano' ? 'quanto entrou e quanto rendeu em cada ano' : 'cada aporte sobe um degrau; entre eles, o que rendeu nos meses parados'} · ${textoPer}`}
+              extra={<AbasPilula abas={[{ key: 'mes', label: 'Mês' }, { key: 'ano', label: 'Ano' }]} valor={modoEvo} onChange={setModoEvo} variante="claro" altura={30} folga={2} />} />
+            <div className="min-h-0 flex-1">{mesesP.length ? <CascataPatrimonio meses={mesesP} modo={modoEvo} ctrl={ctrlEvo} auto /> : <p className="py-6 text-center text-sm text-gray-400">Nada no período.</p>}</div>
+            <LegendaSeries ctrl={ctrlEvo} series={[
+              { key: 'entrou', rotulo: 'Entrou (aportes)', cor: 'var(--serie-gastos)' },
+              { key: 'rendeu', rotulo: 'Rendeu', cor: COR_ENTRADAS },
+              ...(mesesP.some((m) => m.resgates > 0) ? [{ key: 'saiu', rotulo: 'Saiu (resgates e vencimentos)', cor: 'var(--origem-fixo)' }] : []),
+              { key: 'aportado', rotulo: 'Aportado (no fim)', cor: COR_APORTADO },
+            ]} />
           </section>
         );
       case 'pt_rendeu':

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { calendario, fator, mesAMes, montarCarteira, posicaoDoAporte } from '../src/lib/carteira.js';
 import {
-  escadaDeLiquidez, filtrarCarteira, irPorAliquota, linhaDoTempoVencimentos, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
+  cascataDoPatrimonio, escadaDeLiquidez, filtrarCarteira, irPorAliquota, linhaDoTempoVencimentos, mesesComMovimento, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
   textoDoPeriodo, vencimentos,
 } from '../src/lib/patrimonio.js';
 
@@ -148,4 +148,37 @@ test('as quedas: o fim do IOF entra como uma queda, também na isenta', () => {
   // o IR por alíquota: o IR e o IOF separados, fechando com a carteira
   const g = irPorAliquota(abertos);
   assert.equal(g.reduce((s, x) => s + x.iof, 0), c.total.iof);
+});
+
+test('o dinheiro que entrou e saiu: só os meses com movimento, a quebra com os vazios e o ano no primeiro de cada um', () => {
+  const m = (competencia, aportes = 0, resgates = 0) => ({ competencia, aportes, resgates });
+  const meses = [m('2024-12', 100), m('2025-01', 50), m('2025-02'), m('2025-03'), m('2025-04', 0, 30), m('2025-05'), m('2026-01', 10), m('2026-02')];
+  const r = mesesComMovimento(meses);
+  assert.deepEqual(r.map((x) => (x.tipo === 'quebra' ? `/${x.vazios}` : `${x.id}${x.ano ? '*' : ''}`)), ['2024-12*', '2025-01*', '/2', '2025-04', '/8', '2026-01*']);
+  assert.equal(r.find((x) => x.id === '2025-04').k, 4);
+  assert.deepEqual(mesesComMovimento([m('2026-01'), m('2026-02')]), []);
+});
+
+test('a evolução em cascata: os meses com aporte, os parados num degrau, por ano e o começo do período', () => {
+  // o total, o que entrou, o que saiu e o que rendeu (= total − anterior − entrou + saiu), como o `mesAMes` dá
+  let ant = 0;
+  const m = (competencia, total, aportes = 0, resgates = 0) => {
+    const r = { competencia, total, aportes, resgates, rendeu: total - ant - aportes + resgates, aportado: 0, rendimentoAcum: 0 };
+    ant = total; return r;
+  };
+  const meses = [m('2025-11', 1000, 1000), m('2025-12', 1010), m('2026-01', 1020), m('2026-02', 2030, 1000), m('2026-03', 1540, 0, 500)];
+  meses[4].aportado = 1500; meses[4].rendimentoAcum = 40;
+  const c = cascataDoPatrimonio(meses);
+  assert.deepEqual(c.colunas.map((x) => `${x.tipo}:${x.de}→${x.ate}${x.ano ? '*' : ''}`), ['mes:0→1000*', 'parado:1000→1020', 'mes:1020→2030*', 'mes:2030→1540']);
+  const p = c.colunas[1];
+  assert.deepEqual([p.n, p.rendeu, p.desde, p.ateMes], [2, 20, '2025-12', '2026-01']);
+  assert.equal(p.ano, false); // dez/25 é do ano do mês antes dele: o ano só vem com jan
+  assert.deepEqual(c.fim, { competencia: '2026-03', total: 1540, aportado: 1500, rendimento: 40 });
+  const a = cascataDoPatrimonio(meses, 'ano');
+  assert.deepEqual(a.colunas.map((x) => `${x.tipo}:${x.valor}:${x.de}→${x.ate}${x.ano ? '*' : ''}`),
+    ['aportes:1000:0→1000*', 'rendeu:10:1000→1010', 'aportes:1000:1010→2010*', 'rendeu:30:2010→2040', 'saiu:500:2040→1540']);
+  // o período que começa depois: a coluna do começo, do zero até o patrimônio de antes
+  const depois = cascataDoPatrimonio(meses.slice(2));
+  assert.deepEqual(depois.colunas.slice(0, 2).map((x) => `${x.tipo}:${x.de}→${x.ate}`), ['inicio:0→1010', 'parado:1010→1020']);
+  assert.equal(cascataDoPatrimonio([]), null);
 });

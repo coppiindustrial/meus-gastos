@@ -343,13 +343,12 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   `DO_PATRIMONIO` no `MiniaturaWidget`), a FAIXA DE FILTROS embaixo (Período · Instituição · Tipo · Investimento, o Comparar
   à direita: CDI, IPCA ou nada) e os blocos: o "Agora" (`AgoraPatrimonio`: vencimentos para avaliar e reaplicados para
   conferir em âmbar; o próximo vencimento e a próxima queda do IR em cinza), os 4 `CartaoKpi` (patrimônio, rendeu no último
-  mês fechado com o % do CDI, rendeu em 12 meses, livre hoje), Evolução (`ColunasAportado`; uma série FIXADA na escala
-  dela), Onde está o dinheiro (a `RoscaOrigem` da Visão geral, que aceita `cor`/`rotulo`/`dica`; clicar na instituição ou no
+  mês fechado com o % do CDI, rendeu em 12 meses, livre hoje), Evolução EM CASCATA (`CascataPatrimonio`, 09/11/2026, a opção B do mockup "Evolução do patrimônio em cascata" com a C na chave Mês | Ano, `patrimonio_evolucao_modo`: cada degrau começa onde o anterior terminou — o aporte em azul, o rendimento em verde, a saída em laranja —, só os meses com movimento e os parados num degrau "N meses rendendo", ou aportes / rendeu / saiu por ano; a última coluna é o patrimônio de hoje, aportado + rendimento; `cascataDoPatrimonio` em lib/patrimonio.js), Onde está o dinheiro (a `RoscaOrigem` da Visão geral, que aceita `cor`/`rotulo`/`dica`; clicar na instituição ou no
   tipo filtra), Quanto rendeu em cada mês (`ColunasRendeu`: em reais, com o tracejado do que o índice daria no mesmo
   dinheiro — o `base` do `mesAMes` × o índice do mês | `ColunasPct`; a prop é `indice`, NUNCA `ref`, que o React engole),
   o IR e quando ele cai, VENCIMENTOS (a linha do tempo por mês — já venceu, volta, reaplica, a marca de hoje, clicar filtra
   — e as abas Próximos | Histórico: o valor do dia, o IR, o líquido e para onde foi; o que venceu há até 30 dias fica PARA
-  AVALIAR até o "Visto", `inv_aportes.vencimento_visto`, migration 026), o dinheiro que entrou e saiu (barras divergentes),
+  AVALIAR até o "Visto", `inv_aportes.vencimento_visto`, migration 026), o dinheiro que entrou e saiu (barras divergentes; SÓ OS MESES COM MOVIMENTO — 09/11/2026, a opção A do mockup: entre dois distantes a quebra "//" e "N meses sem nada", `mesesComMovimento` em lib/patrimonio.js; a vaga MEDIDA encurta os rótulos no bloco estreito),
   quando o dinheiro fica livre (o % é do último degrau) e cada investimento (a tabela que ordena, com a taxa ao ano
   equivalente). Contas em `lib/patrimonio.js` (testada em `test/patrimonio.test.js`), desenho em
   `components/patrimonio/BlocosPatrimonio.jsx` e `GraficoPatrimonio.jsx`. O FILTRO refaz a carteira e o mês a mês só com os

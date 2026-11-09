@@ -1,11 +1,13 @@
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { COR_ENTRADAS } from '../graficos/Graficos.jsx';
-import { COR_FALTOU, GradeEsq, ReguaMeses, formatoRotulo, posRotulo } from '../graficos/GraficosVisao.jsx';
+import { CALHA_ESQ, COR_FALTOU, GradeEsq, ReguaMeses, formatoRotulo, posRotulo } from '../graficos/GraficosVisao.jsx';
 import { CLASSE_GUIA, COR_ROTULO } from '../../lib/coresGrafico.js';
 import { escalaLinear } from '../../lib/escala.js';
 import { varCor } from '../../lib/varCor.js';
 import { formatBRL } from '../../lib/dinheiro.js';
-import { competenciaAtual, nomeCompetencia } from '../../lib/format.js';
+import { competenciaAtual, competenciaCurta, nomeCompetencia } from '../../lib/format.js';
+import { cascataDoPatrimonio } from '../../lib/patrimonio.js';
 
 // OS GRÁFICOS DE MESES DO PATRIMÔNIO, no chrome do "Entradas × gastos" da Visão geral: o eixo à ESQUERDA (`GradeEsq`), o
 // número em cada coluna, e no hover a guia tracejada, os outros meses a 40% e o balão; a legenda embaixo (no bloco) é
@@ -210,5 +212,179 @@ export function ColunasPct({ meses, cdi, indice, refRotulo = 'CDI', ctrl, auto =
           : cA ? `${Math.round((a.pct / cA) * 100)}% do ${refRotulo}` : a.competencia >= competenciaAtual() ? `O ${refRotulo} do mês em andamento ainda não fechou.` : undefined} />
       )}
     </Caixa>
+  );
+}
+
+// ------------------------------------------------------------ a evolução em cascata
+// A EVOLUÇÃO EM CASCATA (09/11/2026, a opção B do mockup "Evolução do patrimônio em cascata", com a C na chave "Ano"):
+// cada coluna é um DEGRAU que começa onde o anterior terminou — o aporte sobe em azul, o rendimento em verde, a saída desce
+// em laranja (o rendimento negativo, em vermelho) — e a última é o patrimônio do fim do período, o aportado em cinza e o
+// rendimento acumulado em verde. As contas são de `cascataDoPatrimonio` (lib/patrimonio.js):
+//   · `modo` 'mes': só os meses com aporte ou saída, e os meses parados entre eles num degrau só ("9 meses / rendendo"),
+//     as mesmas colunas do "Entrou e saiu"; 'ano': aportes, rendeu e saiu de cada ano;
+//   · o fio tracejado liga o fim de um degrau ao começo do seguinte (meia vaga de cada lado, por cima do vão);
+//   · a régua no mesmo arranjo das colunas, e a vaga MEDIDA encurta os rótulos no bloco estreito (como no "Entrou e saiu").
+// `ctrl`: a legenda (séries 'entrou', 'rendeu', 'saiu', 'aportado').
+const COR_APORTE = 'var(--serie-gastos)';
+const COR_SAIDA = 'var(--origem-fixo)';
+const PESO_PARADO = 0.8;
+const VAO = 6;
+const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const ROTULO_ANO = { aportes: 'aportes', rendeu: 'rendeu', saiu: 'saiu' };
+
+export function CascataPatrimonio({ meses, modo = 'mes', ctrl, auto = false }) {
+  const balao = useBalao(260, 150);
+  const cas = useMemo(() => cascataDoPatrimonio(meses, modo), [meses, modo]);
+  const reguaRef = useRef(null);
+  const [larg, setLarg] = useState(0);
+  const tem = !!cas;
+  useLayoutEffect(() => {
+    const el = reguaRef.current;
+    if (!el) return undefined;
+    setLarg(el.clientWidth - CALHA_ESQ);
+    const ro = new ResizeObserver(() => setLarg(el.clientWidth - CALHA_ESQ));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tem]);
+  if (!cas) return null;
+
+  const hoje = competenciaAtual();
+  const vagas = [...cas.colunas, { tipo: 'fim', id: 'fim', de: cas.fim.total, ate: cas.fim.total }];
+  const peso = (v) => ({ flexGrow: v.tipo === 'parado' ? PESO_PARADO : 1, flexBasis: 0 });
+  const pesos = vagas.reduce((s, v) => s + peso(v).flexGrow, 0);
+  const u = larg > 0 ? (larg - VAO * (vagas.length - 1)) / pesos : Infinity;
+  const curto = u < 34;
+  const comNumero = u >= 24;
+  const inicial = u < 19;
+  // o alto de cada coluna: o maior ponto do degrau (o mês sobe o aporte e o rendimento antes de descer a saída)
+  const alto = (v) => (v.tipo === 'mes' ? Math.max(v.de, v.de + v.entrou + Math.max(0, v.rendeu), v.ate) : Math.max(v.de, v.ate));
+  const esc = escalaLinear(Math.max(1, ...vagas.map(alto)) / 100);
+  const fr = (c) => esc.fracao(Math.max(0, c) / 100);
+  const rot = formatoRotulo(esc.marcas[esc.marcas.length - 1]);
+  const ativo = balao.ativo;
+  const sob = ativo !== null ? vagas.find((v) => v.id === ativo) : null;
+
+  // um pedaço do degrau, de um nível a outro (o menor visível tem 2px)
+  const pedaco = (de, ate, cor, serie, k) => {
+    const lo = Math.min(de, ate); const hi = Math.max(de, ate);
+    return (
+      <div key={k} className="absolute left-[19%] right-[19%] rounded-[1.5px] transition-opacity duration-150"
+        style={{ bottom: frac(fr(lo)), height: `max(2px, ${frac(fr(hi) - fr(lo))})`, background: cor, opacity: ctrl.opSerie(serie) }} />
+    );
+  };
+  const degrau = (v) => {
+    if (v.tipo === 'inicio') return pedaco(0, v.ate, COR_APORTADO, 'aportado', 'i');
+    if (v.tipo === 'fim') {
+      const ap = Math.max(0, Math.min(cas.fim.total, cas.fim.aportado));
+      return [pedaco(0, ap, COR_APORTADO, 'aportado', 'a'), cas.fim.total > ap && pedaco(ap, cas.fim.total, COR_ENTRADAS, 'rendeu', 'r')];
+    }
+    if (v.tipo === 'parado') return pedaco(v.de, v.ate, v.rendeu < 0 ? COR_FALTOU : COR_ENTRADAS, 'rendeu', 'r');
+    if (v.tipo === 'aportes') return pedaco(v.de, v.ate, COR_APORTE, 'entrou', 'e');
+    if (v.tipo === 'rendeu') return pedaco(v.de, v.ate, v.valor < 0 ? COR_FALTOU : COR_ENTRADAS, 'rendeu', 'r');
+    if (v.tipo === 'saiu') return pedaco(v.de, v.ate, COR_SAIDA, 'saiu', 's');
+    // o mês: sobe o aporte, sobe o rendimento, desce a saída e o rendimento negativo
+    const out = [];
+    let n = v.de;
+    if (v.entrou > 0) { out.push(pedaco(n, n + v.entrou, COR_APORTE, 'entrou', 'e')); n += v.entrou; }
+    if (v.rendeu > 0) { out.push(pedaco(n, n + v.rendeu, COR_ENTRADAS, 'rendeu', 'r')); n += v.rendeu; }
+    if (v.saiu > 0) { out.push(pedaco(n, n - v.saiu, COR_SAIDA, 'saiu', 's')); n -= v.saiu; }
+    if (v.rendeu < 0) out.push(pedaco(n, n + v.rendeu, COR_FALTOU, 'rendeu', 'n'));
+    return out;
+  };
+  // o número em cima do degrau: o que fez ele mudar
+  const texto = (v) => {
+    if (v.tipo === 'fim' || v.tipo === 'inicio') return { t: rot(v.ate), forte: true };
+    if (v.tipo === 'parado') return { t: `${v.rendeu < 0 ? '−' : '+'}${rot(Math.abs(v.rendeu))}`, cor: v.rendeu < 0 ? COR_FALTOU : COR_ENTRADAS };
+    if (v.tipo === 'aportes') return { t: `+${rot(v.valor)}` };
+    if (v.tipo === 'rendeu') return { t: `${v.valor < 0 ? '−' : '+'}${rot(Math.abs(v.valor))}`, cor: v.valor < 0 ? COR_FALTOU : COR_ENTRADAS };
+    if (v.tipo === 'saiu') return { t: `−${rot(v.valor)}`, cor: COR_SAIDA };
+    return v.entrou > 0 ? { t: `+${rot(v.entrou)}` } : { t: `−${rot(v.saiu)}`, cor: COR_SAIDA };
+  };
+  const fimNome = cas.fim.competencia === hoje ? 'hoje' : competenciaCurta(cas.fim.competencia);
+  const mesCurto = (c) => { const n = MESES_CURTOS[Number(c.slice(5, 7)) - 1]; return inicial ? n[0] : n; };
+  const anoTexto = (a) => (curto ? `’${a.slice(2)}` : a);
+
+  const balaoDe = (v) => {
+    if (v.tipo === 'fim') {
+      return { titulo: cas.fim.competencia === hoje ? 'Hoje' : nomeCompetencia(cas.fim.competencia), itens: [
+        { rotulo: 'Patrimônio', valor: formatBRL(cas.fim.total) },
+        { rotulo: 'Dinheiro aportado', valor: formatBRL(cas.fim.aportado), cor: COR_APORTADO },
+        { rotulo: 'Rendimento acumulado', valor: formatBRL(cas.fim.rendimento), cor: COR_ENTRADAS },
+      ] };
+    }
+    if (v.tipo === 'inicio') return { titulo: 'Antes do período', itens: [{ rotulo: `Patrimônio antes de ${competenciaCurta(v.antesDe)}`, valor: formatBRL(v.ate), cor: COR_APORTADO }] };
+    if (v.tipo === 'parado') {
+      return { titulo: `${competenciaCurta(v.desde)}${v.n > 1 ? ` a ${competenciaCurta(v.ateMes)}` : ''} · sem aporte`, itens: [
+        { rotulo: v.n > 1 ? `Rendeu nos ${v.n} meses` : 'Rendeu no mês', valor: formatBRL(v.rendeu), cor: v.rendeu < 0 ? COR_FALTOU : COR_ENTRADAS },
+        { rotulo: 'Patrimônio no fim', valor: formatBRL(v.ate) },
+      ] };
+    }
+    if (v.tipo === 'mes') {
+      return { titulo: `${nomeCompetencia(v.m.competencia)}${v.m.competencia === hoje ? ' · até hoje' : ''}`, itens: [
+        { rotulo: 'Patrimônio no fim do mês', valor: formatBRL(v.ate) },
+        ...(v.entrou ? [{ rotulo: 'Entrou', valor: formatBRL(v.entrou), cor: COR_APORTE }] : []),
+        { rotulo: 'Rendeu', valor: formatBRL(v.rendeu), cor: v.rendeu < 0 ? COR_FALTOU : COR_ENTRADAS },
+        ...(v.saiu ? [{ rotulo: 'Saiu', valor: formatBRL(v.saiu), cor: COR_SAIDA }] : []),
+      ] };
+    }
+    const nome = { aportes: 'Entrou', rendeu: 'Rendeu', saiu: 'Saiu' }[v.tipo];
+    const cor = { aportes: COR_APORTE, rendeu: COR_ENTRADAS, saiu: COR_SAIDA }[v.tipo];
+    return { titulo: `${nome} em ${v.anoDe}${v.meses < 12 ? ` (${v.meses} ${v.meses === 1 ? 'mês' : 'meses'})` : ''}`, itens: [
+      { rotulo: nome, valor: formatBRL(v.valor), cor },
+      { rotulo: `Patrimônio no fim de ${v.anoDe}`, valor: formatBRL(v.fimDoAno) },
+    ] };
+  };
+  const b = sob ? balaoDe(sob) : null;
+
+  return (
+    <div className={auto ? 'flex h-full min-h-0 flex-col' : ''}>
+      <div className={auto ? 'min-h-0 flex-1 pt-4' : 'h-[230px] pt-4'}>
+        <GradeEsq esc={esc}>
+          <div className="pointer-events-none absolute inset-0 flex gap-1.5">
+            {vagas.map((v, k) => {
+              const tx = texto(v);
+              return (
+                <div key={v.id} className="relative h-full min-w-0 transition-opacity duration-100" style={{ ...peso(v), opacity: balao.esmaecido(v.id) ? 0.4 : 1 }}>
+                  {/* o fio que liga os degraus: do vão até o começo deste, e do fim deste até o próximo */}
+                  {k > 0 && <span className="absolute left-[-6px] right-[81%] border-t border-dashed border-gray-400" style={{ bottom: frac(fr(v.de)) }} />}
+                  {k < vagas.length - 1 && <span className="absolute left-[81%] right-0 border-t border-dashed border-gray-400" style={{ bottom: frac(fr(v.ate)) }} />}
+                  {degrau(v)}
+                  <span className={`absolute inset-x-[-8px] hidden text-center tabular-nums ${comNumero ? 'sm:block' : ''} ${tx.forte ? 'text-[10.5px] font-bold' : 'text-[9px] font-semibold'}`}
+                    style={{ bottom: posRotulo(fr(alto(v))), color: tx.cor ?? COR_ROTULO }}>{tx.t}</span>
+                  {ativo === v.id && <div className={`${CLASSE_GUIA} left-1/2`} />}
+                </div>
+              );
+            })}
+          </div>
+          <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
+            {vagas.map((v) => (
+              <button key={v.id} type="button" onMouseMove={balao.aoMover(v.id)} style={peso(v)} aria-label={`${balaoDe(v).titulo}: ${formatBRL(v.ate)}`}
+                className="h-full min-w-0 cursor-default" />
+            ))}
+          </div>
+        </GradeEsq>
+      </div>
+      {/* a régua: o mesmo arranjo das colunas */}
+      <div ref={reguaRef} className="flex gap-1.5 pt-1" style={{ paddingLeft: CALHA_ESQ }}>
+        {vagas.map((v) => {
+          const ativa = ativo === v.id ? 'font-semibold text-gray-800' : 'text-gray-500';
+          let cima; let baixo = null; let italico = false;
+          if (v.tipo === 'fim') cima = <span className="font-bold text-gray-800">{fimNome}</span>;
+          else if (v.tipo === 'inicio') cima = 'antes';
+          else if (v.tipo === 'parado') { italico = true; cima = curto ? `${v.n}m` : `${v.n} ${v.n === 1 ? 'mês' : 'meses'}`; if (!curto) baixo = 'rendendo'; }
+          else if (v.tipo === 'mes') cima = mesCurto(v.m.competencia);
+          else cima = curto ? ROTULO_ANO[v.tipo][0] : ROTULO_ANO[v.tipo];
+          if (v.ano && v.tipo !== 'parado') baixo = <span className="font-semibold text-gray-600 not-italic">{anoTexto(v.anoDe)}</span>;
+          return (
+            <span key={v.id} className={`flex min-w-0 flex-col items-center whitespace-nowrap text-[10px] leading-[13px] ${italico ? 'text-[9.5px] italic text-gray-400' : ativa}`} style={peso(v)}
+              title={v.tipo === 'parado' ? `${v.n} ${v.n === 1 ? 'mês' : 'meses'} sem aporte, só rendendo` : undefined}>
+              <span>{cima}</span>
+              {baixo && <span>{baixo}</span>}
+            </span>
+          );
+        })}
+      </div>
+      {b && <BalaoGrafico pos={balao.pos} largura={260} titulo={b.titulo} itens={b.itens} />}
+    </div>
   );
 }

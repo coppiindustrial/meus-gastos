@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import AbasPilula from '../AbasPilula.jsx';
 import { Etiqueta } from '../Comuns.jsx';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
-import { GradeEsq, ReguaMeses, formatoRotulo, posRotulo } from '../graficos/GraficosVisao.jsx';
+import { CALHA_ESQ, GradeEsq, ReguaMeses, formatoRotulo, posRotulo } from '../graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../graficos/LegendaSeries.jsx';
 import { ESTADO, MEDIO } from '../dashboard/AvisoAgora.jsx';
 import { COR_APORTADO } from './GraficoPatrimonio.jsx';
@@ -12,6 +12,7 @@ import { varCor } from '../../lib/varCor.js';
 import { brlCurto, formatBRL } from '../../lib/dinheiro.js';
 import { formatDate, nomeCompetencia } from '../../lib/format.js';
 import { rotuloTaxa } from '../../lib/carteira.js';
+import { mesesComMovimento } from '../../lib/patrimonio.js';
 import { lsGet, lsSet } from '../../lib/storage.js';
 import { useNoCelular } from '../../lib/celular.js';
 
@@ -324,9 +325,33 @@ export function BlocoLiquidez({ degraus }) {
 // ------------------------------------------------------------ o dinheiro que entrou e saiu
 // AS BARRAS DIVERGENTES do "Saldo do mês" da Visão geral: o que entrou em cada mês PARA CIMA (os aportes) e o que saiu
 // PARA BAIXO (os resgates e os vencimentos), com o número em cada uma.
+// SÓ OS MESES COM MOVIMENTO (09/11/2026, a opção A do mockup "O dinheiro que entrou e saiu", a pedido: 24 meses, 13
+// vazios, e os nomes se sobrepunham): `mesesComMovimento` (lib/patrimonio.js) dá as colunas e, entre dois meses distantes,
+// a QUEBRA — o "//" sobre o zero e "N meses / sem nada" na régua, numa vaga de 70% (`PESO_QUEBRA`). A régua é a das
+// colunas (o mesmo `flex` e o mesmo vão): o nome curto do mês e o ANO embaixo do primeiro mês de cada ano. A guia do hover
+// mora dentro da coluna (as vagas não têm a mesma largura). O BLOCO ESTREITO (a vaga de um mês MEDIDA): abaixo de 34px o
+// ano vira "'25" e a quebra só "3m" (o resto no title); abaixo de 24px some o número das barras; abaixo de 19px o mês
+// fica na inicial — senão, num card de 376px, o ano e a quebra batiam nos vizinhos.
+const PESO_QUEBRA = 0.7;
+const VAO = 6; // o `gap-1.5`
+const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 export function EntrouSaiu({ meses, ctrl, onMes }) {
   const balao = useBalao(230, 110);
-  const vals = meses.flatMap((m) => [m.aportes / 100, -m.resgates / 100]);
+  const vagas = useMemo(() => mesesComMovimento(meses), [meses]);
+  const reguaRef = useRef(null);
+  const [larg, setLarg] = useState(0);
+  const tem = vagas.length > 0;
+  useLayoutEffect(() => {
+    const el = reguaRef.current;
+    if (!el) return undefined;
+    setLarg(el.clientWidth - CALHA_ESQ);
+    const ro = new ResizeObserver(() => setLarg(el.clientWidth - CALHA_ESQ));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tem]);
+  if (!tem) return <p className="py-6 text-center text-sm text-gray-400">Nenhum aporte nem saída no período.</p>;
+  const comMov = vagas.filter((v) => v.tipo === 'mes').map((v) => v.m);
+  const vals = comMov.flatMap((m) => [m.aportes / 100, -m.resgates / 100]);
   const hi = Math.max(0, ...vals); const lo = Math.min(0, ...vals);
   const base = escalaLinear(Math.max(hi, -lo, 1), 3);
   const passo = base.marcas[1] ?? base.teto;
@@ -339,40 +364,74 @@ export function EntrouSaiu({ meses, ctrl, onMes }) {
   const rot = formatoRotulo(Math.max(topo, -fundo));
   const i = balao.ativo;
   const m = i !== null ? meses[i] : null;
+  const peso = (v) => ({ flexGrow: v.tipo === 'quebra' ? PESO_QUEBRA : 1, flexBasis: 0 });
+  // a largura de um mês: o que sobra dos vãos, dividido pelos pesos (0 = ainda não medido: o desenho cheio)
+  const pesos = vagas.reduce((s, v) => s + (v.tipo === 'quebra' ? PESO_QUEBRA : 1), 0);
+  const u = larg > 0 ? (larg - VAO * (vagas.length - 1)) / pesos : Infinity;
+  const curto = u < 34;
+  const comNumero = u >= 24;
+  const inicial = u < 19;
+  const numero = comNumero ? 'sm:block' : '';
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 pb-4 pt-4">
         <GradeEsq esc={esc}>
           <div className="pointer-events-none absolute inset-0 flex gap-1.5">
-            {meses.map((mm, k) => (
-              <div key={mm.competencia} className="h-full min-w-0 flex-1 transition-opacity duration-100" style={{ opacity: balao.esmaecido(k) ? 0.4 : 1 }}>
-                <div className="relative mx-auto h-full w-full" style={{ maxWidth: LARG_VAGA }}>
-                  {mm.aportes > 0 && (
-                    <>
-                      <div className="absolute left-[19%] right-[19%] rounded-t-[2px] transition-opacity duration-150" style={{ bottom: frac(zero), height: frac(fr(mm.aportes) - zero), background: COR_VOLTA, opacity: ctrl.opSerie('entrou') }} />
-                      <span className="absolute inset-x-[-8px] hidden text-center text-[9px] font-semibold tabular-nums sm:block" style={{ bottom: `calc(${fr(mm.aportes) * 100}% + 3px)`, color: COR_ROTULO, opacity: ctrl.opSerie('entrou') < 1 ? 0.3 : 1 }}>{rot(mm.aportes)}</span>
-                    </>
-                  )}
-                  {mm.resgates > 0 && (
-                    <>
-                      <div className="absolute left-[19%] right-[19%] rounded-b-[2px] transition-opacity duration-150" style={{ top: frac(1 - zero), height: frac(zero - fr(-mm.resgates)), background: COR_SAIU, opacity: ctrl.opSerie('saiu') }} />
-                      <span className="absolute inset-x-[-8px] hidden text-center text-[9px] font-semibold tabular-nums sm:block" style={{ top: `calc(${(1 - fr(-mm.resgates)) * 100}% + 3px)`, color: COR_SAIU, opacity: ctrl.opSerie('saiu') < 1 ? 0.3 : 1 }}>−{rot(mm.resgates)}</span>
-                    </>
-                  )}
+            {vagas.map((v) => {
+              if (v.tipo === 'quebra') {
+                return (
+                  <div key={v.id} className="relative h-full min-w-0" style={peso(v)}>
+                    {/* o "//" sobre a linha do zero: o tempo que passou sem nada */}
+                    <svg viewBox="0 0 14 12" width="14" height="12" aria-hidden="true" className="absolute left-1/2 -translate-x-1/2 translate-y-1/2 text-gray-400" style={{ bottom: frac(zero) }}>
+                      <path d="M1 11L6 1M8 11l5-10" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                );
+              }
+              const mm = v.m;
+              return (
+                <div key={v.id} className="relative h-full min-w-0 transition-opacity duration-100" style={{ ...peso(v), opacity: balao.esmaecido(v.k) ? 0.4 : 1 }}>
+                  <div className="relative mx-auto h-full w-full" style={{ maxWidth: LARG_VAGA }}>
+                    {mm.aportes > 0 && (
+                      <>
+                        <div className="absolute left-[19%] right-[19%] rounded-t-[2px] transition-opacity duration-150" style={{ bottom: frac(zero), height: frac(fr(mm.aportes) - zero), background: COR_VOLTA, opacity: ctrl.opSerie('entrou') }} />
+                        <span className={`absolute inset-x-[-8px] hidden text-center text-[9px] font-semibold tabular-nums ${numero}`} style={{ bottom: `calc(${fr(mm.aportes) * 100}% + 3px)`, color: COR_ROTULO, opacity: ctrl.opSerie('entrou') < 1 ? 0.3 : 1 }}>{rot(mm.aportes)}</span>
+                      </>
+                    )}
+                    {mm.resgates > 0 && (
+                      <>
+                        <div className="absolute left-[19%] right-[19%] rounded-b-[2px] transition-opacity duration-150" style={{ top: frac(1 - zero), height: frac(zero - fr(-mm.resgates)), background: COR_SAIU, opacity: ctrl.opSerie('saiu') }} />
+                        <span className={`absolute inset-x-[-8px] hidden text-center text-[9px] font-semibold tabular-nums ${numero}`} style={{ top: `calc(${(1 - fr(-mm.resgates)) * 100}% + 3px)`, color: COR_SAIU, opacity: ctrl.opSerie('saiu') < 1 ? 0.3 : 1 }}>−{rot(mm.resgates)}</span>
+                      </>
+                    )}
+                  </div>
+                  {i === v.k && <div className={`${CLASSE_GUIA} left-1/2`} />}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-          {m && <div className={CLASSE_GUIA} style={{ left: `${((i + 0.5) / meses.length) * 100}%` }} />}
           <div className="absolute inset-0 flex gap-1.5" onMouseLeave={balao.aoSair}>
-            {meses.map((mm, k) => (
-              <button key={mm.competencia} type="button" onMouseMove={balao.aoMover(k)} onClick={onMes ? () => onMes(mm.competencia) : undefined}
-                aria-label={`${nomeCompetencia(mm.competencia)}: entrou ${formatBRL(mm.aportes)}, saiu ${formatBRL(mm.resgates)}`} className="h-full min-w-0 flex-1 cursor-default" />
-            ))}
+            {vagas.map((v) => (v.tipo === 'quebra' ? <div key={v.id} className="min-w-0" style={peso(v)} /> : (
+              <button key={v.id} type="button" onMouseMove={balao.aoMover(v.k)} onClick={onMes ? () => onMes(v.m.competencia) : undefined} style={peso(v)}
+                aria-label={`${nomeCompetencia(v.m.competencia)}: entrou ${formatBRL(v.m.aportes)}, saiu ${formatBRL(v.m.resgates)}`} className="h-full min-w-0 cursor-default" />
+            )))}
           </div>
         </GradeEsq>
       </div>
-      <ReguaMeses meses={meses} ativo={i} />
+      {/* a régua: o mesmo arranjo das colunas; o ano embaixo do primeiro mês de cada ano; a quebra diz quantos meses */}
+      <div ref={reguaRef} className="flex gap-1.5 pt-1" style={{ paddingLeft: CALHA_ESQ }}>
+        {vagas.map((v) => (v.tipo === 'quebra' ? (
+          <span key={v.id} className="flex min-w-0 flex-col items-center overflow-visible whitespace-nowrap text-[9.5px] italic leading-[13px] text-gray-400" style={peso(v)}
+            title={`${v.vazios} ${v.vazios === 1 ? 'mês' : 'meses'} sem aporte nem saída`}>
+            {curto ? <span>{v.vazios}m</span> : <><span>{v.vazios} {v.vazios === 1 ? 'mês' : 'meses'}</span><span>sem nada</span></>}
+          </span>
+        ) : (
+          <span key={v.id} className="flex min-w-0 flex-col items-center whitespace-nowrap leading-[13px]" style={peso(v)}>
+            <span className={`text-[10px] transition-colors duration-150 ${i === v.k ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>{(inicial ? (x) => x[0] : (x) => x)(MESES_CURTOS[Number(v.m.competencia.slice(5, 7)) - 1])}</span>
+            {v.ano && <span className="text-[10px] font-semibold text-gray-600">{curto ? `’${v.m.competencia.slice(2, 4)}` : v.m.competencia.slice(0, 4)}</span>}
+          </span>
+        )))}
+      </div>
       {m && (
         <BalaoGrafico pos={balao.pos} largura={230} titulo={nomeCompetencia(m.competencia)} itens={[
           { rotulo: 'Entrou', valor: m.aportes ? formatBRL(m.aportes) : '—', cor: COR_VOLTA },
