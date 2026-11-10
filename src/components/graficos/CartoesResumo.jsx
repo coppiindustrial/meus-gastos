@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import BalaoGrafico, { posicaoBalao } from './BalaoGrafico.jsx';
 import { COR_ENTRADAS, COR_GASTOS } from './Graficos.jsx';
 import { COR_SALDO } from './GraficosVisao.jsx';
@@ -66,7 +66,9 @@ export function CartaoKpi({
   const x = (i) => 6 + (i / Math.max(1, vals.length - 1)) * (W - 12);
   const y = (val) => H - 5 - ((val - min) / (max - min || 1)) * (H - (compacto ? 10 : 14));
   const pts = vals.map((val, i) => `${x(i).toFixed(1)},${y(val).toFixed(1)}`).join(' ');
-  const gradId = `grad-${rotulo}-${compacto ? 'c' : 'n'}`;
+  // O ID DO DEGRADÊ é só letras e números (10/11/2026): montado com o rótulo, "Selic (meta)" e "Rendeu em 12 meses" (espaço,
+  // parênteses) quebravam o `url(#…)` e a área sob a curva saía PRETA; e dois cartões com o mesmo rótulo dividiam o id.
+  const gradId = `grad${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const pontoAtivo = hover ? hover.i : vals.length - 1;
 
   const mover = (e) => {

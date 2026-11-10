@@ -77,3 +77,24 @@ export function carteiraContraIndices(meses, cdiMes, ipca, mesAtual) {
       return { competencia: m.competencia, carteira: m.pct, cdi, ipca: i, real: i === null ? null : (1 + m.pct) / (1 + i) - 1, doCdi: cdi ? m.pct / cdi : null };
     });
 }
+
+// A COTAÇÃO AO VIVO (10/11/2026, a pedido: "queria que atualizasse com mais frequência"): a PTAX do Banco Central sai UMA
+// VEZ POR DIA (por volta das 13h; antes disso a de hoje não existe e o cartão mostrava a de ontem). O número de AGORA vem
+// do câmbio comercial da AwesomeAPI (`api/indicadores.js`, relido a cada minuto pela tela), e a PTAX segue no histórico.
+// `lerCotacaoAgora`: a resposta dela → { usd, eur } com { valor (R$), varDia (fração), quando ('AAAA-MM-DD HH:MM:SS',
+// a hora de Brasília) } — o que vier sem número fica null.
+export function lerCotacaoAgora(json) {
+  const um = (x) => {
+    const valor = Number(x?.bid); const varDia = Number(x?.pctChange) / 100;
+    return Number.isFinite(valor) && valor > 0 && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(x?.create_date ?? '')
+      ? { valor, varDia: Number.isFinite(varDia) ? varDia : null, quando: x.create_date } : null;
+  };
+  return { usd: um(json?.USDBRL), eur: um(json?.EURBRL) };
+}
+// A série da PTAX COM O PONTO DE AGORA: o valor ao vivo entra como o ponto do dia dele (no lugar da PTAX do mesmo dia, se
+// já saiu); sem cotação ao vivo, a série como está.
+export function comAgora(s, agora) {
+  if (!agora) return s ?? [];
+  const dia = agora.quando.slice(0, 10);
+  return [...(s ?? []).filter(([d]) => d < dia), [dia, agora.valor]];
+}

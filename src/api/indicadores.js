@@ -4,6 +4,11 @@
 // pesquisa FOCUS do Banco Central (o Olinda: as medianas anuais do mercado para o IPCA, a Selic e o câmbio). A taxa do
 // Tesouro IPCA+ de hoje fica de fora (opção A do mockup): o site do Tesouro não deixa o navegador ler.
 // Cada parte que falhar volta null (o bloco dela avisa) e a tela segue com as outras.
+// O DÓLAR E O EURO DE AGORA (10/11/2026, a pedido): a PTAX sai uma vez por dia (perto das 13h); o câmbio comercial ao vivo
+// vem da AwesomeAPI (pública, aberta ao navegador, sem chave; atualiza a cada ~30 s) — `cotacaoAgora`, que a tela relê a
+// cada minuto. Falhou, null: o cartão volta à PTAX.
+import { lerCotacaoAgora } from '../lib/indicadores.js';
+
 const SGS = (n) => `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${n}/dados`;
 const br = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 // SEMPRE COM A DATA FINAL (06/11/2026): sem o `dataFinal`, a API do Banco Central passou a responder 304 SEM CONTEÚDO (o
@@ -30,6 +35,26 @@ async function focus() {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Focus: ${r.status}`);
   return (await r.json()).value ?? [];
+}
+
+// NO MÍNIMO 20 s ENTRE DUAS LEITURAS (a mesma promessa para quem pedir antes): a tela que se remonta (mudar a largura troca
+// o casco do celular pelo do computador) relia a cada vez — foram 12 chamadas em 17 s ao redimensionar.
+const INTERVALO_MIN = 20000;
+let ultimaLeitura = { em: 0, promessa: null };
+export function cotacaoAgora() {
+  if (ultimaLeitura.promessa && Date.now() - ultimaLeitura.em < INTERVALO_MIN) return ultimaLeitura.promessa;
+  const promessa = (async () => {
+    try {
+      const r = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL', { cache: 'no-store' });
+      if (!r.ok) return null;
+      const c = lerCotacaoAgora(await r.json());
+      return c.usd || c.eur ? c : null;
+    } catch {
+      return null;
+    }
+  })();
+  ultimaLeitura = { em: Date.now(), promessa };
+  return promessa;
 }
 
 export async function carregarIndicadores(hoje) {

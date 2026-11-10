@@ -5,9 +5,9 @@ import { CartaoKpi } from '../components/graficos/CartoesResumo.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import { ColunasMes, GraficoLinhas } from '../components/indicadores/GraficosIndicadores.jsx';
 import useCarteira from '../components/patrimonio/useCarteira.js';
-import { carregarIndicadores } from '../api/indicadores.js';
+import { carregarIndicadores, cotacaoAgora } from '../api/indicadores.js';
 import {
-  carteiraContraIndices, degraus, focusPorAno, juroReal, porMes, ultimo, variacaoEm, variacaoNoDia,
+  carteiraContraIndices, comAgora, degraus, focusPorAno, juroReal, porMes, ultimo, variacaoEm, variacaoNoDia,
 } from '../lib/indicadores.js';
 import { competenciaAtual, competenciaCurta, formatDate, todayISO } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
@@ -70,6 +70,17 @@ export default function Indicadores() {
     setCarregando(false);
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
+  // O DÓLAR E O EURO AO VIVO: lidos ao abrir, a cada minuto com a aba à vista e ao voltar para ela (o "Recarregar" também)
+  const [agora, setAgora] = useState(null);
+  const lerAgora = useCallback(async () => { const c = await cotacaoAgora(); if (c) setAgora(c); }, []);
+  useEffect(() => {
+    lerAgora();
+    const t = setInterval(() => { if (document.visibilityState === 'visible') lerAgora(); }, 60000);
+    const volta = () => { if (document.visibilityState === 'visible') lerAgora(); };
+    document.addEventListener('visibilitychange', volta);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', volta); };
+  }, [lerAgora]);
+  const recarregar = useCallback(() => { carregar(); lerAgora(); }, [carregar, lerAgora]);
   const pat = useCarteira(); // a carteira do zero: o mês a mês dos aportes e o CDI de cada mês
   const [moeda, setMoedaEstado] = useState(() => (lsGet('indicadores_moeda') === '30d' ? '30d' : '12m'));
   const setMoeda = (v) => { setMoedaEstado(v); lsSet('indicadores_moeda', v); };
@@ -82,7 +93,16 @@ export default function Indicadores() {
   const cdiHoje = ultimo(d.cdi);
   const ipca12 = ultimo(d.ipca12);
   const ipcaMes = ultimo(d.ipca);
-  const usd = ultimo(d.usd); const eur = ultimo(d.eur);
+  // a série da PTAX com o ponto de agora (o cartão, a curva e os 12 meses); o "no dia" do ao vivo é o da AwesomeAPI
+  const sUsd = useMemo(() => comAgora(d.usd, agora?.usd), [d.usd, agora]);
+  const sEur = useMemo(() => comAgora(d.eur, agora?.eur), [d.eur, agora]);
+  const usd = ultimo(sUsd); const eur = ultimo(sEur);
+  const subMoeda = (s, vivo, ptax) => {
+    if (!s?.length) return '—';
+    const ano = `${fracPct(variacaoEm(s, 12))} em 12 meses`;
+    if (vivo) return `${vivo.quando.slice(11, 16)} · ${fracPct(vivo.varDia, 2)} no dia · ${ano}`;
+    return `PTAX ${formatDate(ultimo(ptax)[0]).slice(0, 5)} · ${fracPct(variacaoNoDia(ptax), 2)} no dia · ${ano}`;
+  };
   const real = juroReal(selicHoje?.[1] ?? null, ipca12?.[1] ?? null);
   const anoHoje = Number(hoje.slice(0, 4));
   const anosFocus = [anoHoje, anoHoje + 1, anoHoje + 2];
@@ -103,12 +123,10 @@ export default function Indicadores() {
           <CartaoKpi compacto icone="inflacao" cor={COR.ipca} rotulo="IPCA 12 meses" valor={pct(ipca12?.[1])}
             sub={ipcaMes ? `até ${competenciaCurta(ipcaMes[0].slice(0, 7))} · no mês ${pct(ipcaMes[1])}` : '—'}
             serie={porMes(d.ipca12).slice(-12)} formatar={(v) => pct(v)} />
-          <CartaoKpi compacto icone="dolar" cor={COR.usd} rotulo="Dólar (PTAX)" valor={reais(usd?.[1])}
-            sub={usd ? `${formatDate(usd[0]).slice(0, 5)} · ${fracPct(variacaoNoDia(d.usd), 2)} no dia · ${fracPct(variacaoEm(d.usd, 12))} em 12 meses` : '—'}
-            serie={porMes(d.usd).slice(-12)} formatar={(v) => reais(v)} />
-          <CartaoKpi compacto icone="euro" cor={COR.eur} rotulo="Euro (PTAX)" valor={reais(eur?.[1])}
-            sub={eur ? `${formatDate(eur[0]).slice(0, 5)} · ${fracPct(variacaoNoDia(d.eur), 2)} no dia · ${fracPct(variacaoEm(d.eur, 12))} em 12 meses` : '—'}
-            serie={porMes(d.eur).slice(-12)} formatar={(v) => reais(v)} />
+          <CartaoKpi compacto icone="dolar" cor={COR.usd} rotulo={agora?.usd ? 'Dólar' : 'Dólar (PTAX)'} valor={reais(usd?.[1])}
+            sub={subMoeda(sUsd, agora?.usd, d.usd)} serie={porMes(sUsd).slice(-12)} formatar={(v) => reais(v)} />
+          <CartaoKpi compacto icone="euro" cor={COR.eur} rotulo={agora?.eur ? 'Euro' : 'Euro (PTAX)'} valor={reais(eur?.[1])}
+            sub={subMoeda(sEur, agora?.eur, d.eur)} serie={porMes(sEur).slice(-12)} formatar={(v) => reais(v)} />
         </div>
       </CardAutoAltura>
     </div>
@@ -156,13 +174,13 @@ export default function Indicadores() {
         );
       case 'ind_moedas':
         return (
-          <Bloco titulo="Dólar e euro" sub="PTAX de venda"
+          <Bloco titulo="Dólar e euro" sub={agora ? 'PTAX de venda · hoje, o comercial ao vivo' : 'PTAX de venda'}
             extra={<AbasPilula abas={[{ key: '30d', label: '30 dias' }, { key: '12m', label: '12 meses' }]} valor={moeda} onChange={setMoeda} variante="claro" altura={26} folga={2} />}>
             <div className="flex h-full flex-col">
               <div className="min-h-0 flex-1">
                 <GraficoLinhas formatar={(v) => reais(v)} formatarEixo={(v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} series={[
-                  { key: 'usd', rotulo: 'Dólar', cor: COR.usd, pontos: filtrarMoeda(d.usd) },
-                  { key: 'eur', rotulo: 'Euro', cor: COR.eur, pontos: filtrarMoeda(d.eur) },
+                  { key: 'usd', rotulo: 'Dólar', cor: COR.usd, pontos: filtrarMoeda(sUsd) },
+                  { key: 'eur', rotulo: 'Euro', cor: COR.eur, pontos: filtrarMoeda(sEur) },
                 ]} />
               </div>
               <Legenda itens={[['Dólar', COR.usd], ['Euro', COR.eur]]} />
@@ -228,6 +246,6 @@ export default function Indicadores() {
   }
   return (
     <GridPersonalizavel escopo="indicadores_v1" titulo="Indicadores" acessorio={acessorio}
-      catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={renderWidget} pronto={!!dados} onAtualizar={carregar} atualizando={carregando} />
+      catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={renderWidget} pronto={!!dados} onAtualizar={recarregar} atualizando={carregando} />
   );
 }

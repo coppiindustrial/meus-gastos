@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { carteiraContraIndices, degraus, focusPorAno, juroReal, porMes, pontoEm, ultimo, variacaoEm, variacaoNoDia } from '../src/lib/indicadores.js';
+import { carteiraContraIndices, comAgora, degraus, lerCotacaoAgora, focusPorAno, juroReal, porMes, pontoEm, ultimo, variacaoEm, variacaoNoDia } from '../src/lib/indicadores.js';
 
 // Dados FICTÍCIOS.
 const selic = [['2026-06-17', 14.25], ['2026-06-18', 14.0], ['2026-06-19', 14.0], ['2026-08-06', 13.75], ['2026-08-07', 13.75]];
@@ -43,4 +43,21 @@ test('a carteira contra o CDI e o IPCA: só os meses fechados com rendimento', (
   assert.equal(r[0].competencia, '2026-09');
   assert.ok(Math.abs(r[0].real - (1.011 / 1.0048 - 1)) < 1e-12);
   assert.ok(Math.abs(r[0].doCdi - 0.011 / 0.0105) < 1e-12);
+});
+
+test('a cotação ao vivo: a resposta da AwesomeAPI e o ponto de agora na série da PTAX', () => {
+  const json = {
+    USDBRL: { bid: '5.5904', pctChange: '1.484946', create_date: '2026-11-10 11:57:33' },
+    EURBRL: { bid: 'x', pctChange: '1.02', create_date: '2026-11-10 11:55:20' },
+  };
+  const a = lerCotacaoAgora(json);
+  assert.deepEqual([a.usd.valor, a.usd.quando], [5.5904, '2026-11-10 11:57:33']);
+  assert.ok(Math.abs(a.usd.varDia - 0.01484946) < 1e-12);
+  assert.equal(a.eur, null); // sem número, fica de fora (o cartão volta à PTAX)
+  assert.deepEqual(lerCotacaoAgora(null), { usd: null, eur: null });
+  const ptax = [['2026-11-06', 5.5013], ['2026-11-09', 5.5146]];
+  assert.deepEqual(comAgora(ptax, a.usd), [...ptax, ['2026-11-10', 5.5904]]);
+  // depois das 13h a PTAX de hoje já saiu: o ao vivo fica no lugar dela
+  assert.deepEqual(comAgora([...ptax, ['2026-11-10', 5.57]], a.usd), [...ptax, ['2026-11-10', 5.5904]]);
+  assert.equal(comAgora(ptax, null), ptax);
 });
