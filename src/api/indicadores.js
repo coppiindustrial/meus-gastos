@@ -17,25 +17,36 @@ const br = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 const hojeBR = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
 const menosDias = (iso, n) => new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) - n * 86400000).toISOString().slice(0, 10);
 
+// TENTA DE NOVO (10/11/2026): a API do Banco Central falha às vezes numa série e não nas outras (o CDI e o IPCA de 12 meses
+// vieram "—" com a Selic e o IPCA do mês lidos na mesma hora). Três tentativas, com 1 s e 3 s de espera, antes do null.
+const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));
+async function comTentativas(ler) {
+  for (const ms of [1000, 3000]) {
+    try { return await ler(); } catch { await espera(ms); }
+  }
+  return ler();
+}
+
 // [['AAAA-MM-DD', número]] desde `desde` (a Selic meta vem com datas FUTURAS — vale até a próxima reunião —: corta em `ate`)
-async function serie(n, desde, ate) {
+const serie = (n, desde, ate) => comTentativas(async () => {
   const r = await fetch(`${SGS(n)}?formato=json&dataInicial=${br(desde)}&dataFinal=${hojeBR()}`);
   if (!r.ok) throw new Error(`SGS ${n}: ${r.status}`);
   const lista = await r.json();
+  if (!Array.isArray(lista)) throw new Error(`SGS ${n}: resposta sem a lista`);
   return lista
     .map((x) => [String(x.data).split('/').reverse().join('-'), Number(String(x.valor).replace(',', '.'))])
     .filter(([d, v]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(v) && (!ate || d <= ate));
-}
+});
 
 // As medianas da Focus (as anuais, a base de cálculo 0 = todas as instituições), as mais novas primeiro.
-async function focus() {
+const focus = () => comTentativas(async () => {
   const filtro = "(Indicador eq 'IPCA' or Indicador eq 'Selic' or Indicador eq 'Câmbio') and baseCalculo eq 0";
   const url = 'https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais'
     + `?$top=90&$filter=${encodeURIComponent(filtro)}&$orderby=${encodeURIComponent('Data desc')}&$format=json&$select=Indicador,Data,DataReferencia,Mediana`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Focus: ${r.status}`);
   return (await r.json()).value ?? [];
-}
+});
 
 // NO MÍNIMO 20 s ENTRE DUAS LEITURAS (a mesma promessa para quem pedir antes): a tela que se remonta (mudar a largura troca
 // o casco do celular pelo do computador) relia a cada vez — foram 12 chamadas em 17 s ao redimensionar.

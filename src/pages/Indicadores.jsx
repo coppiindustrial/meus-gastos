@@ -66,10 +66,19 @@ export default function Indicadores() {
   const [carregando, setCarregando] = useState(false);
   const carregar = useCallback(async () => {
     setCarregando(true);
-    setDados(await carregarIndicadores(todayISO()));
+    const novos = await carregarIndicadores(todayISO());
+    // o que falhou agora e tinha vindo antes fica com o de antes
+    setDados((antes) => Object.fromEntries(Object.entries(novos).map(([k, v]) => [k, v ?? antes?.[k] ?? null])));
     setCarregando(false);
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
+  // FALTOU UMA PARTE (o Banco Central falhou mesmo com as tentativas): lê de novo a cada minuto até vir tudo
+  const faltaAlgo = !!dados && Object.values(dados).some((v) => v == null);
+  useEffect(() => {
+    if (!faltaAlgo) return undefined;
+    const t = setTimeout(carregar, 60000);
+    return () => clearTimeout(t);
+  }, [faltaAlgo, dados, carregar]);
   // O DÓLAR E O EURO AO VIVO: lidos ao abrir, a cada minuto com a aba à vista e ao voltar para ela (o "Recarregar" também)
   const [agora, setAgora] = useState(null);
   const lerAgora = useCallback(async () => { const c = await cotacaoAgora(); if (c) setAgora(c); }, []);
