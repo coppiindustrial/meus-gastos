@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Modal from '../Modal.jsx';
 import AbasPilula from '../AbasPilula.jsx';
 import Toggle from '../Toggle.jsx';
@@ -8,13 +8,14 @@ import LegendaSeries, { useDestaqueSeries } from '../graficos/LegendaSeries.jsx'
 import { IconMaximize, IconMinimize } from '../icons.jsx';
 import GraficoAtivo, { COR_EVENTO, COR_MARCA, LETRA_EVENTO } from './GraficoAtivo.jsx';
 import WidgetTradingView from './WidgetTradingView.jsx';
-import { atualizarEventos, buscarHistorico, eventosDoAtivo, fechamentosDoAtivo, intradiaDoAtivo, mensalDoAtivo } from '../../api/rendaVariavel.js';
+import SeletorAtivo, { lembrarVista } from './SeletorAtivo.jsx';
+import { acaoDeFora, atualizarEventos, buscarHistorico, eventosDoAtivo, fechamentosDoAtivo, intradiaDoAtivo, mensalDoAtivo } from '../../api/rendaVariavel.js';
 import { dolarDiario } from '../../api/indicadores.js';
 import { useNoCelular } from '../../lib/celular.js';
 import { formatBRL } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
 import { lsGet, lsSet } from '../../lib/storage.js';
-import { CLASSES, classeDoTipo, nomeDoTipo, precoDaOperacao } from '../../lib/rendaVariavel.js';
+import { CLASSES, TIPOS, classeDoTipo, nomeDoTipo, posicaoDoAtivo, precoDaOperacao } from '../../lib/rendaVariavel.js';
 import {
   PERIODOS, cotasAntesDe, desdobramentosSemOperacao, desempenho, dolarEm, eventosNoPeriodo, historicoDoPrecoMedio, historicoQueFalta,
   inicioDoPeriodo, marcasNoPeriodo, paraDesenho, precoMedioEm, proximoResultado, resumoDosDividendos, ultimosResultados, velasDeFechamentos,
@@ -35,6 +36,10 @@ import {
 // ativo por sessão: se o Yahoo recusar, segue com o que há e o rodapé avisa. OS EVENTOS (`rv_eventos`, migration 031) são
 // relidos uma vez por dia (`atualizarEventos`). O 1 dia (de 5 em 5 minutos) e o "Desde o início" (um ponto por mês desde a
 // estreia) a função busca na hora, sem guardar.
+// O TÍTULO É O SELETOR (13/11/2026, a opção B do mockup "Ver o gráfico de qualquer ação"): "MU · Micron ▾" abre o
+// `SeletorAtivo` (a carteira, as vistas há pouco e a busca pelo nome); escolher troca o conteúdo sem fechar o painel (o
+// período, a forma e as marcas ficam: são lembrados). A AÇÃO FORA DO CADASTRO vem inteira da função na hora (`acaoDeFora`:
+// os fechamentos, os eventos e a cotação, sem gravar) e o lado troca "Sua posição" por "Cadastrar".
 
 const PEDIDOS = new Set(); // os ativos cujo histórico já foi pedido nesta sessão
 const EVENTOS_PEDIDOS = new Set(); // e os eventos
@@ -53,14 +58,13 @@ const QUANDO = { amc: 'depois do fechamento', bmo: 'antes da abertura', dmh: 'du
 const nomeTri = (e) => (e.trimestre && e.ano ? `${e.trimestre}º tri fiscal ${e.ano}` : '');
 const casasDiv = (v) => (Number(v) < 0.1 ? 4 : 3);
 
-export default function PainelAtivo({ posicao, operacoes, ptax, dolar, hoje, onClose, onOperar }) {
+function ConteudoAtivo({ posicao, operacoes, ptax, dolar, hoje, onOperar, pronto = null, deFora = false, onCadastrar = null }) {
   const p = posicao;
   const { ativo } = p;
   const usd = !!p.usd;
   const movel = useNoCelular();
   const classe = CLASSES.find((c) => c.id === classeDoTipo(ativo.tipo));
   const cor = classe?.cor ?? 'var(--serie-gastos)';
-  const [cheio, setCheio] = useState(false);
   const [aba, setAbaEstado] = useState(() => (movel ? 'meu' : ler('rv_grafico_aba', 'meu', ['meu', 'tv'])));
   const setAba = (v) => { setAbaEstado(v); lsSet('rv_grafico_aba', v); };
   const [per, setPerEstado] = useState(() => ler('rv_grafico_periodo', '1A', PERIODOS.map((x) => x.key)));
@@ -81,11 +85,14 @@ export default function PainelAtivo({ posicao, operacoes, ptax, dolar, hoje, onC
   const emReais = usd && brl && !doInicio; // o dólar de antes de 10 anos o Banco Central não dá numa leitura
 
   // ---- o histórico guardado (e o pedido ao Yahoo, se faltar) e os eventos (relidos uma vez por dia)
-  const [hist, setHist] = useState(null);
-  const [eventos, setEventos] = useState(undefined); // undefined: lendo; null: sem a migration 031
+  // a ação de fora do cadastro já chega com tudo (`pronto`): nada a ler nem a pedir
+  const [hist, setHist] = useState(() => (pronto ? { velas: true, linhas: pronto.linhas } : null));
+  const [eventos, setEventos] = useState(() => (pronto ? pronto.eventos : undefined)); // undefined: lendo; null: sem a migration 031
+  const alvoApi = deFora ? { ticker: ativo.ticker, mercado: ativo.mercado } : ativo.id;
   const [buscando, setBuscando] = useState(false);
   const [aviso, setAviso] = useState(null);
   useEffect(() => {
+    if (pronto) return undefined;
     let vivo = true;
     (async () => {
       let pediuHistorico = false;
@@ -137,7 +144,7 @@ export default function PainelAtivo({ posicao, operacoes, ptax, dolar, hoje, onC
   useEffect(() => {
     if (!intradia) return undefined;
     let vivo = true;
-    const lerIntra = () => intradiaDoAtivo(ativo.id).then((r) => { if (vivo) setIntra(r); });
+    const lerIntra = () => intradiaDoAtivo(alvoApi).then((r) => { if (vivo) setIntra(r); });
     lerIntra();
     const t = setInterval(() => { if (document.visibilityState === 'visible') lerIntra(); }, 120000);
     return () => { vivo = false; clearInterval(t); };
@@ -146,7 +153,7 @@ export default function PainelAtivo({ posicao, operacoes, ptax, dolar, hoje, onC
   useEffect(() => {
     if (!doInicio || mensal) return undefined;
     let vivo = true;
-    mensalDoAtivo(ativo.id).then((r) => { if (vivo) setMensal(r?.erro ? { erro: r.erro } : { velas: velasDeFechamentos(r?.pontos) }); });
+    mensalDoAtivo(alvoApi).then((r) => { if (vivo) setMensal(r?.erro ? { erro: r.erro } : { velas: velasDeFechamentos(r?.pontos) }); });
     return () => { vivo = false; };
   }, [doInicio, ativo.id, mensal]);
 
@@ -298,13 +305,6 @@ export default function PainelAtivo({ posicao, operacoes, ptax, dolar, hoje, onC
 
   const vazio = !intradia && !pontos.length;
   const carregandoTudo = !hist || (buscando && !velas.length) || (doInicio && !mensal);
-  const acoesModal = (
-    <Tooltip label={cheio ? 'Sair da tela cheia' : 'Tela cheia'}>
-      <button type="button" onClick={() => setCheio((x) => !x)} aria-label={cheio ? 'Sair da tela cheia' : 'Tela cheia'} className={BTN_ICONE}>
-        {cheio ? <IconMinimize className="h-3.5 w-3.5" /> : <IconMaximize className="h-3.5 w-3.5" />}
-      </button>
-    </Tooltip>
-  );
   const interruptor = (rotulo, aria, valor, mudar) => (
     <span className="flex h-[24px] items-center gap-2 px-2">
       <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => mudar(!valor)} className="whitespace-nowrap text-[12px] font-medium text-gray-600">{rotulo}</button>
@@ -317,10 +317,6 @@ export default function PainelAtivo({ posicao, operacoes, ptax, dolar, hoje, onC
         : grupo === 'semana' ? 'Velas semanais: no período longo, uma vela por semana.' : grupo === 'mes' ? 'Velas mensais: no período longo, uma vela por mês.' : 'O fechamento e o volume de cada dia.');
 
   return (
-    <Modal open onClose={onClose} title={`${ativo.ticker}${ativo.nome ? ` · ${ativo.nome}` : ''}`}
-      subtitulo={`${nomeDoTipo(ativo.tipo)} · ${ativo.mercado === 'EUA' ? 'EUA' : 'B3'}${ativo.corretora ? ` · ${ativo.corretora}` : ''}`}
-      acoes={acoesModal} alturaCheia animarTamanho padding="p-0" fecharNoBackdrop
-      maxWidth={cheio ? 'max-w-[96vw]' : 'max-w-[min(1280px,95vw)]'} altura={cheio ? 'h-[94vh]' : 'h-[90vh]'}>
       <div className="flex h-full min-h-0 flex-col">
         {/* o preço e a troca de aba */}
         <div className="flex shrink-0 flex-wrap items-center gap-x-3.5 gap-y-1.5 px-5 pb-1 pt-4">
@@ -393,7 +389,17 @@ export default function PainelAtivo({ posicao, operacoes, ptax, dolar, hoje, onC
                     {onOperar && <button type="button" className="mt-1 font-semibold underline decoration-dotted underline-offset-2 hover:text-amber-900" onClick={() => onOperar(ativo, 'desdob')}>Lançar o desdobramento</button>}
                   </div>
                 )}
-                <Bloco titulo="Sua posição">
+                {deFora ? (
+                  <div className="flex flex-col gap-1.5 rounded-[6px] border border-gray-200 bg-hx-f9fafb px-3 py-2.5 text-[12px] leading-[17px] text-gray-600">
+                    <span><b className="font-semibold text-gray-900">{ativo.ticker}</b> não está no seu cadastro: o gráfico vem na hora, sem guardar.</span>
+                    {onCadastrar && (
+                      <span className="flex flex-wrap gap-1.5">
+                        <button type="button" className="btn-secondary !h-[28px] !px-2.5 !text-[12px]" onClick={() => onCadastrar(ativo, false)}>Cadastrar</button>
+                        <button type="button" className="btn-secondary !h-[28px] !px-2.5 !text-[12px]" onClick={() => onCadastrar(ativo, true)}>Cadastrar e lançar uma compra</button>
+                      </span>
+                    )}
+                  </div>
+                ) : <Bloco titulo="Sua posição">
                   {p.quantidade > 0 ? (<>
                     <Linha r="Cotas" v={<b className="font-semibold text-gray-900">{p.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 6 })}</b>} />
                     <Linha r="Preço médio" v={usd && !emReais ? `US$ ${num(p.precoMedio)}` : formatBRL(Math.round((usd ? p.custoMedioReais : p.precoMedio) * 100))} />
@@ -401,7 +407,7 @@ export default function PainelAtivo({ posicao, operacoes, ptax, dolar, hoje, onC
                     {usd && <Linha r="Em dólar" v={`US$ ${num(p.valorMoeda / 100)}`} />}
                     <Linha r="Resultado" v={<span className={corDe(p.resultado)}>{p.resultado >= 0 ? '+' : '−'}{formatBRL(Math.round(Math.abs(p.resultado)))} · {pct(p.resPct, 1)}</span>} />
                   </>) : <p className="text-gray-400">Nenhuma cota agora.{onOperar && <> <button type="button" className="font-medium text-gray-600 underline decoration-dotted underline-offset-2 hover:text-gray-900" onClick={() => onOperar(ativo, 'compra')}>Lançar uma compra</button></>}</p>}
-                </Bloco>
+                </Bloco>}
                 <Bloco titulo="Hoje">
                   <Linha r="Abertura" v={c?.abertura ? num(Number(c.abertura) * k) : '—'} />
                   <Linha r="Máxima" v={c?.maxima ? num(Number(c.maxima) * k) : '—'} />
@@ -472,6 +478,84 @@ export default function PainelAtivo({ posicao, operacoes, ptax, dolar, hoje, onC
           </>
         )}
       </div>
+  );
+}
+
+// A AÇÃO FORA DO CADASTRO: lê tudo na função e monta a posição vazia (a cotação de agora; sem ela, o último fechamento)
+function ConteudoDeFora({ alvo, dolar, hoje, ptax, onCadastrar, aoCarregar }) {
+  const [dados, setDados] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    acaoDeFora(alvo.ticker, alvo.mercado).then((r) => { if (vivo) setDados(r ?? { erro: 'sem resposta' }); });
+    return () => { vivo = false; };
+  }, [alvo.ticker, alvo.mercado]);
+  const nome = alvo.nome || dados?.nome || ''; // o da busca (o nome completo do Yahoo) vale sobre o da cotação
+  useEffect(() => { if (dados && !dados.erro && nome) aoCarregar?.(nome); }, [dados, nome, aoCarregar]);
+  if (!dados) return <div className="flex h-full items-center justify-center text-[12.5px] text-gray-400">Buscando {alvo.ticker} no Yahoo… (fora do cadastro, vem na hora)</div>;
+  if (dados.erro || !dados.fechamentos?.length) return <div className="flex h-full items-center justify-center px-6 text-center text-[12.5px] text-gray-400">{alvo.ticker} não veio ({dados.erro ?? 'sem histórico'}).</div>;
+  const tipo = TIPOS[alvo.tipo] ? alvo.tipo : alvo.mercado === 'EUA' ? 'acao_eua' : 'acao_br';
+  const ativo = { id: `fora:${alvo.mercado}:${alvo.ticker}`, ticker: alvo.ticker, nome, tipo, mercado: TIPOS[tipo].mercado, moeda: TIPOS[tipo].moeda, corretora: '' };
+  const f = dados.fechamentos;
+  const ult = f[f.length - 1]; const ant = f[f.length - 2];
+  const cotacao = dados.cotacao?.preco ? dados.cotacao : {
+    preco: ult.preco, fechamento_anterior: ant?.preco ?? null, variacao_dia: ant ? ult.preco / ant.preco - 1 : null,
+    abertura: ult.abertura, maxima: ult.maxima, minima: ult.minima, cotado_em: `${ult.data}T21:00:00Z`, fonte: 'yahoo',
+  };
+  const posicao = posicaoDoAtivo(ativo, [], { cotacao, dolar, hoje });
+  return <ConteudoAtivo posicao={posicao} operacoes={[]} ptax={ptax} dolar={dolar} hoje={hoje} pronto={{ linhas: f, eventos: dados.eventos ?? [] }} deFora onCadastrar={onCadastrar} />;
+}
+
+// O PAINEL: `alvo` = { ativoId } (cadastrado) | { ticker, mercado, nome, tipo } (de fora) | null (escolher); `abrirSeletor`:
+// abre já com o seletor (o "Ver o gráfico de uma ação…" do ▾). `posicoes`: a carteira (os cadastrados, para o seletor).
+export default function PainelAtivo({ alvo: alvoInicial, posicoes, operacoes, ptax, dolar, hoje, onClose, onOperar, onCadastrar, abrirSeletor = false }) {
+  const movel = useNoCelular();
+  const [alvo, setAlvo] = useState(alvoInicial ?? null);
+  const [seletor, setSeletor] = useState(abrirSeletor || !alvoInicial);
+  const [cheio, setCheio] = useState(false);
+  const [nomeDeFora, setNomeDeFora] = useState('');
+  const [ancora, setAncora] = useState(null); // o botão do título (estado, não ref: o seletor que abre junto precisa dele já no 1º quadro)
+  const posicao = alvo?.ativoId ? posicoes.find((x) => x.ativo.id === alvo.ativoId) : null;
+  const ativo = posicao?.ativo ?? (alvo && !alvo.ativoId ? { ticker: alvo.ticker, nome: nomeDeFora || alvo.nome, tipo: alvo.tipo, mercado: alvo.mercado, corretora: '' } : null);
+  const cor = ativo ? CLASSES.find((c) => c.id === classeDoTipo(ativo.tipo))?.cor : null;
+  const fecharSeletor = useCallback(() => setSeletor(false), []);
+  const escolher = (it) => {
+    setSeletor(false);
+    if (it.ativoId) setAlvo({ ativoId: it.ativoId });
+    else { lembrarVista(it); setNomeDeFora(''); setAlvo({ ticker: it.ticker, mercado: it.mercado, nome: it.nome, tipo: it.tipo }); }
+  };
+  const chave = alvo ? (alvo.ativoId ?? `${alvo.mercado}:${alvo.ticker}`) : 'nada';
+  const titulo = (
+    <button ref={setAncora} type="button" onClick={() => setSeletor((x) => !x)} aria-expanded={seletor} aria-haspopup="dialog"
+      className="-ml-1.5 inline-flex max-w-full items-center gap-2 rounded-[6px] px-1.5 py-0.5 text-left transition-colors hover:bg-gray-100 aria-expanded:bg-gray-100">
+      {cor && <span aria-hidden="true" className="h-[18px] w-[3px] shrink-0 rounded-[2px]" style={{ background: cor }} />}
+      <span className="truncate">{ativo ? <><b className="font-semibold text-gray-900">{ativo.ticker}</b>{ativo.nome ? <span className="font-medium text-gray-600"> · {ativo.nome}</span> : null}</> : <span className="text-gray-500">Escolha uma ação</span>}</span>
+      <svg viewBox="0 0 24 14" width="10" height="6" fill="currentColor" aria-hidden="true" className={`shrink-0 text-gray-500 transition-transform duration-200 ease-out ${seletor ? 'rotate-180' : ''}`}><path d="M1.5 2h21L12 12.5z" /></svg>
+    </button>
+  );
+  const subtitulo = ativo ? `${nomeDoTipo(ativo.tipo)} · ${ativo.mercado === 'EUA' ? 'EUA' : 'B3'}${ativo.corretora ? ` · ${ativo.corretora}` : ''}${posicao ? '' : ' · fora do cadastro'} · clique no nome para trocar` : 'Procure pelo ticker ou pelo nome da empresa';
+  const acoes = (
+    <Tooltip label={cheio ? 'Sair da tela cheia' : 'Tela cheia'}>
+      <button type="button" onClick={() => setCheio((x) => !x)} aria-label={cheio ? 'Sair da tela cheia' : 'Tela cheia'} className={BTN_ICONE}>
+        {cheio ? <IconMinimize className="h-3.5 w-3.5" /> : <IconMaximize className="h-3.5 w-3.5" />}
+      </button>
+    </Tooltip>
+  );
+  return (
+    <Modal open onClose={onClose} title={titulo} rotulo={ativo ? `O gráfico de ${ativo.ticker}` : 'O gráfico de uma ação'} subtitulo={subtitulo}
+      acoes={acoes} alturaCheia animarTamanho padding="p-0" fecharNoBackdrop={!seletor}
+      maxWidth={cheio ? 'max-w-[96vw]' : 'max-w-[min(1280px,95vw)]'} altura={cheio ? 'h-[94vh]' : 'h-[90vh]'}>
+      {posicao ? (
+        <ConteudoAtivo key={chave} posicao={posicao} operacoes={operacoes} ptax={ptax} dolar={dolar} hoje={hoje} onOperar={onOperar} />
+      ) : alvo && !alvo.ativoId ? (
+        <ConteudoDeFora key={chave} alvo={alvo} dolar={dolar} hoje={hoje} ptax={ptax} aoCarregar={setNomeDeFora}
+          onCadastrar={movel ? null : onCadastrar} />
+      ) : (
+        <div className="flex h-full items-center justify-center px-6 text-center text-[12.5px] text-gray-400">Procure uma ação pelo ticker ou pelo nome da empresa: a da carteira ou qualquer uma das bolsas dos EUA e da B3.</div>
+      )}
+      {seletor && ancora && (
+        <SeletorAtivo ancora={ancora} posicoes={posicoes} atual={ativo} onEscolher={escolher}
+          onFechar={() => { fecharSeletor(); if (!alvo) onClose(); }} />
+      )}
     </Modal>
   );
 }

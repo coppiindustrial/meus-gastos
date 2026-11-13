@@ -445,6 +445,15 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   trimestre fiscal) e os trimestres de antes entram com a data do fim do trimestre e `hora` 'periodo' (só na tabela, nunca no
   gráfico). A B3 não tem resultados (sem fonte grátis). O "historico" grava os eventos junto; o painel relê uma vez por dia
   (a ação "eventos"). Sem a 031, o painel segue sem as marcas e o rodapé avisa.
+- O GRÁFICO DE QUALQUER AÇÃO (13/11/2026, a opção B do mockup "Ver o gráfico de qualquer ação"): O TÍTULO DO PAINEL É O SELETOR
+  ("MU · Micron ▾" abre o `SeletorAtivo`: na sua carteira, as VISTAS HÁ POUCO — as 5 últimas de fora do cadastro, `rv_vistas`,
+  só ticker, mercado, nome e tipo — e, escrevendo, a busca pelo nome); trocar não fecha o painel. O ▾ da Renda variável tem
+  "Ver o gráfico de uma ação…", que abre o painel já com o seletor. A AÇÃO FORA DO CADASTRO vem inteira da função na hora, SEM
+  GRAVAR (a ação "avulso": 10 anos de fechamentos, os eventos e a cotação; o "intradia" e o "mensal" aceitam ticker + mercado);
+  o lado troca "Sua posição" por "Cadastrar" / "Cadastrar e lançar uma compra" (o cadastro abre com a linha preenchida — `inicial`
+  do `ModalCadastroAtivos` — e a compra abre quando ela entra na carteira). O `PainelAtivo` é o Modal com o título-seletor e
+  o miolo `ConteudoAtivo` (remontado a cada ação; o período, a forma e as marcas são lembrados). O `Modal` aceita `rotulo`
+  (o nome para o leitor de tela quando o título não é texto). Sem atalho de teclado (o Ctrl+K da busca rápida já existe).
 
 ## Indicadores (06/11/2026, o mockup aprovado "Indicadores e importações", opção A)
 

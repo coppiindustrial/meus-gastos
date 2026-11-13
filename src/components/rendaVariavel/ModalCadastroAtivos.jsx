@@ -29,12 +29,14 @@ const OPCOES_TIPO = [
 let seq = 0;
 const novaLinha = (tipo = 'acao_eua') => ({ chave: `n${++seq}`, novo: true, ticker: '', tipo, nome: '', corretora: '', ativo: true });
 
-export default function ModalCadastroAtivos({ ativos, operacoes, tipoInicial, onFechar, onSalvo }) {
+// `inicial`: { ticker, tipo, nome } — a linha nova já preenchida (o "Cadastrar" da ação de fora no painel do gráfico)
+export default function ModalCadastroAtivos({ ativos, operacoes, tipoInicial, inicial = null, onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   const comOps = new Set(operacoes.map((o) => o.ativo_id));
   const [linhas, setLinhas] = useState(() => {
     const ls = ativos.map((a) => ({ chave: a.id, id: a.id, ticker: a.ticker, tipo: a.tipo, nome: a.nome, corretora: a.corretora, ativo: a.ativo !== false, original: a }));
+    if (inicial) return [...ls, { ...novaLinha(inicial.tipo), ticker: inicial.ticker, nome: inicial.nome ?? '' }];
     return tipoInicial || !ls.length ? [...ls, novaLinha(tipoInicial)] : ls;
   });
   const [conferencia, setConferencia] = useState({}); // chave → 'lendo' | 'ok' | 'nao'

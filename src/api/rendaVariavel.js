@@ -68,9 +68,13 @@ export async function fechamentosDoAtivo(ativoId) {
 // a função busca o histórico no Yahoo e grava: { gravados, de, ate } ou { erro }
 export const buscarHistorico = (ativoId, range = '10y') => chamar({ acao: 'historico', ativo_id: ativoId, range });
 // o pregão de hoje de 5 em 5 minutos (não fica guardado): { pontos: [{ t, o, h, l, c }], anterior, inicio, fim } ou { erro }
-export const intradiaDoAtivo = (ativoId) => chamar({ acao: 'intradia', ativo_id: ativoId });
+// `alvo`: o id do ativo cadastrado, ou { ticker, mercado } de uma ação fora do cadastro (o seletor do painel)
+const doAlvo = (alvo) => (typeof alvo === 'string' ? { ativo_id: alvo } : { ticker: alvo.ticker, mercado: alvo.mercado });
+export const intradiaDoAtivo = (alvo) => chamar({ acao: 'intradia', ...doAlvo(alvo) });
 // o "Desde o início": um ponto por mês desde a estreia na bolsa (não fica guardado): { pontos: [{ data, preco, … }] } ou { erro }
-export const mensalDoAtivo = (ativoId) => chamar({ acao: 'mensal', ativo_id: ativoId });
+export const mensalDoAtivo = (alvo) => chamar({ acao: 'mensal', ...doAlvo(alvo) });
+// O GRÁFICO DE UMA AÇÃO FORA DO CADASTRO, sem gravar nada: { ticker, mercado, nome, fechamentos, eventos, cotacao } ou { erro }
+export const acaoDeFora = (ticker, mercado) => chamar({ acao: 'avulso', ticker, mercado });
 
 // OS EVENTOS de UM ativo (migration 031: os dividendos, os desdobramentos, os resultados e a estreia, que a função grava).
 // Sem a migration, null (o painel segue sem as marcas).

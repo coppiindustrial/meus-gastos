@@ -39,8 +39,10 @@ export default function Modal({
   open, onClose, title, children, maxWidth = 'max-w-lg', aside,
   alturaCheia = false, fecharNoBackdrop = false, subtitulo = null, acoes = null,
   z = 'z-[60]', altura = 'h-full', padding = 'p-5', paddingCabecalho = 'px-5 py-3',
-  animarTamanho = false,
+  animarTamanho = false, rotulo = null,
 }) {
+  // `rotulo`: o nome do diálogo para o leitor de tela quando o `title` não é texto (o painel do ativo: o título é o seletor)
+  const nomeDialogo = rotulo ?? (typeof title === 'string' ? title : undefined);
   // O modal continua MONTADO por mais `SAIDA_MS` depois de fechado — é o que dá tempo de a saída
   // acontecer. Antes era `if (!open) return null` seco: a caixa sumia do DOM no mesmo quadro do
   // clique e não havia o que animar.
@@ -78,7 +80,7 @@ export default function Modal({
       <div className={`tela-movel fundo-movel fixed inset-0 ${z === 'z-[35]' ? 'z-[60]' : z} bg-white ${
         saindo ? 'tela-movel-sai' : 'tela-movel-entra'}`}
         style={saindo ? { pointerEvents: 'none' } : undefined}
-        role="dialog" aria-modal="true" aria-label={title}>
+        role="dialog" aria-modal="true" aria-label={nomeDialogo}>
         <div className="absolute inset-0 overflow-auto overscroll-contain pb-[max(16px,env(safe-area-inset-bottom))]"
           style={{
             paddingTop: 'calc(env(safe-area-inset-top, 0px) + 66px)',
@@ -142,7 +144,7 @@ export default function Modal({
         <div className={`card w-full ${maxWidth} motion-reduce:animate-none ${
           saindo ? 'animate-modal-out' : 'animate-modal-in'} ${alturaCheia ? `${altura} flex flex-col min-h-0` : ''} ${
           animarTamanho ? 'transition-[max-width,height] duration-300 ease-out motion-reduce:transition-none' : ''}`}
-          role="dialog" aria-modal="true" aria-label={title}>
+          role="dialog" aria-modal="true" aria-label={nomeDialogo}>
           {/* `border-gray-100` e não `gray-200`: é a MESMA divisória do painel de contatos ao lado
               (PainelContatos.jsx, cabeçalho e rodapé). Lado a lado, a do modal era visivelmente mais
               escura que as duas do painel — três linhas com o mesmo papel em dois tons. */}

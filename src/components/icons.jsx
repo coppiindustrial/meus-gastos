@@ -578,10 +578,12 @@ export const IconColar = ({ className = 'h-[15px] w-[15px]' }) => (
 // SOBE 1PX (09/11/2026, medido nas capturas do usuário): centrado na caixa do texto, o círculo ficava 2px acima do topo
 // das maiúsculas e 4px abaixo da linha de base — o texto se desenha mais baixo que a caixa dele. Com o -1px, fica no
 // meio do texto (3px e 3px). Vale para todo "+" ao lado de um texto (Adicionar…, Criar categoria, aporte em…).
-export const CirculoMais = ({ borda = 'text-gray-400', cor = '', grande = false }) => {
+// `subir`: o 1px acima (o padrão, ao lado do texto das linhas de acrescentar); `subir={false}` quando ele já fica no meio da
+// linha do texto — a ação no pé das listas (`SelectBusca`): medido em 13/11/2026, lá o círculo ficava 1px acima da letra.
+export const CirculoMais = ({ borda = 'text-gray-400', cor = '', grande = false, subir = true }) => {
   const t = grande ? 18 : 16; const m = t / 2; const p = grande ? 5 : 4;
   return (
-    <svg viewBox={`0 0 ${t} ${t}`} width={t} height={t} className={`shrink-0 -translate-y-px ${cor}`} fill="none" aria-hidden="true">
+    <svg viewBox={`0 0 ${t} ${t}`} width={t} height={t} className={`shrink-0 ${subir ? '-translate-y-px' : ''} ${cor}`} fill="none" aria-hidden="true">
       <circle cx={m} cy={m} r={m - 0.5} className={borda} stroke="currentColor" strokeWidth="1" strokeDasharray="2.2 1.6" />
       <path d={`M${m} ${m - p}v${2 * p}M${m - p} ${m}h${2 * p}`} stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>

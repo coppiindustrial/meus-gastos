@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import CabecalhoPagina from '../components/CabecalhoPagina.jsx';
 import Tooltip from '../components/Tooltip.jsx';
 import MenuContexto from '../components/MenuContexto.jsx';
@@ -27,7 +27,9 @@ import { nomeDoTipo } from '../lib/rendaVariavel.js';
 // "+ Lançar operação". Duas abas (a pílula que desliza): CARTEIRA (a tabela agrupada) e OPERAÇÕES (a lista). Os PROVENTOS se
 // lançam aqui (o tipo Provento do pop-up), mas a análise deles mora no Patrimônio. A cotação vem da função `cotacoes` do
 // Supabase (a brapi e a Finnhub); ao abrir, se a última tiver mais de 20 minutos, a tela pede uma nova. No celular, só ler.
-// O GRÁFICO DO ATIVO (13/11/2026): o ticker, a curvinha do mês e o ícone da linha abrem o `PainelAtivo` (Meu gráfico | Avançado).
+// O GRÁFICO DO ATIVO (13/11/2026): o ticker, a curvinha do mês e o ícone da linha abrem o `PainelAtivo` (Meu gráfico | Avançado);
+// o ▾ "Ver o gráfico de uma ação…" abre o painel com o seletor no título — qualquer ação, na carteira ou não. O "Cadastrar"
+// da ação de fora abre o cadastro já com ela; "e lançar uma compra" abre a compra assim que ela entra na carteira.
 
 const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
 const ABAS = [{ key: 'carteira', label: 'Carteira' }, { key: 'operacoes', label: 'Operações' }];
@@ -42,7 +44,13 @@ export default function RendaVariavel() {
   const [cadastro, setCadastro] = useState(null); // { tipoInicial? }
   const [operacao, setOperacao] = useState(null); // { ativo?, tipo?, op? }
   const [mais, setMais] = useState(null);
-  const [grafico, setGrafico] = useState(null); // o id do ativo do PainelAtivo
+  const [grafico, setGrafico] = useState(null); // { alvo: { ativoId } | { ticker, mercado, nome, tipo } | null, abrirSeletor? }
+  const [depoisDoCadastro, setDepoisDoCadastro] = useState(null); // { ticker, mercado }: lançar a compra quando ela entrar
+  useEffect(() => {
+    if (!depoisDoCadastro) return;
+    const ativo = d.ativos.find((a) => a.ticker === depoisDoCadastro.ticker && a.mercado === depoisDoCadastro.mercado);
+    if (ativo) { setDepoisDoCadastro(null); setOperacao({ ativo, tipo: 'compra' }); }
+  }, [d.ativos, depoisDoCadastro]);
   const maisAberto = useRef(false);
 
   if (d.carregando) return (<div><CabecalhoPagina titulo="Renda variável" /><PageLoading /></div>);
@@ -58,7 +66,6 @@ export default function RendaVariavel() {
     );
   }
   const { carteira } = d;
-  const posGrafico = grafico ? carteira.posicoes.find((p) => p.ativo.id === grafico) : null;
   const vazio = !d.ativos.length;
   const nAtivos = carteira.grupos.reduce((s, g) => s + g.posicoes.length, 0);
 
@@ -94,6 +101,7 @@ export default function RendaVariavel() {
   const abrirMais = (el) => {
     const r = el.getBoundingClientRect();
     setMais({ x: r.right - 280, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+      { rotulo: 'Ver o gráfico de uma ação…', sub: 'na carteira ou não: pelo ticker ou pelo nome', onEscolher: () => setGrafico({ alvo: carteira.posicoes[0] ? { ativoId: carteira.posicoes[0].ativo.id } : null, abrirSeletor: true }) },
       { rotulo: d.atualizando ? 'Atualizando as cotações…' : 'Atualizar as cotações agora', sub: d.erroFuncao ? `a função não respondeu: ${d.erroFuncao}` : 'o agendamento lê a cada 15 min no pregão', desabilitado: d.atualizando || vazio, onEscolher: () => d.releer(true) },
       { rotulo: 'Exportar a carteira (CSV)', sub: 'cada ativo: quantidade, preço médio, posição, resultado', desabilitado: !nAtivos, motivo: !nAtivos ? 'nenhum ativo' : undefined, onEscolher: exportar },
     ] });
@@ -136,7 +144,7 @@ export default function RendaVariavel() {
           <section className="card mt-4 flex flex-col overflow-hidden !p-0">
             {aba === 'carteira'
               ? <TabelaRendaVariavel carteira={carteira} hoje={d.hoje} dolar={d.dolar} movel={movel} acoes={acoes} inicio={inicio}
-                fechamentos={d.fechamentos} onGrafico={(p) => setGrafico(p.ativo.id)} />
+                fechamentos={d.fechamentos} onGrafico={(p) => setGrafico({ alvo: { ativoId: p.ativo.id } })} />
               : <ListaOperacoes ativos={d.ativos} operacoes={d.operacoes} hoje={d.hoje} movel={movel} acoes={acoes} inicio={inicio} />}
           </section>
           {movel && <p className="mt-2 text-xs text-gray-500">Lançar, editar e o cadastro ficam no computador.</p>}
@@ -144,13 +152,18 @@ export default function RendaVariavel() {
       )}
 
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
-      {posGrafico && (
-        <PainelAtivo posicao={posGrafico} operacoes={d.operacoes} ptax={d.ptax} dolar={d.dolar} hoje={d.hoje} onClose={() => setGrafico(null)}
-          onOperar={movel ? null : (ativo, tipo = 'compra') => { setGrafico(null); setOperacao({ ativo, tipo }); }} />
+      {grafico && (
+        <PainelAtivo alvo={grafico.alvo} abrirSeletor={!!grafico.abrirSeletor} posicoes={carteira.posicoes} operacoes={d.operacoes} ptax={d.ptax}
+          dolar={d.dolar} hoje={d.hoje} onClose={() => setGrafico(null)}
+          onOperar={movel ? null : (ativo, tipo = 'compra') => { setGrafico(null); setOperacao({ ativo, tipo }); }}
+          onCadastrar={(ativo, comCompra) => {
+            setGrafico(null);
+            setCadastro({ inicial: { ticker: ativo.ticker, tipo: ativo.tipo, nome: ativo.nome ?? '' }, depois: comCompra ? { ticker: ativo.ticker, mercado: ativo.mercado } : null });
+          }} />
       )}
       {cadastro && (
-        <ModalCadastroAtivos ativos={d.ativos} operacoes={d.operacoes} tipoInicial={cadastro.tipoInicial}
-          onFechar={() => setCadastro(null)} onSalvo={() => { setCadastro(null); d.carregar().then(() => d.releer(false)); }} />
+        <ModalCadastroAtivos ativos={d.ativos} operacoes={d.operacoes} tipoInicial={cadastro.tipoInicial} inicial={cadastro.inicial}
+          onFechar={() => setCadastro(null)} onSalvo={() => { if (cadastro.depois) setDepoisDoCadastro(cadastro.depois); setCadastro(null); d.carregar().then(() => d.releer(false)); }} />
       )}
       {operacao && (
         <ModalOperacao inicial={operacao} ativos={d.ativos} operacoes={d.operacoes} cotacoes={d.cotacoes} ptax={d.ptax} dolar={d.dolar} hoje={d.hoje}

@@ -115,7 +115,7 @@ export default function ModalOperacao({ inicial = {}, ativos, operacoes, cotacoe
         <div className="grid grid-cols-2 gap-3">
           <Campo rotulo="Ativo" className="col-span-2">
             <SelectSimples value={ativoId} onChange={setAtivoId} opcoes={opcoesAtivo} placeholder="Escolha o ativo"
-              acao={onCadastro ? { rotulo: () => '+ Cadastrar ativo', onClick: () => onCadastro() } : undefined} />
+              acao={onCadastro ? { rotulo: () => 'Cadastrar ativo', onClick: () => onCadastro() } : undefined} />
             {posAntes && <p className="mt-1 text-[11.5px] text-gray-500">Você tem {posAntes.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 6 })} {posAntes.quantidade === 1 ? 'cota' : 'cotas'}{posAntes.precoMedio ? ` · preço médio ${moeda(usd, posAntes.precoMedio)}` : ''}</p>}
           </Campo>
           <Campo rotulo={tipo === 'provento' ? 'Pago em' : 'Data'}><CampoData value={data} onChange={setData} /></Campo>

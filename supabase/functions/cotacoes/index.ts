@@ -17,6 +17,9 @@
 //     { "acao": "intradia", "ativo_id": "…" } o pregão de hoje de 5 em 5 minutos, também do Yahoo, sem gravar (o "1D").
 //     { "acao": "buscar", "q": "nvidia" } PROCURA pelo nome ou pelo ticker na busca do Yahoo (os dois mercados: as bolsas dos
 //     EUA e a B3), para o cadastro achar o ativo sem saber a sigla; não grava nada.
+//     { "acao": "avulso", "ticker": "NVDA", "mercado": "EUA" } o GRÁFICO DE UMA AÇÃO FORA DO CADASTRO (o seletor do painel), sem
+//     gravar: os fechamentos de 10 anos, os dividendos, os desdobramentos e a estreia (Yahoo), os resultados (Finnhub, nos EUA)
+//     e a cotação de agora. O "intradia" e o "mensal" também aceitam o ticker e o mercado no lugar do ativo_id.
 //     { "acao": "mensal", "ativo_id": "…" } um ponto por mês desde a estreia na bolsa (o "Desde o início"), sem gravar.
 //     { "acao": "eventos", "ativo_id": "…" } relê os EVENTOS (migration 031): os dividendos e desdobramentos do último ano
 //     (Yahoo), a estreia e, nos EUA, os resultados da Finnhub (o calendário e as surpresas). O "historico" já faz isso junto.
@@ -130,20 +133,38 @@ async function gravarEventos(admin: ReturnType<typeof createClient>, linhas: Eve
 // próximos (a data, 'bmo'/'amc', o lucro por ação e a receita esperados); as SURPRESAS, os 4 últimos trimestres (o divulgado
 // e o esperado pelo ano e trimestre fiscal, sem a data). Então: grava o calendário e, nos guardados do mesmo ano e trimestre,
 // o divulgado das surpresas. Devolve as surpresas (a tabela do painel mostra os trimestres de antes do app).
-async function resultadosDaFinnhub(admin: ReturnType<typeof createClient>, ativo: { id: string; user_id: string; ticker: string }) {
+async function lerResultadosFinnhub(ticker: string) {
   const token = Deno.env.get('FINNHUB_TOKEN');
   if (!token) throw new Error('falta o segredo FINNHUB_TOKEN');
-  const t = encodeURIComponent(ativo.ticker);
+  const t = encodeURIComponent(ticker);
   const de = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
   const ate = new Date(Date.now() + 200 * 86400000).toISOString().slice(0, 10);
   const ler = async (url: string) => { const r = await fetch(url); return r.ok ? r.json() : null; };
   const cal: Record<string, unknown>[] = (await ler(`https://finnhub.io/api/v1/calendar/earnings?symbol=${t}&from=${de}&to=${ate}&token=${token}`))?.earningsCalendar ?? [];
   const sur: Record<string, unknown>[] = (await ler(`https://finnhub.io/api/v1/stock/earnings?symbol=${t}&token=${token}`)) ?? [];
-  const linhas: Evento[] = cal.filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(String(x.date ?? ''))).map((x) => ({
-    ativo_id: ativo.id, user_id: ativo.user_id, tipo: 'resultado', data: x.date, hora: String(x.hour ?? ''),
+  const doCalendario = cal.filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(String(x.date ?? ''))).map((x) => ({
+    tipo: 'resultado', data: x.date, hora: String(x.hour ?? ''),
     valor: ou(x.epsActual), estimado: ou(x.epsEstimate), receita: ou(x.revenueActual), receita_estimada: ou(x.revenueEstimate),
     ano: x.year ?? null, trimestre: x.quarter ?? null,
   }));
+  return { doCalendario, sur: Array.isArray(sur) ? sur : [] };
+}
+// os resultados de uma ação FORA DO CADASTRO, sem gravar: o calendário e, no mesmo trimestre, o divulgado das surpresas; as
+// surpresas que sobram com a data do fim do trimestre (`hora` 'periodo'), como as guardadas
+function resultadosSemGravar(doCalendario: Evento[], sur: Record<string, unknown>[]) {
+  const linhas = doCalendario.map((l) => ({ ...l }));
+  for (const x of sur) {
+    const l = linhas.find((g) => g.ano === x.year && g.trimestre === x.quarter);
+    if (l) { if (ou(x.actual) !== null) { l.valor = ou(x.actual); l.estimado = ou(x.estimate) ?? l.estimado; } continue; }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(x.period ?? '')) && ou(x.actual) !== null) {
+      linhas.push({ tipo: 'resultado', data: x.period, hora: 'periodo', valor: ou(x.actual), estimado: ou(x.estimate), ano: x.year ?? null, trimestre: x.quarter ?? null });
+    }
+  }
+  return linhas;
+}
+async function resultadosDaFinnhub(admin: ReturnType<typeof createClient>, ativo: { id: string; user_id: string; ticker: string }) {
+  const { doCalendario, sur } = await lerResultadosFinnhub(ativo.ticker);
+  const linhas: Evento[] = doCalendario.map((l) => ({ ativo_id: ativo.id, user_id: ativo.user_id, ...l }));
   await gravarEventos(admin, linhas);
   if (Array.isArray(sur) && sur.length) {
     const { data: guardados } = await admin.from('rv_eventos').select('data, ano, trimestre, valor').eq('ativo_id', ativo.id).eq('tipo', 'resultado');
@@ -238,6 +259,42 @@ Deno.serve(async (req) => {
       const q = String(corpo.q ?? '').trim().slice(0, 60);
       if (q.length < 2) return resposta({ itens: [] });
       return resposta({ itens: await buscarNoYahoo(q) });
+    }
+
+    // UMA AÇÃO FORA DO CADASTRO: o ticker e o mercado no lugar do ativo_id; nada é gravado
+    const deFora = !corpo?.ativo_id && corpo?.ticker && ['avulso', 'intradia', 'mensal'].includes(corpo?.acao);
+    if (deFora) {
+      if (!usuario) return resposta({ erro: 'só com o login' }, 401);
+      const ticker = String(corpo.ticker).trim().toUpperCase().slice(0, 12);
+      const mercado = corpo.mercado === 'EUA' ? 'EUA' : 'B3';
+      if (corpo.acao === 'intradia') {
+        const { velas, meta } = await doYahoo(ticker, mercado, '1d', '5m');
+        const regular = meta.currentTradingPeriod?.regular ?? {};
+        return resposta({ pontos: velas, anterior: ou(meta.chartPreviousClose) ?? ou(meta.previousClose), inicio: regular.start ?? null, fim: regular.end ?? null, fonte: 'yahoo' });
+      }
+      if (corpo.acao === 'mensal') {
+        const { velas, dia } = await doYahoo(ticker, mercado, 'max', '1mo');
+        return resposta({ pontos: velas.map((x) => ({ data: dia(x.t), preco: x.c, abertura: x.o, maxima: x.h, minima: x.l, volume: x.v })), fonte: 'yahoo' });
+      }
+      const [diario, mensal, cotacao, res] = await Promise.all([
+        doYahoo(ticker, mercado, '10y', '1d', true),
+        doYahoo(ticker, mercado, 'max', '1mo').catch(() => null),
+        buscar(mercado, ticker, true).catch(() => null),
+        mercado === 'EUA' ? lerResultadosFinnhub(ticker).catch(() => null) : Promise.resolve(null),
+      ]);
+      const porDia = new Map<string, Record<string, unknown>>();
+      diario.velas.forEach((x) => { const data = diario.dia(x.t); porDia.set(data, { data, preco: x.c, abertura: x.o, maxima: x.h, minima: x.l, volume: x.v }); });
+      const eventos: Evento[] = [
+        ...diario.divs.map((x) => ({ tipo: 'dividendo', data: x.data, valor: x.valor, hora: '' })),
+        ...diario.splits.map((x) => ({ tipo: 'desdobramento', data: x.data, valor: x.valor, hora: '' })),
+        ...(mensal?.velas.length ? [{ tipo: 'estreia', data: mensal.dia(mensal.velas[0].t), valor: mensal.velas[0].c, hora: '' }] : []),
+        ...(res ? resultadosSemGravar(res.doCalendario, res.sur) : []),
+      ];
+      const { nome: nomeFonte, ...c } = cotacao ?? ({} as Cotacao);
+      return resposta({
+        ticker, mercado, nome: nomeFonte || String(diario.meta.longName || diario.meta.shortName || ''),
+        fechamentos: [...porDia.values()], eventos, cotacao: cotacao ? c : null, fonte: 'yahoo',
+      });
     }
 
     if (['historico', 'intradia', 'mensal', 'eventos'].includes(corpo?.acao)) {
