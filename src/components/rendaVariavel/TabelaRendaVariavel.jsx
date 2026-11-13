@@ -187,6 +187,7 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
       const aberto = !fechadas.has(l.id);
       const faixa = `border-b border-gray-200 bg-hx-f3f4f6 ${aceso(l.id)}`;
       const n = g.posicoes.length;
+      const comPos = g.posicoes.some((p) => p.quantidade > 0); // só cadastrado, sem compra: os totais ficam vazios (nada de "R$ 0")
       return (
         <tr key={l.id} {...attrs} className="group/linha" onMouseEnter={() => setSobLinha(l.id)}>
           <td className={`relative h-[46px] cursor-pointer pl-3 pr-3 ${faixa}`} onClick={() => alternar(l.id)}>
@@ -200,10 +201,10 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
           <td className={`${faixa} ${movel ? 'hidden' : ''}`} />
           <td className={`${faixa} ${movel ? 'hidden' : ''}`} />
           <td className={`${faixa} px-3 text-right`}>{n > 0 && <MarcaMercado posicoes={g.posicoes} mercado={g.classe.mercado} />}</td>
-          <td className={`${faixa} ${numTd} text-[13.5px] font-semibold text-gray-900`}>{n ? reais(g.totais.valor) : ''}</td>
-          <td className={`${faixa} ${numTd} font-semibold`}>{n ? <span className={corDe(g.totais.resultado)}>{sinal(g.totais.resultado)}{reais(Math.abs(g.totais.resultado))}</span> : ''}</td>
+          <td className={`${faixa} ${numTd} text-[13.5px] font-semibold text-gray-900`}>{comPos ? reais(g.totais.valor) : ''}</td>
+          <td className={`${faixa} ${numTd} font-semibold`}>{comPos ? <span className={corDe(g.totais.resultado)}>{sinal(g.totais.resultado)}{reais(Math.abs(g.totais.resultado))}</span> : ''}</td>
           <td className={`${faixa} ${numTd} font-semibold text-gray-700 ${movel ? 'hidden' : ''}`}>{g.totais.proventos ? reais(g.totais.proventos) : ''}</td>
-          <td className={`${faixa} px-3 font-semibold text-gray-700 ${movel ? 'hidden' : ''}`}>{n ? <Barrinha fracao={peso(g.totais.valor)} cor={g.classe.cor} /> : ''}</td>
+          <td className={`${faixa} px-3 font-semibold text-gray-700 ${movel ? 'hidden' : ''}`}>{comPos ? <Barrinha fracao={peso(g.totais.valor)} cor={g.classe.cor} /> : ''}</td>
           {acoesTd(faixa)}
         </tr>
       );
@@ -379,10 +380,10 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${movel ? 'hidden' : ''}`} />
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${movel ? 'hidden' : ''}`} />
               <td className="border-t border-gray-200 bg-hx-f9fafb" />
-              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-900`}>{reais(total.valor)}</td>
+              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-900`}>{total.custo ? reais(total.valor) : '—'}</td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd}`}>
-                <span className={corDe(total.resultado)}>{sinal(total.resultado)}{reais(Math.abs(total.resultado))}</span>
-                <span className="block text-[11.5px] font-normal text-gray-500">{pct(total.resPct)}</span>
+                {total.custo ? <span className={corDe(total.resultado)}>{sinal(total.resultado)}{reais(Math.abs(total.resultado))}</span> : '—'}
+                {total.custo > 0 && <span className="block text-[11.5px] font-normal text-gray-500">{pct(total.resPct)}</span>}
               </td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{total.proventos ? reais(total.proventos) : '—'}</td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb px-3 text-gray-700 ${movel ? 'hidden' : ''}`}>{total.valor ? '100%' : ''}</td>

@@ -374,7 +374,7 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
 - A COTAÇÃO (decisão do usuário: brapi + Finnhub, com chave): a função `supabase/functions/cotacoes/index.ts` (Deno; publicar
   em Edge Functions com o "Verify JWT" DESLIGADO — ela confere sozinha) lê a B3 na brapi.dev e os EUA na Finnhub, com as
   chaves nos SEGREDOS do Supabase (BRAPI_TOKEN, FINNHUB_TOKEN; nunca no repositório, que é público). Quem chama: o
-  AGENDAMENTO (migration 028, pg_cron a cada 15 min das 13h às 21h45 UTC em dia útil, com o cabeçalho `x-segredo` =
+  AGENDAMENTO (migration 028; a 029 dá à `service_role` a permissão nas tabelas — sem ela, "permission denied for table rv_ativos"; pg_cron a cada 15 min das 13h às 21h45 UTC em dia útil, com o cabeçalho `x-segredo` =
   COTACOES_SEGREDO, guardado no Vault como `cotacoes_segredo`) ou o APP com o login (`api/rendaVariavel.js`:
   `atualizarCotacoes`, e `consultarTicker`, que confere o ticker no cadastro e traz o nome). A tela pede uma leitura ao
   abrir se a mais nova tiver mais de 20 minutos, e relê a tabela a cada 5 (`components/rendaVariavel/useRendaVariavel.js`).
