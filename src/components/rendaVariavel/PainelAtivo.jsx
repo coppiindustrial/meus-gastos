@@ -186,7 +186,7 @@ export default function PainelAtivo({ posicao, operacoes, ptax, dolar, hoje, onC
   const series = [
     { key: 'preco', rotulo: emReais ? 'Preço em reais' : usd ? 'Preço em dólar' : 'Preço', cor, forma: 'linha' },
     ...(verOps && !intradia ? [
-      { key: 'compra', rotulo: 'Compra', cor: COR_MARCA.compra },
+      ...(minhas.some((o) => o.tipo === 'compra') ? [{ key: 'compra', rotulo: 'Compra', cor: COR_MARCA.compra }] : []),
       ...(minhas.some((o) => o.tipo === 'venda') ? [{ key: 'venda', rotulo: 'Venda', cor: COR_MARCA.venda }] : []),
       ...(minhas.some((o) => o.tipo === 'provento') ? [{ key: 'prov', rotulo: 'Provento', cor: COR_MARCA.provento }] : []),
     ] : []),
