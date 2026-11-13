@@ -15,6 +15,8 @@
 //     sem chave: os dois mercados, anos de histórico) e grava em `rv_fechamentos`, com a abertura, a máxima, a mínima e o
 //     volume (migration 030) — o gráfico do ativo pede na primeira vez e quando faltam dias.
 //     { "acao": "intradia", "ativo_id": "…" } o pregão de hoje de 5 em 5 minutos, também do Yahoo, sem gravar (o "1D").
+//     { "acao": "buscar", "q": "nvidia" } PROCURA pelo nome ou pelo ticker na busca do Yahoo (os dois mercados: as bolsas dos
+//     EUA e a B3), para o cadastro achar o ativo sem saber a sigla; não grava nada.
 //     { "acao": "mensal", "ativo_id": "…" } um ponto por mês desde a estreia na bolsa (o "Desde o início"), sem gravar.
 //     { "acao": "eventos", "ativo_id": "…" } relê os EVENTOS (migration 031): os dividendos e desdobramentos do último ano
 //     (Yahoo), a estreia e, nos EUA, os resultados da Finnhub (o calendário e as surpresas). O "historico" já faz isso junto.
@@ -170,6 +172,37 @@ function eventosDoYahoo(ativo: { id: string; user_id: string }, divs: { data: st
   ];
 }
 
+// A BUSCA DO CADASTRO (13/11/2026): a do Yahoo, pelo nome ou pelo ticker ("nvidia" → NVDA, "maxi renda" → MXRF11). Fica só o
+// que o app cadastra — as bolsas dos EUA e a B3 (o ".SA"), ação ou ETF; sai o mercado fracionário e os outros sufixos da B3
+// (PETR4F, MXRF11Q), os futuros e as outras bolsas. O TIPO é um palpite que o cadastro mostra e a pessoa troca: na B3, o
+// "FII" no nome, o BDR pelo final (32 a 35, 39), o ETF pelo tipo ou pelo "índice" no nome; nos EUA, ação ou ETF.
+const BOLSAS_EUA: Record<string, string> = { NMS: 'Nasdaq', NGM: 'Nasdaq', NCM: 'Nasdaq', NAS: 'Nasdaq', NYQ: 'NYSE', NYS: 'NYSE', ASE: 'NYSE American', PCX: 'NYSE Arca', BTS: 'Cboe' };
+async function buscarNoYahoo(q: string) {
+  const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=16&newsCount=0&listsCount=0&lang=pt-BR&region=BR`;
+  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`o Yahoo respondeu ${r.status}`);
+  const quotes: Record<string, unknown>[] = (await r.json())?.quotes ?? [];
+  const out: Record<string, unknown>[] = [];
+  for (const x of quotes) {
+    const simbolo = String(x.symbol ?? '');
+    const tipoY = String(x.quoteType ?? '');
+    if (tipoY !== 'EQUITY' && tipoY !== 'ETF') continue;
+    const nome = String(x.longname || x.shortname || '').replace(/\s+/g, ' ').trim();
+    if (x.exchange === 'SAO') {
+      const ticker = simbolo.replace(/\.SA$/, '');
+      if (!/^[A-Z]{4}\d{1,2}$/.test(ticker)) continue; // o fracionário (PETR4F) e os outros sufixos ficam de fora
+      const fim = Number(ticker.slice(4));
+      const tipo = /^FII\b|imobili/i.test(`${x.shortname ?? ''} ${nome}`) ? 'fii'
+        : [32, 33, 34, 35, 39].includes(fim) ? 'bdr'
+          : tipoY === 'ETF' || /índice|indice|\bETF\b/i.test(nome) ? 'etf_br' : 'acao_br';
+      out.push({ ticker, nome, mercado: 'B3', tipo, bolsa: 'B3' });
+    } else if (BOLSAS_EUA[String(x.exchange)] && /^[A-Z][A-Z.-]{0,9}$/.test(simbolo)) {
+      out.push({ ticker: simbolo, nome, mercado: 'EUA', tipo: tipoY === 'ETF' ? 'etf_eua' : 'acao_eua', bolsa: BOLSAS_EUA[String(x.exchange)] });
+    }
+  }
+  return out.slice(0, 10);
+}
+
 const buscar = (mercado: string, ticker: string, comNome = false) => (mercado === 'EUA' ? daFinnhub(ticker, comNome) : daBrapi(ticker));
 // o dia do pregão, no fuso da bolsa (o fechamento de "hoje" para quem olha do Brasil à noite ainda é o de hoje lá)
 const diaDoPregao = (iso: string, mercado: string) =>
@@ -198,6 +231,13 @@ Deno.serve(async (req) => {
       if (!ticker) return resposta({ erro: 'falta o ticker' }, 400);
       const c = await buscar(mercado, ticker, true);
       return resposta(c ? { ticker, mercado, nome: c.nome ?? '', preco: c.preco, variacao_dia: c.variacao_dia } : { ticker, mercado, naoAchou: true });
+    }
+
+    if (corpo?.acao === 'buscar') {
+      if (!usuario) return resposta({ erro: 'só com o login' }, 401);
+      const q = String(corpo.q ?? '').trim().slice(0, 60);
+      if (q.length < 2) return resposta({ itens: [] });
+      return resposta({ itens: await buscarNoYahoo(q) });
     }
 
     if (['historico', 'intradia', 'mensal', 'eventos'].includes(corpo?.acao)) {

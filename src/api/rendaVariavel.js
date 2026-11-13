@@ -84,3 +84,6 @@ export async function eventosDoAtivo(ativoId) {
 }
 // a função relê os eventos (o último ano do Yahoo e os resultados da Finnhub): { eventos } ou { erroEventos } ou { erro }
 export const atualizarEventos = (ativoId) => chamar({ acao: 'eventos', ativo_id: ativoId });
+// A BUSCA DO CADASTRO: pelo nome ou pelo ticker ("nvidia" → NVDA), nas bolsas dos EUA e na B3:
+// { itens: [{ ticker, nome, mercado, tipo, bolsa }] } ou { erro }
+export const buscarAtivos = (q) => chamar({ acao: 'buscar', q });

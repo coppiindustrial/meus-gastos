@@ -391,7 +391,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   fechamento até ele e pela PTAX do dia; a VALORIZAÇÃO = o total − o anterior − o que entrou + o que saiu),
   `previaDaOperacao` e, para o Patrimônio, `noFormatoDoPatrimonio` e `somarMeses`.
 - A TELA: o cabeçalho de Investimentos (✎ `ModalCadastroAtivos`, a tabela de formulário dos cadastros, "Salvar alterações
-  (N)"; ▾ atualizar as cotações agora e o CSV; "+ Lançar operação") e o cartão com a pílula Carteira | Operações
+  (N)"; O TICKER SE PROCURA PELO NOME — `CampoTicker`, 13/11/2026, a pedido: "nvidia" → NVDA, pela ação "buscar" da função, a
+  busca do Yahoo só com as bolsas dos EUA e a B3, ação ou ETF; escolher preenche o ticker, o tipo, um palpite, e o nome; ▾ atualizar as cotações agora e o CSV; "+ Lançar operação") e o cartão com a pílula Carteira | Operações
   (`rv_aba`). A CARTEIRA (`TabelaRendaVariavel.jsx`) é a `TabelaCarteira` um nível acima: a faixa da classe com a barra da
   cor e a marca do mercado (aberto com a hora, fechado, ou âmbar "sem cotação nova há N h" no pregão), o ativo recuado e as
   OPERAÇÕES no trilho (a compra com o lote de hoje, a venda com o lucro realizado, o desdobramento; os proventos ficam na coluna deles, na aba Operações e no Patrimônio); recolhe
