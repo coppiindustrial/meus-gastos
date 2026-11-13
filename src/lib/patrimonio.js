@@ -194,6 +194,9 @@ export function mesesComMovimento(meses) {
 //   · 'ano': três degraus por ano (`aportes`, `rendeu`, `saiu`; o que é zero não entra).
 // O período que não começa no primeiro aporte abre com `inicio` (o patrimônio de antes, do zero). `ano` marca a primeira
 // coluna de cada ano (a régua escreve o ano embaixo dela). Sem meses, null.
+// A VALORIZAÇÃO (13/11/2026, a renda variável): o mês pode ter `valorizacao` (a parte do `rendeu` que veio das cotações, para
+// cima ou para baixo); o degrau do mês e o parado a levam em `valorizou` (o `rendeu` continua o total), e no 'ano' ela é um
+// degrau à parte entre o rendeu e o saiu.
 const antesDoMes = (m) => m.total - m.aportes - m.rendeu + m.resgates;
 export function cascataDoPatrimonio(meses, modo = 'mes') {
   if (!meses.length) return null;
@@ -204,8 +207,9 @@ export function cascataDoPatrimonio(meses, modo = 'mes') {
     [...new Set(meses.map((m) => m.competencia.slice(0, 4)))].forEach((ano) => {
       const ms = meses.filter((m) => m.competencia.startsWith(ano));
       const fimDoAno = ms[ms.length - 1].total;
-      const soma = (k) => ms.reduce((s, m) => s + m[k], 0);
-      [['aportes', soma('aportes'), 1], ['rendeu', soma('rendeu'), 1], ['saiu', soma('resgates'), -1]].forEach(([tipo, valor, sinal]) => {
+      const soma = (k) => ms.reduce((s, m) => s + (m[k] ?? 0), 0);
+      const val = soma('valorizacao');
+      [['aportes', soma('aportes'), 1], ['rendeu', soma('rendeu') - val, 1], ['valorizou', val, 1], ['saiu', soma('resgates'), -1]].forEach(([tipo, valor, sinal]) => {
         if (!valor) return;
         colunas.push({ tipo, id: `${tipo}:${ano}`, anoDe: ano, valor, de: nivel, ate: nivel + sinal * valor, meses: ms.length, fimDoAno });
         nivel += sinal * valor;
@@ -216,11 +220,11 @@ export function cascataDoPatrimonio(meses, modo = 'mes') {
     meses.forEach((m) => {
       if (m.aportes > 0 || m.resgates > 0) {
         if (parado) { colunas.push(parado); parado = null; }
-        colunas.push({ tipo: 'mes', id: m.competencia, m, anoDe: m.competencia.slice(0, 4), de: antesDoMes(m), entrou: m.aportes, rendeu: m.rendeu, saiu: m.resgates, ate: m.total });
+        colunas.push({ tipo: 'mes', id: m.competencia, m, anoDe: m.competencia.slice(0, 4), de: antesDoMes(m), entrou: m.aportes, rendeu: m.rendeu, valorizou: m.valorizacao ?? 0, saiu: m.resgates, ate: m.total });
         return;
       }
-      if (!parado) parado = { tipo: 'parado', id: `p:${m.competencia}`, anoDe: m.competencia.slice(0, 4), desde: m.competencia, n: 0, rendeu: 0, de: antesDoMes(m) };
-      parado.n += 1; parado.rendeu += m.rendeu; parado.ateMes = m.competencia; parado.ate = m.total;
+      if (!parado) parado = { tipo: 'parado', id: `p:${m.competencia}`, anoDe: m.competencia.slice(0, 4), desde: m.competencia, n: 0, rendeu: 0, valorizou: 0, de: antesDoMes(m) };
+      parado.n += 1; parado.rendeu += m.rendeu; parado.valorizou += m.valorizacao ?? 0; parado.ateMes = m.competencia; parado.ate = m.total;
     });
     if (parado) colunas.push(parado);
   }

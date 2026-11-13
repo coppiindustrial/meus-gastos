@@ -12,7 +12,10 @@ import { CartaoKpi } from '../components/graficos/CartoesResumo.jsx';
 import { COR_ENTRADAS } from '../components/graficos/Graficos.jsx';
 import { RoscaOrigem } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
-import { COR_APORTADO, COR_CDI, CascataPatrimonio, ColunasPct, ColunasRendeu } from '../components/patrimonio/GraficoPatrimonio.jsx';
+import { COR_APORTADO, COR_CDI, COR_VALORIZOU, CascataPatrimonio, ColunasPct, ColunasRendeu } from '../components/patrimonio/GraficoPatrimonio.jsx';
+import BlocoProventos from '../components/rendaVariavel/BlocoProventos.jsx';
+import useRendaVariavel from '../components/rendaVariavel/useRendaVariavel.js';
+import { CLASSES as CLASSES_RV, classeDoTipo, competenciasEntre, mesAMesRV, noFormatoDoPatrimonio, somarMeses } from '../lib/rendaVariavel.js';
 import {
   AgoraPatrimonio, BlocoIR, BlocoLiquidez, BlocoVencimentos, EntrouSaiu, TabelaInvestimentos, TituloBloco,
 } from '../components/patrimonio/BlocosPatrimonio.jsx';
@@ -45,11 +48,22 @@ import { varCor } from '../lib/varCor.js';
 //     em cada mês" (o CDI, o IPCA ou nada).
 //   · O PASSADO: os depósitos lançados como "já estava aplicado" com a data do depósito aparecem desde o depósito, pela
 //     conta do índice de trás para frente (`mesAMes`).
+//   · A RENDA VARIÁVEL (13/11/2026, a pedido: "tudo somado"): a CLASSE na faixa de filtros (Tudo · Renda fixa · Renda
+//     variável; só aparece com operação lançada). Em "Tudo" o mês a mês é a soma (`somarMeses`): o total, o que entrou e
+//     saiu e o rendeu com a VALORIZAÇÃO das cotações (o degrau violeta da Evolução); os PROVENTOS não mudam o total (o
+//     dinheiro foi para a conta), mas contam no "Rendeu" dos números e no "Quanto rendeu em cada mês", e têm o bloco deles
+//     (`BlocoProventos`). A rosca ganha "Classe" (clicar filtra a classe). Os filtros de instituição, tipo e investimento são
+//     da renda fixa: com um deles, a renda variável sai. O IR, os vencimentos e cada investimento seguem só a renda fixa.
 
 const LS_OCULTAR = 'patrimonio_ocultar';
 const LS_COMPARAR = 'patrimonio_comparar';
 const LS_FORMA = 'patrimonio_rendeu_forma';
 const LS_EVOLUCAO = 'patrimonio_evolucao_modo';
+const OPCOES_CLASSE = [
+  { value: 'tudo', label: 'Tudo', chip: 'Classe: tudo' },
+  { value: 'rf', label: 'Renda fixa', chip: 'Renda fixa' },
+  { value: 'rv', label: 'Renda variável', chip: 'Renda variável' },
+];
 const OPCOES_COMPARAR = [
   { value: 'cdi', label: 'CDI', chip: 'Comparar: CDI' },
   { value: 'ipca', label: 'IPCA (a inflação)', chip: 'Comparar: IPCA' },
@@ -72,18 +86,21 @@ const CATALOGO = [
   { id: 'pt_entrou', titulo: 'O dinheiro que entrou e saiu', area: 'pt_graficos', x: 0, y: 41, w: 6, h: 9, minH: 6, minPx: 360 },
   { id: 'pt_livre', titulo: 'Quando o dinheiro fica livre', area: 'pt_graficos', x: 6, y: 41, w: 6, h: 9, minH: 6, minPx: 320 },
   { id: 'pt_investimentos', titulo: 'Cada investimento', area: 'pt_listas', x: 0, y: 50, w: 12, h: 11, minH: 6, minPx: 560 },
+  { id: 'pt_proventos', titulo: 'Proventos', area: 'pt_graficos', x: 0, y: 61, w: 12, h: 12, minH: 8, minPx: 420 },
 ];
 // NO CELULAR (só de ler, como a Visão geral): sem o grid, os blocos numa ordem fixa, cada um na altura que serve à tela
 // estreita (`null` = a do conteúdo).
 const BLOCOS_MOVEL = [
   ['pt_agora', null], ['pt_kpis', null], ['pt_evolucao', 300], ['pt_rendeu', 300], ['pt_onde', 360], ['pt_vencimentos', 560],
-  ['pt_ir', null], ['pt_livre', null], ['pt_entrou', 280],
+  ['pt_proventos', null], ['pt_ir', null], ['pt_livre', null], ['pt_entrou', 280],
 ];
 
 export default function Patrimonio() {
   const navigate = useNavigate();
   const toast = useToast();
   const d = useCarteira();
+  const rv = useRendaVariavel();
+  const [classe, setClasse] = useState('tudo');
   const movel = useNoCelular();
   const [per, setPer] = useState('tudo');
   const [insts, setInsts] = useState([]);
@@ -96,7 +113,7 @@ export default function Patrimonio() {
   // A EVOLUÇÃO EM CASCATA: por mês (só os com aporte, os parados num degrau) ou por ano
   const [modoEvo, setModoEvoEstado] = useState(() => (lsGet(LS_EVOLUCAO) === 'ano' ? 'ano' : 'mes'));
   const setModoEvo = (v) => { setModoEvoEstado(v); lsSet(LS_EVOLUCAO, v); };
-  const [ondePor, setOndePor] = useState('inst');
+  const [ondePor, setOndePor] = useState('classe');
   const [vencAba, setVencAba] = useState('prox');
   // O OLHO (o da Visão geral): fechado, todo valor vira "•••"; para mostrar de novo os blocos remontam (`versao`).
   const [oculto, setOcultoEstado] = useState(() => lsGet(LS_OCULTAR) === 'sim');
@@ -114,7 +131,19 @@ export default function Patrimonio() {
   const filtro = useMemo(() => filtrarCarteira(d, { insts, tipos, invs }), [d, insts, tipos, invs]);
   const carteira = useMemo(() => (filtro.filtrado ? montarCarteira({ ...filtro, cdi: d.cdi ?? [], ipca: d.ipca, hoje }) : d.carteira), [filtro, d.carteira, d.cdi, d.ipca, hoje]);
   const meses = useMemo(() => (filtro.filtrado ? mesAMes({ ...filtro, cdi: d.cdi ?? [], ipca: d.ipca, hoje }) : d.meses), [filtro, d.meses, d.cdi, d.ipca, hoje]);
-  const mesesP = useMemo(() => noPeriodo(meses, per), [meses, per]);
+  // A RENDA VARIÁVEL: o mês a mês dela desde a primeira operação, e o que a tela usa conforme a Classe
+  const temRV = rv.operacoes.length > 0;
+  const filtroRF = insts.length > 0 || tipos.length > 0 || invs.length > 0;
+  const comRV = temRV && classe === 'tudo' && !filtroRF;
+  const soRV = temRV && classe === 'rv' && !filtroRF;
+  const mesesRV = useMemo(() => {
+    if (!rv.operacoes.length) return [];
+    const primeira = rv.operacoes.map((o) => o.data).sort()[0].slice(0, 7);
+    const comps = competenciasEntre(primeira, hoje.slice(0, 7));
+    return noFormatoDoPatrimonio(mesAMesRV({ ativos: rv.ativos, operacoes: rv.operacoes, fechamentos: rv.fechamentos, cotacoes: rv.cotacoes, dolarDia: rv.ptax, dolar: rv.dolar, comps, hoje }));
+  }, [rv.ativos, rv.operacoes, rv.fechamentos, rv.cotacoes, rv.ptax, rv.dolar, hoje]);
+  const mesesTela = useMemo(() => (soRV ? mesesRV : comRV ? somarMeses(meses, mesesRV) : meses), [soRV, comRV, meses, mesesRV]);
+  const mesesP = useMemo(() => noPeriodo(mesesTela, per), [mesesTela, per]);
   const textoPer = textoDoPeriodo(mesesP);
   const venc = useMemo(() => vencimentos({ itens: carteira.itens, cdi: d.cdi ?? [], ipca: d.ipca, hoje }), [carteira, d.cdi, d.ipca, hoje]);
   const linha = useMemo(() => linhaDoTempoVencimentos(venc, hoje), [venc, hoje]);
@@ -125,7 +154,7 @@ export default function Patrimonio() {
   const comVisto = d.aportes.some((a) => 'vencimento_visto' in a);
 
   if (d.carregando) return (<div><CabecalhoPagina titulo="Patrimônio" /><PageLoading /></div>);
-  if (d.semMigration || !d.aportes.length) {
+  if (d.semMigration || (!d.aportes.length && !temRV)) {
     return (
       <div>
         <CabecalhoPagina titulo="Patrimônio" acoes={<button type="button" className="btn-primary" onClick={ir}>Ver os investimentos</button>} />
@@ -139,17 +168,23 @@ export default function Patrimonio() {
     );
   }
 
-  const t = carteira.total;
-  const fechados = meses.filter((m) => m.competencia < hojeComp && m.pct !== null);
+  const tRF = carteira.total;
+  const rvTotal = (comRV || soRV) && rv.carteira ? rv.carteira.total : { valor: 0, custo: 0, resultado: 0 };
+  // o "vale" da tela: a renda fixa, a variável ou as duas
+  const t = soRV ? { ...tRF, vale: rvTotal.valor, liquido: rvTotal.valor, ir: 0, iof: 0, rendeu: rvTotal.resultado }
+    : comRV ? { ...tRF, vale: tRF.vale + rvTotal.valor, liquido: tRF.liquido + rvTotal.valor, rendeu: tRF.rendeu + rvTotal.resultado } : tRF;
+  const comProv = (m) => m.rendeu + (m.proventos ?? 0);
+  const fechados = mesesTela.filter((m) => m.competencia < hojeComp && m.pct !== null);
   const ult = fechados[fechados.length - 1] ?? null;
   const doze = fechados.slice(-12);
-  const rend12 = doze.reduce((s, m) => s + m.rendeu, 0);
+  const rend12 = doze.reduce((s, m) => s + comProv(m), 0);
   const degraus = escadaDeLiquidez(abertos, venc.proximos);
-  const livre = degraus[0]?.valor ?? 0;
+  // o livre: o de resgate a qualquer hora e, com a renda variável, ela inteira (vende no pregão)
+  const livre = (soRV ? 0 : degraus[0]?.valor ?? 0) + rvTotal.valor;
   const em30 = (degraus[1]?.valor ?? 0) - livre;
   const indice = comparar === 'cdi' ? d.cdiMes : comparar === 'ipca' ? d.ipca : null;
   const refRotulo = comparar === 'ipca' ? 'IPCA' : 'CDI';
-  const ultimos = meses.slice(-12);
+  const ultimos = mesesTela.slice(-12);
   const nInv = carteira.grupos.reduce((s, g) => s + g.investimentos.length, 0);
   const qtdInv = `${nInv} ${nInv === 1 ? 'investimento' : 'investimentos'}`;
 
@@ -157,8 +192,8 @@ export default function Patrimonio() {
   const opcoesInst = [...new Set(d.cadastro.map((i) => i.instituicao.trim()))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((n) => ({ value: n, label: n, cor: cores[n] }));
   const opcoesTipo = [...new Set(d.cadastro.map((i) => i.tipo))].map((tp) => ({ value: tp, label: nomeDoTipo(tp) }));
   const opcoesInv = opcoesInst.map((g) => ({ titulo: g.label, cor: g.cor, itens: d.cadastro.filter((i) => i.instituicao.trim() === g.value).map((i) => ({ value: i.id, label: i.nome, grupo: g.label })) }));
-  const filtrando = per !== 'tudo' || insts.length > 0 || tipos.length > 0 || invs.length > 0;
-  const limpar = () => { setPer('tudo'); setInsts([]); setTipos([]); setInvs([]); };
+  const filtrando = per !== 'tudo' || classe !== 'tudo' || insts.length > 0 || tipos.length > 0 || invs.length > 0;
+  const limpar = () => { setPer('tudo'); setClasse('tudo'); setInsts([]); setTipos([]); setInvs([]); };
   const alternar = (lista, set) => (k) => set(lista.includes(k) ? lista.filter((x) => x !== k) : [...lista, k]);
   const marcarVisto = async (id) => {
     try { await marcarVencimentoVisto([id]); toast.success('Marcado como visto.'); d.carregar(); } catch (err) {
@@ -174,31 +209,42 @@ export default function Patrimonio() {
     const rot = ondePor === 'tipo' ? nomeDoTipo(k) : ondePor === 'resgate' ? (k === 'diaria' ? 'A qualquer hora' : 'Só no vencimento') : k;
     grupos.set(k, { key: k, rotulo: rot, valor: (grupos.get(k)?.valor ?? 0) + x.pos.vale });
   });
-  const itensOnde = [...grupos.values()].sort((a, b) => b.valor - a.valor).map((g, i) => ({ ...g, cor: ondePor === 'inst' ? cores[g.key] : PALETA[i % PALETA.length] }));
+  const ondeEf = soRV ? 'classe' : ondePor === 'classe' && !comRV ? 'inst' : ondePor;
+  let itensOnde = [...grupos.values()].sort((a, b) => b.valor - a.valor).map((g, i) => ({ ...g, cor: ondeEf === 'inst' ? cores[g.key] : PALETA[i % PALETA.length] }));
+  if (ondeEf === 'classe') {
+    const pos = rv.carteira?.posicoes.filter((p) => p.quantidade > 0) ?? [];
+    itensOnde = soRV
+      ? pos.map((p) => ({ key: p.ativo.ticker, rotulo: p.ativo.ticker, valor: Math.round(p.valorReais), cor: CLASSES_RV.find((c) => c.id === classeDoTipo(p.ativo.tipo))?.cor })).sort((a, b) => b.valor - a.valor)
+      : [{ key: 'rf', rotulo: 'Renda fixa', valor: abertos.reduce((s, x) => s + x.pos.vale, 0), cor: 'var(--origem-manual)' },
+        ...CLASSES_RV.map((c) => ({ key: c.id, rotulo: c.nome, valor: Math.round(pos.filter((p) => classeDoTipo(p.ativo.tipo) === c.id).reduce((s, p) => s + p.valorReais, 0)), cor: c.cor }))]
+        .filter((x) => x.valor > 0).sort((a, b) => b.valor - a.valor);
+  }
 
   const kpis = (
     <div className="card !border-0 !bg-transparent !shadow-none">
       <CardAutoAltura id="pt_kpis">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
           <CartaoKpi compacto icone="patrimonio" cor="var(--serie-gastos)" rotulo="Patrimônio" valor={formatBRL(t.vale)} valorCurto={brlCurto(t.vale)}
-            sub={`≈ ${brlCurto(t.liquido)} líquido · IR ≈ ${brlCurto(t.ir)}${t.iof ? ` · IOF ≈ ${brlCurto(t.iof)}` : ''}`} serie={ultimos.map((m) => ({ competencia: m.competencia, valor: m.total }))} />
+            sub={comRV ? `renda fixa ${brlCurto(tRF.vale)} · variável ${brlCurto(rvTotal.valor)}` : soRV ? `custou ${brlCurto(rvTotal.custo)} · ${rvTotal.resultado < 0 ? '−' : '+'}${brlCurto(Math.abs(rvTotal.resultado))} de resultado` : `≈ ${brlCurto(t.liquido)} líquido · IR ≈ ${brlCurto(t.ir)}${t.iof ? ` · IOF ≈ ${brlCurto(t.iof)}` : ''}`} serie={ultimos.map((m) => ({ competencia: m.competencia, valor: m.total }))} />
           <CartaoKpi compacto icone="entradas" cor={COR_ENTRADAS} rotulo={ult ? `Rendeu em ${competenciaCurta(ult.competencia)}` : 'Rendeu no mês'}
-            valor={ult ? formatBRL(ult.rendeu) : '—'} valorCurto={ult ? brlCurto(ult.rendeu) : '—'} corValor={ult && ult.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}
+            valor={ult ? formatBRL(comProv(ult)) : '—'} valorCurto={ult ? brlCurto(comProv(ult)) : '—'} corValor={ult && comProv(ult) < 0 ? 'text-hx-c0393d' : 'text-green-700'}
             sub={ult ? [`${pct(ult.pct)} no mês`, d.cdiMes?.[ult.competencia] ? `${Math.round((ult.pct / d.cdiMes[ult.competencia]) * 100)}% do CDI` : null].filter(Boolean).join(' · ') : 'no fim do 1º mês fechado'}
-            serie={doze.map((m) => ({ competencia: m.competencia, valor: m.rendeu }))} nota={(i) => pct(doze[i]?.pct)} />
+            serie={doze.map((m) => ({ competencia: m.competencia, valor: comProv(m) }))} nota={(i) => [pct(doze[i]?.pct), doze[i]?.proventos ? `proventos ${brlCurto(doze[i].proventos)}` : null, doze[i]?.valorizacao ? `cotações ${doze[i].valorizacao < 0 ? '−' : '+'}${brlCurto(Math.abs(doze[i].valorizacao))}` : null].filter(Boolean).join(' · ')} />
           <CartaoKpi compacto icone="tendencia" cor={COR_ENTRADAS} rotulo={doze.length >= 12 ? 'Rendeu em 12 meses' : `Rendeu em ${doze.length} ${doze.length === 1 ? 'mês' : 'meses'}`}
             valor={formatBRL(rend12)} valorCurto={brlCurto(rend12)} corValor="text-green-700"
             sub={`${doze.length ? `${competenciaCurta(doze[0].competencia)} a ${competenciaCurta(doze[doze.length - 1].competencia)} · ` : ''}até hoje ${brlCurto(t.rendeu)}`}
             titulo="Os meses fechados. Até hoje: vale hoje − aplicado (também o que o dinheiro de antes do app já tinha rendido)."
             serie={ultimos.map((m) => ({ competencia: m.competencia, valor: m.rendimentoAcum }))} />
           <CartaoKpi compacto icone="liquidez" cor={COR_LIQUIDEZ} rotulo="Livre hoje" valor={formatBRL(livre)} valorCurto={brlCurto(livre)}
-            sub={`${t.vale ? Math.round((livre / t.vale) * 100) : 0}% do patrimônio${em30 > 0 ? ` · + ${brlCurto(em30)} em 30 dias` : ''}`}
-            titulo="O que tem resgate a qualquer hora. Em 30 dias: o que vence e volta para a conta." />
+            sub={`${t.vale ? Math.round((livre / t.vale) * 100) : 0}% do patrimônio${em30 > 0 && !soRV ? ` · + ${brlCurto(em30)} em 30 dias` : ''}`}
+            titulo={`O que tem resgate a qualquer hora${rvTotal.valor ? ' (e a renda variável, que se vende no pregão)' : ''}. Em 30 dias: o que vence e volta para a conta.`} />
         </div>
       </CardAutoAltura>
     </div>
   );
 
+  // o "Quanto rendeu": os proventos contam (o dinheiro que a renda variável pagou)
+  const mesesRendeu = comRV || soRV ? mesesP.map((m) => ({ ...m, rendeu: comProv(m) })) : mesesP;
   const renderWidget = (id) => {
     switch (id) {
       case 'pt_agora':
@@ -221,7 +267,8 @@ export default function Patrimonio() {
             <LegendaSeries ctrl={ctrlEvo} series={[
               { key: 'entrou', rotulo: 'Entrou (aportes)', cor: 'var(--serie-gastos)' },
               { key: 'rendeu', rotulo: 'Rendeu', cor: COR_ENTRADAS },
-              ...(mesesP.some((m) => m.resgates > 0) ? [{ key: 'saiu', rotulo: 'Saiu (resgates e vencimentos)', cor: 'var(--origem-fixo)' }] : []),
+              ...(mesesP.some((m) => m.valorizacao) ? [{ key: 'valorizou', rotulo: 'Valorização das cotações', cor: COR_VALORIZOU }] : []),
+              ...(mesesP.some((m) => m.resgates > 0) ? [{ key: 'saiu', rotulo: comRV || soRV ? 'Saiu (resgates, vencimentos e vendas)' : 'Saiu (resgates e vencimentos)', cor: 'var(--origem-fixo)' }] : []),
               { key: 'aportado', rotulo: 'Aportado (no fim)', cor: COR_APORTADO },
             ]} />
           </section>
@@ -233,8 +280,8 @@ export default function Patrimonio() {
               sub={forma === 'pct' ? `o % do mês${indice ? ` contra o ${refRotulo}` : ''} · ${textoPer}` : `em reais${indice ? `, contra o que o ${refRotulo} daria no mesmo dinheiro` : ''} · ${textoPer}`}
               extra={<AbasPilula abas={[{ key: 'reais', label: 'Em reais' }, { key: 'pct', label: '% do mês' }]} valor={forma} onChange={setForma} variante="claro" altura={30} folga={2} />} />
             <div className="min-h-0 flex-1">
-              {forma === 'pct' ? <ColunasPct meses={mesesP} indice={indice ?? null} refRotulo={refRotulo} ctrl={ctrlRendeu} auto />
-                : <ColunasRendeu meses={mesesP} indice={indice} refRotulo={refRotulo} ctrl={ctrlRendeu} auto />}
+              {forma === 'pct' ? <ColunasPct meses={mesesRendeu} indice={indice ?? null} refRotulo={refRotulo} ctrl={ctrlRendeu} auto />
+                : <ColunasRendeu meses={mesesRendeu} indice={indice} refRotulo={refRotulo} ctrl={ctrlRendeu} auto />}
             </div>
             <LegendaSeries ctrl={ctrlRendeu} series={[
               { key: 'rendeu', rotulo: forma === 'pct' ? 'Rendeu no mês (%)' : 'Rendeu no mês', cor: COR_ENTRADAS },
@@ -248,15 +295,15 @@ export default function Patrimonio() {
             <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
               <span className="text-[13px] font-semibold text-gray-800">Onde está o dinheiro</span>
               <div className="ml-auto">
-                <AbasPilula abas={[{ key: 'inst', label: 'Instituição' }, { key: 'tipo', label: 'Tipo' }, { key: 'taxa', label: 'Taxa' }, { key: 'resgate', label: 'Resgate' }]}
-                  valor={ondePor} onChange={setOndePor} variante="claro" altura={28} folga={2} />
+                <AbasPilula abas={[...(comRV || soRV ? [{ key: 'classe', label: soRV ? 'Ativo' : 'Classe' }] : []), ...(soRV ? [] : [{ key: 'inst', label: 'Instituição' }, { key: 'tipo', label: 'Tipo' }, { key: 'taxa', label: 'Taxa' }, { key: 'resgate', label: 'Resgate' }])]}
+                  valor={ondeEf} onChange={setOndePor} variante="claro" altura={28} folga={2} />
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-auto px-4 pb-3 pt-2">
               <RoscaOrigem itens={itensOnde} rotulo="Onde está o dinheiro"
-                marcadas={ondePor === 'inst' ? insts : ondePor === 'tipo' ? tipos : []}
-                onClicar={ondePor === 'inst' ? alternar(insts, setInsts) : ondePor === 'tipo' ? alternar(tipos, setTipos) : undefined}
-                dica={ondePor === 'tipo' ? 'Clique para filtrar a tela por este tipo' : 'Clique para filtrar a tela por esta instituição'} />
+                marcadas={ondeEf === 'inst' ? insts : ondeEf === 'tipo' ? tipos : []}
+                onClicar={ondeEf === 'inst' ? alternar(insts, setInsts) : ondeEf === 'tipo' ? alternar(tipos, setTipos) : ondeEf === 'classe' && !soRV ? (k) => setClasse(k === 'rf' ? 'rf' : 'rv') : undefined}
+                dica={ondeEf === 'classe' ? 'Clique para ver só esta classe' : ondeEf === 'tipo' ? 'Clique para filtrar a tela por este tipo' : 'Clique para filtrar a tela por esta instituição'} />
             </div>
           </section>
         );
@@ -272,6 +319,8 @@ export default function Patrimonio() {
           </section>
         );
       case 'pt_livre': return <BlocoLiquidez degraus={degraus} />;
+      case 'pt_proventos':
+        return <BlocoProventos posicoes={rv.carteira?.posicoes ?? []} comps={mesesP.map((m) => m.competencia)} hoje={hoje} textoPer={textoPer} />;
       case 'pt_investimentos': return <TabelaInvestimentos linhas={porInvestimento(abertos, venc.proximos, hoje)} cores={cores} onInvestimentos={ir} />;
       default: return null;
     }
@@ -281,8 +330,12 @@ export default function Patrimonio() {
     <FaixaProvider>
       <div className="flex flex-wrap items-center gap-2">
         <Trilho>
-          <SegUnico id="periodo" rotulo="Período" opcoes={opcoesDePeriodo(meses)} value={per} onChange={setPer} padrao="tudo" mostraPadrao largura={210} />
+          <SegUnico id="periodo" rotulo="Período" opcoes={opcoesDePeriodo(mesesTela)} value={per} onChange={setPer} padrao="tudo" mostraPadrao largura={210} />
           <DivisorFaixa />
+          {temRV && (<>
+            <SegUnico id="classe" rotulo="Classe" opcoes={OPCOES_CLASSE} value={classe} onChange={setClasse} padrao="tudo" largura={200} />
+            <DivisorFaixa />
+          </>)}
           <SegMulti id="instituicao" rotulo="Instituição" plural="instituições" opcoes={opcoesInst} value={insts} onChange={setInsts} largura={220} />
           <DivisorFaixa />
           <SegMulti id="tipo" rotulo="Tipo" opcoes={opcoesTipo} value={tipos} onChange={setTipos} largura={180} />
@@ -321,9 +374,9 @@ export default function Patrimonio() {
   }
 
   return (
-    <GridPersonalizavel escopo="patrimonio_v1" titulo="Patrimônio"
+    <GridPersonalizavel escopo="patrimonio_v2" titulo="Patrimônio"
       acessorio={<span className="hidden text-sm text-gray-500 sm:inline">{qtdInv} em {carteira.grupos.length} {carteira.grupos.length === 1 ? 'instituição' : 'instituições'} · {nomeCompetencia(hojeComp).toLowerCase()}</span>}
       catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={(id) => <Fragment key={`${id}-${versao}`}>{renderWidget(id)}</Fragment>} abaixo={filtros}
-      pronto onAtualizar={d.carregar} oculto={oculto} onOcultar={alternarOculto} />
+      pronto onAtualizar={() => { d.carregar(); rv.carregar(); }} oculto={oculto} onOcultar={alternarOculto} />
   );
 }

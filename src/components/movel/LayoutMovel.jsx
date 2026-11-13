@@ -26,7 +26,8 @@ const ICONES = {
   '/fixos': <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></>,
   '/cadastros/cartoes': <><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></>,
   '/patrimonio': <path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6" />,
-  '/investimentos': <path d="M4 18l6-6 4 4 6-8M14 8h6v6" />,
+  '/investimentos': <><ellipse cx="9" cy="6.5" rx="6" ry="2.6" /><path d="M3 6.5V11c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6V6.5" /><path d="M3 11v4.5c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6V11" /></>,
+  '/renda-variavel': <path d="M4 18l6-6 4 4 6-8M14 8h6v6" />,
   '/indicadores': <><path d="M19 5 5 19" /><circle cx="7" cy="7" r="2" /><circle cx="17" cy="17" r="2" /></>,
 };
 export const SECOES_MOVEL = [
@@ -35,7 +36,8 @@ export const SECOES_MOVEL = [
   { to: '/fixos', label: 'Gastos fixos', contador: 'fixos', dica: 'a lançar' },
   { to: '/cadastros/cartoes', label: 'Cartões' },
   { to: '/patrimonio', label: 'Patrimônio' },
-  { to: '/investimentos', label: 'Investimentos' },
+  { to: '/investimentos', label: 'Renda fixa' },
+  { to: '/renda-variavel', label: 'Renda variável' },
   { to: '/indicadores', label: 'Indicadores' },
 ];
 const Icone = ({ para }) => (

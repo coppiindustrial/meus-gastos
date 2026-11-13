@@ -16,6 +16,7 @@ import Modelos from './pages/Modelos.jsx';
 import Fixos from './pages/Fixos.jsx';
 import Patrimonio from './pages/Patrimonio.jsx';
 import Investimentos from './pages/Investimentos.jsx';
+import RendaVariavel from './pages/RendaVariavel.jsx';
 import Indicadores from './pages/Indicadores.jsx';
 import Importar from './pages/Importar.jsx';
 
@@ -50,6 +51,7 @@ export default function App() {
       <Route path="/fixos" element={<Protected><Fixos /></Protected>} />
       <Route path="/patrimonio" element={<Protected><Patrimonio /></Protected>} />
       <Route path="/investimentos" element={<Protected><Investimentos /></Protected>} />
+      <Route path="/renda-variavel" element={<Protected><RendaVariavel /></Protected>} />
       <Route path="/indicadores" element={<Protected><Indicadores /></Protected>} />
       <Route path="/extrato" element={<Navigate to="/importar" replace />} />
       <Route path="/importar" element={<Protected><Importar /></Protected>} />

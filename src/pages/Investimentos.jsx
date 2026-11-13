@@ -42,11 +42,11 @@ export default function Investimentos() {
   const [mais, setMais] = useState(null);
   const maisAberto = useRef(false);
 
-  if (d.carregando) return (<div><CabecalhoPagina titulo="Investimentos" /><PageLoading /></div>);
+  if (d.carregando) return (<div><CabecalhoPagina titulo="Renda fixa" /><PageLoading /></div>);
   if (d.semMigration) {
     return (
       <div>
-        <CabecalhoPagina titulo="Investimentos" />
+        <CabecalhoPagina titulo="Renda fixa" />
         <p className="mt-4 max-w-2xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
           Falta aplicar a <b className="font-semibold">migration 020</b> (a carteira do zero): no Supabase, SQL Editor, cole o arquivo
           <code className="mx-1">supabase/migrations/020_carteira_do_zero.sql</code> e clique em Run. Depois, recarregue esta tela.
@@ -121,7 +121,7 @@ export default function Investimentos() {
   const vazio = !d.cadastro.length;
   return (
     <div>
-      <CabecalhoPagina titulo="Investimentos"
+      <CabecalhoPagina titulo="Renda fixa"
         acessorio={!vazio && <span className="text-sm text-gray-500">{qtdInv} em {carteira.grupos.length} {carteira.grupos.length === 1 ? 'instituição' : 'instituições'} · {formatBRL(t.vale)}</span>}
         acoes={!movel && <>
           {/* O GRUPO DO DRE: ✎ o cadastro · ▾ mais ações (o nome no tooltip), e o gesto do dia a dia ao lado */}

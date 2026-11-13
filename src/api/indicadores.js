@@ -68,6 +68,10 @@ export function cotacaoAgora() {
   return promessa;
 }
 
+// O DÓLAR PTAX DE CADA DIA desde `desde` (a renda variável: o dólar sugerido de uma operação no exterior e o de cada fim de
+// mês no Patrimônio). Falhou, null.
+export const dolarDiario = (desde) => serie(1, desde, null).catch(() => null);
+
 export async function carregarIndicadores(hoje) {
   const desde = `${Number(hoje.slice(0, 4)) - 2}-01-01`; // dois anos e o corrente: os gráficos da Selic e do IPCA
   const umAno = menosDias(hoje, 400); // 12 meses e um pouco: o dólar e o euro (e a variação em 12 meses)

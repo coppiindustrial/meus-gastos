@@ -227,10 +227,12 @@ export function ColunasPct({ meses, cdi, indice, refRotulo = 'CDI', ctrl, auto =
 // `ctrl`: a legenda (séries 'entrou', 'rendeu', 'saiu', 'aportado').
 const COR_APORTE = 'var(--serie-gastos)';
 const COR_SAIDA = 'var(--origem-fixo)';
+// a valorização das cotações (a renda variável), o violeta do "Sobrou": sobe ou desce
+export const COR_VALORIZOU = 'var(--serie-sobrou)';
 const PESO_PARADO = 0.8;
 const VAO = 6;
 const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-const ROTULO_ANO = { aportes: 'aportes', rendeu: 'rendeu', saiu: 'saiu' };
+const ROTULO_ANO = { aportes: 'aportes', rendeu: 'rendeu', valorizou: 'valoriz.', saiu: 'saiu' };
 
 export function CascataPatrimonio({ meses, modo = 'mes', ctrl, auto = false }) {
   const balao = useBalao(260, 150);
@@ -256,8 +258,20 @@ export function CascataPatrimonio({ meses, modo = 'mes', ctrl, auto = false }) {
   const curto = u < 34;
   const comNumero = u >= 24;
   const inicial = u < 19;
-  // o alto de cada coluna: o maior ponto do degrau (o mês sobe o aporte e o rendimento antes de descer a saída)
-  const alto = (v) => (v.tipo === 'mes' ? Math.max(v.de, v.de + v.entrou + Math.max(0, v.rendeu), v.ate) : Math.max(v.de, v.ate));
+  // OS PASSOS do mês e do parado: o aporte, os juros (o rendeu sem a valorização), a valorização e a saída, nessa ordem, cada
+  // um a partir do nível em que o anterior parou (o negativo desce)
+  const passos = (v) => {
+    const val = v.valorizou ?? 0; const juros = v.rendeu - val;
+    if (v.tipo === 'parado') return [[juros, juros < 0 ? COR_FALTOU : COR_ENTRADAS, 'rendeu'], [val, COR_VALORIZOU, 'valorizou']].filter(([x]) => x);
+    return [[v.entrou, COR_APORTE, 'entrou'], [juros, juros < 0 ? COR_FALTOU : COR_ENTRADAS, 'rendeu'], [val, COR_VALORIZOU, 'valorizou'], [-v.saiu, COR_SAIDA, 'saiu']].filter(([x]) => x);
+  };
+  // o alto de cada coluna: o maior ponto do degrau
+  const alto = (v) => {
+    if (v.tipo !== 'mes' && v.tipo !== 'parado') return Math.max(v.de, v.ate);
+    let n = v.de; let max = n;
+    passos(v).forEach(([x]) => { n += x; max = Math.max(max, n); });
+    return Math.max(max, v.ate);
+  };
   const esc = escalaLinear(Math.max(1, ...vagas.map(alto)) / 100);
   const fr = (c) => esc.fracao(Math.max(0, c) / 100);
   const rot = formatoRotulo(esc.marcas[esc.marcas.length - 1]);
@@ -278,18 +292,14 @@ export function CascataPatrimonio({ meses, modo = 'mes', ctrl, auto = false }) {
       const ap = Math.max(0, Math.min(cas.fim.total, cas.fim.aportado));
       return [pedaco(0, ap, COR_APORTADO, 'aportado', 'a'), cas.fim.total > ap && pedaco(ap, cas.fim.total, COR_ENTRADAS, 'rendeu', 'r')];
     }
-    if (v.tipo === 'parado') return pedaco(v.de, v.ate, v.rendeu < 0 ? COR_FALTOU : COR_ENTRADAS, 'rendeu', 'r');
+    if (v.tipo === 'parado' && !v.valorizou) return pedaco(v.de, v.ate, v.rendeu < 0 ? COR_FALTOU : COR_ENTRADAS, 'rendeu', 'r');
+    if (v.tipo === 'valorizou') return pedaco(v.de, v.ate, COR_VALORIZOU, 'valorizou', 'v');
     if (v.tipo === 'aportes') return pedaco(v.de, v.ate, COR_APORTE, 'entrou', 'e');
     if (v.tipo === 'rendeu') return pedaco(v.de, v.ate, v.valor < 0 ? COR_FALTOU : COR_ENTRADAS, 'rendeu', 'r');
     if (v.tipo === 'saiu') return pedaco(v.de, v.ate, COR_SAIDA, 'saiu', 's');
-    // o mês: sobe o aporte, sobe o rendimento, desce a saída e o rendimento negativo
-    const out = [];
+    // o mês (e o parado com valorização): cada passo a partir de onde o anterior parou
     let n = v.de;
-    if (v.entrou > 0) { out.push(pedaco(n, n + v.entrou, COR_APORTE, 'entrou', 'e')); n += v.entrou; }
-    if (v.rendeu > 0) { out.push(pedaco(n, n + v.rendeu, COR_ENTRADAS, 'rendeu', 'r')); n += v.rendeu; }
-    if (v.saiu > 0) { out.push(pedaco(n, n - v.saiu, COR_SAIDA, 'saiu', 's')); n -= v.saiu; }
-    if (v.rendeu < 0) out.push(pedaco(n, n + v.rendeu, COR_FALTOU, 'rendeu', 'n'));
-    return out;
+    return passos(v).map(([x, cor, serie], k) => { const p = pedaco(n, n + x, cor, serie, k); n += x; return p; });
   };
   // o número em cima do degrau: o que fez ele mudar
   const texto = (v) => {
@@ -297,6 +307,7 @@ export function CascataPatrimonio({ meses, modo = 'mes', ctrl, auto = false }) {
     if (v.tipo === 'parado') return { t: `${v.rendeu < 0 ? '−' : '+'}${rot(Math.abs(v.rendeu))}`, cor: v.rendeu < 0 ? COR_FALTOU : COR_ENTRADAS };
     if (v.tipo === 'aportes') return { t: `+${rot(v.valor)}` };
     if (v.tipo === 'rendeu') return { t: `${v.valor < 0 ? '−' : '+'}${rot(Math.abs(v.valor))}`, cor: v.valor < 0 ? COR_FALTOU : COR_ENTRADAS };
+    if (v.tipo === 'valorizou') return { t: `${v.valor < 0 ? '−' : '+'}${rot(Math.abs(v.valor))}`, cor: COR_VALORIZOU };
     if (v.tipo === 'saiu') return { t: `−${rot(v.valor)}`, cor: COR_SAIDA };
     return v.entrou > 0 ? { t: `+${rot(v.entrou)}` } : { t: `−${rot(v.saiu)}`, cor: COR_SAIDA };
   };
@@ -315,7 +326,8 @@ export function CascataPatrimonio({ meses, modo = 'mes', ctrl, auto = false }) {
     if (v.tipo === 'inicio') return { titulo: 'Antes do período', itens: [{ rotulo: `Patrimônio antes de ${competenciaCurta(v.antesDe)}`, valor: formatBRL(v.ate), cor: COR_APORTADO }] };
     if (v.tipo === 'parado') {
       return { titulo: `${competenciaCurta(v.desde)}${v.n > 1 ? ` a ${competenciaCurta(v.ateMes)}` : ''} · sem aporte`, itens: [
-        { rotulo: v.n > 1 ? `Rendeu nos ${v.n} meses` : 'Rendeu no mês', valor: formatBRL(v.rendeu), cor: v.rendeu < 0 ? COR_FALTOU : COR_ENTRADAS },
+        { rotulo: v.n > 1 ? `Rendeu nos ${v.n} meses` : 'Rendeu no mês', valor: formatBRL(v.rendeu - (v.valorizou ?? 0)), cor: v.rendeu < 0 ? COR_FALTOU : COR_ENTRADAS },
+        ...(v.valorizou ? [{ rotulo: 'Valorização das cotações', valor: formatBRL(v.valorizou), cor: COR_VALORIZOU }] : []),
         { rotulo: 'Patrimônio no fim', valor: formatBRL(v.ate) },
       ] };
     }
@@ -323,12 +335,13 @@ export function CascataPatrimonio({ meses, modo = 'mes', ctrl, auto = false }) {
       return { titulo: `${nomeCompetencia(v.m.competencia)}${v.m.competencia === hoje ? ' · até hoje' : ''}`, itens: [
         { rotulo: 'Patrimônio no fim do mês', valor: formatBRL(v.ate) },
         ...(v.entrou ? [{ rotulo: 'Entrou', valor: formatBRL(v.entrou), cor: COR_APORTE }] : []),
-        { rotulo: 'Rendeu', valor: formatBRL(v.rendeu), cor: v.rendeu < 0 ? COR_FALTOU : COR_ENTRADAS },
+        { rotulo: 'Rendeu', valor: formatBRL(v.rendeu - (v.valorizou ?? 0)), cor: v.rendeu - (v.valorizou ?? 0) < 0 ? COR_FALTOU : COR_ENTRADAS },
+        ...(v.valorizou ? [{ rotulo: 'Valorização das cotações', valor: formatBRL(v.valorizou), cor: COR_VALORIZOU }] : []),
         ...(v.saiu ? [{ rotulo: 'Saiu', valor: formatBRL(v.saiu), cor: COR_SAIDA }] : []),
       ] };
     }
-    const nome = { aportes: 'Entrou', rendeu: 'Rendeu', saiu: 'Saiu' }[v.tipo];
-    const cor = { aportes: COR_APORTE, rendeu: COR_ENTRADAS, saiu: COR_SAIDA }[v.tipo];
+    const nome = { aportes: 'Entrou', rendeu: 'Rendeu', valorizou: 'Valorização das cotações', saiu: 'Saiu' }[v.tipo];
+    const cor = { aportes: COR_APORTE, rendeu: COR_ENTRADAS, valorizou: COR_VALORIZOU, saiu: COR_SAIDA }[v.tipo];
     return { titulo: `${nome} em ${v.anoDe}${v.meses < 12 ? ` (${v.meses} ${v.meses === 1 ? 'mês' : 'meses'})` : ''}`, itens: [
       { rotulo: nome, valor: formatBRL(v.valor), cor },
       { rotulo: `Patrimônio no fim de ${v.anoDe}`, valor: formatBRL(v.fimDoAno) },

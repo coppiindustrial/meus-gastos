@@ -360,6 +360,57 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   O `useCarteira` busca o CDI desde o depósito mais antigo. Os Indicadores leem o mesmo mês a mês ("Sua carteira × CDI × IPCA").
 - O EXTRATO do Nubank: RDB e "dinheiro guardado" voltam a ficar só como "Fora: investimento" (não viram aporte).
 
+## Renda variável (13/11/2026, o mockup "Renda variável", tabela A)
+
+- O QUE É: a Micron direto nos EUA (em dólar), os FIIs e as ações da B3. No menu, Análises: Patrimônio · Indicadores ·
+  RENDA FIXA (o "Investimentos" de antes, renomeado a pedido; a tela e o /investimentos são os mesmos) · RENDA VARIÁVEL
+  (/renda-variavel, `pages/RendaVariavel.jsx`). O IR da renda variável (DARF do mês, apuração anual do exterior) fica para a
+  fase seguinte; as operações já guardam o que ele vai pedir (data, preço, taxas, o dólar do dia).
+- O BANCO (migration 027): `rv_ativos` (ticker, nome, tipo acao_br | fii | bdr | etf_br | acao_eua | etf_eua — o tipo decide o
+  mercado B3 | EUA e a moeda BRL | USD —, corretora, ativo, ordem) · `rv_operacoes` (compra e venda: quantidade, o TOTAL em
+  centavos da moeda do ativo, as taxas e, no exterior, o dólar do dia; provento: o bruto, o retido na fonte e o tipo
+  rendimento | dividendo | jcp; desdobramento e grupamento: o fator) · `rv_cotacoes` (a última de cada ativo) e
+  `rv_fechamentos` (o preço de cada dia), que SÓ A FUNÇÃO GRAVA (o app só lê; o RLS dá select ao dono).
+- A COTAÇÃO (decisão do usuário: brapi + Finnhub, com chave): a função `supabase/functions/cotacoes/index.ts` (Deno; publicar
+  em Edge Functions com o "Verify JWT" DESLIGADO — ela confere sozinha) lê a B3 na brapi.dev e os EUA na Finnhub, com as
+  chaves nos SEGREDOS do Supabase (BRAPI_TOKEN, FINNHUB_TOKEN; nunca no repositório, que é público). Quem chama: o
+  AGENDAMENTO (migration 028, pg_cron a cada 15 min das 13h às 21h45 UTC em dia útil, com o cabeçalho `x-segredo` =
+  COTACOES_SEGREDO, guardado no Vault como `cotacoes_segredo`) ou o APP com o login (`api/rendaVariavel.js`:
+  `atualizarCotacoes`, e `consultarTicker`, que confere o ticker no cadastro e traz o nome). A tela pede uma leitura ao
+  abrir se a mais nova tiver mais de 20 minutos, e relê a tabela a cada 5 (`components/rendaVariavel/useRendaVariavel.js`).
+  O fechamento é a última leitura do dia do pregão (o dia no fuso da bolsa). O dólar de hoje é o comercial ao vivo dos
+  Indicadores (`cotacaoAgora`); o de cada dia, a PTAX (`dolarDiario` em `api/indicadores.js`).
+- AS CONTAS (`lib/rendaVariavel.js`, testada em `test/rendaVariavel.test.js`): `posicaoDoAtivo` — o PREÇO MÉDIO é o da
+  corretora (o pago com as taxas ÷ a quantidade); a VENDA sai pelo custo médio (o preço médio não muda; o lucro = o que
+  entrou em reais − o custo médio em reais das cotas); NO EXTERIOR o custo em reais vai pelo DÓLAR DE CADA COMPRA (a conta
+  do IR) e o valor pelo de hoje, então o resultado tem a parte da ação (`resMoedaPct`) e a do câmbio (`cambio`); o
+  DESDOBRAMENTO multiplica a quantidade (o grupamento é o fator < 1) e divide o último preço; o PROVENTO não muda a
+  posição (é dinheiro que foi para a conta; o de data futura é o anunciado, `aReceber`). Sem cotação, o preço da última
+  operação (a tela avisa "sem cotação"). `carteiraRV` (as faixas Exterior · FIIs · Ações da B3, os totais exatos
+  arredondados no fim, os vendidos inteiros à parte), `proventosPorMes`, `mesAMesRV` (o valor no fim do mês pelo último
+  fechamento até ele e pela PTAX do dia; a VALORIZAÇÃO = o total − o anterior − o que entrou + o que saiu),
+  `previaDaOperacao` e, para o Patrimônio, `noFormatoDoPatrimonio` e `somarMeses`.
+- A TELA: o cabeçalho de Investimentos (✎ `ModalCadastroAtivos`, a tabela de formulário dos cadastros, "Salvar alterações
+  (N)"; ▾ atualizar as cotações agora e o CSV; "+ Lançar operação") e o cartão com a pílula Carteira | Operações
+  (`rv_aba`). A CARTEIRA (`TabelaRendaVariavel.jsx`) é a `TabelaCarteira` um nível acima: a faixa da classe com a barra da
+  cor e a marca do mercado (aberto com a hora, fechado, ou âmbar "sem cotação nova há N h" no pregão), o ativo recuado e as
+  OPERAÇÕES no trilho (a compra com o lote de hoje, a venda com o lucro realizado, o desdobramento; os proventos ficam na coluna deles, na aba Operações e no Patrimônio); recolhe
+  animado (`rv_fechadas`); no trilho "Exterior em US$" (`rv_usd`) e Centavos (`rv_centavos`); o balão na Cotação (o dia do
+  ativo) e no Resultado do exterior (a ação × o dólar). As OPERAÇÕES (`ListaOperacoes.jsx`): a lista com a faixa de
+  filtros (ativo, tipo). O POP-UP `ModalOperacao.jsx`: Compra · Venda · Provento · Desdobramento (o grupamento no mesmo), o
+  dólar do dia sugerido pela PTAX (a do dia útil antes no fim de semana), "usar 30%" no retido dos EUA e a prévia (o preço
+  médio na moeda e o custo médio em reais; o lucro da venda; vender mais do que tem não deixa).
+- NO PATRIMÔNIO (a pedido: "tudo somado", e os proventos lá em vez de uma aba): a CLASSE na faixa de filtros (Tudo · Renda
+  fixa · Renda variável; só com operação lançada). Em "Tudo", o mês a mês é `somarMeses` (o da renda fixa + o
+  `noFormatoDoPatrimonio` da variável): o total, o que entrou e saiu e o rendeu COM A VALORIZAÇÃO — o DEGRAU VIOLETA da
+  Evolução (`valorizacao` no mês, `valorizou` na coluna; `COR_VALORIZOU` = `--serie-sobrou`; no "Ano" um degrau à parte). Os
+  PROVENTOS não mudam o total, mas contam no "Rendeu" dos números e no "Quanto rendeu em cada mês" (`comProv`), e têm o
+  bloco `pt_proventos` (`components/rendaVariavel/BlocoProventos.jsx`: recebido em 12 meses, média, a receber, o rendimento
+  dos FIIs; as colunas empilhadas por ativo, o anunciado hachurado, ou a tabela ativo × mês; `patrimonio_proventos`). O
+  escopo do grid virou `patrimonio_v2` (a disposição salva ganha o bloco embaixo, ligado). A rosca tem a aba "Classe"
+  (clicar filtra a classe). O livre soma a renda variável (vende no pregão). Os filtros de instituição, tipo e investimento
+  são da renda fixa: com um deles, a variável sai. O IR, os vencimentos e cada investimento seguem só a renda fixa.
+
 ## Indicadores (06/11/2026, o mockup aprovado "Indicadores e importações", opção A)
 
 - `pages/Indicadores.jsx` (/indicadores, em Análises, entre Patrimônio e Investimentos — os painéis antes da tabela, 09/11/2026): o MERCADO, à parte do seu

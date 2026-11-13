@@ -104,6 +104,8 @@ const ESCOPO_ANTIGO = {
     ),
     configurar: emSeguida(ligarDepoisDe('vg_saldo', 'vg_origem_mes'), ligarDepoisDe('vg_origem_mes', 'vg_comprometido'), ligarDepoisDe('vg_comprometido', 'vg_fora')),
   },
+  // `patrimonio_v2` (13/11/2026, a renda variável): o bloco dos Proventos, embaixo do "Cada investimento" e ligado
+  patrimonio_v2: { de: 'patrimonio_v1', converter: abaixoDe('pt_investimentos', { widget_id: 'pt_proventos', h: 12 }), configurar: ligarDepoisDe('pt_investimentos', 'pt_proventos') },
 };
 const api = {
   get: async (rota) => {
