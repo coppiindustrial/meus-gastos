@@ -49,7 +49,8 @@ function MarcaEvento({ x, y, tipo, vazia = false, tracejada = false, opacidade =
     <g className="cursor-default transition-opacity duration-150" style={{ opacity: opacidade }} onMouseMove={onMove} onMouseLeave={onLeave}>
       <circle cx={x} cy={y} r="7.5" strokeWidth="1.5" strokeDasharray={tracejada ? '2.5 2' : undefined}
         className={vazia ? 'fill-current text-white' : ''} style={vazia ? { stroke: cor } : { fill: cor, stroke: cor }} />
-      <text x={x} y={y + 3.3} textAnchor="middle" className="pointer-events-none text-[9.5px] font-bold" style={{ fill: vazia ? cor : '#fff' }}>{LETRA_EVENTO[tipo]}</text>
+      {/* +3,5: a maiúscula da Inter em negrito a 9,5px fica com o meio no centro do círculo (medido com o `measureText`) */}
+      <text x={x} y={y + 3.5} textAnchor="middle" className="pointer-events-none text-[9.5px] font-bold" style={{ fill: vazia ? cor : '#fff' }}>{LETRA_EVENTO[tipo]}</text>
     </g>
   );
 }

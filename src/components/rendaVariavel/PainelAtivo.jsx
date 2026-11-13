@@ -483,9 +483,14 @@ const Bloco = ({ titulo, children }) => (
   </div>
 );
 const Linha = ({ r, v }) => (<><dt className="text-gray-500">{r}</dt><dd className="m-0 text-right text-gray-700">{v}</dd></>);
-// a letra do evento num círculo de px inteiros (14 × 14)
+// a letra do evento num círculo de 14 × 14 px, desenhada em SVG: no HTML a letra sentava pela linha de base da caixa de texto
+// (a meia-entrelinha) e ficava baixa; aqui a linha de base vai onde a maiúscula fica no centro — 10,5 MEDIDO com a Inter
+// Variable em negrito a 9px (o `measureText` da letra: o meio dela em 7,0, o centro do círculo)
 const Letra = ({ tipo }) => (
-  <span aria-hidden="true" className="inline-grid h-[14px] w-[14px] shrink-0 place-items-center rounded-full text-[8.5px] font-bold normal-case tracking-normal text-white" style={{ background: COR_EVENTO[tipo] }}>{LETRA_EVENTO[tipo]}</span>
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" className="inline-block shrink-0 align-[-2px]">
+    <circle cx="7" cy="7" r="7" style={{ fill: COR_EVENTO[tipo] }} />
+    <text x="7" y="10.5" textAnchor="middle" fontSize="9" fontWeight="700" fill="#fff">{LETRA_EVENTO[tipo]}</text>
+  </svg>
 );
 
 // a frase de uma operação no balão do gráfico
