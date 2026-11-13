@@ -410,6 +410,23 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   escopo do grid virou `patrimonio_v2` (a disposição salva ganha o bloco embaixo, ligado). A rosca tem a aba "Classe"
   (clicar filtra a classe). O livre soma a renda variável (vende no pregão). Os filtros de instituição, tipo e investimento
   são da renda fixa: com um deles, a variável sai. O IR, os vencimentos e cada investimento seguem só a renda fixa.
+- O GRÁFICO DO ATIVO (13/11/2026, o mockup "O gráfico do ativo", AS DUAS ABAS a pedido): `components/rendaVariavel/PainelAtivo.jsx`,
+  o painel dos ampliados (1280px/90vh, tela cheia), aberto por TRÊS PORTAS da carteira (`onGrafico` da tabela): o TICKER
+  (sublinha no hover), a CURVINHA DO MÊS ao lado da cotação (os fechamentos de 31 dias) e o ícone do gráfico nas ações da
+  linha. As abas: MEU GRÁFICO (`GraficoAtivo.jsx`, SVG na largura medida: 1D · 1M · 3M · 6M · No ano · 1A · 5A · Tudo, linha
+  ou VELAS — semanais acima de 300 dias, mensais acima de 400 semanas —, as OPERAÇÕES em cima da curva ▲ ▼ ●, o PREÇO MÉDIO
+  EM DEGRAUS na base de cotas de hoje, "Em R$" pela PTAX de cada dia; ao lado, a posição, o dia e as 52 semanas; lembrados
+  `rv_grafico_periodo`, `rv_grafico_tipo`, `rv_grafico_aba`) e AVANÇADO (`WidgetTradingView.jsx`, o widget do TradingView,
+  grátis com a marca deles à vista; a B3 como "BMFBOVESPA:TICKER"; o tema segue o `data-tema`). Contas em `lib/graficoAtivo.js`
+  (testada em `test/graficoAtivo.test.js`).
+  O HISTÓRICO (decisão do usuário: o recomendado): as fontes que o app usa quase não têm — a Finnhub grátis não dá velas e a
+  brapi grátis dá 3 meses, só da B3 —, então a função `cotacoes` ganhou a ação "historico": o YAHOO FINANCE (não oficial,
+  sem chave; a B3 com ".SA") grava 10 anos em `rv_fechamentos` com a abertura, a máxima, a mínima e o volume (migration
+  030; sem ela, só o preço e as velas viram o fechamento). O painel pede na primeira vez (menos de 150 dias guardados) ou
+  quando faltam os últimos dias (`historicoQueFalta`), uma vez por ativo por sessão; recusou, segue com o que há e o rodapé
+  avisa. O "intradia" (o 1D, de 5 em 5 min) vem na hora, sem gravar. O agendamento também grava a abertura, a máxima e a
+  mínima do dia. A CARGA DA TELA lê os fechamentos só desde a primeira operação (no mínimo 45 dias): o histórico inteiro
+  fica para o painel (`fechamentosDoAtivo`). O Yahoo ajusta o passado aos desdobramentos; o preço médio do gráfico também.
 
 ## Indicadores (06/11/2026, o mockup aprovado "Indicadores e importações", opção A)
 

@@ -4,7 +4,7 @@ import Toggle from '../Toggle.jsx';
 import { Trilho as TrilhoFaixa, DivisorFaixa } from '../filtros/FaixaFiltros.jsx';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { Etiqueta } from '../Comuns.jsx';
-import { CirculoMais, IconAplicar, IconExpandirTudo, IconLapis, IconLixeira, IconResgatar } from '../icons.jsx';
+import { CirculoMais, IconAplicar, IconComercial, IconExpandirTudo, IconLapis, IconLixeira, IconResgatar } from '../icons.jsx';
 import useLinhasAnimadas, { atributosLinha } from '../../lib/useLinhasAnimadas.js';
 import { formatBRL } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
@@ -19,20 +19,38 @@ import { NOME_PROVENTO, nomeDoTipo, precoDaOperacao } from '../../lib/rendaVaria
 // trilho do cabeçalho, "Exterior em US$" (o preço na moeda do ativo; `rv_usd`) e os Centavos (`rv_centavos`). As ações da
 // linha no quadrado de 30px, só no hover: COMPRAR e VENDER no ativo, EDITAR e EXCLUIR na operação. O balão: na Cotação, o
 // dia do ativo; no Resultado do exterior, quanto veio da ação e quanto do dólar.
+// O GRÁFICO DO ATIVO (13/11/2026, o mockup "O gráfico do ativo"): três portas para o `PainelAtivo` (`onGrafico`) — o TICKER
+// (sublinha no hover), a CURVINHA DO MÊS ao lado da cotação (os fechamentos dos últimos 31 dias) e o ícone do gráfico nas
+// ações da linha.
 
 const COLUNAS = [
   { id: 'nome', rotulo: 'Ativo · operação', esq: true },
-  { id: 'qtd', rotulo: 'Qtd', largura: 64, desk: true },
-  { id: 'pm', rotulo: 'Preço médio', largura: 124, desk: true },
-  { id: 'cot', rotulo: 'Cotação', largura: 120 },
-  { id: 'pos', rotulo: 'Posição', largura: 124 },
-  { id: 'res', rotulo: 'Resultado', largura: 140 },
-  { id: 'prov', rotulo: 'Proventos 12m', largura: 116, desk: true },
-  { id: 'peso', rotulo: 'Na carteira', esq: true, largura: 112, desk: true },
+  { id: 'qtd', rotulo: 'Qtd', largura: 56, desk: true },
+  { id: 'pm', rotulo: 'Preço médio', largura: 116, desk: true },
+  { id: 'cot', rotulo: 'Cotação', largura: 168 },
+  { id: 'pos', rotulo: 'Posição', largura: 120 },
+  { id: 'res', rotulo: 'Resultado', largura: 132 },
+  { id: 'prov', rotulo: 'Proventos 12m', largura: 108, desk: true },
+  { id: 'peso', rotulo: 'Na carteira', esq: true, largura: 104, desk: true },
 ];
-// as larguras cabem numa tela de 1440 com a barra lateral aberta (a caixa mede ~1100): o nome fica com o resto
-const LARGURA_ACOES = 76;
-const LARGURA_MINIMA = 1080;
+// as larguras cabem numa tela de 1440 com a barra lateral aberta (a caixa mede ~1100): o nome fica com o resto; a Cotação
+// leva a curvinha do mês e as ações, três botões (comprar, vender, o gráfico)
+const LARGURA_ACOES = 114;
+const LARGURA_MINIMA = 1100;
+// A CURVINHA DO MÊS: os fechamentos dos últimos 31 dias, na cor de quanto andou no mês
+function Curvinha({ precos, rotulo, onClick }) {
+  if (!precos || precos.length < 2) return <span className="w-[44px] shrink-0" />;
+  const mn = Math.min(...precos); const mx = Math.max(...precos);
+  const pts = precos.map((v, i) => `${((i / (precos.length - 1)) * 42 + 1).toFixed(1)},${(17 - ((v - mn) / (mx - mn || 1)) * 14).toFixed(1)}`).join(' ');
+  const sobe = precos[precos.length - 1] >= precos[0];
+  return (
+    <button type="button" onClick={onClick} aria-label={rotulo} className="shrink-0 rounded-[4px] p-0.5 transition-colors hover:bg-gray-100">
+      <svg width="44" height="20" viewBox="0 0 44 20" aria-hidden="true" className={`block stroke-current ${sobe ? 'text-green-700' : 'text-hx-c0393d'}`}>
+        <polyline points={pts} fill="none" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+    </button>
+  );
+}
 const RECUO_OP = 80;
 const lerSet = (k) => { try { return new Set(JSON.parse(lsGet(k) ?? '[]')); } catch { return new Set(); } };
 const sinal = (c) => (c > 0 ? '+' : c < 0 ? '−' : '');
@@ -95,7 +113,7 @@ const Barrinha = ({ fracao, cor }) => (
   </span>
 );
 
-export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoes, inicio }) {
+export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoes, inicio, fechamentos = [], onGrafico = null }) {
   const [centavos, setCentavosEstado] = useState(() => lsGet('rv_centavos') === '1');
   const setCentavos = (v) => { lsSet('rv_centavos', v ? '1' : '0'); setCentavosEstado(v); };
   const [emUsd, setEmUsdEstado] = useState(() => lsGet('rv_usd') !== '0');
@@ -108,6 +126,13 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
   const balao = useBalao(290, 170);
   const caixaRef = useRef(null);
   const { grupos, total } = carteira;
+  // os fechamentos do último mês de cada ativo (a curvinha)
+  const doMes = useMemo(() => {
+    const desde = new Date(Date.parse(`${hoje}T12:00:00Z`) - 31 * 86400000).toISOString().slice(0, 10);
+    const m = new Map();
+    fechamentos.forEach((f) => { if (f.data < desde) return; if (!m.has(f.ativo_id)) m.set(f.ativo_id, []); m.get(f.ativo_id).push(Number(f.preco)); });
+    return m;
+  }, [fechamentos, hoje]);
   const temUsd = grupos.some((g) => g.posicoes.some((p) => p.usd));
   // o preço na moeda do ativo, ou em reais (pelo dólar de hoje)
   const preco = (p, v) => (p.usd && !emUsd ? moeda(false, v === null ? null : v * (dolar ?? 0)) : moeda(p.usd, v));
@@ -232,7 +257,9 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
               {temCorpo ? <span className="mt-px"><Seta aberto={aberto} onClick={() => alternar(l.id)} rotulo={aberto ? `Fechar as operações de ${p.ativo.ticker}` : `Abrir as operações de ${p.ativo.ticker}`} /></span> : <span className="w-[20px] shrink-0" />}
               <span className="block min-w-0">
                 <span className="flex items-center gap-1.5 text-[13px] font-medium text-gray-800">
-                  <span className="truncate"><b className="font-semibold text-gray-900">{p.ativo.ticker}</b>{p.ativo.nome ? ` · ${p.ativo.nome}` : ''}</span>
+                  <span className="truncate">{onGrafico
+                    ? <button type="button" onClick={() => onGrafico(p)} className="font-semibold text-gray-900 underline decoration-transparent decoration-dotted underline-offset-[3px] transition-colors hover:decoration-gray-400 group-hover/linha:decoration-gray-300">{p.ativo.ticker}</button>
+                    : <b className="font-semibold text-gray-900">{p.ativo.ticker}</b>}{p.ativo.nome ? ` · ${p.ativo.nome}` : ''}</span>
                   {!nOps && <span className="shrink-0"><Etiqueta tom="ambar">sem operação</Etiqueta></span>}
                 </span>
                 <span className="block truncate text-[11.5px] text-gray-500">{nomeDoTipo(p.ativo.tipo)} · {p.ativo.mercado === 'EUA' ? 'EUA' : 'B3'}{p.ativo.corretora ? ` · ${p.ativo.corretora}` : ''}{nOps ? ` · ${nOps} ${nOps === 1 ? 'operação' : 'operações'}` : ''}</span>
@@ -244,9 +271,14 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
             {preco(p, p.precoMedio)}
             {p.usd && p.custoMedioReais && <span className="block text-[11px] text-gray-400">{formatBRL(Math.round(p.custoMedioReais * 100))}</span>}
           </td>
-          <td className={`${td} ${numTd} cursor-help`} onMouseMove={mover(l.id, 'cot')} onMouseLeave={balao.aoSair}>
-            <span className={`underline decoration-gray-300 decoration-dotted underline-offset-[3px] ${p.semCotacao ? 'text-gray-400' : 'text-gray-800'}`}>{preco(p, p.preco)}</span>
-            <span className={`block text-[11px] ${p.semCotacao ? 'text-amber-700' : corDe(p.variacaoDia ?? 0)}`}>{p.semCotacao ? 'sem cotação' : `${pct(p.variacaoDia, 2)} no dia`}</span>
+          <td className={`${td} ${numTd}`}>
+            <span className="flex items-center justify-end gap-2">
+              {!movel && onGrafico && <Curvinha precos={doMes.get(p.ativo.id)} rotulo={`Ver o gráfico de ${p.ativo.ticker}`} onClick={() => onGrafico(p)} />}
+              <span className="block cursor-help" onMouseMove={mover(l.id, 'cot')} onMouseLeave={balao.aoSair}>
+                <span className={`underline decoration-gray-300 decoration-dotted underline-offset-[3px] ${p.semCotacao ? 'text-gray-400' : 'text-gray-800'}`}>{preco(p, p.preco)}</span>
+                <span className={`block text-[11px] ${p.semCotacao ? 'text-amber-700' : corDe(p.variacaoDia ?? 0)}`}>{p.semCotacao ? 'sem cotação' : `${pct(p.variacaoDia, 2)} no dia`}</span>
+              </span>
+            </span>
           </td>
           <td className={`${td} ${numTd} font-semibold text-gray-900`}>
             {p.quantidade ? reais(p.valorReais) : <span className="font-normal text-gray-400">—</span>}
@@ -264,6 +296,7 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
           <td className={`${td} px-3 text-gray-700 ${movel ? 'hidden' : ''}`}>{p.quantidade ? <Barrinha fracao={peso(p.valorReais)} cor={g.classe.cor} /> : null}</td>
           {acoesTd(`${td} px-2`, acoes && (
             <>
+              {onGrafico && <BotaoLinha titulo={`Ver o gráfico de ${p.ativo.ticker}`} onClick={() => onGrafico(p)}><IconComercial className="h-[15px] w-[15px]" /></BotaoLinha>}
               <BotaoLinha titulo={`Comprar ${p.ativo.ticker}`} onClick={() => acoes.operar(p.ativo, 'compra')}><IconAplicar /></BotaoLinha>
               {p.quantidade > 0 && <BotaoLinha titulo={`Vender ${p.ativo.ticker}`} onClick={() => acoes.operar(p.ativo, 'venda')}><IconResgatar /></BotaoLinha>}
             </>

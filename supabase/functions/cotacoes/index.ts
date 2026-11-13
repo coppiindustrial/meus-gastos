@@ -1,7 +1,8 @@
 // Meus Gastos — a função COTACOES (13/11/2026, a renda variável; migration 027).
 //
 // Busca a cotação de cada ativo cadastrado em `rv_ativos` e grava a última em `rv_cotacoes` e o preço do dia em
-// `rv_fechamentos` (gravado de novo a cada leitura: depois do pregão, ele É o fechamento). A B3 vem da brapi.dev, os EUA da
+// `rv_fechamentos` (gravado de novo a cada leitura: depois do pregão, ele É o fechamento; com a abertura, a máxima e a mínima
+// do dia — migration 030). A B3 vem da brapi.dev, os EUA da
 // Finnhub; as chaves ficam nos SEGREDOS do Supabase (BRAPI_TOKEN, FINNHUB_TOKEN), nunca no repositório (que é público).
 //
 // Quem chama:
@@ -10,6 +11,10 @@
 //   · o APP, com o login da pessoa (o cabeçalho Authorization do supabase-js): atualiza só os ativos dela.
 //     { "acao": "consultar", "ticker": "MU", "mercado": "EUA" } não grava nada: devolve o nome e o preço (o cadastro do
 //     ativo confere o ticker antes de salvar).
+//     { "acao": "historico", "ativo_id": "…", "range": "10y" } busca o fechamento de cada dia no YAHOO FINANCE (não oficial,
+//     sem chave: os dois mercados, anos de histórico) e grava em `rv_fechamentos`, com a abertura, a máxima, a mínima e o
+//     volume (migration 030) — o gráfico do ativo pede na primeira vez e quando faltam dias.
+//     { "acao": "intradia", "ativo_id": "…" } o pregão de hoje de 5 em 5 minutos, também do Yahoo, sem gravar (o "1D").
 // Publicar: Supabase → Edge Functions → Deploy a new function → "cotacoes", colar este arquivo, e DESLIGAR o "Verify JWT"
 // (a função confere sozinha: o segredo do agendamento ou o login da pessoa).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
@@ -60,6 +65,38 @@ async function daFinnhub(ticker: string, comNome = false): Promise<Cotacao | nul
   };
 }
 
+// ------------------------------------------------------------ o Yahoo Finance (o histórico do gráfico do ativo)
+// O endpoint do gráfico do Yahoo, o mesmo que o site deles usa. NÃO É OFICIAL: pode mudar ou recusar; aí a ação devolve
+// { erro } e o app segue com o que já guardou. A B3 leva o ".SA" no ticker.
+type Vela = { t: number; o: number | null; h: number | null; l: number | null; c: number; v: number | null };
+async function doYahoo(ticker: string, mercado: string, range: string, intervalo: string) {
+  const simbolo = mercado === 'EUA' ? ticker : `${ticker}.SA`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(simbolo)}?range=${range}&interval=${intervalo}&includePrePost=false`;
+  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`o Yahoo respondeu ${r.status}`);
+  const res = (await r.json())?.chart?.result?.[0];
+  if (!res?.timestamp?.length) throw new Error('o Yahoo não tem histórico deste ticker');
+  const q = res.indicators?.quote?.[0] ?? {};
+  const velas: Vela[] = [];
+  res.timestamp.forEach((t: number, i: number) => {
+    const c = ou(q.close?.[i]);
+    if (!c) return;
+    velas.push({ t, o: ou(q.open?.[i]), h: ou(q.high?.[i]), l: ou(q.low?.[i]), c, v: typeof q.volume?.[i] === 'number' ? Math.round(q.volume[i]) : null });
+  });
+  return { velas, meta: res.meta ?? {} };
+}
+// grava os fechamentos; sem a migration 030 (as colunas das velas), grava só o preço
+async function gravarFechamentos(admin: ReturnType<typeof createClient>, linhas: Record<string, unknown>[]) {
+  for (let i = 0; i < linhas.length; i += 500) {
+    const lote = linhas.slice(i, i + 500);
+    let r = await admin.from('rv_fechamentos').upsert(lote, { onConflict: 'ativo_id,data' });
+    if (r.error && /abertura|maxima|minima|volume|column/i.test(r.error.message)) {
+      r = await admin.from('rv_fechamentos').upsert(lote.map(({ ativo_id, user_id, data, preco }) => ({ ativo_id, user_id, data, preco })), { onConflict: 'ativo_id,data' });
+    }
+    if (r.error) throw r.error;
+  }
+}
+
 const buscar = (mercado: string, ticker: string, comNome = false) => (mercado === 'EUA' ? daFinnhub(ticker, comNome) : daBrapi(ticker));
 // o dia do pregão, no fuso da bolsa (o fechamento de "hoje" para quem olha do Brasil à noite ainda é o de hoje lá)
 const diaDoPregao = (iso: string, mercado: string) =>
@@ -90,6 +127,29 @@ Deno.serve(async (req) => {
       return resposta(c ? { ticker, mercado, nome: c.nome ?? '', preco: c.preco, variacao_dia: c.variacao_dia } : { ticker, mercado, naoAchou: true });
     }
 
+    if (corpo?.acao === 'historico' || corpo?.acao === 'intradia') {
+      if (!usuario) return resposta({ erro: 'só com o login' }, 401);
+      const { data: ativo, error: e1 } = await admin.from('rv_ativos').select('id, user_id, ticker, mercado').eq('id', String(corpo.ativo_id ?? '')).eq('user_id', usuario).maybeSingle();
+      if (e1) throw e1;
+      if (!ativo) return resposta({ erro: 'ativo não encontrado' }, 404);
+      if (corpo.acao === 'intradia') {
+        const { velas, meta } = await doYahoo(ativo.ticker, ativo.mercado, '1d', '5m');
+        const regular = meta.currentTradingPeriod?.regular ?? {};
+        return resposta({ pontos: velas, anterior: ou(meta.chartPreviousClose) ?? ou(meta.previousClose), inicio: regular.start ?? null, fim: regular.end ?? null, fonte: 'yahoo' });
+      }
+      const range = ['1mo', '3mo', '1y', '5y', '10y', 'max'].includes(corpo.range) ? corpo.range : '10y';
+      const { velas, meta } = await doYahoo(ativo.ticker, ativo.mercado, range, '1d');
+      const off = Number(meta.gmtoffset ?? 0); // o dia no fuso da bolsa
+      const porDia = new Map<string, Record<string, unknown>>();
+      velas.forEach((x) => {
+        const data = new Date((x.t + off) * 1000).toISOString().slice(0, 10);
+        porDia.set(data, { ativo_id: ativo.id, user_id: ativo.user_id, data, preco: x.c, abertura: x.o, maxima: x.h, minima: x.l, volume: x.v });
+      });
+      const linhas = [...porDia.values()];
+      await gravarFechamentos(admin, linhas);
+      return resposta({ gravados: linhas.length, de: linhas[0]?.data ?? null, ate: linhas[linhas.length - 1]?.data ?? null, fonte: 'yahoo' });
+    }
+
     let consulta = admin.from('rv_ativos').select('id, user_id, ticker, mercado').eq('ativo', true);
     if (usuario) consulta = consulta.eq('user_id', usuario);
     const { data: ativos, error } = await consulta;
@@ -109,13 +169,12 @@ Deno.serve(async (req) => {
       if (!c) { falharam.push(a.ticker); continue; }
       const { nome: _nome, ...linha } = c;
       cotacoes.push({ ativo_id: a.id, user_id: a.user_id, ...linha });
-      fechamentos.push({ ativo_id: a.id, user_id: a.user_id, data: diaDoPregao(c.cotado_em, a.mercado), preco: c.preco });
+      fechamentos.push({ ativo_id: a.id, user_id: a.user_id, data: diaDoPregao(c.cotado_em, a.mercado), preco: c.preco, abertura: c.abertura, maxima: c.maxima, minima: c.minima });
     }
     if (cotacoes.length) {
       const r1 = await admin.from('rv_cotacoes').upsert(cotacoes, { onConflict: 'ativo_id' });
       if (r1.error) throw r1.error;
-      const r2 = await admin.from('rv_fechamentos').upsert(fechamentos, { onConflict: 'ativo_id,data' });
-      if (r2.error) throw r2.error;
+      await gravarFechamentos(admin, fechamentos);
     }
     return resposta({ atualizados: cotacoes.length, falharam });
   } catch (e) {

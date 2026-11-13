@@ -10,6 +10,7 @@ import TabelaRendaVariavel from '../components/rendaVariavel/TabelaRendaVariavel
 import ListaOperacoes from '../components/rendaVariavel/ListaOperacoes.jsx';
 import ModalOperacao from '../components/rendaVariavel/ModalOperacao.jsx';
 import ModalCadastroAtivos from '../components/rendaVariavel/ModalCadastroAtivos.jsx';
+import PainelAtivo from '../components/rendaVariavel/PainelAtivo.jsx';
 import useRendaVariavel from '../components/rendaVariavel/useRendaVariavel.js';
 import { useNoCelular } from '../lib/celular.js';
 import { useToast } from '../context/ToastContext.jsx';
@@ -26,6 +27,7 @@ import { nomeDoTipo } from '../lib/rendaVariavel.js';
 // "+ Lançar operação". Duas abas (a pílula que desliza): CARTEIRA (a tabela agrupada) e OPERAÇÕES (a lista). Os PROVENTOS se
 // lançam aqui (o tipo Provento do pop-up), mas a análise deles mora no Patrimônio. A cotação vem da função `cotacoes` do
 // Supabase (a brapi e a Finnhub); ao abrir, se a última tiver mais de 20 minutos, a tela pede uma nova. No celular, só ler.
+// O GRÁFICO DO ATIVO (13/11/2026): o ticker, a curvinha do mês e o ícone da linha abrem o `PainelAtivo` (Meu gráfico | Avançado).
 
 const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
 const ABAS = [{ key: 'carteira', label: 'Carteira' }, { key: 'operacoes', label: 'Operações' }];
@@ -40,6 +42,7 @@ export default function RendaVariavel() {
   const [cadastro, setCadastro] = useState(null); // { tipoInicial? }
   const [operacao, setOperacao] = useState(null); // { ativo?, tipo?, op? }
   const [mais, setMais] = useState(null);
+  const [grafico, setGrafico] = useState(null); // o id do ativo do PainelAtivo
   const maisAberto = useRef(false);
 
   if (d.carregando) return (<div><CabecalhoPagina titulo="Renda variável" /><PageLoading /></div>);
@@ -55,6 +58,7 @@ export default function RendaVariavel() {
     );
   }
   const { carteira } = d;
+  const posGrafico = grafico ? carteira.posicoes.find((p) => p.ativo.id === grafico) : null;
   const vazio = !d.ativos.length;
   const nAtivos = carteira.grupos.reduce((s, g) => s + g.posicoes.length, 0);
 
@@ -131,7 +135,8 @@ export default function RendaVariavel() {
         <>
           <section className="card mt-4 flex flex-col overflow-hidden !p-0">
             {aba === 'carteira'
-              ? <TabelaRendaVariavel carteira={carteira} hoje={d.hoje} dolar={d.dolar} movel={movel} acoes={acoes} inicio={inicio} />
+              ? <TabelaRendaVariavel carteira={carteira} hoje={d.hoje} dolar={d.dolar} movel={movel} acoes={acoes} inicio={inicio}
+                fechamentos={d.fechamentos} onGrafico={(p) => setGrafico(p.ativo.id)} />
               : <ListaOperacoes ativos={d.ativos} operacoes={d.operacoes} hoje={d.hoje} movel={movel} acoes={acoes} inicio={inicio} />}
           </section>
           {movel && <p className="mt-2 text-xs text-gray-500">Lançar, editar e o cadastro ficam no computador.</p>}
@@ -139,6 +144,10 @@ export default function RendaVariavel() {
       )}
 
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
+      {posGrafico && (
+        <PainelAtivo posicao={posGrafico} operacoes={d.operacoes} ptax={d.ptax} dolar={d.dolar} hoje={d.hoje} onClose={() => setGrafico(null)}
+          onOperar={movel ? null : (ativo) => { setGrafico(null); setOperacao({ ativo, tipo: 'compra' }); }} />
+      )}
       {cadastro && (
         <ModalCadastroAtivos ativos={d.ativos} operacoes={d.operacoes} tipoInicial={cadastro.tipoInicial}
           onFechar={() => setCadastro(null)} onSalvo={() => { setCadastro(null); d.carregar().then(() => d.releer(false)); }} />
