@@ -117,3 +117,68 @@ test('dolarEm: o último até o dia', () => {
   assert.equal(dolarEm(ptax, '2026-11-13'), 5.32);
   assert.equal(dolarEm(ptax, '2026-11-01'), 5.3);
 });
+
+// ------------------------------------------------------------ a faixa de desempenho e os eventos
+import {
+  desempenho, eventosNoPeriodo, proximoResultado, ultimosResultados, resumoDosDividendos, cotasAntesDe, desdobramentosSemOperacao,
+} from '../src/lib/graficoAtivo.js';
+
+test('inicioDoPeriodo: a semana são 7 dias corridos', () => {
+  assert.equal(inicioDoPeriodo('1S', '2026-11-13'), '2026-11-06');
+});
+
+test('desempenho: contra o último fechamento até o começo; o dia contra o anterior; o início contra a estreia', () => {
+  const velas = [
+    { d: '2025-11-12', c: 50 }, { d: '2026-10-13', c: 80 }, { d: '2026-11-05', c: 90 }, { d: '2026-11-12', c: 98 }, { d: '2026-11-13', c: 100 },
+  ];
+  const r = desempenho({ velas, preco: 100, anterior: 98, estreia: 2, hoje: '2026-11-13' });
+  assert.equal(r['1D'], 100 / 98 - 1);
+  assert.equal(r['1S'], 100 / 90 - 1); // o de 06/11 não existe: vale o de 05/11
+  assert.equal(r['1M'], 100 / 80 - 1);
+  assert.equal(r['1A'], 1); // 50 → 100
+  assert.equal(r['5A'], null); // não há histórico até 2021
+  assert.equal(r.tudo, 49);
+  assert.equal(desempenho({ velas, hoje: '2026-11-13' }).tudo, null); // sem a estreia
+});
+
+const eventos = [
+  { tipo: 'dividendo', data: '2026-09-29', valor: 0.15 },
+  { tipo: 'resultado', data: '2026-09-23', hora: 'amc', valor: 33.42, estimado: 32.56, ano: 2026, trimestre: 4 },
+  { tipo: 'resultado', data: '2026-09-30', hora: 'periodo', valor: 33.42, estimado: 32.56, ano: 2026, trimestre: 4 },
+  { tipo: 'resultado', data: '2026-06-30', hora: 'periodo', valor: 25.11, estimado: 21.4, ano: 2026, trimestre: 3 },
+  { tipo: 'resultado', data: '2026-12-15', hora: 'amc', valor: null, estimado: 39.37, ano: 2027, trimestre: 1 },
+  { tipo: 'dividendo', data: '2025-09-29', valor: 0.115 },
+  { tipo: 'estreia', data: '1984-06-01', valor: 0.94 },
+];
+
+test('eventosNoPeriodo: o fim do trimestre sem data não vai ao gráfico; o futuro também não', () => {
+  const pontos = [{ d0: '2026-09-21', d: '2026-09-25' }, { d0: '2026-09-28', d: '2026-10-02' }];
+  const m = eventosNoPeriodo(eventos, pontos);
+  assert.deepEqual(m.map((x) => [x.ev.tipo, x.ev.data, x.j]), [['dividendo', '2026-09-29', 1], ['resultado', '2026-09-23', 0]]);
+});
+
+test('proximoResultado e ultimosResultados: um por trimestre, o com a data vale', () => {
+  assert.equal(proximoResultado(eventos, '2026-11-13').data, '2026-12-15');
+  const u = ultimosResultados(eventos);
+  assert.deepEqual(u.map((x) => [x.trimestre, x.hora]), [[4, 'amc'], [3, 'periodo']]);
+});
+
+test('resumoDosDividendos: o último, os 12 meses e o rendimento', () => {
+  const r = resumoDosDividendos(eventos, '2026-11-13', 100);
+  assert.equal(r.ultimo.data, '2026-09-29');
+  assert.equal(r.em12, 0.15); // o de 29/09/2025 já saiu dos 12 meses
+  assert.equal(r.rendimento, 0.0015);
+});
+
+test('cotasAntesDe: quem tinha no fim do pregão anterior à data-ex', () => {
+  const degraus = [{ d: '2026-03-10', qtd: 2 }, { d: '2026-09-29', qtd: 3 }];
+  assert.equal(cotasAntesDe(degraus, '2026-09-29'), 2); // a compra no próprio dia não recebe
+  assert.equal(cotasAntesDe(degraus, '2026-03-10'), 0);
+  assert.equal(cotasAntesDe(degraus, '2026-10-01'), 3);
+});
+
+test('desdobramentosSemOperacao: o da empresa depois da primeira compra, sem o seu', () => {
+  const ev = [{ tipo: 'desdobramento', data: '2026-06-10', valor: 2 }, { tipo: 'desdobramento', data: '2020-01-10', valor: 3 }];
+  assert.equal(desdobramentosSemOperacao(ev, [{ tipo: 'compra', data: '2026-03-10' }]).length, 1);
+  assert.equal(desdobramentosSemOperacao(ev, [{ tipo: 'compra', data: '2026-03-10' }, { tipo: 'desdobramento', data: '2026-06-12', fator: 2 }]).length, 0);
+});

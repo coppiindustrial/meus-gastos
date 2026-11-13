@@ -427,6 +427,23 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   avisa. O "intradia" (o 1D, de 5 em 5 min) vem na hora, sem gravar. O agendamento também grava a abertura, a máxima e a
   mínima do dia. A CARGA DA TELA lê os fechamentos só desde a primeira operação (no mínimo 45 dias): o histórico inteiro
   fica para o painel (`fechamentosDoAtivo`). O Yahoo ajusta o passado aos desdobramentos; o preço médio do gráfico também.
+- DESEMPENHO, VOLUME, DIVIDENDOS E RESULTADOS (13/11/2026, o mockup de mesmo nome, a OPÇÃO B; o resto, as recomendadas): a
+  FAIXA DE DESEMPENHO É O PERÍODO do Meu gráfico (`PERIODOS`: 1 dia · 1 semana · 1 mês · 3 · 6 meses · 1 ano · 5 anos ·
+  Desde o início — cada célula diz quanto andou, `desempenho`, e clicada troca o gráfico; as pílulas saíram). Conferida com o
+  Investing em 13/11/2026: a mesma faixa, a diferença só da hora da cotação. O "Desde o início" desenha um ponto por mês desde
+  a estreia (a ação "mensal", sem gravar) e o número sai do evento 'estreia'. Embaixo do preço, a FAIXA DOS EVENTOS (D o
+  dividendo na data-ex — cheio quando você tinha cotas no pregão anterior, `cotasAntesDe` —, E o resultado com a linha
+  tracejada, S o desdobramento; o próximo resultado tracejado na calha da direita) e as BARRAS DO VOLUME; os interruptores
+  "Dividendos e resultados" (`rv_grafico_eventos`) e "Volume" (`rv_grafico_volume`). O ● do provento saiu da curva (o D cheio
+  diz). Ao lado: o próximo resultado, os últimos 4 (`ultimosResultados`), os dividendos (`resumoDosDividendos`) e o AVISO do
+  desdobramento da empresa que você não lançou (`desdobramentosSemOperacao`, "Lançar o desdobramento" abre o pop-up).
+  OS EVENTOS (migration 031, `rv_eventos`: dividendo · desdobramento · resultado · estreia; o app só lê): o Yahoo dá os
+  dividendos e desdobramentos na mesma leitura do histórico (`events=div|split`); OS RESULTADOS vêm da Finnhub, e o plano
+  grátis (testado com a MU em 13/11/2026) só dá os PRÓXIMOS no calendário e os 4 últimos trimestres nas "surpresas", sem a data
+  da divulgação — então o E do gráfico vai SE ACUMULANDO (o calendário fica guardado e o divulgado chega pelo mesmo ano e
+  trimestre fiscal) e os trimestres de antes entram com a data do fim do trimestre e `hora` 'periodo' (só na tabela, nunca no
+  gráfico). A B3 não tem resultados (sem fonte grátis). O "historico" grava os eventos junto; o painel relê uma vez por dia
+  (a ação "eventos"). Sem a 031, o painel segue sem as marcas e o rodapé avisa.
 
 ## Indicadores (06/11/2026, o mockup aprovado "Indicadores e importações", opção A)
 

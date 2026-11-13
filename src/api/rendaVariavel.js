@@ -69,3 +69,18 @@ export async function fechamentosDoAtivo(ativoId) {
 export const buscarHistorico = (ativoId, range = '10y') => chamar({ acao: 'historico', ativo_id: ativoId, range });
 // o pregão de hoje de 5 em 5 minutos (não fica guardado): { pontos: [{ t, o, h, l, c }], anterior, inicio, fim } ou { erro }
 export const intradiaDoAtivo = (ativoId) => chamar({ acao: 'intradia', ativo_id: ativoId });
+// o "Desde o início": um ponto por mês desde a estreia na bolsa (não fica guardado): { pontos: [{ data, preco, … }] } ou { erro }
+export const mensalDoAtivo = (ativoId) => chamar({ acao: 'mensal', ativo_id: ativoId });
+
+// OS EVENTOS de UM ativo (migration 031: os dividendos, os desdobramentos, os resultados e a estreia, que a função grava).
+// Sem a migration, null (o painel segue sem as marcas).
+export async function eventosDoAtivo(ativoId) {
+  try {
+    return await exigir(supabase.from('rv_eventos').select('tipo, data, valor, estimado, receita, receita_estimada, hora, ano, trimestre, atualizado_em').eq('ativo_id', ativoId).order('data'));
+  } catch (err) {
+    if (/rv_eventos|schema cache|does not exist/i.test(err?.message ?? '')) return null;
+    throw err;
+  }
+}
+// a função relê os eventos (o último ano do Yahoo e os resultados da Finnhub): { eventos } ou { erroEventos } ou { erro }
+export const atualizarEventos = (ativoId) => chamar({ acao: 'eventos', ativo_id: ativoId });

@@ -4,22 +4,31 @@ import { COR_FALTOU } from '../graficos/GraficosVisao.jsx';
 import { DICA } from '../../lib/coresGrafico.js';
 import { escalaPreco, rotulosX } from '../../lib/graficoAtivo.js';
 
-// O GRÁFICO DO PREÇO DE UM ATIVO (13/11/2026, o mockup "O gráfico do ativo", a aba Meu gráfico): SVG na LARGURA MEDIDA da
-// caixa (o chrome dos Indicadores), o eixo à esquerda (calha de 56px), a LINHA com a área ou as VELAS (sobe na cor das
-// entradas, cai no vermelho do "faltou"), o PREÇO MÉDIO EM DEGRAUS tracejado, as OPERAÇÕES em cima da curva (▲ compra, ▼
-// venda, ● provento), e à direita as etiquetas do último preço e do preço médio. No 1D o eixo é o pregão inteiro (a curva
-// para na hora de agora, o resto hachurado) com o fechamento de ontem tracejado. Hover: a guia, o ponto e o balão que quem
-// chama monta (`balaoDe`). As contas moram em `lib/graficoAtivo.js`.
+// O GRÁFICO DO PREÇO DE UM ATIVO (13/11/2026, os mockups "O gráfico do ativo" e "Desempenho, volume, dividendos e
+// resultados"): SVG na LARGURA MEDIDA da caixa (o chrome dos Indicadores), o eixo à esquerda (calha de 56px), a LINHA com a
+// área ou as VELAS (sobe na cor das entradas, cai no vermelho do "faltou"), o PREÇO MÉDIO EM DEGRAUS tracejado, as SUAS
+// compras e vendas em cima da curva (▲ ▼), e à direita as etiquetas do último preço e do preço médio. Embaixo do preço, a
+// FAIXA DOS EVENTOS da empresa — D o dividendo na data-ex (cheio quando você tinha cotas), E o resultado (a linha tracejada
+// sobe até o preço), S o desdobramento; o próximo resultado, tracejado na calha da direita — e as BARRAS DO VOLUME (verdes no
+// dia que subiu, vermelhas no que caiu). No 1D o eixo é o pregão inteiro (a curva para na hora de agora, o resto hachurado)
+// com o fechamento de ontem tracejado. Hover: a guia do preço ao volume, o ponto e o balão que quem chama monta (`balaoDe`);
+// num evento, o balão dele (`balaoDoEvento`). As contas moram em `lib/graficoAtivo.js`.
 //
-// `pontos`: [{ d0, d, o, h, l, c }] já na moeda da tela; no 1D, [{ t, o, h, l, c }] com `sessao` = { inicio, fim } (segundos).
-// `pmDe(p)`: o preço médio daquele ponto (ou null); `marcas`: [{ j, op }]; `op(k)`: a opacidade de cada tipo ('preco', 'compra',
-// 'venda', 'prov', 'pm' — o `opSerie` da legenda). `balaoDe(p, j, ops)` → { titulo, itens, extra, nota }.
+// `pontos`: [{ d0, d, o, h, l, c, v }] já na moeda da tela; no 1D, [{ t, o, h, l, c, v }] com `sessao` = { inicio, fim } (s).
+// `pmDe(p)`: o preço médio daquele ponto (ou null); `marcas`: [{ j, op }] (as suas operações); `eventos`: [{ j, ev, cheio? }];
+// `proximo`: o próximo resultado ({ data }) ou null; `volume`: as barras; `comEventos`: a faixa dos eventos.
+// `op(k)`: a opacidade de cada tipo ('preco', 'compra', 'venda', 'pm', 'dividendo', 'resultado', 'desdobramento', 'volume' —
+// o `opSerie` da legenda).
 
 const E = 56; const D = 88; const T = 12; const B = 26;
+const FAIXA_EV = 24; const ALT_VOL = 60; const VAO_VOL = 6;
 const COR_SOBE = 'var(--serie-entradas)';
 const COR_CAI = COR_FALTOU;
-export const COR_MARCA = { compra: 'var(--serie-entradas)', venda: 'var(--origem-fixo)', provento: 'var(--serie-sobrou)' };
-const tipoDaMarca = (op) => (op.tipo === 'compra' ? 'compra' : op.tipo === 'venda' ? 'venda' : op.tipo === 'provento' ? 'prov' : 'outro');
+export const COR_MARCA = { compra: 'var(--serie-entradas)', venda: 'var(--origem-fixo)' };
+export const COR_EVENTO = { dividendo: 'var(--serie-entradas)', resultado: 'var(--origem-fixo)', desdobramento: 'var(--origem-manual)' };
+export const LETRA_EVENTO = { dividendo: 'D', resultado: 'E', desdobramento: 'S' };
+const volumeCurto = (v) => (v >= 1e9 ? `${(v / 1e9).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} bi` : v >= 1e6 ? `${(v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} mi` : v >= 1e3 ? `${(v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} mil` : String(Math.round(v)));
+const dataCurta = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
 function useCaixa(altMin) {
   const ref = useRef(null);
@@ -33,16 +42,35 @@ function useCaixa(altMin) {
   return [ref, tam];
 }
 
+// a marca redonda de um evento (a letra no meio); `vazia`: o contorno (o dividendo sem cotas, o próximo resultado)
+function MarcaEvento({ x, y, tipo, vazia = false, tracejada = false, opacidade = 1, onMove, onLeave }) {
+  const cor = COR_EVENTO[tipo];
+  return (
+    <g className="cursor-default transition-opacity duration-150" style={{ opacity: opacidade }} onMouseMove={onMove} onMouseLeave={onLeave}>
+      <circle cx={x} cy={y} r="7.5" strokeWidth="1.5" strokeDasharray={tracejada ? '2.5 2' : undefined}
+        className={vazia ? 'fill-current text-white' : ''} style={vazia ? { stroke: cor } : { fill: cor, stroke: cor }} />
+      <text x={x} y={y + 3.3} textAnchor="middle" className="pointer-events-none text-[9.5px] font-bold" style={{ fill: vazia ? cor : '#fff' }}>{LETRA_EVENTO[tipo]}</text>
+    </g>
+  );
+}
+
 export default function GraficoAtivo({
-  pontos, tipo = 'linha', per, sessao = null, anterior = null, pmDe = null, marcas = [], op = () => 1,
-  cor, balaoDe, altMin = 260,
+  pontos, tipo = 'linha', per, sessao = null, anterior = null, pmDe = null, marcas = [], eventos = [], proximo = null,
+  volume = false, comEventos = false, op = () => 1, cor, balaoDe, balaoDoEvento = null, altMin = 300,
 }) {
   const [ref, { w, h }] = useCaixa(altMin);
-  const balao = useBalao(270, 190);
+  const balao = useBalao(280, 200);
   const gid = `ga${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   if (!pontos?.length) return <div ref={ref} className="h-full min-h-[260px]" />;
 
-  const iw = w - E - D; const ih = h - T - B;
+  const temVol = volume && pontos.some((p) => p.v);
+  const faixaEv = comEventos ? FAIXA_EV : 0;
+  const altVol = temVol ? ALT_VOL : 0;
+  const iw = w - E - D;
+  const ih = Math.max(120, h - T - B - faixaEv - (temVol ? altVol + VAO_VOL : 0));
+  const yFaixa = T + ih + faixaEv / 2 + 1;
+  const yVol0 = T + ih + faixaEv + (temVol ? VAO_VOL : 0);
+  const yVol1 = yVol0 + altVol;
   const n = pontos.length;
   const intra = !!sessao;
   const frac = intra
@@ -78,24 +106,47 @@ export default function GraficoAtivo({
     const d = pontos.map((p, j) => `${j ? 'L' : 'M'}${X(frac(p, j)).toFixed(1)} ${Y(p.c).toFixed(1)}`).join('');
     const xi = X(frac(pontos[0], 0)).toFixed(1); const xf = X(frac(pontos[n - 1], n - 1)).toFixed(1);
     serie = (
-      <>
+      <g className="transition-opacity duration-150" style={{ opacity: op('preco') }}>
         <path d={`${d}L${xf} ${T + ih}L${xi} ${T + ih}Z`} fill={`url(#${gid})`} />
-        <path d={d} fill="none" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" className="transition-opacity duration-150" style={{ stroke: cor, opacity: op('preco') }} />
-      </>
+        <path d={d} fill="none" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" style={{ stroke: cor }} />
+      </g>
     );
   } else {
     const vagas = intra ? Math.max(n, (sessao.fim - sessao.inicio) / 300) : n;
     const bw = Math.max(1, Math.min(9, (iw / vagas) * 0.62));
-    serie = pontos.map((p, j) => {
-      const x = X(frac(p, j)); const c = p.c >= p.o ? COR_SOBE : COR_CAI;
-      const yo = Y(p.o); const yc = Y(p.c);
-      return (
-        <g key={j} className="transition-opacity duration-150" style={{ stroke: c, fill: c, opacity: op('preco') }}>
-          <line x1={x} x2={x} y1={Y(p.h)} y2={Y(p.l)} strokeWidth="1" />
-          <rect x={x - bw / 2} y={Math.min(yo, yc)} width={bw} height={Math.max(1, Math.abs(yc - yo))} rx={bw > 4 ? 1 : 0} strokeWidth="0" />
-        </g>
-      );
-    });
+    serie = (
+      <g className="transition-opacity duration-150" style={{ opacity: op('preco') }}>
+        {pontos.map((p, j) => {
+          const x = X(frac(p, j)); const c = p.c >= p.o ? COR_SOBE : COR_CAI;
+          const yo = Y(p.o); const yc = Y(p.c);
+          return (
+            <g key={j} style={{ stroke: c, fill: c }}>
+              <line x1={x} x2={x} y1={Y(p.h)} y2={Y(p.l)} strokeWidth="1" />
+              <rect x={x - bw / 2} y={Math.min(yo, yc)} width={bw} height={Math.max(1, Math.abs(yc - yo))} rx={bw > 4 ? 1 : 0} strokeWidth="0" />
+            </g>
+          );
+        })}
+      </g>
+    );
+  }
+
+  // o volume: a barra de cada ponto, na cor de quanto andou contra o ponto anterior
+  let barrasVol = null;
+  let maxVol = 0;
+  if (temVol) {
+    maxVol = Math.max(...pontos.map((p) => p.v ?? 0));
+    const vagas = intra ? Math.max(n, (sessao.fim - sessao.inicio) / 300) : n;
+    const bw = Math.max(1, Math.min(8, (iw / vagas) * 0.7));
+    barrasVol = (
+      <g className="transition-opacity duration-150" style={{ opacity: op('volume') }}>
+        {pontos.map((p, j) => {
+          if (!p.v) return null;
+          const ant = j ? pontos[j - 1].c : (anterior ?? p.o);
+          const alt = Math.max(1, (p.v / (maxVol || 1)) * altVol);
+          return <rect key={j} x={X(frac(p, j)) - bw / 2} y={yVol1 - alt} width={bw} height={alt} style={{ fill: p.c >= ant ? COR_SOBE : COR_CAI }} opacity="0.5" />;
+        })}
+      </g>
+    );
   }
 
   // o preço médio em degraus (some onde não havia cotas)
@@ -111,7 +162,6 @@ export default function GraficoAtivo({
     });
     if (caminhoPm && ligado) caminhoPm += `H${X(frac(pontos[n - 1], n - 1)).toFixed(1)}`;
   }
-  const esmaece = (k) => op(k);
 
   // as etiquetas da direita: o último preço (na cor da série) e o preço médio de hoje (tracejada); afastadas se se tocam
   const ultimo = pontos[n - 1];
@@ -123,7 +173,8 @@ export default function GraficoAtivo({
     etiquetas.push({ y, texto: `PM ${formatarEixo(pmHoje, true)}` });
   }
 
-  const j0 = balao.ativo?.j;
+  const alvo = balao.ativo;
+  const j0 = alvo?.j;
   const sob = j0 !== undefined && j0 !== null ? pontos[j0] : null;
   const mover = (e) => {
     const r = e.currentTarget.getBoundingClientRect(); // o retângulo do hover já começa depois da calha do eixo
@@ -132,7 +183,8 @@ export default function GraficoAtivo({
     pontos.forEach((p, j) => { const dd = Math.abs(frac(p, j) - f); if (dd < bd) { bd = dd; best = j; } });
     balao.aoMover({ j: best })(e);
   };
-  const info = sob ? balaoDe(sob, j0, marcas.filter((m) => m.j === j0).map((m) => m.op)) : null;
+  const moverEvento = (ev) => (e) => { e.stopPropagation(); balao.aoMover({ ev })(e); };
+  const info = alvo?.ev ? balaoDoEvento?.(alvo.ev) : sob ? balaoDe(sob, j0, marcas.filter((m) => m.j === j0).map((m) => m.op), eventos.filter((m) => m.j === j0).map((m) => m.ev)) : null;
   const agora = intra ? X(frac(pontos[n - 1], n - 1)) : null;
 
   return (
@@ -152,6 +204,7 @@ export default function GraficoAtivo({
             <text x={E - 8} y={Y(v) + 3.5} textAnchor="end" className="fill-current text-[10.5px] tabular-nums text-gray-400">{formatarEixo(v)}</text>
           </g>
         ))}
+        {(comEventos || temVol) && <line x1={E} x2={w - D + 6} y1={T + ih} y2={T + ih} className="stroke-current text-gray-300" />}
         {intra && agora < w - D - 2 && (
           <>
             <rect x={agora} y={T} width={w - D - agora} height={ih} fill={`url(#${gid}h)`} opacity="0.5" />
@@ -164,15 +217,26 @@ export default function GraficoAtivo({
             <text x={w - D + 10} y={Y(anterior) + 3.5} className="fill-current text-[10.5px] text-gray-400">ontem</text>
           </g>
         )}
+        {/* o resultado: a linha tracejada do dia, do preço à faixa dos eventos */}
+        {eventos.filter((m) => m.ev.tipo === 'resultado').map(({ j, ev }) => {
+          const x = X(frac(pontos[j], j));
+          return <line key={`l${ev.data}`} x1={x} x2={x} y1={T} y2={T + ih} strokeDasharray="2 4" className="transition-opacity duration-150" style={{ stroke: COR_EVENTO.resultado, opacity: 0.45 * op('resultado') }} />;
+        })}
         {serie}
+        {barrasVol}
+        {temVol && (
+          <>
+            <text x={E - 8} y={yVol0 + 8} textAnchor="end" className="fill-current text-[10px] tabular-nums text-gray-400">{volumeCurto(maxVol)}</text>
+            <text x={E - 8} y={yVol1} textAnchor="end" className="fill-current text-[10px] text-gray-400">vol.</text>
+          </>
+        )}
         {caminhoPm && <path d={caminhoPm} fill="none" strokeWidth="1.25" strokeDasharray="5 4" className="stroke-current text-gray-500 transition-opacity duration-150" style={{ opacity: op('pm') }} />}
         {marcas.map(({ j, op: o }) => {
-          const p = pontos[j]; const x = X(frac(p, j)); const k = tipoDaMarca(o);
-          const estilo = { fill: COR_MARCA[o.tipo] ?? 'var(--origem-manual)', opacity: esmaece(k) };
+          const p = pontos[j]; const x = X(frac(p, j));
+          const estilo = { fill: COR_MARCA[o.tipo], opacity: op(o.tipo) };
           if (o.tipo === 'compra') { const y = Y(tipo === 'velas' ? p.l : p.c) + 8; return <path key={o.id} d={`M${x} ${y}l6 10h-12z`} strokeWidth="1.5" className="stroke-current text-white transition-opacity duration-150" style={estilo} />; }
           if (o.tipo === 'venda') { const y = Y(tipo === 'velas' ? p.h : p.c) - 8; return <path key={o.id} d={`M${x} ${y}l6 -10h-12z`} strokeWidth="1.5" className="stroke-current text-white transition-opacity duration-150" style={estilo} />; }
-          if (o.tipo === 'provento') return <circle key={o.id} cx={x} cy={T + ih - 7} r="4.5" strokeWidth="1.5" className="stroke-current text-white transition-opacity duration-150" style={estilo} />;
-          return <rect key={o.id} x={x - 4} y={T + ih - 11} width="8" height="8" transform={`rotate(45 ${x} ${T + ih - 7})`} strokeWidth="1.5" className="stroke-current text-white transition-opacity duration-150" style={{ ...estilo, fill: 'var(--origem-manual)' }} />;
+          return null;
         })}
         {xs.map((a) => <text key={`${a.x}`} x={a.x} y={h - 8} textAnchor="middle" className="fill-current text-[10.5px] text-gray-400">{a.texto}</text>)}
         {etiquetas.map((g) => (
@@ -184,13 +248,25 @@ export default function GraficoAtivo({
         ))}
         {sob && (
           <g pointerEvents="none">
-            <line x1={X(frac(sob, j0))} x2={X(frac(sob, j0))} y1={T} y2={T + ih} className="stroke-current text-gray-400" strokeDasharray="3 3" />
+            <line x1={X(frac(sob, j0))} x2={X(frac(sob, j0))} y1={T} y2={temVol ? yVol1 : T + ih} className="stroke-current text-gray-400" strokeDasharray="3 3" />
             <circle cx={X(frac(sob, j0))} cy={Y(sob.c)} r="4" strokeWidth="2" className="stroke-current text-white" style={{ fill: cor }} />
           </g>
         )}
         <rect x={E} y={T} width={iw} height={ih} fill="transparent" onMouseMove={mover} onMouseLeave={balao.aoSair} />
+        {temVol && <rect x={E} y={yVol0} width={iw} height={altVol} fill="transparent" onMouseMove={mover} onMouseLeave={balao.aoSair} />}
+        {/* a faixa dos eventos por cima de tudo: o hover é dela */}
+        {comEventos && eventos.map(({ j, ev, cheio }) => (
+          <MarcaEvento key={`${ev.tipo}${ev.data}`} x={X(frac(pontos[j], j))} y={yFaixa} tipo={ev.tipo} vazia={ev.tipo === 'dividendo' && !cheio}
+            opacidade={op(ev.tipo)} onMove={moverEvento(ev)} onLeave={balao.aoSair} />
+        ))}
+        {comEventos && proximo && (
+          <g>
+            <MarcaEvento x={w - D + 16} y={yFaixa} tipo="resultado" vazia tracejada opacidade={op('resultado')} onMove={moverEvento({ ...proximo, proximo: true })} onLeave={balao.aoSair} />
+            <text x={w - D + 28} y={yFaixa + 3.5} className="pointer-events-none fill-current text-[10.5px] font-semibold tabular-nums text-gray-500">{dataCurta(proximo.data)}</text>
+          </g>
+        )}
       </svg>
-      {info && <BalaoGrafico pos={balao.pos} largura={270} titulo={info.titulo} itens={info.itens} nota={info.nota}>{info.extra}</BalaoGrafico>}
+      {info && <BalaoGrafico pos={balao.pos} largura={280} titulo={info.titulo} itens={info.itens} nota={info.nota}>{info.extra}</BalaoGrafico>}
     </div>
   );
 }

@@ -15,6 +15,9 @@
 //     sem chave: os dois mercados, anos de histórico) e grava em `rv_fechamentos`, com a abertura, a máxima, a mínima e o
 //     volume (migration 030) — o gráfico do ativo pede na primeira vez e quando faltam dias.
 //     { "acao": "intradia", "ativo_id": "…" } o pregão de hoje de 5 em 5 minutos, também do Yahoo, sem gravar (o "1D").
+//     { "acao": "mensal", "ativo_id": "…" } um ponto por mês desde a estreia na bolsa (o "Desde o início"), sem gravar.
+//     { "acao": "eventos", "ativo_id": "…" } relê os EVENTOS (migration 031): os dividendos e desdobramentos do último ano
+//     (Yahoo), a estreia e, nos EUA, os resultados da Finnhub (o calendário e as surpresas). O "historico" já faz isso junto.
 // Publicar: Supabase → Edge Functions → Deploy a new function → "cotacoes", colar este arquivo, e DESLIGAR o "Verify JWT"
 // (a função confere sozinha: o segredo do agendamento ou o login da pessoa).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
@@ -67,11 +70,13 @@ async function daFinnhub(ticker: string, comNome = false): Promise<Cotacao | nul
 
 // ------------------------------------------------------------ o Yahoo Finance (o histórico do gráfico do ativo)
 // O endpoint do gráfico do Yahoo, o mesmo que o site deles usa. NÃO É OFICIAL: pode mudar ou recusar; aí a ação devolve
-// { erro } e o app segue com o que já guardou. A B3 leva o ".SA" no ticker.
+// { erro } e o app segue com o que já guardou. A B3 leva o ".SA" no ticker. Na mesma leitura vêm os DIVIDENDOS (a data-ex e
+// o valor por ação) e os DESDOBRAMENTOS (o fator), que vão para `rv_eventos` (migration 031).
 type Vela = { t: number; o: number | null; h: number | null; l: number | null; c: number; v: number | null };
-async function doYahoo(ticker: string, mercado: string, range: string, intervalo: string) {
+type Evento = Record<string, unknown>;
+async function doYahoo(ticker: string, mercado: string, range: string, intervalo: string, eventos = false) {
   const simbolo = mercado === 'EUA' ? ticker : `${ticker}.SA`;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(simbolo)}?range=${range}&interval=${intervalo}&includePrePost=false`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(simbolo)}?range=${range}&interval=${intervalo}&includePrePost=false${eventos ? '&events=div%7Csplit' : ''}`;
   const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', Accept: 'application/json' } });
   if (!r.ok) throw new Error(`o Yahoo respondeu ${r.status}`);
   const res = (await r.json())?.chart?.result?.[0];
@@ -83,7 +88,16 @@ async function doYahoo(ticker: string, mercado: string, range: string, intervalo
     if (!c) return;
     velas.push({ t, o: ou(q.open?.[i]), h: ou(q.high?.[i]), l: ou(q.low?.[i]), c, v: typeof q.volume?.[i] === 'number' ? Math.round(q.volume[i]) : null });
   });
-  return { velas, meta: res.meta ?? {} };
+  const meta = res.meta ?? {};
+  // o dia no fuso da bolsa
+  const dia = (t: number) => new Date((t + Number(meta.gmtoffset ?? 0)) * 1000).toISOString().slice(0, 10);
+  const divs = Object.values(res.events?.dividends ?? {})
+    .map((x) => ({ data: dia((x as { date: number }).date), valor: Number((x as { amount: number }).amount) }))
+    .filter((x) => x.valor > 0);
+  const splits = Object.values(res.events?.splits ?? {})
+    .map((x) => { const s = x as { date: number; numerator: number; denominator: number }; return { data: dia(s.date), valor: s.denominator ? s.numerator / s.denominator : 0 }; })
+    .filter((x) => x.valor > 0 && x.valor !== 1);
+  return { velas, meta, dia, divs, splits };
 }
 // grava os fechamentos; sem a migration 030 (as colunas das velas), grava só o preço
 async function gravarFechamentos(admin: ReturnType<typeof createClient>, linhas: Record<string, unknown>[]) {
@@ -95,6 +109,65 @@ async function gravarFechamentos(admin: ReturnType<typeof createClient>, linhas:
     }
     if (r.error) throw r.error;
   }
+}
+// grava os eventos; o RESULTADO um a um e sem os campos vazios: o calendário traz o esperado sem o divulgado, e o vazio não
+// pode apagar o que as "surpresas" já tinham preenchido
+async function gravarEventos(admin: ReturnType<typeof createClient>, linhas: Evento[]) {
+  const inteiros = linhas.filter((l) => l.tipo !== 'resultado');
+  for (let i = 0; i < inteiros.length; i += 500) {
+    const r = await admin.from('rv_eventos').upsert(inteiros.slice(i, i + 500), { onConflict: 'ativo_id,tipo,data' });
+    if (r.error) throw r.error;
+  }
+  for (const l of linhas.filter((x) => x.tipo === 'resultado')) {
+    const limpo = Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null && v !== undefined));
+    const r = await admin.from('rv_eventos').upsert(limpo, { onConflict: 'ativo_id,tipo,data' });
+    if (r.error) throw r.error;
+  }
+}
+// OS RESULTADOS de uma ação dos EUA na Finnhub. O plano grátis (testado em 13/11/2026 com a MU): o CALENDÁRIO só traz os
+// próximos (a data, 'bmo'/'amc', o lucro por ação e a receita esperados); as SURPRESAS, os 4 últimos trimestres (o divulgado
+// e o esperado pelo ano e trimestre fiscal, sem a data). Então: grava o calendário e, nos guardados do mesmo ano e trimestre,
+// o divulgado das surpresas. Devolve as surpresas (a tabela do painel mostra os trimestres de antes do app).
+async function resultadosDaFinnhub(admin: ReturnType<typeof createClient>, ativo: { id: string; user_id: string; ticker: string }) {
+  const token = Deno.env.get('FINNHUB_TOKEN');
+  if (!token) throw new Error('falta o segredo FINNHUB_TOKEN');
+  const t = encodeURIComponent(ativo.ticker);
+  const de = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
+  const ate = new Date(Date.now() + 200 * 86400000).toISOString().slice(0, 10);
+  const ler = async (url: string) => { const r = await fetch(url); return r.ok ? r.json() : null; };
+  const cal: Record<string, unknown>[] = (await ler(`https://finnhub.io/api/v1/calendar/earnings?symbol=${t}&from=${de}&to=${ate}&token=${token}`))?.earningsCalendar ?? [];
+  const sur: Record<string, unknown>[] = (await ler(`https://finnhub.io/api/v1/stock/earnings?symbol=${t}&token=${token}`)) ?? [];
+  const linhas: Evento[] = cal.filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(String(x.date ?? ''))).map((x) => ({
+    ativo_id: ativo.id, user_id: ativo.user_id, tipo: 'resultado', data: x.date, hora: String(x.hour ?? ''),
+    valor: ou(x.epsActual), estimado: ou(x.epsEstimate), receita: ou(x.revenueActual), receita_estimada: ou(x.revenueEstimate),
+    ano: x.year ?? null, trimestre: x.quarter ?? null,
+  }));
+  await gravarEventos(admin, linhas);
+  if (Array.isArray(sur) && sur.length) {
+    const { data: guardados } = await admin.from('rv_eventos').select('data, ano, trimestre, valor').eq('ativo_id', ativo.id).eq('tipo', 'resultado');
+    for (const g of guardados ?? []) {
+      const s = sur.find((x) => x.year === g.ano && x.quarter === g.trimestre);
+      const divulgado = s ? ou(s.actual) : null;
+      if (divulgado !== null && Number(g.valor) !== divulgado) {
+        await admin.from('rv_eventos').update({ valor: divulgado, estimado: ou(s!.estimate) }).eq('ativo_id', ativo.id).eq('tipo', 'resultado').eq('data', g.data);
+      }
+    }
+    // o trimestre que nenhum guardado pegou (os de antes do app): entra com a data do FIM DO TRIMESTRE e `hora` 'periodo' —
+    // a data não é a da divulgação, então o gráfico não o marca; só a tabela dos últimos resultados o mostra
+    const soltos = sur.filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(String(x.period ?? '')) && ou(x.actual) !== null
+      && !(guardados ?? []).some((g) => g.ano === x.year && g.trimestre === x.quarter && g.data !== x.period));
+    await gravarEventos(admin, soltos.map((x) => ({
+      ativo_id: ativo.id, user_id: ativo.user_id, tipo: 'resultado', data: x.period, hora: 'periodo',
+      valor: ou(x.actual), estimado: ou(x.estimate), ano: x.year ?? null, trimestre: x.quarter ?? null,
+    })));
+  }
+  return (Array.isArray(sur) ? sur : []).map((x) => ({ ano: x.year, trimestre: x.quarter, periodo: x.period, valor: ou(x.actual), estimado: ou(x.estimate) }));
+}
+function eventosDoYahoo(ativo: { id: string; user_id: string }, divs: { data: string; valor: number }[], splits: { data: string; valor: number }[]): Evento[] {
+  return [
+    ...divs.map((x) => ({ ativo_id: ativo.id, user_id: ativo.user_id, tipo: 'dividendo', data: x.data, valor: x.valor })),
+    ...splits.map((x) => ({ ativo_id: ativo.id, user_id: ativo.user_id, tipo: 'desdobramento', data: x.data, valor: x.valor })),
+  ];
 }
 
 const buscar = (mercado: string, ticker: string, comNome = false) => (mercado === 'EUA' ? daFinnhub(ticker, comNome) : daBrapi(ticker));
@@ -127,7 +200,7 @@ Deno.serve(async (req) => {
       return resposta(c ? { ticker, mercado, nome: c.nome ?? '', preco: c.preco, variacao_dia: c.variacao_dia } : { ticker, mercado, naoAchou: true });
     }
 
-    if (corpo?.acao === 'historico' || corpo?.acao === 'intradia') {
+    if (['historico', 'intradia', 'mensal', 'eventos'].includes(corpo?.acao)) {
       if (!usuario) return resposta({ erro: 'só com o login' }, 401);
       const { data: ativo, error: e1 } = await admin.from('rv_ativos').select('id, user_id, ticker, mercado').eq('id', String(corpo.ativo_id ?? '')).eq('user_id', usuario).maybeSingle();
       if (e1) throw e1;
@@ -137,17 +210,39 @@ Deno.serve(async (req) => {
         const regular = meta.currentTradingPeriod?.regular ?? {};
         return resposta({ pontos: velas, anterior: ou(meta.chartPreviousClose) ?? ou(meta.previousClose), inicio: regular.start ?? null, fim: regular.end ?? null, fonte: 'yahoo' });
       }
+      if (corpo.acao === 'mensal') { // o "Desde o início": um ponto por mês desde a estreia, sem gravar
+        const { velas, dia } = await doYahoo(ativo.ticker, ativo.mercado, 'max', '1mo');
+        return resposta({ pontos: velas.map((x) => ({ data: dia(x.t), preco: x.c, abertura: x.o, maxima: x.h, minima: x.l, volume: x.v })), fonte: 'yahoo' });
+      }
+      // OS EVENTOS: os dividendos e os desdobramentos (Yahoo), a estreia e, nos EUA, os resultados (Finnhub); sem a 031, avisa
+      const atualizarEventos = async (divs: { data: string; valor: number }[], splits: { data: string; valor: number }[]) => {
+        try {
+          const linhas = eventosDoYahoo(ativo, divs, splits);
+          const m = await doYahoo(ativo.ticker, ativo.mercado, 'max', '1mo').catch(() => null);
+          if (m?.velas.length) linhas.push({ ativo_id: ativo.id, user_id: ativo.user_id, tipo: 'estreia', data: m.dia(m.velas[0].t), valor: m.velas[0].c });
+          await gravarEventos(admin, linhas);
+          const surpresas = ativo.mercado === 'EUA' ? await resultadosDaFinnhub(admin, ativo).catch(() => []) : [];
+          return { eventos: linhas.length, surpresas };
+        } catch (e) {
+          const m = String((e as Error)?.message ?? e);
+          return { erroEventos: /rv_eventos|does not exist|schema cache/i.test(m) ? 'falta a migration 031' : m };
+        }
+      };
+      if (corpo.acao === 'eventos') { // a releitura de cada dia: o último ano do Yahoo e os resultados
+        const y = await doYahoo(ativo.ticker, ativo.mercado, '1y', '1d', true);
+        return resposta(await atualizarEventos(y.divs, y.splits));
+      }
       const range = ['1mo', '3mo', '1y', '5y', '10y', 'max'].includes(corpo.range) ? corpo.range : '10y';
-      const { velas, meta } = await doYahoo(ativo.ticker, ativo.mercado, range, '1d');
-      const off = Number(meta.gmtoffset ?? 0); // o dia no fuso da bolsa
+      const { velas, dia, divs, splits } = await doYahoo(ativo.ticker, ativo.mercado, range, '1d', true);
       const porDia = new Map<string, Record<string, unknown>>();
       velas.forEach((x) => {
-        const data = new Date((x.t + off) * 1000).toISOString().slice(0, 10);
+        const data = dia(x.t);
         porDia.set(data, { ativo_id: ativo.id, user_id: ativo.user_id, data, preco: x.c, abertura: x.o, maxima: x.h, minima: x.l, volume: x.v });
       });
       const linhas = [...porDia.values()];
       await gravarFechamentos(admin, linhas);
-      return resposta({ gravados: linhas.length, de: linhas[0]?.data ?? null, ate: linhas[linhas.length - 1]?.data ?? null, fonte: 'yahoo' });
+      const ev = await atualizarEventos(divs, splits);
+      return resposta({ gravados: linhas.length, de: linhas[0]?.data ?? null, ate: linhas[linhas.length - 1]?.data ?? null, fonte: 'yahoo', ...ev });
     }
 
     let consulta = admin.from('rv_ativos').select('id, user_id, ticker, mercado').eq('ativo', true);

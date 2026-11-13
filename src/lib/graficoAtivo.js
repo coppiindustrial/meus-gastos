@@ -10,21 +10,25 @@
 const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
 const porData = (a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : String(a.criado_em ?? '').localeCompare(String(b.criado_em ?? '')));
 
+// OS PERÍODOS são as células da FAIXA DE DESEMPENHO (13/11/2026, a opção B do mockup "Desempenho, volume, dividendos e
+// resultados": a faixa É o período — cada célula diz quanto o ativo andou nele e, clicada, troca o gráfico). O "Desde o
+// início" desenha um ponto por mês desde a estreia na bolsa (lido na hora); o 1 dia, o pregão de hoje de 5 em 5 minutos.
 export const PERIODOS = [
-  { key: '1D', rotulo: '1D', nome: 'hoje' },
-  { key: '1M', rotulo: '1M', meses: 1, nome: 'em 1 mês' },
-  { key: '3M', rotulo: '3M', meses: 3, nome: 'em 3 meses' },
-  { key: '6M', rotulo: '6M', meses: 6, nome: 'em 6 meses' },
-  { key: 'YTD', rotulo: 'No ano', nome: 'no ano' },
-  { key: '1A', rotulo: '1A', meses: 12, nome: 'em 1 ano' },
-  { key: '5A', rotulo: '5A', meses: 60, nome: 'em 5 anos' },
-  { key: 'tudo', rotulo: 'Tudo', nome: 'em todo o histórico' },
+  { key: '1D', rotulo: '1 dia', nome: 'hoje' },
+  { key: '1S', rotulo: '1 semana', dias: 7, nome: 'em 1 semana' },
+  { key: '1M', rotulo: '1 mês', meses: 1, nome: 'em 1 mês' },
+  { key: '3M', rotulo: '3 meses', meses: 3, nome: 'em 3 meses' },
+  { key: '6M', rotulo: '6 meses', meses: 6, nome: 'em 6 meses' },
+  { key: '1A', rotulo: '1 ano', meses: 12, nome: 'em 1 ano' },
+  { key: '5A', rotulo: '5 anos', meses: 60, nome: 'em 5 anos' },
+  { key: 'tudo', rotulo: 'Desde o início', nome: 'desde a estreia' },
 ];
 
-// o primeiro dia do período ('AAAA-MM-DD'), ou null no "Tudo" (e no 1D, que não lê os fechamentos)
+// o primeiro dia do período ('AAAA-MM-DD'), ou null no "Desde o início" (e no 1D, que não lê os fechamentos)
 export function inicioDoPeriodo(per, hoje) {
   if (per === 'YTD') return `${hoje.slice(0, 4)}-01-01`;
   const p = PERIODOS.find((x) => x.key === per);
+  if (p?.dias) return new Date(Date.parse(`${hoje}T12:00:00Z`) - p.dias * 86400000).toISOString().slice(0, 10);
   if (!p?.meses) return null;
   const [a, m, d] = hoje.split('-').map(Number);
   const alvo = new Date(Date.UTC(a, m - 1 - p.meses, 1));
@@ -174,4 +178,74 @@ export function dolarEm(ptax, d) {
   if (d < ptax[0][0]) return ptax[0][1];
   while (lo < hi) { const m = (lo + hi + 1) >> 1; if (ptax[m][0] <= d) lo = m; else hi = m - 1; }
   return ptax[lo][1];
+}
+
+// ------------------------------------------------------------ a faixa de desempenho e os eventos (migration 031)
+
+// QUANTO O ATIVO ANDOU EM CADA PERÍODO da faixa: o preço de agora contra o último fechamento ATÉ o primeiro dia do período (o
+// do pregão antes, se o dia não teve). O 1 dia é contra o fechamento anterior; o "Desde o início", contra a estreia na bolsa
+// (o evento 'estreia'). Sem histórico até o começo do período (o ativo é mais novo, ou o Yahoo não trouxe), null ("—").
+export function desempenho({ velas, preco = null, anterior = null, estreia = null, hoje }) {
+  const agora = preco ?? velas[velas.length - 1]?.c ?? null;
+  const out = {};
+  PERIODOS.forEach((p) => {
+    if (!agora) { out[p.key] = null; return; }
+    if (p.key === '1D') {
+      const ant = anterior ?? (velas.length > 1 ? (velas[velas.length - 1].d >= hoje ? velas[velas.length - 2].c : velas[velas.length - 1].c) : null);
+      out[p.key] = ant ? agora / ant - 1 : null;
+      return;
+    }
+    if (p.key === 'tudo') { out[p.key] = estreia ? agora / estreia - 1 : null; return; }
+    const de = inicioDoPeriodo(p.key, hoje);
+    let base = null;
+    for (const v of velas) { if (v.d > de) break; base = v.c; }
+    out[p.key] = base ? agora / base - 1 : null;
+  });
+  return out;
+}
+
+// OS EVENTOS NO GRÁFICO: o dividendo (a data-ex), o desdobramento e o resultado com a data da divulgação (o 'periodo', o fim
+// do trimestre que veio sem a data, fica de fora), cada um no ponto que contém a data — como as operações
+export function eventosNoPeriodo(eventos, pontos) {
+  const doGrafico = (eventos ?? []).filter((e) => (e.tipo === 'dividendo' || e.tipo === 'desdobramento' || e.tipo === 'resultado') && e.hora !== 'periodo');
+  return marcasNoPeriodo(doGrafico.map((e) => ({ ...e, id: `${e.tipo}:${e.data}` })), pontos).map(({ j, op }) => ({ j, ev: op }));
+}
+// o próximo resultado (a data de hoje em diante, ainda sem o divulgado)
+export function proximoResultado(eventos, hoje) {
+  return (eventos ?? []).filter((e) => e.tipo === 'resultado' && e.hora !== 'periodo' && e.data >= hoje && num(e.valor) === null)
+    .sort((a, b) => (a.data < b.data ? -1 : 1))[0] ?? null;
+}
+// os últimos resultados divulgados, o mais novo primeiro: um por trimestre fiscal (o com a data da divulgação vale sobre o
+// do fim do trimestre)
+export function ultimosResultados(eventos, n = 4) {
+  const porTri = new Map();
+  (eventos ?? []).filter((e) => e.tipo === 'resultado' && num(e.valor) !== null).forEach((e) => {
+    const k = e.ano && e.trimestre ? `${e.ano}-${e.trimestre}` : e.data;
+    const ja = porTri.get(k);
+    if (!ja || (ja.hora === 'periodo' && e.hora !== 'periodo')) porTri.set(k, e);
+  });
+  return [...porTri.values()].sort((a, b) => ((a.ano ?? 0) - (b.ano ?? 0)) || ((a.trimestre ?? 0) - (b.trimestre ?? 0)) || (a.data < b.data ? -1 : 1)).reverse().slice(0, n);
+}
+// os dividendos: o último, a soma dos 12 meses até hoje (por ação) e o rendimento sobre o preço de agora
+export function resumoDosDividendos(eventos, hoje, preco) {
+  const divs = (eventos ?? []).filter((e) => e.tipo === 'dividendo' && e.data <= hoje).sort((a, b) => (a.data < b.data ? -1 : 1));
+  if (!divs.length) return null;
+  const desde = inicioDoPeriodo('1A', hoje);
+  const em12 = divs.filter((e) => e.data > desde).reduce((s, e) => s + Number(e.valor), 0);
+  return { ultimo: divs[divs.length - 1], em12, rendimento: preco && em12 ? em12 / preco : null, quantos12: divs.filter((e) => e.data > desde).length };
+}
+// AS COTAS NA DATA-EX: quem tinha a ação no fim do pregão ANTERIOR recebe — o `qtd` do último degrau antes do dia
+export function cotasAntesDe(degraus, d) {
+  let q = 0;
+  for (const g of degraus) { if (g.d >= d) break; q = g.qtd; }
+  return q;
+}
+// O DESDOBRAMENTO QUE FALTA LANÇAR: o da empresa (Yahoo) depois da primeira compra, sem um desdobramento ou grupamento seu a
+// até 10 dias dele — sem lançar, a quantidade de cotas do app fica errada
+export function desdobramentosSemOperacao(eventos, operacoes) {
+  const compras = operacoes.filter((o) => o.tipo === 'compra').map((o) => o.data).sort();
+  if (!compras.length) return [];
+  const dias = (a, b) => Math.abs(Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`)) / 86400000;
+  return (eventos ?? []).filter((e) => e.tipo === 'desdobramento' && e.data > compras[0]
+    && !operacoes.some((o) => (o.tipo === 'desdobramento' || o.tipo === 'grupamento') && dias(o.data, e.data) <= 10));
 }

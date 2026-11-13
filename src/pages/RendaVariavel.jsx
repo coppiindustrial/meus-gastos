@@ -146,7 +146,7 @@ export default function RendaVariavel() {
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
       {posGrafico && (
         <PainelAtivo posicao={posGrafico} operacoes={d.operacoes} ptax={d.ptax} dolar={d.dolar} hoje={d.hoje} onClose={() => setGrafico(null)}
-          onOperar={movel ? null : (ativo) => { setGrafico(null); setOperacao({ ativo, tipo: 'compra' }); }} />
+          onOperar={movel ? null : (ativo, tipo = 'compra') => { setGrafico(null); setOperacao({ ativo, tipo }); }} />
       )}
       {cadastro && (
         <ModalCadastroAtivos ativos={d.ativos} operacoes={d.operacoes} tipoInicial={cadastro.tipoInicial}
