@@ -13,17 +13,16 @@ import { aliquotaIOF, dataDoDeposito, ehIsento, fimDoIOF, planoDoResgate, resgat
 
 // RESGATAR PELO INVESTIMENTO (16/11/2026, a opção A do mockup "Resgatar pelo investimento"): o "Resgatar" da linha do
 // investimento (o "pai"). A data e o valor que CHEGA NA CONTA (16/11/2026, a pedido: como no Nubank, o banco tira a mais
-// do investimento para pagar o IR e o IOF; grava-se o bruto de cada parte), repartido entre os aportes por `planoDoResgate`: DO MAIS ANTIGO para o mais novo, como o Nubank (o mais antigo já não tem
-// IOF e tem o IR mais baixo), ou EU ESCOLHO: marcar os aportes que podem pagar, e o valor se reparte entre os marcados na
+// do investimento para pagar o IR e o IOF; grava-se o bruto de cada parte), repartido entre os aportes por `planoDoResgate`: DO MAIS NOVO para o mais antigo, como o Nubank, ou EU ESCOLHO: marcar os aportes que podem pagar, e o valor se reparte entre os marcados na
 // mesma ordem. A tabela mostra cada aporte (a ordem em que sai, a idade e a alíquota, o IOF de quem tem menos de 30 dias,
 // quanto vale, quanto sai — "tudo" quando sai inteiro —, o rendimento junto, o IOF, o IR e quanto chega) e os totais.
 // Grava um resgate em cada aporte alcançado, numa requisição só, ligados pelo `lote` (migration 032).
 // `x`: o investimento da carteira ({ inv, aportes }); `itens`: os { ap, resgates } dele (também os já encerrados).
-const MODOS = [{ key: 'antigo', label: 'Do mais antigo' }, { key: 'escolho', label: 'Eu escolho' }];
+const MODOS = [{ key: 'antigo', label: 'Do mais novo' }, { key: 'escolho', label: 'Eu escolho' }]; // 'antigo': a chave de antes
 const pctTexto = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
 // EDITAR O PEDIDO (16/11/2026, o histórico da renda fixa): `editando` = { lote, data, partes: [{ aporte_id, sai, chega }] }, e os
-// `itens` vêm SEM os resgates do lote. Abre com a data e o que chegou; "Do mais antigo" se foi assim que ele saiu, senão "Eu
+// `itens` vêm SEM os resgates do lote. Abre com a data e o que chegou; "Do mais novo" se foi assim que ele saiu, senão "Eu
 // escolho" com os aportes dele marcados. Salvar REFAZ o pedido pela conta nova: grava o novo (outro `lote`) e só então
 // apaga o de antes — se a segunda parte falhar, o pedido aparece duas vezes, mas nada se perde.
 const paraCampo = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -33,7 +32,7 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, editando
   const confirmar = useConfirmacao();
   const totalAntes = editando ? editando.partes.reduce((t, p) => t + p.sai, 0) : 0;
   const chegaAntes = editando ? editando.partes.reduce((t, p) => t + (p.chega ?? p.sai), 0) : 0;
-  // foi do mais antigo? a conta de hoje, com o mesmo líquido e o mesmo dia, tira dos mesmos aportes
+  // foi do mais novo? a conta de hoje, com o mesmo líquido e o mesmo dia, tira dos mesmos aportes
   const [inicio] = useState(() => {
     if (!editando) return { modo: 'antigo', escolhidos: new Set() };
     const fifo = planoDoResgate({ itens, inv: x.inv, cal, data: editando.data, valor: chegaAntes, hoje });
@@ -112,7 +111,7 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, editando
           <AbasPilula abas={MODOS} valor={modo} onChange={setModo} variante="claro" altura={30} folga={2} />
           <span className="text-[11.5px] text-gray-500">{escolho
             ? (nMarcados ? `${nMarcados} ${nMarcados === 1 ? 'marcado' : 'marcados'} · ${formatBRL(plano.disponivel)}: o valor se reparte entre eles, do mais antigo para o mais novo` : 'marque os aportes de onde o dinheiro pode sair')
-            : 'como o Nubank: o mais antigo já não tem IOF e tem o IR mais baixo'}</span>
+            : 'como o Nubank: primeiro o depósito mais novo; o imposto sai do que fica'}</span>
         </div>
 
         <div className="max-h-[min(330px,40vh)] overflow-auto rounded-md border border-gray-200 [scrollbar-gutter:stable]">
@@ -190,7 +189,7 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, editando
             {comIOF.length > 0 ? (
               <div className="rounded-md bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800">
                 {comIOF.length === 1 ? 'Um aporte com menos de 30 dias entrou' : `${comIOF.length} aportes com menos de 30 dias entraram`} no resgate e {comIOF.length === 1 ? 'paga' : 'pagam'} IOF ({formatBRL(tot.iof)}).{' '}
-                {escolho ? 'Desmarque-o, ou espere o IOF zerar' : 'Do mais antigo, ele só entra quando os outros não bastam. Espere o IOF zerar'} em <b>{formatDate(fimDoIOF(dataDoDeposito(comIOF[0].ap)))}</b> para não pagar.
+                O IOF dele zera em <b>{formatDate(fimDoIOF(dataDoDeposito(comIOF[0].ap)))}</b>.
               </div>
             ) : (
               <p className="text-[12px] text-gray-500">Confira depois no banco: na lista de depósitos, os que diminuíram devem ser estes. Se o banco tirou de outros, use "Eu escolho" e acerte.</p>
@@ -205,7 +204,7 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, editando
         )}
         <div className="flex items-center gap-2">
           {editando && <button type="button" className="btn-secondary !text-red-700" onClick={excluir}>Excluir o resgate</button>}
-          <span className="flex-1 text-[11.5px] text-gray-400">o banco tira a mais para o IR e o IOF · o valor aceita conta (10000+5000)</span>
+          <span className="flex-1 text-[11.5px] text-gray-400">o IR e o IOF saem do que fica no investimento · o valor aceita conta (10000+5000)</span>
           <button type="button" className="btn-secondary" onClick={onFechar}>Cancelar</button>
           <button type="submit" className="btn-primary" disabled={salvando || !!erro}>
             {salvando ? 'Salvando…' : editando ? 'Salvar a correção' : `Resgatar ${plano.liquido ? formatBRL(plano.liquido) : ''}${usados.length ? ` de ${usados.length} ${usados.length === 1 ? 'aporte' : 'aportes'}` : ''}`}

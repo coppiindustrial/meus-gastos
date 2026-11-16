@@ -52,37 +52,44 @@ export function impostos(ganho, idade, aliquota) {
 }
 // O DIA EM QUE O IOF ZERA: o 30º dia depois da data do aporte (a idade 30; até a 29ª, 96% … 3% do rendimento).
 export const fimDoIOF = (desde) => maisDias(desde, 30);
-// O IMPOSTO DE UM RESGATE (09/11/2026, a pedido): `valor` é o que SAI do aporte (bruto, o que se grava; o digitado é o que
-// CHEGA — `brutoParaChegar`). Sai junto
-// a mesma fração do rendimento (o aplicado e o rendido diminuem na mesma proporção), e o IOF e o IR são sobre ela, pela
-// idade e alíquota da posição no dia. `valor` null = tudo. Devolve { sai, rendimento, iof, ir, chega, aliquotaIOF,
-// semIOF: o imposto se fosse a partir do fim do IOF (o IR sobre o rendimento inteiro), fimIOF }.
+// O RESGATE COMO O NUBANK (16/11/2026, a página de ajuda "Saldo da Caixinha após resgate"): o valor PEDIDO chega inteiro
+// na conta, e o IOF e o IR sobre o rendimento DELE saem do que fica no investimento ("bruto de R$ 1.000, resgate de R$ 500
+// com R$ 20 de impostos: ficam R$ 480"). Então sai do aporte o pedido + os impostos, e é isso que se grava
+// (`valor_centavos`). O rendimento do pedido é a mesma fração do rendimento do aporte (o aplicado e o rendido diminuem na
+// mesma proporção), com o IOF e o IR pela idade e alíquota da posição no dia. "Tudo" leva o valor inteiro e paga sobre o
+// rendimento inteiro. (Antes de hoje o digitado era o que SAÍA, com o imposto dentro dele.)
+const rendimentoDe = (pos, v) => Math.max(0, Math.round(Math.max(0, pos.rendeu) * (v / pos.vale)));
+const comImposto = (pos, pedido) => { const t = impostos(rendimentoDe(pos, pedido), pos.idade, pos.aliquota ?? 0); return pedido + t.iof + t.ir; };
+// O IMPOSTO DE UM RESGATE: `valor` é o que SAIU do aporte (o gravado; null = tudo). Acha o pedido (o maior cujo pedido +
+// impostos cabe no que saiu) e devolve { sai, pedido, rendimento (o do pedido), iof, ir, chega, aliquota, aliquotaIOF,
+// semIOF: o IR se fosse a partir do fim do IOF, fimIOF }.
 export function impostoDoResgate(pos, valor = null) {
   if (!pos || pos.encerrado || !(pos.vale > 0)) return null;
-  const sai = valor === null ? pos.vale : Math.min(valor, pos.vale);
-  const rendimento = Math.max(0, Math.round(Math.max(0, pos.rendeu) * (sai / pos.vale)));
+  const tudo = valor === null || valor >= pos.vale;
+  const sai = tudo ? pos.vale : Math.max(0, valor);
+  let pedido = sai;
+  if (!tudo) {
+    let lo = 0; let hi = sai;
+    while (lo < hi) { const m = Math.ceil((lo + hi) / 2); if (comImposto(pos, m) <= sai) lo = m; else hi = m - 1; }
+    pedido = lo;
+  }
+  const rendimento = rendimentoDe(pos, pedido);
   const aliquota = pos.aliquota ?? 0;
   const { iof, ir } = impostos(rendimento, pos.idade, aliquota);
   const semIOF = iof ? impostos(rendimento, 30, aliquota).ir : null;
   return {
-    sai, rendimento, iof, ir, chega: sai - iof - ir, aliquota, aliquotaIOF: iof ? aliquotaIOF(pos.idade) : 0,
+    sai, pedido, rendimento, iof, ir, chega: sai - iof - ir, aliquota, aliquotaIOF: iof ? aliquotaIOF(pos.idade) : 0,
     semIOF, fimIOF: iof && pos.partida?.desdeIR ? fimDoIOF(pos.partida.desdeIR) : null,
   };
 }
-// O VALOR DIGITADO É O QUE CHEGA NA CONTA (16/11/2026, a pedido: "no Nubank, se eu resgato 280 reais, volta pra conta 280
-// reais"): o banco tira A MAIS do investimento para pagar o IOF e o IR. Devolve o menor bruto `sai` (o que se grava) com
-// `impostoDoResgate(pos, sai).chega` igual a `liquido` — a cada centavo a mais, o que chega sobe 0 ou 1 centavo, então
-// o menor que alcança dá o valor exato. null = nem resgatando tudo chega tanto.
+// O QUE SAI DO APORTE para chegar `liquido` na conta: o pedido + o IOF e o IR sobre o rendimento dele (o valor inteiro
+// quando é o líquido de "tudo"). null = nem resgatando tudo chega tanto.
 export function brutoParaChegar(pos, liquido) {
   if (!pos || pos.encerrado || !(pos.vale > 0) || !(liquido > 0)) return null;
-  const chega = (s) => impostoDoResgate(pos, s).chega;
-  if (chega(pos.vale) < liquido) return null;
-  let lo = Math.min(liquido, pos.vale); let hi = pos.vale;
-  while (lo < hi) {
-    const m = Math.floor((lo + hi) / 2);
-    if (chega(m) >= liquido) hi = m; else lo = m + 1;
-  }
-  return lo;
+  const chegaTudo = impostoDoResgate(pos).chega;
+  if (liquido > chegaTudo) return null;
+  if (liquido === chegaTudo) return pos.vale;
+  return Math.min(comImposto(pos, liquido), pos.vale);
 }
 // a próxima vez que a alíquota cai (no dia seguinte ao fim da faixa): { data, para } ou null (já na menor)
 export function proximaQueda(desde, hoje) {
@@ -451,9 +458,9 @@ export function lerResgate({ aporte, data, valor, tudo }, partidaData, vale, hoj
 
 // ------------------------------------------------------------ o resgate pelo investimento
 // O RESGATE PELO INVESTIMENTO (16/11/2026, a opção A do mockup "Resgatar pelo investimento"): o valor que CHEGA NA CONTA
-// (o líquido, como no Nubank; o bruto de cada parte sai de `brutoParaChegar`) repartido entre os aportes do MAIS ANTIGO
-// para o mais novo, pela data
-// do depósito — como o Nubank: o mais antigo já não tem IOF e tem o IR mais baixo. `marcados` (um Set de ids; null = todos)
+// (o líquido, como no Nubank; o bruto de cada parte sai de `brutoParaChegar`) repartido entre os aportes do MAIS NOVO
+// para o mais antigo, pela data do depósito — como o Nubank (16/11/2026: o saldo do RDB Resgate Diário depois de três
+// resgates só fecha com o imposto do depósito mais novo; do mais antigo ficava R$ 16 abaixo). `marcados` (um Set de ids; null = todos)
 // limita os que podem pagar ("Eu escolho"). Cada aporte alcançado sai inteiro ("tudo", vai para os encerrados), menos o
 // último, que paga o resto. Fica de fora o aporte posterior à data, o que já tinha saído e o vencido.
 // `itens`: os { ap, resgates } do investimento (os da carteira, `montarCarteira`). Devolve { linhas: [{ ap, pos, marcado,
@@ -467,7 +474,7 @@ export function planoDoResgate({ itens, inv, cal, data, valor, marcados = null, 
     .filter((x) => x.ap.data <= data)
     .map((x) => ({ ap: x.ap, pos: posicaoDoAporte(x.ap, inv, (x.resgates ?? []).filter((r) => r.data <= data), cal, data) }))
     .filter((l) => !l.pos.encerrado && l.pos.vale > 0)
-    .sort((a, b) => compara(dataDoDeposito(a.ap), dataDoDeposito(b.ap)) || compara(a.ap.data, b.ap.data) || compara(String(a.ap.criado_em ?? ''), String(b.ap.criado_em ?? '')))
+    .sort((a, b) => compara(dataDoDeposito(b.ap), dataDoDeposito(a.ap)) || compara(b.ap.data, a.ap.data) || compara(String(b.ap.criado_em ?? ''), String(a.ap.criado_em ?? '')))
     .map((l) => ({ ...l, marcado: !marcados || marcados.has(l.ap.id), sai: 0, tudo: false, imp: null, chegaTudo: impostoDoResgate(l.pos).chega }));
   const disponivel = linhas.filter((l) => l.marcado).reduce((t, l) => t + l.pos.vale, 0);
   const chegaMax = linhas.filter((l) => l.marcado).reduce((t, l) => t + l.chegaTudo, 0);
@@ -563,7 +570,7 @@ export function movimentosDaCarteira({ itens = [], cal = [] }) {
     if (v && !x.seguinte) out.push({ id: `v-${ap.id}`, tipo: 'venceu', data: v.data, inv, ap, entrou: 0, saiu: v.valor, ir: v.ir, iof: v.iof, chega: v.liquido });
   });
   lotes.forEach((partes, lote) => {
-    partes.sort((a, b) => compara(dataDoDeposito(a.ap), dataDoDeposito(b.ap)) || compara(a.ap.data, b.ap.data));
+    partes.sort((a, b) => compara(dataDoDeposito(b.ap), dataDoDeposito(a.ap)) || compara(b.ap.data, a.ap.data)); // a ordem do resgate
     const soma = (k) => partes.reduce((t, p) => t + (k === 'sai' ? p.sai : p.imp?.[k] ?? 0), 0);
     out.push({ id: `l-${lote}`, tipo: 'resgate', data: partes[0].r.data, inv: partes[0].inv, ap: partes[0].ap, r: partes[0].r, lote, partes,
       entrou: 0, saiu: soma('sai'), ir: soma('ir'), iof: soma('iof'), chega: partes.reduce((t, p) => t + (p.imp?.chega ?? p.sai), 0) });

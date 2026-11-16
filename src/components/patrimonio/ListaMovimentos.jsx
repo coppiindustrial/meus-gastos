@@ -154,7 +154,7 @@ export default function ListaMovimentos({ carteira, cadastro, movel, acoes, inic
                                   <button type="button" onClick={() => alternar(m.id)} aria-expanded={aberto}
                                     className="inline-flex shrink-0 items-center gap-1 text-[11.5px] text-gray-500 transition-colors hover:text-gray-900">
                                     <svg viewBox="0 0 24 24" className={`h-[11px] w-[11px] transition-transform ${aberto ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
-                                    {m.partes.length} aportes, do mais antigo
+                                    {m.partes.length} aportes
                                   </button>
                                 ) : <span className="truncate text-[11.5px] text-gray-400">{detalhe(m)}</span>}
                                 {item?.ap.conferir && <span className="inline-flex h-[18px] shrink-0 items-center rounded-[6px] bg-amber-50 px-1.5 text-[10.5px] font-semibold text-amber-700">conferir</span>}

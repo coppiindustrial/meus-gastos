@@ -17,7 +17,7 @@ import { brutoParaChegar, ehIsento, impostoDoResgate, lerResgate, posicaoDoAport
 // IR sobre ele e quanto chega na conta (`impostoDoResgate`). Com o IOF ainda valendo, a faixa âmbar diz quando ele zera e
 // quanto se economiza a partir de lá.
 // O VALOR DIGITADO É O QUE CHEGA NA CONTA (16/11/2026, a pedido: "no Nubank, se eu resgato 280 reais, volta pra conta 280
-// reais"): o banco tira a mais do aporte para pagar o IR e o IOF; grava-se esse bruto (`brutoParaChegar`).
+// reais"): o IR e o IOF sobre o rendimento do pedido saem do que fica no aporte; grava-se o que saiu (`brutoParaChegar`).
 // EDITAR (16/11/2026, o histórico da renda fixa): `editando` = o resgate gravado (a linha de `inv_resgates`); o `item` vem
 // com os resgates do aporte SEM ele. Abre com a data e o valor dele, mostra como estava e grava por cima (`atualizarResgate`).
 const paraCampo = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -109,7 +109,7 @@ export default function ModalResgate({ item, cal, hoje, editando = null, onFecha
           Tudo{vale ? ` (${formatBRL(vale)} em ${formatDate(data)})` : ''}
         </label>
         <div className={`rounded-md border px-3 py-2.5 text-[12.5px] ${erro && tentou ? 'border-red-200 bg-red-50 text-red-700' : 'border-gray-200 bg-hx-f9fafb text-gray-600'}`} aria-live="polite">
-          {erro ? (tentou ? erro : <span className="text-gray-500">Nesse dia o aporte vale {formatBRL(vale)}{chegaTudo ? ` (chegam ${formatBRL(chegaTudo)} na conta)` : ''}. Digite quanto chega na conta — o banco tira a mais para o IR e o IOF —, ou marque "Tudo".</span>)
+          {erro ? (tentou ? erro : <span className="text-gray-500">Nesse dia o aporte vale {formatBRL(vale)}{chegaTudo ? ` (chegam ${formatBRL(chegaTudo)} na conta)` : ''}. Digite quanto chega na conta — o IR e o IOF saem do que fica no aporte —, ou marque "Tudo".</span>)
             : r.dados.tudo ? (
               <div className="space-y-1">
                 <p>O aporte sai inteiro ({formatBRL(vale)}) e vai para os encerrados.</p>

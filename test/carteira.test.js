@@ -392,11 +392,12 @@ test('o IOF: o dia em que zera, o imposto do resgate (bruto) e os totais com o I
   assert.equal(tudo.fimIOF, '2026-11-10');
   assert.equal(tudo.semIOF, Math.floor(p.rendeu * 0.225)); // sem o IOF, o IR sobre o rendimento inteiro
   assert.ok(tudo.semIOF < tudo.iof + tudo.ir);
-  // a metade: a metade do rendimento, e o imposto sobre ela
-  const metade = impostoDoResgate(p, Math.round(p.vale / 2));
-  assert.equal(metade.rendimento, Math.round(p.rendeu / 2));
+  // a metade do valor pedida: chega a metade, e o imposto sobre o rendimento DELA sai a mais do aporte (como o Nubank)
+  const pedido = Math.round(p.vale / 2);
+  const metade = impostoDoResgate(p, brutoParaChegar(p, pedido));
+  assert.equal(metade.rendimento, Math.round(p.rendeu * (pedido / p.vale)));
   assert.deepEqual([metade.iof, metade.ir], [Math.floor(metade.rendimento * 0.1), Math.floor((metade.rendimento - metade.iof) * 0.225)]);
-  assert.equal(metade.chega, metade.sai - metade.iof - metade.ir);
+  assert.deepEqual([metade.pedido, metade.chega, metade.sai], [pedido, pedido, pedido + metade.iof + metade.ir]);
   // sem IOF (mais de 30 dias): nada de IOF nem de "a partir de"
   const velho = impostoDoResgate(posicaoDoAporte(novo('2026-06-03', 1000000), inv(100), [], cal, HOJE), 100000);
   assert.deepEqual([velho.iof, velho.semIOF, velho.fimIOF], [0, null, null]);
@@ -457,7 +458,11 @@ test('brutoParaChegar: o digitado é o que chega na conta; o banco tira a mais p
   const sai = brutoParaChegar(p, 28000);
   assert.ok(sai > 28000);
   assert.equal(impostoDoResgate(p, sai).chega, 28000);
-  assert.ok(impostoDoResgate(p, sai - 1).chega < 28000); // o menor que alcança
+  assert.equal(sai, 28000 + impostoDoResgate(p, sai).iof + impostoDoResgate(p, sai).ir); // o imposto sai do que fica
+  // a página do Nubank: bruto de R$ 1.000, resgate de R$ 500 com R$ 20 de impostos → ficam R$ 480
+  const nu = { vale: 100000, rendeu: 26667, idade: 800, aliquota: 0.15, partida: {} };
+  assert.equal(brutoParaChegar(nu, 50000), 52000);
+  assert.equal(nu.vale - brutoParaChegar(nu, 50000), 48000);
   // em todo valor, o exato (a cada centavo a mais, o que chega sobe 0 ou 1)
   for (let v = 1; v < 5000; v += 37) assert.equal(impostoDoResgate(p, brutoParaChegar(p, v)).chega, v);
   // com IOF, sai mais ainda
@@ -471,37 +476,35 @@ test('brutoParaChegar: o digitado é o que chega na conta; o banco tira a mais p
   assert.equal(brutoParaChegar(p, 0), null);
 });
 
-test('planoDoResgate: do mais antigo para o mais novo; o valor é o que chega; o último paga o resto', () => {
+test('planoDoResgate: do mais novo para o mais antigo; o valor é o que chega; o último paga o resto', () => {
   const i = inv(100);
   const a = novo('2026-04-06', 1000000); const b = novo('2026-06-01', 500000); const c = novo('2026-09-01', 300000);
-  const itens = [c, a, b].map((ap) => ({ ap, resgates: [] })); // fora de ordem de propósito
+  const itens = [a, c, b].map((ap) => ({ ap, resgates: [] })); // fora de ordem de propósito
   const dia = '2026-11-05';
-  const pa = posicaoDoAporte(a, i, [], cal, dia); const pb = posicaoDoAporte(b, i, [], cal, dia);
-  const va = pa.vale; const vb = pb.vale;
-  const chegaA = impostoDoResgate(pa).chega;
-  // só o mais antigo, parcial: chega o digitado, sai o bruto
+  const pc = posicaoDoAporte(c, i, [], cal, dia); const pb = posicaoDoAporte(b, i, [], cal, dia);
+  const chegaC = impostoDoResgate(pc).chega;
+  // só o mais novo, parcial: chega o digitado; sai o digitado + o imposto
   let p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: 200000, hoje: HOJE });
   assert.equal(p.erro, null);
-  const sa = brutoParaChegar(pa, 200000);
-  assert.deepEqual(p.linhas.map((l) => [l.ap.id, l.sai, l.tudo]), [[a.id, sa, false], [b.id, 0, false], [c.id, 0, false]]);
-  assert.deepEqual([p.total, p.liquido, p.linhas[0].imp.chega], [sa, 200000, 200000]);
-  // passa do primeiro: ele sai inteiro, o segundo paga o resto do que chega
-  p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: chegaA + 1000, hoje: HOJE });
+  const sc = brutoParaChegar(pc, 200000);
+  assert.deepEqual(p.linhas.map((l) => [l.ap.id, l.sai, l.tudo]), [[c.id, sc, false], [b.id, 0, false], [a.id, 0, false]]);
+  assert.deepEqual([p.total, p.liquido, p.linhas[0].imp.chega], [sc, 200000, 200000]);
+  // passa do mais novo: ele sai inteiro, o seguinte paga o resto do que chega
+  p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: chegaC + 1000, hoje: HOJE });
   const sb = brutoParaChegar(pb, 1000);
-  assert.deepEqual(p.linhas.map((l) => [l.sai, l.tudo]), [[va, true], [sb, false], [0, false]]);
-  assert.equal(p.total, va + sb);
-  assert.equal(p.linhas.reduce((t, l) => t + (l.imp?.chega ?? 0), 0), chegaA + 1000);
-  assert.ok(p.linhas[0].imp.ir > 0);
-  // o que se grava: "tudo" no primeiro, o bruto no segundo
+  assert.deepEqual(p.linhas.map((l) => [l.sai, l.tudo]), [[pc.vale, true], [sb, false], [0, false]]);
+  assert.equal(p.total, pc.vale + sb);
+  assert.equal(p.linhas.reduce((t, l) => t + (l.imp?.chega ?? 0), 0), chegaC + 1000);
+  // o que se grava: "tudo" no primeiro, o que saiu no segundo
   assert.deepEqual(resgatesDoPlano(p, dia, 'L'), [
-    { aporte_id: a.id, data: dia, valor_centavos: null, tudo: true, lote: 'L' },
+    { aporte_id: c.id, data: dia, valor_centavos: null, tudo: true, lote: 'L' },
     { aporte_id: b.id, data: dia, valor_centavos: sb, tudo: false, lote: 'L' },
   ]);
   assert.equal(resgatesDoPlano(p, dia)[0].lote, undefined); // sem a 032, sem o lote
-  // marcados: o mais antigo de fora, começa no segundo
-  p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: 100000, marcados: new Set([b.id, c.id]), hoje: HOJE });
+  // marcados: o mais novo de fora, começa no seguinte
+  p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: 100000, marcados: new Set([a.id, b.id]), hoje: HOJE });
   assert.deepEqual(p.linhas.map((l) => l.sai), [0, brutoParaChegar(pb, 100000), 0]);
-  assert.equal(p.disponivel, vb + vale(c, i, dia));
+  assert.equal(p.disponivel, pb.vale + vale(a, i, dia));
   // tudo de todos: o que chega é o líquido de cada um
   p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: 1, hoje: HOJE });
   assert.equal(p.chegaMax, p.linhas.reduce((t, l) => t + impostoDoResgate(l.pos).chega, 0));
@@ -557,10 +560,10 @@ test('as movimentações: aporte, já estava aplicado, resgate, o pedido reparti
   ]);
   const [lote, reap, volta, r1, , , , , antigo] = ms;
   assert.equal(antigo.entrou, 300000); // o total do banco menos o que já tinha rendido
-  // o pedido: as partes do mais antigo (o já estava aplicado de abril) para o mais novo; a soma das partes
-  assert.deepEqual(lote.partes.map((p) => p.ap.id), ['x3', 'x1']);
-  assert.equal(lote.saiu, lote.partes[0].sai + 250000);
-  assert.equal(lote.partes[0].sai, posicaoDoAporte(x3, a, [], cal, '2026-11-05').vale);
+  // o pedido: as partes na ordem do resgate, do mais novo para o mais antigo (o já estava aplicado de abril); a soma
+  assert.deepEqual(lote.partes.map((p) => p.ap.id), ['x1', 'x3']);
+  assert.equal(lote.saiu, lote.partes[1].sai + 250000);
+  assert.equal(lote.partes[1].sai, posicaoDoAporte(x3, a, [], cal, '2026-11-05').vale);
   assert.equal(lote.chega, lote.saiu - lote.ir - lote.iof);
   // o resgate de um aporte: o imposto pela posição do dia
   const pos = posicaoDoAporte(x2, a, [], cal, '2026-08-03');

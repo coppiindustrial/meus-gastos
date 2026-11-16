@@ -285,8 +285,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   SEPARADOS (antes o `ir` era os dois). A carteira tem a COLUNA IOF (a pílula âmbar com o % do dia, o valor, "zera em
   dd/mm · N dias"; o balão com a curva dos 30 dias; LARGURA_MINIMA 1400); o RESGATAR mostra o rendimento que sai junto,
   o IOF, o IR e quanto chega na conta (`impostoDoResgate`, testada) — O VALOR DIGITADO É O QUE CHEGA NA CONTA (16/11/2026, a
-  pedido: "no Nubank, se eu resgato 280 reais, volta pra conta 280 reais"; antes era o bruto): o banco tira a mais do
-  aporte para o IR e o IOF, e o app grava esse bruto (`brutoParaChegar`, testada: o menor bruto cujo líquido é o digitado;
+  pedido: "no Nubank, se eu resgato 280 reais, volta pra conta 280 reais"; antes era o bruto), COMO A AJUDA DO NUBANK
+  ("Saldo da Caixinha após resgate": bruto de R$ 1.000, resgate de R$ 500 com R$ 20 de impostos → ficam R$ 480): o IOF e
+  o IR sobre o rendimento DO PEDIDO saem do que fica, então sai do aporte o pedido + os impostos, e é isso que se grava
+  (`brutoParaChegar`; `impostoDoResgate` refaz o pedido a partir do gravado; "tudo" paga sobre o rendimento inteiro;
   passou do líquido de "tudo", avisa) — e, com IOF, quando zera e quanto se economiza (sai menos do aporte; no "tudo", chega mais); a prévia do aporte diz o IOF do dia; o Patrimônio conta o fim do IOF como uma
   queda (`proximasQuedas`, `tipo` 'iof').
   O RDB PLANEJADO DO NUBANK conta o rendimento desde o DIA ÚTIL ANTES da "Data da aplicação" (os dois depósitos conferidos
@@ -333,9 +335,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   O RESGATE PELO INVESTIMENTO (16/11/2026, a pedido; a opção A do mockup "Resgatar pelo investimento"): o "Resgatar" na LINHA
   DO INVESTIMENTO (só no resgate diário, com aporte) abre `ModalResgateInvestimento`: o valor digitado é o que CHEGA NA CONTA
   (16/11/2026; antes, o bruto): cada aporte alcançado entra com o líquido dele inteiro e o último com o bruto que completa
-  (`brutoParaChegar`); o plano devolve `total` (o bruto, gravado), `liquido` e `chegaMax` (o "tudo" do campo). Repartido por `planoDoResgate` (lib/carteira.js, testada) DO MAIS ANTIGO para o
-  mais novo pela data do depósito (`dataDoDeposito`), como o Nubank (guias e reclamações; não achamos a regra oficial do
-  Nubank nem a da XP) — ou "Eu escolho": marcar os aportes que podem pagar, e o valor se reparte entre os marcados na mesma
+  (`brutoParaChegar`); o plano devolve `total` (o bruto, gravado), `liquido` e `chegaMax` (o "tudo" do campo). Repartido por `planoDoResgate` (lib/carteira.js, testada) DO MAIS NOVO para o
+  mais antigo pela data do depósito (`dataDoDeposito`; 16/11/2026 — antes era do mais antigo, por guias e reclamações):
+  depois de três resgates, o saldo do RDB Resgate Diário no Nubank só fechava com o imposto tirado do depósito mais novo
+  (do mais antigo, o app ficava R$ 16 abaixo). A regra da XP não foi conferida — ou "Eu escolho": marcar os aportes que podem pagar, e o valor se reparte entre os marcados na mesma
   ordem. Cada alcançado sai "tudo", o último paga o resto; a tabela com o IOF e o IR de cada parte (`impostoDoResgate`) e o
   aviso do aporte com IOF. Grava um resgate em cada aporte numa requisição só (`criarResgates`, `resgatesDoPlano`), ligados
   pelo `lote` (migration 032; sem ela, grava sem): no `ModalAporte` a linha diz "parte de um resgate em N aportes" e o ✕
