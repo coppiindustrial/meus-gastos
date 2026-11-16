@@ -8,14 +8,16 @@ import { atualizarResgate, criarResgate, excluirResgate } from '../../api/cartei
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { calcularValor, formatBRL } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
-import { ehIsento, impostoDoResgate, lerResgate, posicaoDoAporte } from '../../lib/carteira.js';
+import { brutoParaChegar, ehIsento, impostoDoResgate, lerResgate, posicaoDoAporte } from '../../lib/carteira.js';
 
 // RESGATAR DE UM APORTE (07/11/2026, a carteira do zero): a data e o valor, ou "Tudo". O resgate sai DAQUELE aporte: o que
 // ele tinha de aplicado e de rendimento diminui na mesma proporção (como o banco), e o resto continua rendendo. "Tudo" (ou
 // o valor inteiro) encerra o aporte. `item`: { ap, inv, resgates } da carteira.
-// O IMPOSTO DO RESGATE (09/11/2026, a pedido, o mockup "O IOF na carteira"): o valor é o que SAI do aporte (bruto, o que se
-// grava); embaixo, o rendimento que sai junto, o IOF e o IR sobre ele e quanto chega na conta (`impostoDoResgate`). Com o
-// IOF ainda valendo, a faixa âmbar diz quando ele zera e quanto chegaria a mais a partir de lá.
+// O IMPOSTO DO RESGATE (09/11/2026, a pedido, o mockup "O IOF na carteira"): embaixo, o rendimento que sai junto, o IOF e o
+// IR sobre ele e quanto chega na conta (`impostoDoResgate`). Com o IOF ainda valendo, a faixa âmbar diz quando ele zera e
+// quanto se economiza a partir de lá.
+// O VALOR DIGITADO É O QUE CHEGA NA CONTA (16/11/2026, a pedido: "no Nubank, se eu resgato 280 reais, volta pra conta 280
+// reais"): o banco tira a mais do aporte para pagar o IR e o IOF; grava-se esse bruto (`brutoParaChegar`).
 // EDITAR (16/11/2026, o histórico da renda fixa): `editando` = o resgate gravado (a linha de `inv_resgates`); o `item` vem
 // com os resgates do aporte SEM ele. Abre com a data e o valor dele, mostra como estava e grava por cima (`atualizarResgate`).
 const paraCampo = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -23,8 +25,13 @@ export default function ModalResgate({ item, cal, hoje, editando = null, onFecha
   const toast = useToast();
   const confirmar = useConfirmacao();
   const { ap, inv, resgates } = item;
+  // como estava (editando): o que saiu e o que chegou, pela conta do dia gravado
+  const antes = editando ? (() => {
+    const p0 = posicaoDoAporte(ap, inv, resgates.filter((x) => x.data <= editando.data), cal, editando.data);
+    return p0.encerrado ? null : impostoDoResgate(p0, editando.tudo ? null : Number(editando.valor_centavos));
+  })() : null;
   const [data, setData] = useState(editando?.data ?? hoje);
-  const [valor, setValor] = useState(editando && !editando.tudo ? paraCampo(editando.valor_centavos) : '');
+  const [valor, setValor] = useState(editando && !editando.tudo ? paraCampo(antes?.chega ?? editando.valor_centavos) : '');
   const [tudo, setTudo] = useState(!!editando?.tudo);
   const [salvando, setSalvando] = useState(false);
   const [tentou, setTentou] = useState(false);
@@ -32,9 +39,13 @@ export default function ModalResgate({ item, cal, hoje, editando = null, onFecha
   // o que o aporte vale no dia do resgate (com os resgates de antes)
   const pos = data ? posicaoDoAporte(ap, inv, resgates.filter((r) => r.data <= data), cal, data) : null;
   const vale = pos?.encerrado ? 0 : pos?.vale ?? 0;
-  const centavos = calcularValor(valor);
-  const r = lerResgate({ aporte: ap.id, data, valor: centavos, tudo }, pos?.partida.data ?? ap.data, vale, hoje);
-  const erro = valor.trim() && !tudo && centavos === null ? 'O valor não é um número.' : pos?.encerrado ? 'Nesse dia o aporte já tinha saído.' : r.erro;
+  const centavos = calcularValor(valor); // o que chega na conta
+  const chegaTudo = vale > 0 ? impostoDoResgate(pos).chega : 0;
+  const bruto = !tudo && centavos > 0 && vale > 0 ? brutoParaChegar(pos, centavos) : null;
+  const passa = !tudo && centavos > 0 && vale > 0 && bruto === null;
+  const r = lerResgate({ aporte: ap.id, data, valor: bruto, tudo }, pos?.partida.data ?? ap.data, vale, hoje);
+  const erro = valor.trim() && !tudo && centavos === null ? 'O valor não é um número.' : pos?.encerrado ? 'Nesse dia o aporte já tinha saído.'
+    : passa ? `Passa do que chega na conta resgatando tudo (${formatBRL(chegaTudo)}, já sem o IR e o IOF).` : r.erro;
   const fica = !erro && r.dados && !r.dados.tudo ? vale - r.dados.valor_centavos : 0;
   const ficaAplicado = !erro && r.dados && !r.dados.tudo && vale ? Math.round(pos.aplicado * (fica / vale)) : 0;
   const imp = !erro && r.dados ? impostoDoResgate(pos, r.dados.tudo ? null : r.dados.valor_centavos) : null;
@@ -45,15 +56,13 @@ export default function ModalResgate({ item, cal, hoje, editando = null, onFecha
       <div className="flex justify-between gap-3"><span>Rendimento que sai junto</span><span className="tabular-nums">{formatBRL(imp.rendimento)}</span></div>
       {imp.iof > 0 && <div className="flex justify-between gap-3"><span>IOF {pct(imp.aliquotaIOF)} ({pos.idade} {pos.idade === 1 ? 'dia' : 'dias'})</span><span className="tabular-nums">− {formatBRL(imp.iof)}</span></div>}
       <div className="flex justify-between gap-3"><span>{isento ? 'IR (isenta)' : `IR ${pct(imp.aliquota)}${imp.iof > 0 ? ' (sobre o que sobra)' : ''}${pos.semData ? ' (pelo maior)' : ''}`}</span><span className="tabular-nums">− {formatBRL(imp.ir)}</span></div>
-      <div className="flex justify-between gap-3 border-t border-gray-200 pt-1"><span>Chega na conta ≈</span><b className="tabular-nums text-gray-900">{formatBRL(imp.chega)}</b></div>
+      <div className="flex justify-between gap-3 border-t border-gray-200 pt-1"><span>Chega na conta</span><b className="tabular-nums text-gray-900">{formatBRL(imp.chega)}</b></div>
     </div>
   );
 
-  // como estava (editando): o que saiu e o que chegou, pela conta do dia gravado
-  const antes = editando ? (() => {
-    const p0 = posicaoDoAporte(ap, inv, resgates.filter((x) => x.data <= editando.data), cal, editando.data);
-    return p0.encerrado ? null : impostoDoResgate(p0, editando.tudo ? null : Number(editando.valor_centavos));
-  })() : null;
+  // com o IOF: o que se economiza resgatando quando ele zerar (tudo: chega mais; o valor: sai menos do aporte)
+  const economia = imp?.fimIOF ? (r.dados.tudo ? imp.iof + imp.ir - imp.semIOF
+    : r.dados.valor_centavos - (brutoParaChegar({ ...pos, idade: 30 }, centavos) ?? r.dados.valor_centavos)) : 0;
 
   const salvar = async (e) => {
     e?.preventDefault();
@@ -67,7 +76,7 @@ export default function ModalResgate({ item, cal, hoje, editando = null, onFecha
         toast.success('Resgate corrigido.');
       } else {
         await criarResgate(r.dados);
-        toast.success(r.dados.tudo ? 'Resgatou tudo: o aporte foi para os encerrados.' : `Resgate de ${formatBRL(r.dados.valor_centavos)} lançado.`);
+        toast.success(r.dados.tudo ? 'Resgatou tudo: o aporte foi para os encerrados.' : `Resgate de ${formatBRL(centavos)} na conta lançado (sai ${formatBRL(r.dados.valor_centavos)}).`);
       }
       onSalvo();
     } catch (err) { toast.error(err.message); setSalvando(false); }
@@ -85,14 +94,14 @@ export default function ModalResgate({ item, cal, hoje, editando = null, onFecha
       <form onSubmit={salvar} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Campo rotulo="Data do resgate"><CampoData value={data} onChange={setData} max={hoje} min={ap.data} /></Campo>
-          <Campo rotulo="Valor que sai (R$)">
+          <Campo rotulo="Valor que chega na conta (R$)">
             <input className="input text-right tabular-nums" inputMode="decimal" autoFocus placeholder="0,00" value={tudo ? '' : valor} disabled={tudo}
               onChange={(e) => setValor(e.target.value)} />
           </Campo>
         </div>
         {editando && (
           <p className="text-[12px] text-gray-500">
-            Como estava: {editando.tudo ? 'tudo' : formatBRL(editando.valor_centavos)} em {formatDate(editando.data)}{antes ? <>, chegou ≈ <b className="font-semibold text-gray-700">{formatBRL(antes.chega)}</b> na conta</> : ''}.
+            Como estava: {editando.tudo ? 'tudo' : <>saiu {formatBRL(editando.valor_centavos)}</>} em {formatDate(editando.data)}{antes ? <>, chegou <b className="font-semibold text-gray-700">{formatBRL(antes.chega)}</b> na conta</> : ''}.
           </p>
         )}
         <label className="flex cursor-pointer items-center gap-2 text-[13px] text-gray-700">
@@ -100,7 +109,7 @@ export default function ModalResgate({ item, cal, hoje, editando = null, onFecha
           Tudo{vale ? ` (${formatBRL(vale)} em ${formatDate(data)})` : ''}
         </label>
         <div className={`rounded-md border px-3 py-2.5 text-[12.5px] ${erro && tentou ? 'border-red-200 bg-red-50 text-red-700' : 'border-gray-200 bg-hx-f9fafb text-gray-600'}`} aria-live="polite">
-          {erro ? (tentou ? erro : <span className="text-gray-500">Nesse dia o aporte vale {formatBRL(vale)}. Digite quanto saiu, ou marque "Tudo".</span>)
+          {erro ? (tentou ? erro : <span className="text-gray-500">Nesse dia o aporte vale {formatBRL(vale)}{chegaTudo ? ` (chegam ${formatBRL(chegaTudo)} na conta)` : ''}. Digite quanto chega na conta — o banco tira a mais para o IR e o IOF —, ou marque "Tudo".</span>)
             : r.dados.tudo ? (
               <div className="space-y-1">
                 <p>O aporte sai inteiro ({formatBRL(vale)}) e vai para os encerrados.</p>
@@ -119,7 +128,7 @@ export default function ModalResgate({ item, cal, hoje, editando = null, onFecha
         {imp?.fimIOF && (
           <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800">
             <svg viewBox="0 0 16 16" className="mt-[2px] h-[14px] w-[14px] shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5" /><path d="M8 4.5V8l2.5 1.5" /></svg>
-            <span>O IOF cai todo dia e zera em <b>{formatDate(imp.fimIOF)}</b>, o 30º dia. Resgatando a partir de lá, chegam <b>{formatBRL(imp.iof + imp.ir - imp.semIOF)}</b> a mais.</span>
+            <span>O IOF cai todo dia e zera em <b>{formatDate(imp.fimIOF)}</b>, o 30º dia. Resgatando a partir de lá, {r.dados.tudo ? <>chegam <b>{formatBRL(economia)}</b> a mais</> : <>saem <b>{formatBRL(economia)}</b> a menos do aporte</>}.</span>
           </div>
         )}
         <div className="flex items-center gap-2">

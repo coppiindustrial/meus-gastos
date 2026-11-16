@@ -284,8 +284,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   — `fimDoIOF`), sai do rendimento ANTES do IR e vale também na LCI e na LCA. `somarPosicoes` devolve o `ir` e o `iof`
   SEPARADOS (antes o `ir` era os dois). A carteira tem a COLUNA IOF (a pílula âmbar com o % do dia, o valor, "zera em
   dd/mm · N dias"; o balão com a curva dos 30 dias; LARGURA_MINIMA 1400); o RESGATAR mostra o rendimento que sai junto,
-  o IOF, o IR e quanto chega na conta — o valor digitado é o que SAI, bruto (`impostoDoResgate`, testada) — e, com IOF,
-  quando zera e quanto chegaria a mais; a prévia do aporte diz o IOF do dia; o Patrimônio conta o fim do IOF como uma
+  o IOF, o IR e quanto chega na conta (`impostoDoResgate`, testada) — O VALOR DIGITADO É O QUE CHEGA NA CONTA (16/11/2026, a
+  pedido: "no Nubank, se eu resgato 280 reais, volta pra conta 280 reais"; antes era o bruto): o banco tira a mais do
+  aporte para o IR e o IOF, e o app grava esse bruto (`brutoParaChegar`, testada: o menor bruto cujo líquido é o digitado;
+  passou do líquido de "tudo", avisa) — e, com IOF, quando zera e quanto se economiza (sai menos do aporte; no "tudo", chega mais); a prévia do aporte diz o IOF do dia; o Patrimônio conta o fim do IOF como uma
   queda (`proximasQuedas`, `tipo` 'iof').
   O RDB PLANEJADO DO NUBANK conta o rendimento desde o DIA ÚTIL ANTES da "Data da aplicação" (os dois depósitos conferidos
   em 08/11/2026, um de quinta e um de sábado); o RDB Resgate Diário e os CDBs, desde o próprio dia. Por isso o
@@ -329,8 +331,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   pagar de um depósito com saques. O campo segue a conta até a pessoa digitar; aí, "pela conta: R$ X · usar"),
   `ModalResgate` (a data e o valor, ou "Tudo"; mostra o que fica rendendo),
   O RESGATE PELO INVESTIMENTO (16/11/2026, a pedido; a opção A do mockup "Resgatar pelo investimento"): o "Resgatar" na LINHA
-  DO INVESTIMENTO (só no resgate diário, com aporte) abre `ModalResgateInvestimento`: o valor digitado é o que SAI do
-  investimento (bruto, decisão do usuário), repartido por `planoDoResgate` (lib/carteira.js, testada) DO MAIS ANTIGO para o
+  DO INVESTIMENTO (só no resgate diário, com aporte) abre `ModalResgateInvestimento`: o valor digitado é o que CHEGA NA CONTA
+  (16/11/2026; antes, o bruto): cada aporte alcançado entra com o líquido dele inteiro e o último com o bruto que completa
+  (`brutoParaChegar`); o plano devolve `total` (o bruto, gravado), `liquido` e `chegaMax` (o "tudo" do campo). Repartido por `planoDoResgate` (lib/carteira.js, testada) DO MAIS ANTIGO para o
   mais novo pela data do depósito (`dataDoDeposito`), como o Nubank (guias e reclamações; não achamos a regra oficial do
   Nubank nem a da XP) — ou "Eu escolho": marcar os aportes que podem pagar, e o valor se reparte entre os marcados na mesma
   ordem. Cada alcançado sai "tudo", o último paga o resto; a tabela com o IOF e o IR de cada parte (`impostoDoResgate`) e o

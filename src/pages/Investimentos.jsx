@@ -84,7 +84,7 @@ export default function Investimentos() {
     editarResgate: (m) => {
       if (m.lote) {
         const x = carteira.grupos.flatMap((g) => g.investimentos).find((y) => y.inv.id === m.inv.id) ?? { inv: m.inv, aportes: [] };
-        setResgateInv({ x, editando: { lote: m.lote, data: m.data, partes: m.partes.map((p) => ({ aporte_id: p.ap.id, sai: p.sai })) } });
+        setResgateInv({ x, editando: { lote: m.lote, data: m.data, partes: m.partes.map((p) => ({ aporte_id: p.ap.id, sai: p.sai, chega: p.imp?.chega ?? p.sai })) } });
         return;
       }
       const item = carteira.itens.find((i) => i.ap.id === m.ap.id);

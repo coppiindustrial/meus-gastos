@@ -52,7 +52,8 @@ export function impostos(ganho, idade, aliquota) {
 }
 // O DIA EM QUE O IOF ZERA: o 30º dia depois da data do aporte (a idade 30; até a 29ª, 96% … 3% do rendimento).
 export const fimDoIOF = (desde) => maisDias(desde, 30);
-// O IMPOSTO DE UM RESGATE (09/11/2026, a pedido): o valor digitado é o que SAI do aporte (bruto, o que se grava). Sai junto
+// O IMPOSTO DE UM RESGATE (09/11/2026, a pedido): `valor` é o que SAI do aporte (bruto, o que se grava; o digitado é o que
+// CHEGA — `brutoParaChegar`). Sai junto
 // a mesma fração do rendimento (o aplicado e o rendido diminuem na mesma proporção), e o IOF e o IR são sobre ela, pela
 // idade e alíquota da posição no dia. `valor` null = tudo. Devolve { sai, rendimento, iof, ir, chega, aliquotaIOF,
 // semIOF: o imposto se fosse a partir do fim do IOF (o IR sobre o rendimento inteiro), fimIOF }.
@@ -67,6 +68,21 @@ export function impostoDoResgate(pos, valor = null) {
     sai, rendimento, iof, ir, chega: sai - iof - ir, aliquota, aliquotaIOF: iof ? aliquotaIOF(pos.idade) : 0,
     semIOF, fimIOF: iof && pos.partida?.desdeIR ? fimDoIOF(pos.partida.desdeIR) : null,
   };
+}
+// O VALOR DIGITADO É O QUE CHEGA NA CONTA (16/11/2026, a pedido: "no Nubank, se eu resgato 280 reais, volta pra conta 280
+// reais"): o banco tira A MAIS do investimento para pagar o IOF e o IR. Devolve o menor bruto `sai` (o que se grava) com
+// `impostoDoResgate(pos, sai).chega` igual a `liquido` — a cada centavo a mais, o que chega sobe 0 ou 1 centavo, então
+// o menor que alcança dá o valor exato. null = nem resgatando tudo chega tanto.
+export function brutoParaChegar(pos, liquido) {
+  if (!pos || pos.encerrado || !(pos.vale > 0) || !(liquido > 0)) return null;
+  const chega = (s) => impostoDoResgate(pos, s).chega;
+  if (chega(pos.vale) < liquido) return null;
+  let lo = Math.min(liquido, pos.vale); let hi = pos.vale;
+  while (lo < hi) {
+    const m = Math.floor((lo + hi) / 2);
+    if (chega(m) >= liquido) hi = m; else lo = m + 1;
+  }
+  return lo;
 }
 // a próxima vez que a alíquota cai (no dia seguinte ao fim da faixa): { data, para } ou null (já na menor)
 export function proximaQueda(desde, hoje) {
@@ -434,13 +450,15 @@ export function lerResgate({ aporte, data, valor, tudo }, partidaData, vale, hoj
 }
 
 // ------------------------------------------------------------ o resgate pelo investimento
-// O RESGATE PELO INVESTIMENTO (16/11/2026, a opção A do mockup "Resgatar pelo investimento"): o valor que SAI do
-// investimento (bruto, como o resgate de um aporte) repartido entre os aportes do MAIS ANTIGO para o mais novo, pela data
+// O RESGATE PELO INVESTIMENTO (16/11/2026, a opção A do mockup "Resgatar pelo investimento"): o valor que CHEGA NA CONTA
+// (o líquido, como no Nubank; o bruto de cada parte sai de `brutoParaChegar`) repartido entre os aportes do MAIS ANTIGO
+// para o mais novo, pela data
 // do depósito — como o Nubank: o mais antigo já não tem IOF e tem o IR mais baixo. `marcados` (um Set de ids; null = todos)
 // limita os que podem pagar ("Eu escolho"). Cada aporte alcançado sai inteiro ("tudo", vai para os encerrados), menos o
 // último, que paga o resto. Fica de fora o aporte posterior à data, o que já tinha saído e o vencido.
 // `itens`: os { ap, resgates } do investimento (os da carteira, `montarCarteira`). Devolve { linhas: [{ ap, pos, marcado,
-// sai, tudo, imp }], total, disponivel, erro }.
+// sai, tudo, imp }], total (o bruto que sai), liquido (o que chega), disponivel (o que os que podem pagar valem), chegaMax
+// (o que chegaria resgatando todos eles), erro }.
 export const dataDoDeposito = (ap) => (ap.origem === 'antigo' ? ap.aplicado_em ?? ap.data : ap.data);
 const compara = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 export function planoDoResgate({ itens, inv, cal, data, valor, marcados = null, hoje }) {
@@ -450,25 +468,27 @@ export function planoDoResgate({ itens, inv, cal, data, valor, marcados = null, 
     .map((x) => ({ ap: x.ap, pos: posicaoDoAporte(x.ap, inv, (x.resgates ?? []).filter((r) => r.data <= data), cal, data) }))
     .filter((l) => !l.pos.encerrado && l.pos.vale > 0)
     .sort((a, b) => compara(dataDoDeposito(a.ap), dataDoDeposito(b.ap)) || compara(a.ap.data, b.ap.data) || compara(String(a.ap.criado_em ?? ''), String(b.ap.criado_em ?? '')))
-    .map((l) => ({ ...l, marcado: !marcados || marcados.has(l.ap.id), sai: 0, tudo: false, imp: null }));
+    .map((l) => ({ ...l, marcado: !marcados || marcados.has(l.ap.id), sai: 0, tudo: false, imp: null, chegaTudo: impostoDoResgate(l.pos).chega }));
   const disponivel = linhas.filter((l) => l.marcado).reduce((t, l) => t + l.pos.vale, 0);
+  const chegaMax = linhas.filter((l) => l.marcado).reduce((t, l) => t + l.chegaTudo, 0);
   let erro = null;
   if (hoje && data > hoje) erro = 'A data do resgate ainda não chegou.';
   else if (!linhas.length) erro = 'Nesse dia o investimento não tinha nada aplicado.';
-  else if (!valor || valor <= 0) erro = 'Falta o valor que sai do investimento.';
+  else if (!valor || valor <= 0) erro = 'Falta o valor que chega na conta.';
   else if (!disponivel) erro = 'Marque pelo menos um aporte.';
-  else if (valor > disponivel) erro = `Passa do que ${marcados ? 'os aportes marcados valem' : 'o investimento vale'} nesse dia (${(disponivel / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`;
+  else if (valor > chegaMax) erro = `Passa do que chega na conta resgatando ${marcados ? 'os aportes marcados' : 'tudo'} nesse dia (${(chegaMax / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}, já sem o IR e o IOF).`;
+  let total = 0;
   if (!erro) {
     let resta = valor;
     for (const l of linhas) {
       if (!l.marcado || resta <= 0) continue;
-      l.sai = Math.min(resta, l.pos.vale);
+      if (resta >= l.chegaTudo) { l.sai = l.pos.vale; resta -= l.chegaTudo; } else { l.sai = brutoParaChegar(l.pos, resta); resta = 0; }
       l.tudo = l.sai >= l.pos.vale;
       l.imp = impostoDoResgate(l.pos, l.tudo ? null : l.sai);
-      resta -= l.sai;
+      total += l.sai;
     }
   }
-  return { linhas, total: erro ? 0 : valor, disponivel, erro };
+  return { linhas, total, liquido: erro ? 0 : valor, disponivel, chegaMax, erro };
 }
 // as linhas de `inv_resgates` do plano: um resgate em cada aporte alcançado, ligados pelo `lote` (migration 032)
 export function resgatesDoPlano(plano, data, lote = null) {

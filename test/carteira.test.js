@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diaUtilAntes, fimDoIOF, impostoDoResgate, impostos, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
+  aliquotaIOF, aliquotaIR, brutoParaChegar, calendario, dadosDoCadastro, diaUtilAntes, fimDoIOF, impostoDoResgate, impostos, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
   linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
   rendeuDoDeposito, rotuloTaxa, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
   arrastoDoCadastro, instituicoesEmOrdem, investimentosEmOrdem, ordensDoCadastro, planoDoResgate, resgatesDoPlano, dataDoDeposito,
@@ -451,32 +451,62 @@ test('o arrasto do cadastro: o investimento muda de grupo; a instituição leva 
 });
 
 // ------------------------------------------------------------ o resgate pelo investimento
-test('planoDoResgate: do mais antigo para o mais novo; o último paga o resto', () => {
+test('brutoParaChegar: o digitado é o que chega na conta; o banco tira a mais para o IR e o IOF', () => {
+  const p = posicaoDoAporte(novo('2026-04-06', 1000000), inv(100), [], cal, HOJE);
+  // R$ 280 na conta: sai um pouco mais, e chega exatamente 280
+  const sai = brutoParaChegar(p, 28000);
+  assert.ok(sai > 28000);
+  assert.equal(impostoDoResgate(p, sai).chega, 28000);
+  assert.ok(impostoDoResgate(p, sai - 1).chega < 28000); // o menor que alcança
+  // em todo valor, o exato (a cada centavo a mais, o que chega sobe 0 ou 1)
+  for (let v = 1; v < 5000; v += 37) assert.equal(impostoDoResgate(p, brutoParaChegar(p, v)).chega, v);
+  // com IOF, sai mais ainda
+  const comIOF = posicaoDoAporte(novo('2026-10-11', 1500000), inv(102.5), [], cal, HOJE);
+  const s2 = brutoParaChegar(comIOF, 100000);
+  assert.equal(impostoDoResgate(comIOF, s2).chega, 100000);
+  assert.ok(impostoDoResgate(comIOF, s2).iof > 0);
+  // tudo: o líquido da posição dá o valor inteiro; mais que isso, não dá
+  assert.equal(brutoParaChegar(p, p.liquido), p.vale);
+  assert.equal(brutoParaChegar(p, p.liquido + 1), null);
+  assert.equal(brutoParaChegar(p, 0), null);
+});
+
+test('planoDoResgate: do mais antigo para o mais novo; o valor é o que chega; o último paga o resto', () => {
   const i = inv(100);
   const a = novo('2026-04-06', 1000000); const b = novo('2026-06-01', 500000); const c = novo('2026-09-01', 300000);
   const itens = [c, a, b].map((ap) => ({ ap, resgates: [] })); // fora de ordem de propósito
   const dia = '2026-11-05';
-  const va = vale(a, i, dia); const vb = vale(b, i, dia);
-  // só o mais antigo, parcial
+  const pa = posicaoDoAporte(a, i, [], cal, dia); const pb = posicaoDoAporte(b, i, [], cal, dia);
+  const va = pa.vale; const vb = pb.vale;
+  const chegaA = impostoDoResgate(pa).chega;
+  // só o mais antigo, parcial: chega o digitado, sai o bruto
   let p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: 200000, hoje: HOJE });
   assert.equal(p.erro, null);
-  assert.deepEqual(p.linhas.map((l) => [l.ap.id, l.sai, l.tudo]), [[a.id, 200000, false], [b.id, 0, false], [c.id, 0, false]]);
-  // passa do primeiro: ele sai inteiro, o segundo paga o resto
-  p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: va + 1000, hoje: HOJE });
-  assert.deepEqual(p.linhas.map((l) => [l.sai, l.tudo]), [[va, true], [1000, false], [0, false]]);
-  assert.equal(p.linhas.reduce((t, l) => t + l.sai, 0), va + 1000);
-  // o imposto de cada parte é o do resgate daquele aporte
-  assert.ok(p.linhas[0].imp.ir > 0 && p.linhas[1].imp.sai === 1000);
-  // o que se grava: "tudo" no primeiro, o valor no segundo
+  const sa = brutoParaChegar(pa, 200000);
+  assert.deepEqual(p.linhas.map((l) => [l.ap.id, l.sai, l.tudo]), [[a.id, sa, false], [b.id, 0, false], [c.id, 0, false]]);
+  assert.deepEqual([p.total, p.liquido, p.linhas[0].imp.chega], [sa, 200000, 200000]);
+  // passa do primeiro: ele sai inteiro, o segundo paga o resto do que chega
+  p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: chegaA + 1000, hoje: HOJE });
+  const sb = brutoParaChegar(pb, 1000);
+  assert.deepEqual(p.linhas.map((l) => [l.sai, l.tudo]), [[va, true], [sb, false], [0, false]]);
+  assert.equal(p.total, va + sb);
+  assert.equal(p.linhas.reduce((t, l) => t + (l.imp?.chega ?? 0), 0), chegaA + 1000);
+  assert.ok(p.linhas[0].imp.ir > 0);
+  // o que se grava: "tudo" no primeiro, o bruto no segundo
   assert.deepEqual(resgatesDoPlano(p, dia, 'L'), [
     { aporte_id: a.id, data: dia, valor_centavos: null, tudo: true, lote: 'L' },
-    { aporte_id: b.id, data: dia, valor_centavos: 1000, tudo: false, lote: 'L' },
+    { aporte_id: b.id, data: dia, valor_centavos: sb, tudo: false, lote: 'L' },
   ]);
   assert.equal(resgatesDoPlano(p, dia)[0].lote, undefined); // sem a 032, sem o lote
   // marcados: o mais antigo de fora, começa no segundo
   p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: 100000, marcados: new Set([b.id, c.id]), hoje: HOJE });
-  assert.deepEqual(p.linhas.map((l) => l.sai), [0, 100000, 0]);
+  assert.deepEqual(p.linhas.map((l) => l.sai), [0, brutoParaChegar(pb, 100000), 0]);
   assert.equal(p.disponivel, vb + vale(c, i, dia));
+  // tudo de todos: o que chega é o líquido de cada um
+  p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: 1, hoje: HOJE });
+  assert.equal(p.chegaMax, p.linhas.reduce((t, l) => t + impostoDoResgate(l.pos).chega, 0));
+  p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: p.chegaMax, hoje: HOJE });
+  assert.ok(p.linhas.every((l) => l.tudo));
 });
 
 test('planoDoResgate: os erros e quem fica de fora', () => {
@@ -489,9 +519,9 @@ test('planoDoResgate: os erros e quem fica de fora', () => {
   p = planoDoResgate({ itens, inv: i, cal, data: '2026-11-05', valor: 1000, hoje: HOJE });
   assert.deepEqual(p.linhas.map((l) => l.ap.id), [b.id]);
   // passa do que vale; nada marcado; sem valor; data futura
-  assert.match(planoDoResgate({ itens, inv: i, cal, data: '2026-11-05', valor: 99999999, hoje: HOJE }).erro, /^Passa do que o investimento vale/);
+  assert.match(planoDoResgate({ itens, inv: i, cal, data: '2026-11-05', valor: 99999999, hoje: HOJE }).erro, /^Passa do que chega na conta resgatando tudo/);
   assert.equal(planoDoResgate({ itens, inv: i, cal, data: '2026-11-05', valor: 1000, marcados: new Set(), hoje: HOJE }).erro, 'Marque pelo menos um aporte.');
-  assert.equal(planoDoResgate({ itens, inv: i, cal, data: '2026-11-05', valor: null, hoje: HOJE }).erro, 'Falta o valor que sai do investimento.');
+  assert.equal(planoDoResgate({ itens, inv: i, cal, data: '2026-11-05', valor: null, hoje: HOJE }).erro, 'Falta o valor que chega na conta.');
   assert.equal(planoDoResgate({ itens, inv: i, cal, data: '2026-11-09', valor: 1000, hoje: HOJE }).erro, 'A data do resgate ainda não chegou.');
 });
 
