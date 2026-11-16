@@ -5,7 +5,7 @@ import {
   aliquotaIOF, aliquotaIR, calendario, dadosDoCadastro, diaUtilAntes, fimDoIOF, impostoDoResgate, impostos, diferencaDoCadastro, fator, fimDeSemana, lerAporte, lerResgate,
   linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
   rendeuDoDeposito, rotuloTaxa, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
-  arrastoDoCadastro, instituicoesEmOrdem, investimentosEmOrdem, ordensDoCadastro,
+  arrastoDoCadastro, instituicoesEmOrdem, investimentosEmOrdem, ordensDoCadastro, planoDoResgate, resgatesDoPlano, dataDoDeposito,
 } from '../src/lib/carteira.js';
 
 // O CDI de cada dia útil de 01/04 a 05/11/2026 (a série 12 do Banco Central, dado público), como `api/taxas.js` entrega.
@@ -447,4 +447,55 @@ test('o arrasto do cadastro: o investimento muda de grupo; a instituição leva 
   assert.deepEqual(arrastoDoCadastro(['i:b', 'i:a', 'g:xp', 'i:c', 'g:nu'], 'g:nu', antes).grupos, ['xp', 'nu']);
   // o Nubank acima de tudo, onde já estava: nada muda
   assert.deepEqual(arrastoDoCadastro(antes, 'g:nu', antes).grupos, ['nu', 'xp']);
+});
+
+// ------------------------------------------------------------ o resgate pelo investimento
+test('planoDoResgate: do mais antigo para o mais novo; o último paga o resto', () => {
+  const i = inv(100);
+  const a = novo('2026-04-06', 1000000); const b = novo('2026-06-01', 500000); const c = novo('2026-09-01', 300000);
+  const itens = [c, a, b].map((ap) => ({ ap, resgates: [] })); // fora de ordem de propósito
+  const dia = '2026-11-05';
+  const va = vale(a, i, dia); const vb = vale(b, i, dia);
+  // só o mais antigo, parcial
+  let p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: 200000, hoje: HOJE });
+  assert.equal(p.erro, null);
+  assert.deepEqual(p.linhas.map((l) => [l.ap.id, l.sai, l.tudo]), [[a.id, 200000, false], [b.id, 0, false], [c.id, 0, false]]);
+  // passa do primeiro: ele sai inteiro, o segundo paga o resto
+  p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: va + 1000, hoje: HOJE });
+  assert.deepEqual(p.linhas.map((l) => [l.sai, l.tudo]), [[va, true], [1000, false], [0, false]]);
+  assert.equal(p.linhas.reduce((t, l) => t + l.sai, 0), va + 1000);
+  // o imposto de cada parte é o do resgate daquele aporte
+  assert.ok(p.linhas[0].imp.ir > 0 && p.linhas[1].imp.sai === 1000);
+  // o que se grava: "tudo" no primeiro, o valor no segundo
+  assert.deepEqual(resgatesDoPlano(p, dia, 'L'), [
+    { aporte_id: a.id, data: dia, valor_centavos: null, tudo: true, lote: 'L' },
+    { aporte_id: b.id, data: dia, valor_centavos: 1000, tudo: false, lote: 'L' },
+  ]);
+  assert.equal(resgatesDoPlano(p, dia)[0].lote, undefined); // sem a 032, sem o lote
+  // marcados: o mais antigo de fora, começa no segundo
+  p = planoDoResgate({ itens, inv: i, cal, data: dia, valor: 100000, marcados: new Set([b.id, c.id]), hoje: HOJE });
+  assert.deepEqual(p.linhas.map((l) => l.sai), [0, 100000, 0]);
+  assert.equal(p.disponivel, vb + vale(c, i, dia));
+});
+
+test('planoDoResgate: os erros e quem fica de fora', () => {
+  const i = inv(100);
+  const a = novo('2026-04-06', 1000000); const b = novo('2026-10-01', 500000);
+  const itens = [{ ap: a, resgates: [{ aporte_id: a.id, data: '2026-08-03', valor_centavos: null, tudo: true }] }, { ap: b, resgates: [] }];
+  // o que já saiu fica de fora; o posterior à data também
+  let p = planoDoResgate({ itens, inv: i, cal, data: '2026-09-01', valor: 1000, hoje: HOJE });
+  assert.equal(p.erro, 'Nesse dia o investimento não tinha nada aplicado.');
+  p = planoDoResgate({ itens, inv: i, cal, data: '2026-11-05', valor: 1000, hoje: HOJE });
+  assert.deepEqual(p.linhas.map((l) => l.ap.id), [b.id]);
+  // passa do que vale; nada marcado; sem valor; data futura
+  assert.match(planoDoResgate({ itens, inv: i, cal, data: '2026-11-05', valor: 99999999, hoje: HOJE }).erro, /^Passa do que o investimento vale/);
+  assert.equal(planoDoResgate({ itens, inv: i, cal, data: '2026-11-05', valor: 1000, marcados: new Set(), hoje: HOJE }).erro, 'Marque pelo menos um aporte.');
+  assert.equal(planoDoResgate({ itens, inv: i, cal, data: '2026-11-05', valor: null, hoje: HOJE }).erro, 'Falta o valor que sai do investimento.');
+  assert.equal(planoDoResgate({ itens, inv: i, cal, data: '2026-11-09', valor: 1000, hoje: HOJE }).erro, 'A data do resgate ainda não chegou.');
+});
+
+test('dataDoDeposito: o "já estava aplicado" pela data do depósito', () => {
+  assert.equal(dataDoDeposito({ origem: 'antigo', data: '2026-11-01', aplicado_em: '2025-03-10' }), '2025-03-10');
+  assert.equal(dataDoDeposito({ origem: 'antigo', data: '2026-11-01', aplicado_em: null }), '2026-11-01');
+  assert.equal(dataDoDeposito({ origem: 'novo', data: '2026-11-01' }), '2026-11-01');
 });

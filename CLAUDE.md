@@ -327,7 +327,16 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (`rendeuDoDeposito`, testada também com um saque no meio; o depósito de mais de dois anos busca o CDI dele). NÃO É o
   "Rendimento bruto" do Nubank: ele soma o que saiu junto nos saques parciais — a conta fechou no centavo o IR que falta
   pagar de um depósito com saques. O campo segue a conta até a pessoa digitar; aí, "pela conta: R$ X · usar"),
-  `ModalResgate` (a data e o valor, ou "Tudo"; mostra o que fica rendendo) e `ModalCadastroCarteira` (a tabela de formulário
+  `ModalResgate` (a data e o valor, ou "Tudo"; mostra o que fica rendendo),
+  O RESGATE PELO INVESTIMENTO (16/11/2026, a pedido; a opção A do mockup "Resgatar pelo investimento"): o "Resgatar" na LINHA
+  DO INVESTIMENTO (só no resgate diário, com aporte) abre `ModalResgateInvestimento`: o valor digitado é o que SAI do
+  investimento (bruto, decisão do usuário), repartido por `planoDoResgate` (lib/carteira.js, testada) DO MAIS ANTIGO para o
+  mais novo pela data do depósito (`dataDoDeposito`), como o Nubank (guias e reclamações; não achamos a regra oficial do
+  Nubank nem a da XP) — ou "Eu escolho": marcar os aportes que podem pagar, e o valor se reparte entre os marcados na mesma
+  ordem. Cada alcançado sai "tudo", o último paga o resto; a tabela com o IOF e o IR de cada parte (`impostoDoResgate`) e o
+  aviso do aporte com IOF. Grava um resgate em cada aporte numa requisição só (`criarResgates`, `resgatesDoPlano`), ligados
+  pelo `lote` (migration 032; sem ela, grava sem): no `ModalAporte` a linha diz "parte de um resgate em N aportes" e o ✕
+  exclui o pedido inteiro (`excluirLote`). E `ModalCadastroCarteira` (a tabela de formulário
   dos fixos, agrupada pela instituição — o nome do grupo é um campo; o investimento com aportes não se exclui, desativa).
   O CADASTRO COM HIERARQUIA E MOVIMENTO (09/11/2026, a opção A do mockup "Cadastro dos investimentos"): a instituição é a
   FAIXA da carteira (a cor dela, a seta que recolhe animado — `cadastro_inv_fechadas` —, o ⇕ no cabeçalho do pop-up, o

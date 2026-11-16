@@ -433,6 +433,50 @@ export function lerResgate({ aporte, data, valor, tudo }, partidaData, vale, hoj
   return { dados: { aporte_id: aporte, data, valor_centavos: valor, tudo: false } };
 }
 
+// ------------------------------------------------------------ o resgate pelo investimento
+// O RESGATE PELO INVESTIMENTO (16/11/2026, a opção A do mockup "Resgatar pelo investimento"): o valor que SAI do
+// investimento (bruto, como o resgate de um aporte) repartido entre os aportes do MAIS ANTIGO para o mais novo, pela data
+// do depósito — como o Nubank: o mais antigo já não tem IOF e tem o IR mais baixo. `marcados` (um Set de ids; null = todos)
+// limita os que podem pagar ("Eu escolho"). Cada aporte alcançado sai inteiro ("tudo", vai para os encerrados), menos o
+// último, que paga o resto. Fica de fora o aporte posterior à data, o que já tinha saído e o vencido.
+// `itens`: os { ap, resgates } do investimento (os da carteira, `montarCarteira`). Devolve { linhas: [{ ap, pos, marcado,
+// sai, tudo, imp }], total, disponivel, erro }.
+export const dataDoDeposito = (ap) => (ap.origem === 'antigo' ? ap.aplicado_em ?? ap.data : ap.data);
+const compara = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+export function planoDoResgate({ itens, inv, cal, data, valor, marcados = null, hoje }) {
+  if (!data) return { linhas: [], total: 0, disponivel: 0, erro: 'Falta a data do resgate.' };
+  const linhas = (itens ?? [])
+    .filter((x) => x.ap.data <= data)
+    .map((x) => ({ ap: x.ap, pos: posicaoDoAporte(x.ap, inv, (x.resgates ?? []).filter((r) => r.data <= data), cal, data) }))
+    .filter((l) => !l.pos.encerrado && l.pos.vale > 0)
+    .sort((a, b) => compara(dataDoDeposito(a.ap), dataDoDeposito(b.ap)) || compara(a.ap.data, b.ap.data) || compara(String(a.ap.criado_em ?? ''), String(b.ap.criado_em ?? '')))
+    .map((l) => ({ ...l, marcado: !marcados || marcados.has(l.ap.id), sai: 0, tudo: false, imp: null }));
+  const disponivel = linhas.filter((l) => l.marcado).reduce((t, l) => t + l.pos.vale, 0);
+  let erro = null;
+  if (hoje && data > hoje) erro = 'A data do resgate ainda não chegou.';
+  else if (!linhas.length) erro = 'Nesse dia o investimento não tinha nada aplicado.';
+  else if (!valor || valor <= 0) erro = 'Falta o valor que sai do investimento.';
+  else if (!disponivel) erro = 'Marque pelo menos um aporte.';
+  else if (valor > disponivel) erro = `Passa do que ${marcados ? 'os aportes marcados valem' : 'o investimento vale'} nesse dia (${(disponivel / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`;
+  if (!erro) {
+    let resta = valor;
+    for (const l of linhas) {
+      if (!l.marcado || resta <= 0) continue;
+      l.sai = Math.min(resta, l.pos.vale);
+      l.tudo = l.sai >= l.pos.vale;
+      l.imp = impostoDoResgate(l.pos, l.tudo ? null : l.sai);
+      resta -= l.sai;
+    }
+  }
+  return { linhas, total: erro ? 0 : valor, disponivel, erro };
+}
+// as linhas de `inv_resgates` do plano: um resgate em cada aporte alcançado, ligados pelo `lote` (migration 032)
+export function resgatesDoPlano(plano, data, lote = null) {
+  return plano.linhas.filter((l) => l.sai > 0).map((l) => ({
+    aporte_id: l.ap.id, data, valor_centavos: l.tudo ? null : l.sai, tudo: l.tudo, ...(lote ? { lote } : {}),
+  }));
+}
+
 // ------------------------------------------------------------ o cadastro em tabela
 // A ORDEM (09/11/2026, a opção A do mockup "Cadastro dos investimentos"): a INSTITUIÇÃO não tem tabela (é o texto do
 // cadastro), então a ordem dela é a do PRIMEIRO investimento dela, a menor `ordem` (no empate, o nome: com tudo em 0,

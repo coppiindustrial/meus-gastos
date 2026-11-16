@@ -7,7 +7,7 @@ import Toggle from '../Toggle.jsx';
 import { Campo } from '../Comuns.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
-import { atualizarAporte, criarAporte, excluirResgate } from '../../api/carteira.js';
+import { atualizarAporte, criarAporte, excluirLote, excluirResgate } from '../../api/carteira.js';
 import { taxasDiarias } from '../../api/taxas.js';
 import { calcularValor, formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
@@ -64,7 +64,9 @@ function formInicial(inicial, cadastro, hoje) {
   };
 }
 
-export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal, hoje, onFechar, onSalvo, onCadastro }) {
+// `todosResgates`: os de todos os aportes — o resgate PELO INVESTIMENTO (migration 032) é um pedido em vários aportes, ligados
+// pelo `lote`: a linha diz "parte do resgate de R$ X (N aportes)", e excluir apaga o pedido inteiro
+export default function ModalAporte({ inicial = {}, cadastro, resgates = [], todosResgates = [], cal, hoje, onFechar, onSalvo, onCadastro }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   const editando = !!inicial.aporte;
@@ -178,7 +180,16 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
       setSalvando(false);
     }
   };
+  const doLote = (rg) => (rg.lote ? todosResgates.filter((x) => x.lote === rg.lote) : []);
   const tirarResgate = async (rg) => {
+    const lote = doLote(rg);
+    if (lote.length > 1) {
+      const ok = await confirmar({ titulo: 'Excluir o resgate inteiro?', confirmar: 'Excluir o resgate', perigo: true,
+        texto: `Este resgate é parte de um pedido em ${lote.length} aportes (${formatDate(rg.data)}). Sai o pedido inteiro, e o dinheiro volta a render em todos eles.` });
+      if (!ok) return;
+      try { await excluirLote(rg.lote); toast.success(`Resgate excluído dos ${lote.length} aportes.`); onSalvo(true); } catch (err) { toast.error(err.message); }
+      return;
+    }
     const ok = await confirmar({ titulo: 'Excluir o resgate?', texto: `O resgate de ${rg.tudo ? 'tudo' : formatBRL(rg.valor_centavos)} em ${formatDate(rg.data)} sai, e o dinheiro volta a render neste aporte.`, confirmar: 'Excluir', perigo: true });
     if (!ok) return;
     try { await excluirResgate(rg.id); toast.success('Resgate excluído.'); onSalvo(true); } catch (err) { toast.error(err.message); }
@@ -280,7 +291,10 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], cal
               {resgates.map((rg) => (
                 <li key={rg.id} className="flex items-center gap-3 px-3 py-1.5 text-[12.5px]">
                   <span className="tabular-nums text-gray-700">{formatDate(rg.data)}</span>
-                  <span className="flex-1 tabular-nums text-gray-900">{rg.tudo ? 'tudo' : formatBRL(rg.valor_centavos)}</span>
+                  <span className="flex-1 tabular-nums text-gray-900">
+                    {rg.tudo ? 'tudo' : formatBRL(rg.valor_centavos)}
+                    {doLote(rg).length > 1 && <span className="ml-2 text-[11.5px] text-gray-400">parte de um resgate em {doLote(rg).length} aportes</span>}
+                  </span>
                   <button type="button" onClick={() => tirarResgate(rg)} className="rounded px-1.5 text-gray-400 hover:bg-hx-fdeaea hover:text-hx-c0393d" aria-label="Excluir o resgate">✕</button>
                 </li>
               ))}

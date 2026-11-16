@@ -8,6 +8,7 @@ import { IconLapis, IconMais, IconSeta } from '../components/icons.jsx';
 import TabelaCarteira from '../components/patrimonio/TabelaCarteira.jsx';
 import ModalAporte from '../components/patrimonio/ModalAporte.jsx';
 import ModalResgate from '../components/patrimonio/ModalResgate.jsx';
+import ModalResgateInvestimento from '../components/patrimonio/ModalResgateInvestimento.jsx';
 import ModalCadastroCarteira from '../components/patrimonio/ModalCadastroCarteira.jsx';
 import AvisoSemTaxas from '../components/patrimonio/AvisoSemTaxas.jsx';
 import useCarteira from '../components/patrimonio/useCarteira.js';
@@ -38,6 +39,7 @@ export default function Investimentos() {
   const [cadastro, setCadastro] = useState(false);
   const [aporte, setAporte] = useState(null); // { investimento_id?, aporte?, reaplicar? }
   const [resgate, setResgate] = useState(null); // o item da carteira
+  const [resgateInv, setResgateInv] = useState(null); // o investimento do resgate repartido (o "Resgatar" da linha dele)
   const [encerrados, setEncerrados] = useState(false);
   const [mais, setMais] = useState(null);
   const maisAberto = useRef(false);
@@ -68,6 +70,7 @@ export default function Investimentos() {
     aportar: (inv) => setAporte({ investimento_id: inv.id }),
     editar: (item) => setAporte({ aporte: item.ap }),
     resgatar: (item) => setResgate(item),
+    resgatarInvestimento: (x) => setResgateInv(x),
     reaplicar: (item) => {
       const v = noVencimento(item.inv, item.pos);
       setAporte({ investimento_id: item.inv.id, reaplicar: { de: com022 ? item.ap.id : null, data: v.data, valor: v.liquido, venc: v } });
@@ -170,9 +173,13 @@ export default function Investimentos() {
       )}
       {aporte && (
         <ModalAporte inicial={aporte} cadastro={d.cadastro} cal={carteira.cal} hoje={d.hoje}
-          resgates={aporte.aporte ? d.resgates.filter((r) => r.aporte_id === aporte.aporte.id) : []}
+          resgates={aporte.aporte ? d.resgates.filter((r) => r.aporte_id === aporte.aporte.id) : []} todosResgates={d.resgates}
           onCadastro={() => { setAporte(null); setCadastro(true); }}
           onFechar={() => setAporte(null)} onSalvo={(ficar) => { if (!ficar) setAporte(null); recarregar(); }} />
+      )}
+      {resgateInv && (
+        <ModalResgateInvestimento x={resgateInv} itens={carteira.itens.filter((i) => i.inv.id === resgateInv.inv.id)} cal={carteira.cal} hoje={d.hoje}
+          onFechar={() => setResgateInv(null)} onSalvo={() => { setResgateInv(null); recarregar(); }} />
       )}
       {resgate && (
         <ModalResgate item={resgate} cal={carteira.cal} hoje={d.hoje} onFechar={() => setResgate(null)} onSalvo={() => { setResgate(null); recarregar(); }} />

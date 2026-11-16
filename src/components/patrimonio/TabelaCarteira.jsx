@@ -282,8 +282,12 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
           <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{n ? (ehIsento(x.inv.tipo) ? <span className="text-gray-400">isento</span> : ir(x.totais)) : null}</td>
           <td className={`${td} ${numTd} ${movel ? 'hidden' : ''}`}>{n ? iof(x.totais) : null}</td>
           <td className={`${td} ${numTd} font-semibold text-gray-900 ${movel ? 'hidden' : ''}`}>{n ? reais(x.totais.liquido) : null}</td>
-          {acoesTd(`${td} px-2`, acoes && x.inv.ativo !== false && (
-            <BotaoLinha titulo={`Aportar em ${x.inv.nome}`} onClick={() => acoes.aportar(x.inv)}><IconAplicar /></BotaoLinha>
+          {acoesTd(`${td} px-2`, acoes && (x.inv.ativo !== false || (n && x.inv.resgate === 'diaria')) && (
+            <>
+              {x.inv.ativo !== false && <BotaoLinha titulo={`Aportar em ${x.inv.nome}`} onClick={() => acoes.aportar(x.inv)}><IconAplicar /></BotaoLinha>}
+              {/* o RESGATE PELO INVESTIMENTO (16/11/2026): reparte o valor entre os aportes; só no resgate diário */}
+              {n > 0 && x.inv.resgate === 'diaria' && acoes.resgatarInvestimento && <BotaoLinha titulo={`Resgatar de ${x.inv.nome}`} onClick={() => acoes.resgatarInvestimento(x)}><IconResgatar /></BotaoLinha>}
+            </>
           ))}
         </tr>
       );
