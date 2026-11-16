@@ -6,9 +6,11 @@ import { IconExpandirTudo, IconGrip } from './icons.jsx';
 import { lsGet, lsSet } from '../lib/storage.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
-import { atualizarCategoria, atualizarGrupo, excluirCategoria, excluirGrupo, juntarCategoria, salvarCategoria, salvarGrupo } from '../api/cadastros.js';
+import { atualizarCategoria, atualizarGrupo, excluirCategoria, excluirGrupo, juntarCategoria, salvarCategoria, salvarGrupo, temGastoFixo } from '../api/cadastros.js';
+import { comoVemDoResumo } from '../lib/categoriasFixas.js';
 import { alteracoes, diferencaCategoria, diferencaGrupo, ficamNoGrupo, reorganizar, totalAlteracoes, validar } from '../lib/cadastroCategorias.js';
 import { CORES_GRUPO } from '../lib/sugestoes.js';
+import { competenciaAtual } from '../lib/format.js';
 import { useListaArrastavel } from '../lib/useListaArrastavel.js';
 import useLinhasAnimadas, { atributosLinha } from '../lib/useLinhasAnimadas.js';
 
@@ -22,6 +24,11 @@ import useLinhasAnimadas, { atributosLinha } from '../lib/useLinhasAnimadas.js';
 // lançamentos não dá: o caminho é juntar (ou desativar).
 //
 // `qtd`: { categoria_id: lançamentos (todo o histórico) }. `regras`: { categoria_id: regras }.
+//
+// O GASTO FIXO (16/11/2026, o mockup "Fixos por categoria"; migration 033): a chave marca a categoria cujo gasto é fixo,
+// venha de onde vier (o Streaming do cartão, o IPTU no boleto); a do GRUPO marca todas as dele (pela metade quando só
+// algumas). Ao lado, o que o app entendeu do histórico (`comoVem`, pela `resumo` — a `resumo_mensal`). As marcadas
+// aparecem nos Gastos fixos, no "Já comprometido" e no "Custo fixo". Só nos grupos de gasto.
 
 const TIPOS = [{ value: 'saida', label: 'Gasto' }, { value: 'entrada', label: 'Entrada' }];
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
@@ -42,7 +49,7 @@ const IconChevron = ({ aberto }) => (
 
 // `pos`: a posição ao abrir (a ordem só conta como alteração na lista que a pessoa mexeu — `ordens`).
 const doGrupo = (g, pos) => ({ id: g.id, pos, novo: false, excluir: false, orig: g, nome: g.nome, tipo: g.tipo, cor: g.cor });
-const daCategoria = (c, pos) => ({ id: c.id, pos, novo: false, excluir: false, juntarEm: null, orig: c, nome: c.nome, grupo_id: c.grupo_id, ativa: c.ativa });
+const daCategoria = (c, pos) => ({ id: c.id, pos, novo: false, excluir: false, juntarEm: null, orig: c, nome: c.nome, grupo_id: c.grupo_id, ativa: c.ativa, gasto_fixo: !!c.gasto_fixo });
 
 // As categorias na ordem dos grupos (a lista já vem por grupo e ordem).
 const rascunhoCats = (gruposBanco, categorias) => {
@@ -50,7 +57,7 @@ const rascunhoCats = (gruposBanco, categorias) => {
   return [...categorias].sort((a, b) => (ordemG.get(a.grupo_id) ?? 0) - (ordemG.get(b.grupo_id) ?? 0)).map(daCategoria);
 };
 
-export default function ModalCadastroCategorias({ grupos: gruposBanco, categorias, qtd = {}, regras = {}, onFechar, onSalvo }) {
+export default function ModalCadastroCategorias({ grupos: gruposBanco, categorias, qtd = {}, regras = {}, resumo = [], onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   const [grupos, setGrupos] = useState(() => gruposBanco.map(doGrupo));
@@ -67,6 +74,10 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
   const abrirGrupo = (id) => { if (recolhidos.has(id)) { const n = new Set(recolhidos); n.delete(id); setRecolhidos(n); } };
   const alternarGrupo = (id) => { const n = new Set(recolhidos); if (n.has(id)) n.delete(id); else n.add(id); setRecolhidos(n); };
   const corpoRef = useRef(null);
+  const comFixo = temGastoFixo(categorias);
+  const SEM_033 = 'Para marcar o gasto fixo, aplique a migration 033 (supabase/migrations/033_categoria_gasto_fixo.sql) no SQL Editor do Supabase.';
+  const hojeComp = competenciaAtual();
+  const como = useMemo(() => comoVemDoResumo(resumo, hojeComp), [resumo, hojeComp]);
 
   // SALVAR NÃO FECHA (30/10/2026, a pedido): a tela recarrega e devolve o banco novo (`grupos`/`categorias`); o
   // rascunho recomeça dele, e a busca, o filtro, os recolhidos e a rolagem ficam como estavam.
@@ -132,7 +143,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
     el?.scrollIntoView({ block: 'nearest' });
   }, 30);
   const novaCategoria = (grupoId) => {
-    const c = { id: novoId(), novo: true, excluir: false, juntarEm: null, orig: null, nome: '', grupo_id: grupoId, ativa: true };
+    const c = { id: novoId(), novo: true, excluir: false, juntarEm: null, orig: null, nome: '', grupo_id: grupoId, ativa: true, gasto_fixo: false };
     setCats((cs) => {
       const ultimo = cs.map((x) => x.grupo_id).lastIndexOf(grupoId);
       return [...cs.slice(0, ultimo + 1), c, ...cs.slice(ultimo + 1)];
@@ -229,16 +240,18 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
         <button type="button" className="btn-secondary !h-8 !px-3 !text-[12.5px]" onClick={novoGrupo}>+ Novo grupo</button>
       </div>
       <div ref={corpoRef} className="max-h-[calc(90vh-190px)] min-h-[240px] overflow-auto border-t border-gray-100 [scrollbar-gutter:stable]">
-        <table className="w-full min-w-[900px] table-fixed border-separate border-spacing-0 text-[12.5px]">
+        <table className="w-full min-w-[1130px] table-fixed border-separate border-spacing-0 text-[12.5px]">
           <colgroup>
             <col style={{ width: 34 }} /><col style={{ width: 30 }} /><col /><col style={{ width: 200 }} />
-            <col style={{ width: 104 }} /><col style={{ width: 70 }} /><col style={{ width: 60 }} /><col style={{ width: 120 }} />
+            <col style={{ width: 104 }} /><col style={{ width: 70 }} /><col style={{ width: 60 }} /><col style={{ width: 230 }} /><col style={{ width: 120 }} />
           </colgroup>
           <thead>
             <tr>
               <th className={th} aria-label="Marcar" /><th className={th} aria-label="Ordem" /><th className={th}>Nome</th><th className={th}>Grupo / tipo</th>
               <th className={`${th} text-right`} title="Lançamentos em todo o histórico">Lançamentos</th><th className={`${th} text-right`}>Regras</th>
-              <th className={th}>Ativa</th><th className={th} />
+              <th className={th}>Ativa</th>
+              <th className={th} title="Tudo o que cai na categoria conta como gasto fixo (nos Gastos fixos e no Já comprometido); ao lado, como ela vem pelo histórico">Gasto fixo</th>
+              <th className={th} />
             </tr>
           </thead>
           <tbody ref={arrasto.containerRef}>
@@ -277,6 +290,20 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
                     </td>
                     <td className={`${td} bg-hx-f6f7f8 text-right text-[11.5px] text-gray-400`} colSpan={3}>{plural(x.n, 'categoria', 'categorias')}</td>
                     <td className={`${td} bg-hx-f6f7f8`}>
+                      {g.tipo === 'saida' && !g.excluir && x.n > 0 && (() => {
+                        const doG = ficamNoGrupo(cats, g.id);
+                        const on = doG.filter((c) => c.gasto_fixo).length;
+                        const todos = on === doG.length;
+                        return (
+                          <span className="flex items-center gap-2 text-[11.5px] text-gray-500" title={comFixo ? 'Marca ou desmarca todas as categorias do grupo' : SEM_033}>
+                            <Toggle compacto checked={todos} misto={on > 0 && !todos} disabled={!comFixo} rotulo={`O grupo ${g.nome} é gasto fixo`}
+                              onChange={() => setCats((cs) => cs.map((c) => (doG.includes(c) ? { ...c, gasto_fixo: !todos } : c)))} />
+                            {todos ? 'o grupo inteiro' : on ? `${on} de ${doG.length}` : ''}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className={`${td} bg-hx-f6f7f8`}>
                       <span className="flex items-center justify-end gap-1">
                         <button type="button" onClick={() => novaCategoria(g.id)} disabled={g.excluir}
                           className="inline-flex h-7 items-center gap-1 rounded-[4px] px-1.5 text-[11.5px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">+ categoria</button>
@@ -287,7 +314,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
                   </tr>,
                   corAberta === g.id && (
                     <tr key={`${x.id}:cor`}>
-                      <td colSpan={8} className="border-b border-gray-100 bg-hx-f9fafb px-4 py-2">
+                      <td colSpan={9} className="border-b border-gray-100 bg-hx-f9fafb px-4 py-2">
                         <span className="flex flex-wrap items-center gap-2">
                           <span className="mr-1 text-[11.5px] text-gray-500">Cor de {g.nome || 'o grupo novo'}:</span>
                           {CORES_GRUPO.map((cor) => (
@@ -337,6 +364,16 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
                   <td className={`${td} text-right tabular-nums text-gray-600`}>{n || <span className="text-gray-300">—</span>}</td>
                   <td className={`${td} text-right tabular-nums text-gray-500`}>{regras[c.id] || <span className="text-gray-300">—</span>}</td>
                   <td className={td}><Toggle compacto checked={c.ativa} disabled={sai} onChange={(v) => mudaCat(c.id, 'ativa', v)} rotulo={`${c.nome} ativa`} /></td>
+                  <td className={`${td} ${c.gasto_fixo && !sai ? 'bg-hx-fffbeb' : ''}`}>
+                    {x.grupo.tipo === 'saida' && (
+                      <span className="flex min-w-0 items-center gap-2" title={comFixo ? undefined : SEM_033}>
+                        <Toggle compacto checked={c.gasto_fixo} disabled={sai || !comFixo} onChange={(v) => mudaCat(c.id, 'gasto_fixo', v)} rotulo={`${c.nome} é gasto fixo`} />
+                        <span className={`truncate text-[11.5px] ${c.gasto_fixo && !sai ? 'text-hx-92400e' : 'text-gray-400'}`} title={como.get(c.id) ? `Pelo histórico: ${como.get(c.id)}` : undefined}>
+                          {como.get(c.id) ?? (c.novo ? '' : 'sem gasto')}
+                        </span>
+                      </span>
+                    )}
+                  </td>
                   <td className={`${td} text-right`}>
                     <BotaoLixo marcado={sai} bloqueado={!sai && n > 0}
                       titulo={sai ? 'Não excluir / não juntar' : n > 0 ? `Tem ${plural(n, 'lançamento', 'lançamentos')}: marque e junte com outra, ou desative` : 'Excluir (ao salvar)'}
@@ -349,7 +386,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
                 </tr>
               );
             })}
-            {linhas.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">Nada com “{busca.trim()}”.</td></tr>}
+            {linhas.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-400">Nada com “{busca.trim()}”.</td></tr>}
           </tbody>
         </table>
       </div>

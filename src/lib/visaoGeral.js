@@ -1,5 +1,6 @@
 import { addMeses } from './format.js';
 import { matrizDoAno } from './fixos.js';
+import { categoriasFixas, categoriasFixasDoMes, linhasDoResumo } from './categoriasFixas.js';
 
 // AS CONTAS DA VISÃO GERAL (a tela inicial, o "Dashboard" da planilha refeito): tudo sobre as linhas
 // da view `resumo_mensal` (mês × tipo × origem × categoria, já somadas no banco), recortadas pelos
@@ -183,7 +184,11 @@ export function foraDoNormal(linhas, comps, categorias, emAndamento, { minimo = 
 // pagar antes de começar — as PARCELAS que vêm (a view `parcelas_futuras`: das faturas mais recentes de cada cartão) e
 // os GASTOS FIXOS do mês (o lançado; senão a MÉDIA MÓVEL do fixo — "não teve" e fora da vigência não contam). Do mês
 // atual até o da última parcela, com `minMeses` e `maxMeses`. Sempre do mês atual, sem os filtros.
-// Devolve [{ competencia, parcelas, compras, fixos, total }].
+// Devolve [{ competencia, parcelas, compras, fixos, categorias, porCategoria, total }].
+//
+// AS CATEGORIAS FIXAS (16/11/2026, migration 033): com `categorias` (as do cadastro, com `gasto_fixo`) e `resumo` (a
+// `resumo_mensal`), cada mês soma também o previsto das categorias marcadas (`categoriasFixasDoMes`), SEM a parte que já
+// está nas parcelas que vêm (as parcelas têm a barra delas). `porCategoria`: o que cada uma pôs no mês (para o balão).
 //
 // A MÉDIA MÓVEL (05/11/2026, a pedido: antes era o sugerido da grade, o ÚLTIMO lançado, e a luz de um mês valia para o
 // ano inteiro): o mês que ainda não foi lançado conta a média dos últimos `JANELA_FIXOS` lançamentos do fixo até hoje
@@ -206,7 +211,7 @@ export function mediaMovelDosFixos(lancamentos, hoje, janela = JANELA_FIXOS) {
   return out;
 }
 const mesesEntre = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
-export function jaComprometido({ parcelas = [], recorrencias = [], lancamentos = [], pulados = [], hoje, minMeses = 6, maxMeses = 12 }) {
+export function jaComprometido({ parcelas = [], recorrencias = [], lancamentos = [], pulados = [], categorias = [], resumo = [], hoje, minMeses = 6, maxMeses = 12 }) {
   const porComp = new Map();
   parcelas.forEach((p) => {
     if (p.competencia < hoje) return;
@@ -218,11 +223,17 @@ export function jaComprometido({ parcelas = [], recorrencias = [], lancamentos =
   const ultima = [...porComp.keys()].sort().pop();
   const n = Math.min(maxMeses, Math.max(minMeses, ultima ? mesesEntre(hoje, ultima) + 1 : 0));
   const fixosDe = fixosDoMes({ recorrencias, lancamentos, pulados, hoje });
+  const catsDe = categoriasFixasDoMes({ categorias, linhas: linhasDoResumo(resumo), parcelas, hoje });
   return Array.from({ length: n }, (_, i) => {
     const competencia = addMeses(hoje, i);
     const p = porComp.get(competencia);
     const fixos = fixosDe(competencia).valor;
-    return { competencia, parcelas: p?.valor ?? 0, compras: p?.compras.size ?? 0, fixos, total: (p?.valor ?? 0) + fixos };
+    const cs = catsDe(competencia);
+    const cats = cs.valor - cs.parcelas;
+    return {
+      competencia, parcelas: p?.valor ?? 0, compras: p?.compras.size ?? 0, fixos, categorias: cats, porCategoria: cs.porCategoria,
+      total: (p?.valor ?? 0) + fixos + cats,
+    };
   });
 }
 
@@ -261,20 +272,33 @@ export function rendaMedia(resumo = [], hoje) {
 // O CUSTO FIXO (09/11/2026, a opção A do mockup "Comprometido na Visão geral"): quanto os gastos fixos levam por mês — o
 // PRÓXIMO mês pela régua do "Já comprometido" (a média móvel de cada fixo; o mês de hoje pode estar lançado só em parte), e o
 // de hoje à parte. `historico`: o que os fixos custaram em cada um dos 12 meses fechados (a `resumo_mensal`, origem 'fixo';
-// só os meses com fixo). Devolve { valor, qtd, competencia, hoje: { valor, qtd }, historico, renda, pctRenda }.
-export function custoFixo({ recorrencias = [], lancamentos = [], pulados = [], resumo = [], hoje }) {
-  const de = fixosDoMes({ recorrencias, lancamentos, pulados, hoje });
+// só os meses com fixo). Devolve { valor, qtd, competencia, hoje: { valor, qtd }, historico, renda, pctRenda, fixos, categorias }.
+//
+// COM AS CATEGORIAS FIXAS (16/11/2026, a 4ª recomendada do mockup "Fixos por categoria"): o mês soma também o que as
+// categorias marcadas levam (o previsto, ou o real + as parcelas quando passam dele — `categoriasFixasDoMes`, com as
+// parcelas delas, que também são custo fixo), e o histórico soma o que caiu nelas. `qtd` conta os fixos e as categorias;
+// `fixos` e `categorias` dão a parte de cada um no próximo mês (o balão do cartão). `parcelas`: a view `parcelas_futuras`.
+export function custoFixo({ recorrencias = [], lancamentos = [], pulados = [], resumo = [], categorias = [], parcelas = [], hoje }) {
+  const deFixos = fixosDoMes({ recorrencias, lancamentos, pulados, hoje });
+  const deCats = categoriasFixasDoMes({ categorias, linhas: linhasDoResumo(resumo), parcelas, hoje });
+  const de = (comp) => { const f = deFixos(comp); const c = deCats(comp); return { valor: f.valor + c.valor, qtd: f.qtd + c.qtd, fixos: f, categorias: c }; };
   const competencia = addMeses(hoje, 1);
   const prox = de(competencia);
   const desde = addMeses(hoje, -12);
   const porMes = new Map();
+  const ids = new Set(categoriasFixas(categorias).map((c) => c.id));
   resumo.forEach((r) => {
-    if (r.tipo !== 'saida' || r.origem !== 'fixo' || r.competencia < desde || r.competencia >= hoje) return;
+    if (r.tipo !== 'saida' || r.competencia < desde || r.competencia >= hoje) return;
+    if (r.origem !== 'fixo' && !ids.has(r.categoria_id)) return;
     porMes.set(r.competencia, (porMes.get(r.competencia) ?? 0) + Number(r.total_centavos));
   });
   const historico = [...porMes].filter(([, v]) => v > 0).sort(([a], [b]) => a.localeCompare(b)).map(([c, valor]) => ({ competencia: c, valor }));
   const renda = rendaMedia(resumo, hoje);
-  return { valor: prox.valor, qtd: prox.qtd, competencia, hoje: de(hoje), historico, renda, pctRenda: renda ? prox.valor / renda : null };
+  const h = de(hoje);
+  return {
+    valor: prox.valor, qtd: prox.qtd, competencia, hoje: { valor: h.valor, qtd: h.qtd }, historico, renda, pctRenda: renda ? prox.valor / renda : null,
+    fixos: prox.fixos.valor, categorias: prox.categorias.valor, porCategoria: prox.categorias.porCategoria,
+  };
 }
 
 // A variação em % (arredondada), ou null sem base para comparar.

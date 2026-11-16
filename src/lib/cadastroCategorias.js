@@ -51,9 +51,11 @@ export function diferencaGrupo(g, ordem) {
 }
 
 // Só o que mudou numa categoria. `grupoReal`: o id do grupo no banco (o de um grupo novo só existe ao salvar).
+// `gasto_fixo` (migration 033): sem a coluna, o banco não o traz — conta como false, e a nova só o leva quando é true.
 export function diferencaCategoria(c, ordem, grupoReal = c.grupo_id) {
-  const campos = { nome: c.nome.trim(), grupo_id: grupoReal, ativa: c.ativa, ordem };
-  return c.novo ? campos : so(campos, c.orig);
+  const campos = { nome: c.nome.trim(), grupo_id: grupoReal, ativa: c.ativa, ordem, gasto_fixo: !!c.gasto_fixo };
+  if (c.novo) { if (!campos.gasto_fixo) delete campos.gasto_fixo; return campos; }
+  return so(campos, { ...c.orig, gasto_fixo: !!c.orig.gasto_fixo });
 }
 
 // O que vai ser gravado: as linhas que mudaram, separadas por o que acontece com elas. Linha nova sem nome não conta

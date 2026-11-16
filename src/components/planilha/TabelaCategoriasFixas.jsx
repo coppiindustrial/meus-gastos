@@ -1,0 +1,196 @@
+import { useNavigate } from 'react-router-dom';
+import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
+import { formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
+import { competenciaCurta, formatDate, nomeCompetencia } from '../../lib/format.js';
+
+// AS CATEGORIAS FIXAS (16/11/2026, o mockup "Fixos por categoria", as recomendadas; migration 033): embaixo da grade dos
+// fixos lançados à mão, as categorias marcadas como gasto fixo, agrupadas como nas Categorias (a barra na cor do grupo),
+// uma coluna por mês — as mesmas larguras da `MatrizFixos`, para os meses ficarem um embaixo do outro. NÃO SE LANÇA: cada
+// célula soma o que caiu na categoria no mês (o ponto da origem: cartão ou avulso/boleto), a parcela que já está numa
+// fatura (hachurada) e, de hoje em diante, o PREVISTO que ainda falta (tracejado; some quando o real entra). O balão diz as
+// compras; clicar abre o mês nos Lançamentos, só com a categoria. As contas em `lib/categoriasFixas.js`.
+//
+// `tabela`: a de `tabelaCategoriasFixas`. `onEscolher`: abre o "Escolher categorias". `semMigracao`: falta a 033.
+// `marcadas`: quantas categorias estão marcadas (com os filtros da tela, a tabela pode vir vazia mesmo havendo).
+
+const ORIGEM = { cartao: ['cartão', 'var(--origem-cartao)'], manual: ['avulso / boleto', 'var(--origem-manual)'], fixo: ['fixo', 'var(--origem-fixo)'] };
+const fmt = (v) => valorParaCampo(v);
+const LARG = 290;
+
+// A origem que mais pesou no mês (o ponto da célula).
+const origemDe = (itens) => {
+  const por = new Map();
+  itens.forEach((l) => por.set(l.origem, (por.get(l.origem) ?? 0) + Math.abs(Number(l.valor_centavos))));
+  return [...por].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'manual';
+};
+
+function Celula({ cel }) {
+  if (!cel.total) return null;
+  const tracejado = 'inline-block rounded-[4px] border border-dashed border-gray-300 px-[5px] italic leading-[16px] text-gray-400';
+  const hachura = 'grade-hachura inline-block rounded-[4px] px-[5px] leading-[16px] text-gray-500';
+  let principal;
+  let resto = 0;
+  if (cel.real) {
+    principal = (
+      <span className="text-gray-800">
+        <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-[2px]" style={{ background: ORIGEM[origemDe(cel.itens)]?.[1] ?? ORIGEM.manual[1] }} />
+        {fmt(cel.real)}
+      </span>
+    );
+    resto = cel.parc + cel.prev;
+  } else if (cel.parc) {
+    principal = <span className={hachura}>{fmt(cel.parc)}</span>;
+    resto = cel.prev;
+  } else principal = <span className={tracejado}>{fmt(cel.prev)}</span>;
+  return (
+    <span className="flex flex-col items-end leading-[1.15]">
+      {principal}
+      {resto > 0 && <span className="text-[10.5px] italic text-gray-400">+{fmt(resto)}</span>}
+    </span>
+  );
+}
+
+export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMigracao, marcadas = 0 }) {
+  const navigate = useNavigate();
+  const balao = useBalao(LARG, 200);
+  const { comps, grupos, totais } = tabela;
+  const colHoje = comps.indexOf(hoje);
+  const passa = (chave) => ({ onMouseMove: balao.aoMover(chave), onMouseLeave: balao.aoSair });
+  const nCats = grupos.reduce((s, g) => s + g.categorias.length, 0);
+
+  // O conteúdo do balão de uma célula: as compras do mês, a parcela que vem e o que falta do previsto.
+  const balaoDe = (chave) => {
+    const [tipo, gi, ci, i] = chave.split(':').map((x, k) => (k ? Number(x) : x));
+    if (tipo === 'g') {
+      const g = grupos[gi];
+      return { titulo: `${g.nome} · ${nomeCompetencia(comps[i])}`, itens: g.categorias.filter((c) => c.celulas[i].total).map((c) => ({ rotulo: c.cat.nome, valor: formatBRL(c.celulas[i].total) })) };
+    }
+    if (tipo === 'n') {
+      const c = grupos[gi].categorias[ci];
+      return {
+        titulo: `${c.cat.nome} · ${grupos[gi].nome}`,
+        itens: [{ rotulo: `No ano (${comps[0].slice(0, 4)})`, valor: formatBRL(c.ano) }],
+        nota: c.perfil.tipo === 'mensal'
+          ? `Vem todo mês: o previsto é a média dos últimos meses (${formatBRL(c.perfil.valor)}).`
+          : c.perfil.tipo === 'sazonal'
+            ? `Vem em alguns meses (${c.como}): o previsto de cada mês é o que caiu no mesmo mês do ano anterior.`
+            : 'Nada nos últimos 12 meses: sem previsto.',
+      };
+    }
+    const c = grupos[gi].categorias[ci];
+    const cel = c.celulas[i];
+    const itens = [
+      ...cel.itens.map((l) => ({
+        rotulo: `${formatDate(l.data)} · ${l.descricao}${l.parcela_total ? ` ${l.parcela_atual}/${l.parcela_total}` : ''}`,
+        valor: formatBRL(Number(l.valor_centavos)), cor: ORIGEM[l.origem]?.[1],
+      })),
+      ...cel.parcelas.map((p) => ({ rotulo: `${p.descricao} ${p.parcela}/${p.parcela_total} · na fatura`, valor: formatBRL(Number(p.valor_centavos)) })),
+      ...(cel.prev ? [{ rotulo: cel.real || cel.parc ? 'Falta (previsto)' : 'Previsto', valor: formatBRL(cel.prev) }] : []),
+    ];
+    return {
+      titulo: `${c.cat.nome} · ${nomeCompetencia(cel.comp)}`,
+      itens: itens.length > 8 ? [...itens.slice(0, 7), { rotulo: `mais ${itens.length - 7}…`, valor: '' }] : itens,
+      nota: cel.prev
+        ? `Previsto ${formatBRL(cel.previsto)}: ${c.perfil.tipo === 'mensal' ? 'a média dos últimos meses' : 'o que caiu no mesmo mês do ano anterior'}. Some quando o gasto entra.`
+        : cel.itens.length ? 'Clique para abrir nos Lançamentos.' : undefined,
+    };
+  };
+  const conteudo = balao.ativo ? balaoDe(balao.ativo) : null;
+
+  const th = 'h-[33px] border-b border-r border-gray-300 bg-hx-f9fafb px-2 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-500';
+  const td = 'h-[38px] border-b border-r border-gray-100 px-2 text-right tabular-nums';
+
+  return (
+    <div className="mt-5">
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <b className="text-[13px] font-semibold text-gray-900">Categorias fixas</b>
+        <span className="text-[12px] text-gray-500">o que caiu nelas, venha do cartão, de boleto ou de onde for · não se lança</span>
+        <span className="flex-1" />
+        <button type="button" className="btn-secondary !h-8 !px-3 !text-[12.5px]" onClick={onEscolher} disabled={semMigracao}
+          title={semMigracao ? 'Aplique a migration 033 no SQL Editor do Supabase' : 'Marcar ou desmarcar as categorias que são gasto fixo'}>
+          Escolher categorias
+        </button>
+      </div>
+
+      {semMigracao || !nCats ? (
+        <div className="rounded-lg border border-dashed border-gray-300 bg-white px-5 py-6 text-[12.5px] leading-[1.5] text-gray-500">
+          {semMigracao
+            ? <>Para marcar categorias como gasto fixo, aplique a migration 033 (<code>supabase/migrations/033_categoria_gasto_fixo.sql</code>) no SQL Editor do Supabase.</>
+            : marcadas ? 'Nenhuma categoria fixa com esses filtros.'
+            : <>Nenhuma categoria marcada como gasto fixo. Marque o Streaming, o IPTU, o seguro do carro… em <b className="font-semibold text-gray-700">Escolher categorias</b> (ou na chave "Gasto fixo" do cadastro das Categorias): tudo o que cair nelas, de onde vier, aparece aqui mês a mês, com o previsto dos meses que ainda não chegaram.</>}
+        </div>
+      ) : (
+        <>
+          <div className="overflow-auto rounded-t-lg border border-gray-300 bg-white" style={{ scrollPaddingLeft: 210 }}>
+            <table className="w-full min-w-[1080px] table-fixed border-separate border-spacing-0 text-[12.5px]">
+              <colgroup><col style={{ width: 210 }} />{comps.map((c) => <col key={c} />)}<col style={{ width: 84 }} /></colgroup>
+              <thead>
+                <tr>
+                  <th className={`${th} sticky left-0 z-20 text-left`}>Categoria</th>
+                  {comps.map((c, i) => (
+                    <th key={c} className={`${th} ${i === colHoje ? '!bg-hx-eef2f7 text-gray-800' : ''}`}
+                      style={i === colHoje ? { boxShadow: 'inset 0 -2px 0 var(--grade-sel)' } : undefined}>
+                      {competenciaCurta(c).slice(0, 3)}
+                    </th>
+                  ))}
+                  <th className={`${th} !border-r-0`} title="O que veio no ano mais o previsto dos meses que faltam">No ano</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grupos.map((g, gi) => [
+                  <tr key={g.id}>
+                    <td className="sticky left-0 z-10 h-8 border-b border-r border-gray-300 bg-hx-f6f7f8 px-3 text-left font-semibold text-gray-800"
+                      style={{ boxShadow: `inset 3px 0 0 ${g.cor}` }}>
+                      <span className="block truncate">{g.nome}</span>
+                    </td>
+                    {g.totais.map((v, i) => (
+                      <td key={comps[i]} {...(v ? passa(`g:${gi}:0:${i}`) : {})}
+                        className="h-8 border-b border-r border-gray-100 bg-hx-f6f7f8 px-2 text-right font-semibold tabular-nums text-gray-700">
+                        {v ? fmt(v) : ''}
+                      </td>
+                    ))}
+                    <td className="h-8 border-b border-gray-100 bg-hx-f6f7f8 px-2 text-right font-semibold tabular-nums text-gray-700">{g.ano ? fmt(g.ano) : ''}</td>
+                  </tr>,
+                  ...g.categorias.map((c, ci) => (
+                    <tr key={c.cat.id}>
+                      <td {...passa(`n:${gi}:${ci}:0`)} className="sticky left-0 z-10 h-[38px] border-b border-r border-gray-300 bg-white py-1 pl-6 pr-2 text-left">
+                        <span className="flex min-w-0 flex-col leading-[1.25]">
+                          <span className="truncate font-medium text-gray-800">{c.cat.nome}</span>
+                          <small className="truncate text-[10.5px] text-gray-400">{c.como}</small>
+                        </span>
+                      </td>
+                      {c.celulas.map((cel, i) => (
+                        <td key={cel.comp} {...(cel.total ? passa(`c:${gi}:${ci}:${i}`) : {})}
+                          onClick={() => { if (cel.itens.length) navigate(`/lancamentos?mes=${cel.comp}&cat=${c.cat.id}`); }}
+                          className={`${td} ${cel.itens.length ? 'cursor-pointer hover:bg-gray-50' : ''}`}>
+                          <Celula cel={cel} />
+                        </td>
+                      ))}
+                      <td className={`${td} !border-r-0 bg-hx-f9fafb text-gray-500`}>{c.ano ? fmt(c.ano) : '—'}</td>
+                    </tr>
+                  )),
+                ])}
+                <tr>
+                  <td className="sticky left-0 z-10 h-8 border-r border-gray-300 bg-hx-f9fafb px-3 text-left font-semibold text-gray-800">Total</td>
+                  {totais.map((v, i) => (
+                    <td key={comps[i]} className="h-8 border-r border-gray-100 bg-hx-f9fafb px-2 text-right font-semibold tabular-nums text-gray-800">{v ? fmt(v) : ''}</td>
+                  ))}
+                  <td className="h-8 bg-hx-f9fafb px-2 text-right font-semibold tabular-nums text-gray-800">{fmt(tabela.ano)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-b-lg border border-t-0 border-gray-300 bg-hx-f9fafb px-3 py-2 text-[11.5px] text-gray-600">
+            <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full" style={{ background: ORIGEM.cartao[1] }} />cartão</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full" style={{ background: ORIGEM.manual[1] }} />avulso / boleto</span>
+            <span className="inline-flex items-center gap-1.5"><span className="rounded-[3px] border border-dashed border-gray-300 px-1 text-[10.5px] italic text-gray-400">94,80</span>previsto (some quando o gasto entra)</span>
+            <span className="inline-flex items-center gap-1.5"><span className="grade-hachura rounded-[3px] px-1 text-[10.5px] text-gray-500">412,30</span>parcela que já está numa fatura</span>
+            <span className="inline-flex items-center gap-1.5"><span className="text-[10.5px] italic text-gray-400">+59,90</span>o que ainda falta no mês</span>
+            <span className="ml-auto text-gray-400">{nCats === 1 ? '1 categoria' : `${nCats} categorias`} · fixos lançados à mão ficam só na grade de cima</span>
+          </div>
+        </>
+      )}
+      {conteudo && <BalaoGrafico pos={balao.pos} largura={LARG} {...conteudo} />}
+    </div>
+  );
+}

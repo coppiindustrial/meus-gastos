@@ -1083,7 +1083,10 @@ export function OrigemPorMes({ meses, ctrl, onMes, rotulosAte = 12 }) {
 // JÁ COMPROMETIDO (03/11/2026, opção C do mockup, em BARRAS DEITADAS a pedido): uma linha por mês daqui para a frente
 // (`jaComprometido`). A barra = os gastos FIXOS (cheio, a cor dos fixos) + as PARCELAS que vêm (hachuradas, como nos
 // Cartões), e no fim o total e quanto ele é da média; a linha tracejada de cima a baixo é a MÉDIA DOS GASTOS por mês
-// (o normal, `media`) — o que falta até ela é a folga que o mês ainda tem. `ctrl`: 'fixos', 'parcelas', 'media'.
+// (o normal, `media`) — o que falta até ela é a folga que o mês ainda tem. `ctrl`: 'fixos', 'categorias', 'parcelas', 'media'.
+// AS CATEGORIAS FIXAS (16/11/2026, migration 033): depois dos fixos, o que as categorias marcadas como gasto fixo levam no
+// mês (o previsto, sem a parte que já está nas parcelas), na cor dos fixos mais clara; o balão diz quais.
+export const COR_CATS_FIXAS = 'color-mix(in srgb, var(--origem-fixo) 45%, transparent)';
 export const HACHURA_PARCELAS = 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--serie-gastos) 38%, transparent) 0 3px, transparent 3px 6px)';
 const ROT_MES = 46;
 const VALOR_MES = 104;
@@ -1118,9 +1121,13 @@ export function JaComprometido({ meses, media, ctrl }) {
               <div className={`absolute inset-y-0 left-0 transition-opacity duration-150 ${mm.parcelas ? '' : 'rounded-r-[2px]'}`}
                 style={{ width: pct(fr(mm.fixos)), background: CORES_ORIGEM.fixo, opacity: ctrl.opSerie('fixos') }} />
             )}
+            {mm.categorias > 0 && (
+              <div className={`absolute inset-y-0 transition-opacity duration-150 ${mm.parcelas ? '' : 'rounded-r-[2px]'}`}
+                style={{ left: mm.fixos ? `calc(${pct(fr(mm.fixos))} + 2px)` : 0, width: pct(fr(mm.categorias)), background: COR_CATS_FIXAS, opacity: ctrl.opSerie('categorias') }} />
+            )}
             {mm.parcelas > 0 && (
               <div className="barra-parcelas absolute inset-y-0 rounded-r-[2px] transition-opacity duration-150"
-                style={{ left: mm.fixos ? `calc(${pct(fr(mm.fixos))} + 2px)` : 0, width: pct(fr(mm.parcelas)), opacity: ctrl.opSerie('parcelas') }} />
+                style={{ left: `calc(${pct(fr(mm.fixos + (mm.categorias ?? 0)))} + ${(mm.fixos ? 2 : 0) + (mm.categorias ? 2 : 0)}px)`, width: pct(fr(mm.parcelas)), opacity: ctrl.opSerie('parcelas') }} />
             )}
           </div>
           <span className="truncate text-right text-[11px] tabular-nums">
@@ -1133,6 +1140,7 @@ export function JaComprometido({ meses, media, ctrl }) {
         <BalaoGrafico pos={balao.pos} largura={250} titulo={`${nomeCompetencia(m.competencia)}${i === 0 ? ' · este mês' : ''}`}
           itens={[
             { rotulo: 'Gastos fixos', valor: formatBRL(m.fixos), cor: CORES_ORIGEM.fixo },
+            ...(m.categorias ? [{ rotulo: `Categorias fixas (${m.porCategoria.slice(0, 3).map((c) => c.nome).join(', ')}${m.porCategoria.length > 3 ? '…' : ''})`, valor: formatBRL(m.categorias), cor: COR_CATS_FIXAS }] : []),
             { rotulo: `Parcelas que vêm${m.compras ? ` (${m.compras} ${m.compras === 1 ? 'compra' : 'compras'})` : ''}`, valor: formatBRL(m.parcelas), cor: COR_GASTOS },
             { rotulo: 'Já comprometido', valor: formatBRL(m.total) },
           ]}

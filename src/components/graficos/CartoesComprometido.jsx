@@ -22,6 +22,7 @@ export function CartaoCustoFixo({ custo, onClicar }) {
       sub={!custo.qtd ? 'nenhum gasto fixo' : [`${custo.qtd} ${custo.qtd === 1 ? 'fixo' : 'fixos'}`, custo.pctRenda !== null ? `${pct(custo.pctRenda)} da renda` : null].filter(Boolean).join(' · ')}
       titulo={[
         `O de ${mes}: cada fixo pela média dos últimos lançamentos dele (o novo, pelo valor padrão).`,
+        custo.categorias ? `Os lançados à mão: ${formatBRL(custo.fixos)}. As categorias fixas (${custo.porCategoria.map((c) => c.nome).join(', ')}): ${formatBRL(custo.categorias)}, pelo previsto do histórico.` : null,
         custo.hoje.qtd ? `Este mês: ${formatBRL(custo.hoje.valor)} (o lançado e o que falta lançar).` : null,
         custo.renda ? `A renda média dos 12 meses: ${formatBRL(custo.renda)} por mês.` : null,
         onClicar ? 'Clique para ver os gastos fixos.' : null,

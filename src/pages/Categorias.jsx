@@ -440,7 +440,7 @@ export default function Categorias() {
       )}
 
       {cadastro && (
-        <ModalCadastroCategorias grupos={grupos} categorias={categorias} qtd={qtdTotal} regras={cadastro.regras}
+        <ModalCadastroCategorias grupos={grupos} categorias={categorias} qtd={qtdTotal} regras={cadastro.regras} resumo={resumo}
           onFechar={() => setCadastro(null)} onSalvo={salvouCadastro} />
       )}
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />

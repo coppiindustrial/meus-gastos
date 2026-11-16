@@ -19,7 +19,7 @@ export async function listarResumoMensal() {
 
 export async function listarParcelasFuturas() {
   return mes(await buscarTudo(() => supabase.from('parcelas_futuras')
-    .select('lancamento_id, competencia, descricao, valor_centavos, parcela, parcela_total, cartao_id')
+    .select('lancamento_id, competencia, descricao, valor_centavos, parcela, parcela_total, cartao_id, categoria_id')
     .order('competencia').order('lancamento_id')));
 }
 

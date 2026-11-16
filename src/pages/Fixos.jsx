@@ -11,16 +11,21 @@ import { DivisorFaixa, FaixaProvider, LimparFiltros, Trilho } from '../component
 import { BuscaFaixa, SegMulti, SegUnico } from '../components/filtros/Segmentos.jsx';
 import MatrizFixos from '../components/planilha/MatrizFixos.jsx';
 import ModalCadastroFixos from '../components/ModalCadastroFixos.jsx';
+import TabelaCategoriasFixas from '../components/planilha/TabelaCategoriasFixas.jsx';
+import ModalEscolherFixas from '../components/ModalEscolherFixas.jsx';
 import { MenuFixos } from '../components/dashboard/AvisoAgora.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import MenuContexto from '../components/MenuContexto.jsx';
 import Tooltip from '../components/Tooltip.jsx';
 import { IconLapis, IconSeta } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { listarCategorias } from '../api/cadastros.js';
+import { listarCategorias, temGastoFixo } from '../api/cadastros.js';
 import {
-  criarRecorrenciasDoHistorico, listarFixosSemRecorrencia, listarLancamentosDeFixos, listarPulados, listarRecorrencias, salvarRecorrencia,
+  criarRecorrenciasDoHistorico, listarFixosSemRecorrencia, listarLancamentosDasCategorias, listarLancamentosDeFixos, listarPulados, listarRecorrencias,
+  salvarRecorrencia,
 } from '../api/fixos.js';
+import { listarParcelasFuturas } from '../api/resumo.js';
+import { categoriasFixas, tabelaCategoriasFixas } from '../lib/categoriasFixas.js';
 import { matrizDoAno, pendentesPorMes, recorrenciasDoHistorico, ultimoLancado } from '../lib/fixos.js';
 import { formatBRL, parseValor, valorParaCampo } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
@@ -38,6 +43,10 @@ import { lsGet, lsSet } from '../lib/storage.js';
 // tela numa caixa só — ✎ o CADASTRO (todos os fixos num pop-up, `ModalCadastroFixos`) e ▾ "Mais ações"
 // (exportar; criar é no cadastro) — e o gesto do dia a dia como o botão de destaque, "Lançar N ▾". O modal
 // de UM fixo continua (clique no nome, botão direito ou Shift+F2).
+//
+// AS CATEGORIAS FIXAS (16/11/2026, migration 033): embaixo da grade, a tabela das categorias marcadas como gasto fixo
+// (`TabelaCategoriasFixas`): o que caiu nelas mês a mês e o previsto dos meses que faltam. Segue o ano, a busca e o filtro
+// de categoria da faixa; "Escolher categorias" abre o `ModalEscolherFixas`.
 const LS_ANO = 'fixos_ano';
 const SEM_CATEGORIA = [{ value: '', label: 'Sem categoria' }];
 
@@ -235,6 +244,9 @@ export default function Fixos() {
   const [pulados, setPulados] = useState([]); // os "não teve" (null: falta aplicar a migration 006)
   const [semRec, setSemRec] = useState([]);
   const [categorias, setCategorias] = useState([]);
+  const [lancsCats, setLancsCats] = useState([]); // os lançamentos das categorias fixas (sem os fixos à mão)
+  const [parcelas, setParcelas] = useState([]);
+  const [escolher, setEscolher] = useState(false);
   const [busca, setBusca] = useState('');
   const [cats, setCats] = useState([]);
   const [situacao, setSituacao] = useState('ativos');
@@ -247,7 +259,9 @@ export default function Fixos() {
   const carregar = useCallback(async () => {
     try {
       const [r, l, s, c, p] = await Promise.all([listarRecorrencias(), listarLancamentosDeFixos(), listarFixosSemRecorrencia(), listarCategorias(), listarPulados()]);
-      setRecs(r); setLancs(l); setSemRec(s); setCategorias(c); setPulados(p);
+      const ids = categoriasFixas(c).map((x) => x.id);
+      const [lc, pf] = ids.length ? await Promise.all([listarLancamentosDasCategorias(ids), listarParcelasFuturas()]) : [[], []];
+      setRecs(r); setLancs(l); setSemRec(s); setCategorias(c); setPulados(p); setLancsCats(lc); setParcelas(pf);
     } catch (err) { toast.error(err.message); setRecs([]); }
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
@@ -260,6 +274,12 @@ export default function Fixos() {
   }, [recs, busca, situacao, cats]);
   const matriz = useMemo(() => matrizDoAno(filtrados, lancs, ano, hoje, pulados ?? []), [filtrados, lancs, ano, hoje, pulados]);
   const ultimos = useMemo(() => ultimoLancado(lancs), [lancs]);
+  // A busca e o filtro de categoria da faixa valem também para as categorias fixas (pelo nome dela ou do grupo).
+  const tabelaFixas = useMemo(() => {
+    const t = semAcento(busca).trim();
+    const cs = categorias.filter((c) => (!cats.length || cats.includes(c.id)) && (!t || semAcento(`${c.nome} ${c.grupo?.nome ?? ''}`).includes(t)));
+    return tabelaCategoriasFixas({ categorias: cs, lancamentos: lancsCats, parcelas, ano, hoje });
+  }, [categorias, lancsCats, parcelas, ano, hoje, busca, cats]);
   const setPuladosLista = useCallback((fn) => setPulados((ps) => fn(ps ?? [])), []);
   const matrizRef = useRef(null);
   const pendMes = useMemo(() => pendentesPorMes(matriz), [matriz]);
@@ -391,6 +411,10 @@ export default function Fixos() {
       {recs.length === 0 && sugeridas.length === 0 && (
         <div className="mt-6 max-w-3xl"><ListaVazia>Nenhum gasto fixo cadastrado. Crie no cadastro (o ✎ no alto da tela).</ListaVazia></div>
       )}
+
+      <TabelaCategoriasFixas tabela={tabelaFixas} hoje={hoje} onEscolher={() => setEscolher(true)} semMigracao={!temGastoFixo(categorias)}
+        marcadas={categoriasFixas(categorias).length} />
+      {escolher && <ModalEscolherFixas categorias={categorias} onFechar={() => setEscolher(false)} onSalvo={() => { setEscolher(false); carregar(); }} />}
 
       {cadastro && (
         <ModalCadastroFixos recs={recs} categorias={categorias} ultimos={ultimos} onFechar={() => setCadastro(false)}

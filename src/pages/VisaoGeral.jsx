@@ -11,7 +11,7 @@ import { CartaoCustoFixo, CartaoParcelas } from '../components/graficos/CartoesC
 
 import { COR_ENTRADAS, COR_GASTOS } from '../components/graficos/Graficos.jsx';
 import {
-  BarrasGrupos, COR_ANTERIOR, COR_FALTOU, COR_SALDO, COR_SOBROU, CORES_ORIGEM, ColunasEntradasGastos, ForaDoNormal, HACHURA_PARCELAS, JaComprometido,
+  BarrasGrupos, COR_ANTERIOR, COR_CATS_FIXAS, COR_FALTOU, COR_SALDO, COR_SOBROU, CORES_ORIGEM, ColunasEntradasGastos, ForaDoNormal, HACHURA_PARCELAS, JaComprometido,
   LinhasEntradasGastos, ORIGENS_MES, OrigemPorMes, RoscaOrigem, SaldoDoMes,
 } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
@@ -212,10 +212,16 @@ export default function VisaoGeral() {
   const parcelasProx = useMemo(() => comprometidoPorMes(parcelas, hoje).find((c) => c.competencia === addMeses(hoje, 1)), [parcelas, hoje]);
   // JÁ COMPROMETIDO: como o "Agora", do mês atual em diante e sem os filtros; o NORMAL é a média dos gastos dos 12 meses
   // fechados antes dele (os da tela mudariam com os filtros).
-  const comprometido = useMemo(() => jaComprometido({ parcelas, recorrencias: fixos.recs, lancamentos: fixos.lancs, pulados: fixos.pulados, hoje }), [parcelas, fixos, hoje]);
+  // (com as CATEGORIAS FIXAS, migration 033: o previsto das marcadas como gasto fixo, pela `resumo_mensal`).
+  const comprometido = useMemo(() => jaComprometido({
+    parcelas, recorrencias: fixos.recs, lancamentos: fixos.lancs, pulados: fixos.pulados, categorias, resumo: linhas ?? [], hoje,
+  }), [parcelas, fixos, categorias, linhas, hoje]);
+  const temCatsFixas = comprometido.some((m) => m.categorias > 0);
   // O QUE A RENDA JÁ TEM COMPROMETIDO (09/11/2026, a opção A do mockup "Comprometido na Visão geral"): o custo fixo por mês e
   // as parcelas de cartão que vêm — dois números da fileira, sem os filtros
-  const custo = useMemo(() => custoFixo({ recorrencias: fixos.recs, lancamentos: fixos.lancs, pulados: fixos.pulados, resumo: linhas ?? [], hoje }), [fixos, linhas, hoje]);
+  const custo = useMemo(() => custoFixo({
+    recorrencias: fixos.recs, lancamentos: fixos.lancs, pulados: fixos.pulados, resumo: linhas ?? [], categorias, parcelas, hoje,
+  }), [fixos, linhas, categorias, parcelas, hoje]);
   const parc = useMemo(() => parcelasComprometidas({ parcelas, cartoes, resumo: linhas ?? [], hoje }), [parcelas, cartoes, linhas, hoje]);
   const mediaNormal = useMemo(() => {
     const doze = Array.from({ length: 12 }, (_, i) => addMeses(hoje, i - 12));
@@ -404,6 +410,7 @@ export default function VisaoGeral() {
             <div className="min-h-0 flex-1 overflow-auto"><JaComprometido meses={comprometido} media={mediaNormal} ctrl={ctrlComprometido} /></div>
             <LegendaSeries ctrl={ctrlComprometido} series={[
               { key: 'fixos', rotulo: 'Gastos fixos', cor: CORES_ORIGEM.fixo },
+              ...(temCatsFixas ? [{ key: 'categorias', rotulo: 'Categorias fixas', cor: COR_CATS_FIXAS }] : []),
               { key: 'parcelas', rotulo: 'Parcelas que vêm', cor: HACHURA_PARCELAS },
               { key: 'media', rotulo: 'Média dos gastos', cor: COR_ANTERIOR, forma: 'tracejado' },
             ]} />

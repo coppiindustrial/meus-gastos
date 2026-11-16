@@ -52,6 +52,16 @@ export async function listarLancamentosDeFixos() {
     .order('competencia').order('id')));
 }
 
+// AS CATEGORIAS FIXAS (migration 033): os gastos que caíram nelas, de todo o histórico, MENOS os fixos lançados à mão
+// (origem 'fixo': ficam na tabela de cima e contariam duas vezes). Para a tabela "Categorias fixas" e o balão de cada mês.
+export async function listarLancamentosDasCategorias(ids) {
+  if (!ids.length) return [];
+  return mes(await buscarTudo(() => supabase.from('lancamentos')
+    .select('id, data, competencia, origem, descricao, valor_centavos, categoria_id, parcela_atual, parcela_total, cartao:cartoes(nome)')
+    .eq('tipo', 'saida').neq('origem', 'fixo').in('categoria_id', ids)
+    .order('competencia').order('id')));
+}
+
 // Lança o fixo do mês. O índice único da migration 004 recusa o segundo lançamento da mesma
 // recorrência no mesmo mês (clique duplo, duas abas).
 export function lancarFixo(rec, comp, valorCentavos) {

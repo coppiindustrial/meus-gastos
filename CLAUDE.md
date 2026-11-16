@@ -524,6 +524,23 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   no que já foi lançado. A ORDEM (29/10/2026): a alça ⠿ arrasta a linha (`lib/useListaArrastavel.js`, copiado do
   Gestor; o fantasma de um `<tr>` vai dentro de uma tabela) e grava em `recorrencias.ordem` (migration 008) junto
   com as outras alterações; a grade e os menus de lançar seguem essa ordem. Sem a coluna, a alça fica apagada.
+- A CATEGORIA QUE É GASTO FIXO (16/11/2026, o mockup "Fixos por categoria", as recomendadas; migration 033,
+  `categorias.gasto_fixo`): para o que se paga todo mês ou todo ano mas não se lança à mão — vem na fatura (o Streaming,
+  o seguro parcelado) ou no boleto (o IPTU, o IPVA em 3 cotas, o licenciamento). MARCAR: a chave "Gasto fixo" no cadastro das
+  Categorias (a do grupo marca todas; pela metade com só algumas — o `misto` do `Toggle`) e o "Escolher categorias" da
+  tabela nova (`ModalEscolherFixas`); ao lado, o "como vem" pelo histórico (`comoVemDoResumo`). NOS GASTOS FIXOS, embaixo
+  da grade, a tabela "CATEGORIAS FIXAS" (`components/planilha/TabelaCategoriasFixas.jsx`, as larguras da `MatrizFixos`):
+  agrupada como nas Categorias, NÃO SE LANÇA — cada célula é o que caiu na categoria (o ponto da origem), a parcela que já
+  está numa fatura (hachurada) e, de hoje em diante, o PREVISTO que falta (tracejado; o mês em andamento: o real e "+falta"
+  embaixo); o balão diz as compras, clicar abre o mês nos Lançamentos com a categoria. Segue o ano, a busca e a categoria
+  da faixa. NOS LANÇAMENTOS NADA MUDA: o previsto nunca é lançamento. O PREVISTO (`lib/categoriasFixas.js`, testada):
+  pelos 12 meses fechados (desde o 1º com gasto), a que vem em todo mês (com 6 ou mais, pode faltar um) é 'mensal' = a
+  média dos últimos 6; o resto é 'sazonal' = o mesmo mês do ano anterior já fechado (até 2 anos). De hoje em diante a
+  célula é o MAIOR entre o previsto e o real + as parcelas. OS FIXOS À MÃO (origem 'fixo') ficam fora dessas contas (estão
+  na grade de cima). Na VISÃO GERAL: o "Já comprometido" ganha a faixa "Categorias fixas" (`COR_CATS_FIXAS`, o laranja
+  dos fixos a 45%) SEM a parte delas que já está nas parcelas, e o "Custo fixo" soma as categorias COM as parcelas delas
+  (o histórico também) — `categoriasFixasDoMes` sobre a `resumo_mensal` (`linhasDoResumo`); a `parcelas_futuras` agora
+  é lida com o `categoria_id`. Sem a 033, a chave fica apagada e a tabela pede a migration. No celular, ainda não.
 - O resumo no topo dos Lançamentos (`components/graficos/CartoesResumo.jsx`, opção C com as setas): cartões com a
   curva dos últimos 6 meses (da `resumo_mensal`; o mês da tela vem da grade); clicar filtra o tipo.
 

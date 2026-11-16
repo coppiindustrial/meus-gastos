@@ -31,8 +31,9 @@ export function excluirGrupo(id) {
   return exigir(supabase.from('grupos').delete().eq('id', id));
 }
 
-export function salvarCategoria({ id, nome, grupo_id, ativa, ordem }) {
-  const dados = { nome: nome.trim(), grupo_id, ativa: ativa ?? true, ordem: ordem ?? 0 };
+// `gasto_fixo` (migration 033) só vai quando é true: sem a coluna, criar uma categoria comum continua dando certo.
+export function salvarCategoria({ id, nome, grupo_id, ativa, ordem, gasto_fixo }) {
+  const dados = { nome: nome.trim(), grupo_id, ativa: ativa ?? true, ordem: ordem ?? 0, ...(gasto_fixo ? { gasto_fixo: true } : {}) };
   return exigir(id
     ? supabase.from('categorias').update(dados).eq('id', id).select().single()
     : supabase.from('categorias').insert(dados).select().single());
@@ -49,6 +50,13 @@ export function atualizarGrupo(id, campos) {
 export function atualizarCategoria(id, campos) {
   return exigir(supabase.from('categorias').update(campos).eq('id', id));
 }
+
+// A CATEGORIA QUE É GASTO FIXO (migration 033): marca ou desmarca várias de uma vez (o "Escolher categorias" dos Gastos
+// fixos). `temGastoFixo`: a coluna existe (o select('*') das categorias a traz em toda linha).
+export function marcarGastoFixo(ids, valor) {
+  return exigir(supabase.from('categorias').update({ gasto_fixo: valor }).in('id', ids));
+}
+export const temGastoFixo = (categorias) => categorias.some((c) => 'gasto_fixo' in c);
 
 // JUNTAR uma categoria em outra: os lançamentos, os gastos fixos e as regras dela passam para a que fica, e ela
 // sai. Sem transação (o PostgREST não tem): a ordem é a que deixa o banco são se parar no meio — mover tudo
