@@ -27,10 +27,10 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, onFechar
   const [data, setData] = useState(hoje);
   const [valor, setValor] = useState('');
   const [modo, setModo] = useState('antigo');
-  const [desmarcados, setDesmarcados] = useState(() => new Set());
+  const [escolhidos, setEscolhidos] = useState(() => new Set());
   const [salvando, setSalvando] = useState(false);
   const centavos = calcularValor(valor);
-  const marcados = useMemo(() => (modo === 'escolho' ? new Set(itens.map((i) => i.ap.id).filter((id) => !desmarcados.has(id))) : null), [modo, itens, desmarcados]);
+  const marcados = modo === 'escolho' ? escolhidos : null;
   const plano = useMemo(() => planoDoResgate({ itens, inv, cal, data, valor: centavos, marcados, hoje }), [itens, inv, cal, data, centavos, marcados, hoje]);
   const usados = plano.linhas.filter((l) => l.sai > 0);
   const tot = usados.reduce((t, l) => ({ rend: t.rend + l.imp.rendimento, iof: t.iof + l.imp.iof, ir: t.ir + l.imp.ir, chega: t.chega + l.imp.chega }), { rend: 0, iof: 0, ir: 0, chega: 0 });
@@ -39,7 +39,10 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, onFechar
   const mostrarErro = erro && (valor.trim() || erro !== 'Falta o valor que sai do investimento.');
   const isento = ehIsento(inv.tipo);
   const comIOF = usados.filter((l) => l.imp.iof > 0);
-  const alternar = (id) => setDesmarcados((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const alternar = (id) => setEscolhidos((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const nMarcados = plano.linhas.filter((l) => l.marcado).length;
+  const todos = plano.linhas.length > 0 && nMarcados === plano.linhas.length;
+  const alternarTodos = () => setEscolhidos(todos ? new Set() : new Set(plano.linhas.map((l) => l.ap.id)));
 
   const salvar = async (e) => {
     e?.preventDefault();
@@ -77,13 +80,15 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, onFechar
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-[12.25px] font-medium text-gray-700">De onde sai</span>
           <AbasPilula abas={MODOS} valor={modo} onChange={setModo} variante="claro" altura={30} folga={2} />
-          <span className="text-[11.5px] text-gray-500">{escolho ? 'marque os aportes que podem pagar: o valor se reparte entre eles, do mais antigo para o mais novo' : 'como o Nubank: o mais antigo já não tem IOF e tem o IR mais baixo'}</span>
+          <span className="text-[11.5px] text-gray-500">{escolho
+            ? (nMarcados ? `${nMarcados} ${nMarcados === 1 ? 'marcado' : 'marcados'} · ${formatBRL(plano.disponivel)}: o valor se reparte entre eles, do mais antigo para o mais novo` : 'marque os aportes de onde o dinheiro pode sair')
+            : 'como o Nubank: o mais antigo já não tem IOF e tem o IR mais baixo'}</span>
         </div>
 
         <div className="max-h-[min(330px,40vh)] overflow-auto rounded-md border border-gray-200 [scrollbar-gutter:stable]">
           <table className="w-full border-separate border-spacing-0 text-[12.5px]">
             <thead><tr>
-              {escolho && <th className={`${th} w-[34px]`} aria-label="Pode pagar" />}
+              {escolho && <th className={`${th} w-[34px] text-left`}><Checkbox size="sm" checked={todos} indeterminate={nMarcados > 0} onChange={alternarTodos} title={todos ? 'Desmarcar todos' : 'Marcar todos'} /></th>}
               <th className={`${th} w-[34px] text-left`}>#</th>
               <th className={`${th} text-left`}>Aporte</th>
               <th className={`${th} text-right`}>Idade</th>
