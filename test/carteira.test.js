@@ -6,6 +6,7 @@ import {
   linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
   rendeuDoDeposito, rotuloTaxa, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
   arrastoDoCadastro, instituicoesEmOrdem, investimentosEmOrdem, ordensDoCadastro, planoDoResgate, resgatesDoPlano, dataDoDeposito,
+  movimentosDaCarteira, totaisDosMovimentos, valorDoInvestimentoEm, impostoDoResgate as impostoDoResgateM,
 } from '../src/lib/carteira.js';
 
 // O CDI de cada dia útil de 01/04 a 05/11/2026 (a série 12 do Banco Central, dado público), como `api/taxas.js` entrega.
@@ -498,4 +499,57 @@ test('dataDoDeposito: o "já estava aplicado" pela data do depósito', () => {
   assert.equal(dataDoDeposito({ origem: 'antigo', data: '2026-11-01', aplicado_em: '2025-03-10' }), '2025-03-10');
   assert.equal(dataDoDeposito({ origem: 'antigo', data: '2026-11-01', aplicado_em: null }), '2026-11-01');
   assert.equal(dataDoDeposito({ origem: 'novo', data: '2026-11-01' }), '2026-11-01');
+});
+
+test('as movimentações: aporte, já estava aplicado, resgate, o pedido repartido, o vencimento e a reaplicação', () => {
+  const a = inv(100, { id: 'a', nome: 'Diário' });
+  const b = inv(100, { id: 'b', nome: 'Prazo', no_vencimento: 'reaplica', prazo_meses: 3 });
+  const c = inv(100, { id: 'c', nome: 'Volta' });
+  const x1 = novo('2026-04-06', 1000000, { id: 'x1', investimento_id: 'a' });
+  const x2 = novo('2026-06-01', 500000, { id: 'x2', investimento_id: 'a' });
+  const x3 = { id: 'x3', investimento_id: 'a', origem: 'antigo', data: '2026-09-01', valor_centavos: 330000, rendeu_antes_centavos: 30000, aplicado_em: '2026-04-01', vencimento: null };
+  const y1 = novo('2026-04-07', 1000000, { id: 'y1', investimento_id: 'b', vencimento: '2026-10-07' });
+  const z1 = novo('2026-05-04', 200000, { id: 'z1', investimento_id: 'c', vencimento: '2026-10-05' });
+  const base = { cadastro: [a, b, c], cdi: CDI, hoje: HOJE };
+  const venc = reaplicacoesDevidas({ ...base, aportes: [y1], resgates: [], cal })[0];
+  const y2 = { ...venc.dados, id: 'y2' };
+  const resgates = [
+    { id: 'r1', aporte_id: 'x2', data: '2026-08-03', valor_centavos: 100000, tudo: false },
+    { id: 'r2', aporte_id: 'x3', data: '2026-11-05', valor_centavos: null, tudo: true, lote: 'L' },
+    { id: 'r3', aporte_id: 'x1', data: '2026-11-05', valor_centavos: 250000, tudo: false, lote: 'L' },
+  ];
+  const carteira = montarCarteira({ ...base, aportes: [x1, x2, x3, y1, y2, z1], resgates });
+  const ms = movimentosDaCarteira(carteira);
+  // do mais novo para o mais antigo; o já estava aplicado na data do depósito; o pedido numa linha só
+  assert.deepEqual(ms.map((m) => [m.data, m.tipo]), [
+    ['2026-11-05', 'resgate'], ['2026-10-07', 'reaplicado'], ['2026-10-05', 'venceu'], ['2026-08-03', 'resgate'],
+    ['2026-06-01', 'aporte'], ['2026-05-04', 'aporte'], ['2026-04-07', 'aporte'], ['2026-04-06', 'aporte'], ['2026-04-01', 'antigo'],
+  ]);
+  const [lote, reap, volta, r1, , , , , antigo] = ms;
+  assert.equal(antigo.entrou, 300000); // o total do banco menos o que já tinha rendido
+  // o pedido: as partes do mais antigo (o já estava aplicado de abril) para o mais novo; a soma das partes
+  assert.deepEqual(lote.partes.map((p) => p.ap.id), ['x3', 'x1']);
+  assert.equal(lote.saiu, lote.partes[0].sai + 250000);
+  assert.equal(lote.partes[0].sai, posicaoDoAporte(x3, a, [], cal, '2026-11-05').vale);
+  assert.equal(lote.chega, lote.saiu - lote.ir - lote.iof);
+  // o resgate de um aporte: o imposto pela posição do dia
+  const pos = posicaoDoAporte(x2, a, [], cal, '2026-08-03');
+  assert.deepEqual([r1.saiu, r1.ir, r1.chega], [100000, impostoDoResgateM(pos, 100000).ir, impostoDoResgateM(pos, 100000).chega]);
+  // o vencimento que voltou para a conta: o valor do dia, o IR e o líquido; o que reaplicou não tem linha de "venceu"
+  const vz = noVencimento(c, posicaoDoAporte(z1, c, [], cal, HOJE));
+  assert.deepEqual([volta.saiu, volta.ir, volta.chega], [vz.valor, vz.ir, vz.liquido]);
+  assert.equal(volta.ficou, 0);
+  assert.deepEqual([reap.entrou, reap.saiu, reap.ir, reap.reaplicou, reap.de.id], [0, 0, venc.venc.ir, venc.venc.liquido, 'y1']);
+  // o que ficou: o valor do investimento no fim do dia, depois do movimento
+  assert.equal(r1.ficou, valorDoInvestimentoEm(carteira.itens.filter((i) => i.inv.id === 'a'), cal, '2026-08-03'));
+  assert.equal(r1.ficou, Math.round(posicaoDoAporte(x1, a, [], cal, '2026-08-03').exato.vale + posicaoDoAporte(x2, a, [resgates[0]], cal, '2026-08-03').exato.vale
+    + 330000 / fator(cal, '2026-08-03', '2026-09-01', 100).f));
+  // depois do pedido, ficam o resto do x1 e o x2 (o x3 saiu inteiro)
+  assert.equal(lote.ficou, Math.round(posicaoDoAporte(x1, a, [resgates[2]], cal, '2026-11-05').exato.vale + posicaoDoAporte(x2, a, [resgates[0]], cal, '2026-11-05').exato.vale));
+  // os totais: a reaplicação não entra nem sai, mas o IR dela conta
+  const t = totaisDosMovimentos(ms);
+  assert.equal(t.entrou, 1000000 + 500000 + 300000 + 1000000 + 200000);
+  assert.equal(t.saiu, lote.saiu + r1.saiu + volta.saiu);
+  assert.equal(t.impostos, ms.reduce((s2, m) => s2 + m.ir + m.iof, 0));
+  assert.ok(reap.ir > 0);
 });

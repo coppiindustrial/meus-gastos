@@ -336,7 +336,18 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   ordem. Cada alcançado sai "tudo", o último paga o resto; a tabela com o IOF e o IR de cada parte (`impostoDoResgate`) e o
   aviso do aporte com IOF. Grava um resgate em cada aporte numa requisição só (`criarResgates`, `resgatesDoPlano`), ligados
   pelo `lote` (migration 032; sem ela, grava sem): no `ModalAporte` a linha diz "parte de um resgate em N aportes" e o ✕
-  exclui o pedido inteiro (`excluirLote`). E `ModalCadastroCarteira` (a tabela de formulário
+  exclui o pedido inteiro (`excluirLote`).
+  AS MOVIMENTAÇÕES (16/11/2026, a opção A do mockup "Histórico da renda fixa", com as recomendadas): a pílula "Carteira |
+  Movimentações" no cartão (`rf_aba`; a `TabelaCarteira` recebe as abas no `inicio`) e `ListaMovimentos`: tudo o que entrou e
+  saiu, do mais novo para o mais antigo e separado por mês — o aporte, o "já estava aplicado" (na data do DEPÓSITO, com o
+  aplicado), o resgate (o pedido do mesmo `lote` numa linha só; a seta abre as partes), o vencimento que VOLTOU para a conta e
+  o REAPLICADO (não entra nem sai, mas o IR sai) —, com o que entrou, o que saiu, o IR + IOF, o que chegou na conta e o que
+  FICOU no investimento no fim do dia (`valorDoInvestimentoEm`). Filtros: investimento, movimento, ano; os 4 totais em cima
+  (`totaisDosMovimentos`). Contas em `movimentosDaCarteira` (lib/carteira.js, testada). EDITAR UM RESGATE JÁ FEITO: o de um
+  aporte abre o `ModalResgate` com `editando` (o item SEM ele; "Como estava…", `atualizarResgate`, "Excluir o resgate"); o
+  pedido repartido abre o `ModalResgateInvestimento` com `editando` ({ lote, data, partes }; os itens SEM o lote; "Do mais
+  antigo" se a conta dá as mesmas partes, senão "Eu escolho" com os dele marcados) e salvar REFAZ o pedido: grava o novo e só
+  então apaga o lote de antes (falhando no meio, aparece duas vezes, nada se perde). O aporte abre o "Editar aporte". E `ModalCadastroCarteira` (a tabela de formulário
   dos fixos, agrupada pela instituição — o nome do grupo é um campo; o investimento com aportes não se exclui, desativa).
   O CADASTRO COM HIERARQUIA E MOVIMENTO (09/11/2026, a opção A do mockup "Cadastro dos investimentos"): a instituição é a
   FAIXA da carteira (a cor dela, a seta que recolhe animado — `cadastro_inv_fechadas` —, o ⇕ no cabeçalho do pop-up, o

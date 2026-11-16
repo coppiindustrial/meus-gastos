@@ -103,7 +103,7 @@ const COLUNAS = [
 const LARGURA_ACOES = 112;
 const LARGURA_MINIMA = 1400;
 
-export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEncerrados, onEncerrados }) {
+export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEncerrados, onEncerrados, inicio = null }) {
   const reais0 = formatos(false);
   const [centavos, setCentavosEstado] = useState(() => lsGet('carteira_centavos') === '1');
   const setCentavos = (v) => { lsSet('carteira_centavos', v ? '1' : '0'); setCentavosEstado(v); };
@@ -402,6 +402,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
   return (
     <section className="card flex flex-col overflow-hidden !p-0">
       <div className="flex shrink-0 flex-wrap items-center gap-2.5 px-4 pb-2.5 pt-3">
+        {inicio}
         <span className="text-[11.5px] text-gray-400">{qtdInv} {qtdInv === 1 ? 'investimento' : 'investimentos'} em {grupos.length} {grupos.length === 1 ? 'instituição' : 'instituições'} · o valor de hoje é a conta de cada aporte pelo CDI de cada dia</span>
         <span className="flex-1" />
         {!movel && (

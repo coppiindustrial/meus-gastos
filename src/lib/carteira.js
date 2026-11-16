@@ -477,6 +477,94 @@ export function resgatesDoPlano(plano, data, lote = null) {
   }));
 }
 
+// ------------------------------------------------------------ as movimentações (o histórico)
+// O VALOR DE UM INVESTIMENTO NO FIM DO DIA `dia` (todos os eventos do dia já valem), a soma exata dos aportes que já
+// existiam, arredondada no fim. O "já estava aplicado" com a data do depósito, antes do dia em que você olhou o banco, vale
+// o número dele descontado o índice de cada dia (a mesma conta do `mesAMes`).
+export function valorDoInvestimentoEm(itens, cal, dia) {
+  let soma = 0;
+  (itens ?? []).forEach(({ ap, inv, resgates }) => {
+    if (dataDoDeposito(ap) > dia) return;
+    if (ap.origem === 'antigo' && ap.aplicado_em && dia < ap.data) {
+      soma += Number(ap.valor_centavos) / fator(cal, dia, ap.data, inv.taxa ?? 100, inv.indexador ?? 'cdi').f;
+      return;
+    }
+    soma += posicaoDoAporte(ap, inv, resgates ?? [], cal, dia, dia).exato.vale;
+  });
+  return Math.round(soma);
+}
+
+// AS MOVIMENTAÇÕES DA RENDA FIXA (16/11/2026, a opção A do mockup "Histórico da renda fixa"): tudo o que entrou e saiu, do
+// mais novo para o mais antigo. `tipo`:
+// · 'aporte' — o dinheiro novo (entrou = o valor);
+// · 'antigo' — o "já estava aplicado", na data do DEPÓSITO (entrou = o total do banco − o que já tinha rendido; sem a data
+//   do depósito, no dia em que você olhou o banco, com o total);
+// · 'reaplicado' — o vencimento que virou um aporte novo: nada entra nem sai da conta, mas sai o IR (o `de` é o aporte que
+//   venceu; `reaplicou` = o líquido);
+// · 'resgate' — um resgate, ou o PEDIDO repartido em vários aportes (os do mesmo `lote`, numa linha só; `partes`): saiu
+//   = o bruto, o IOF e o IR pela idade de cada parte no dia, chega = o que foi para a conta;
+// · 'venceu' — o vencimento que voltou para a conta (o valor do dia, o IR e o IOF, o líquido).
+// `ficou`: o valor do investimento no fim do dia do movimento. Cada um: { id, tipo, data, inv, entrou, saiu, ir, iof,
+// chega, ficou, ap?, r?, lote?, partes?, de?, reaplicou? }.
+export function movimentosDaCarteira({ itens = [], cal = [] }) {
+  const out = [];
+  const porInv = new Map();
+  itens.forEach((x) => { if (!porInv.has(x.inv.id)) porInv.set(x.inv.id, []); porInv.get(x.inv.id).push(x); });
+  const porId = new Map(itens.map((x) => [x.ap.id, x]));
+  const lotes = new Map();
+  itens.forEach((x) => {
+    const { ap, inv } = x;
+    const rs = (x.resgates ?? []).slice().sort((a, b) => compara(a.data, b.data) || compara(String(a.criado_em ?? ''), String(b.criado_em ?? '')));
+    // a entrada
+    if (ap.reaplicado_de) {
+      const ant = porId.get(ap.reaplicado_de);
+      const v = ant ? noVencimento(ant.inv, ant.pos) : null;
+      out.push({ id: `a-${ap.id}`, tipo: 'reaplicado', data: ap.data, inv, ap, de: ant?.ap ?? null, entrou: 0, saiu: 0, ir: v?.ir ?? 0, iof: v?.iof ?? 0, chega: null, reaplicou: Number(ap.valor_centavos) });
+    } else if (ap.origem === 'antigo') {
+      const p = partidaDoAporte(ap, cal);
+      out.push({ id: `a-${ap.id}`, tipo: 'antigo', data: dataDoDeposito(ap), inv, ap, entrou: ap.aplicado_em ? p.aplicado : p.valor, saiu: 0, ir: 0, iof: 0, chega: null });
+    } else {
+      out.push({ id: `a-${ap.id}`, tipo: 'aporte', data: ap.data, inv, ap, entrou: Number(ap.valor_centavos), saiu: 0, ir: 0, iof: 0, chega: null });
+    }
+    // os resgates: cada um com a posição do aporte no dia, com os de antes dele
+    rs.forEach((r, k) => {
+      const pos = posicaoDoAporte(ap, inv, rs.slice(0, k), cal, r.data, r.data);
+      const imp = pos.encerrado ? null : impostoDoResgate(pos, r.tudo ? null : Number(r.valor_centavos));
+      const parte = { ap, inv, r, imp, sai: imp?.sai ?? (r.tudo ? 0 : Number(r.valor_centavos)) };
+      if (r.lote) {
+        if (!lotes.has(r.lote)) lotes.set(r.lote, []);
+        lotes.get(r.lote).push(parte);
+        return;
+      }
+      out.push({ id: `r-${r.id}`, tipo: 'resgate', data: r.data, inv, ap, r, entrou: 0, saiu: parte.sai, ir: imp?.ir ?? 0, iof: imp?.iof ?? 0, chega: imp?.chega ?? parte.sai, partes: [parte] });
+    });
+    // o vencimento que voltou para a conta (o que reaplicou é a linha do aporte novo)
+    const v = noVencimento(inv, x.pos);
+    if (v && !x.seguinte) out.push({ id: `v-${ap.id}`, tipo: 'venceu', data: v.data, inv, ap, entrou: 0, saiu: v.valor, ir: v.ir, iof: v.iof, chega: v.liquido });
+  });
+  lotes.forEach((partes, lote) => {
+    partes.sort((a, b) => compara(dataDoDeposito(a.ap), dataDoDeposito(b.ap)) || compara(a.ap.data, b.ap.data));
+    const soma = (k) => partes.reduce((t, p) => t + (k === 'sai' ? p.sai : p.imp?.[k] ?? 0), 0);
+    out.push({ id: `l-${lote}`, tipo: 'resgate', data: partes[0].r.data, inv: partes[0].inv, ap: partes[0].ap, r: partes[0].r, lote, partes,
+      entrou: 0, saiu: soma('sai'), ir: soma('ir'), iof: soma('iof'), chega: partes.reduce((t, p) => t + (p.imp?.chega ?? p.sai), 0) });
+  });
+  // o que ficou no investimento no fim de cada dia (uma conta por investimento e dia)
+  const ficou = new Map();
+  out.forEach((m) => {
+    const k = `${m.inv.id}|${m.data}`;
+    if (!ficou.has(k)) ficou.set(k, valorDoInvestimentoEm(porInv.get(m.inv.id), cal, m.data));
+    m.ficou = ficou.get(k);
+  });
+  const ORDEM = { venceu: 0, reaplicado: 1, resgate: 2, antigo: 3, aporte: 3 };
+  return out.sort((a, b) => compara(b.data, a.data) || ORDEM[a.tipo] - ORDEM[b.tipo]
+    || compara(String(b.ap?.criado_em ?? ''), String(a.ap?.criado_em ?? '')));
+}
+// os totais de uma lista de movimentações: o que entrou, o que saiu, o IR e o IOF (também os da reaplicação) e quanto chegou
+export function totaisDosMovimentos(lista) {
+  return lista.reduce((t, m) => ({ entrou: t.entrou + m.entrou, saiu: t.saiu + m.saiu, impostos: t.impostos + m.ir + m.iof, chega: t.chega + (m.chega ?? 0) }),
+    { entrou: 0, saiu: 0, impostos: 0, chega: 0 });
+}
+
 // ------------------------------------------------------------ o cadastro em tabela
 // A ORDEM (09/11/2026, a opção A do mockup "Cadastro dos investimentos"): a INSTITUIÇÃO não tem tabela (é o texto do
 // cadastro), então a ordem dela é a do PRIMEIRO investimento dela, a menor `ordem` (no empate, o nome: com tudo em 0,

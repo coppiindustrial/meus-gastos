@@ -45,6 +45,7 @@ export async function gravarReaplicacao(dados) {
 
 // ------------------------------------------------------------ os resgates
 export const criarResgate = (dados) => exigir(supabase.from('inv_resgates').insert(dados).select().single());
+export const atualizarResgate = (id, mudancas) => exigir(supabase.from('inv_resgates').update(mudancas).eq('id', id).select().single());
 export const excluirResgate = (id) => exigir(supabase.from('inv_resgates').delete().eq('id', id));
 // O RESGATE PELO INVESTIMENTO: um resgate em cada aporte, gravados juntos (uma requisição só: entra tudo ou nada) e ligados
 // pelo `lote` (migration 032). Sem a coluna, grava sem ela. Devolve { semLote } quando gravou sem o lote.

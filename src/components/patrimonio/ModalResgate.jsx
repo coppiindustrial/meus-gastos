@@ -4,7 +4,8 @@ import CampoData from '../CampoData.jsx';
 import Toggle from '../Toggle.jsx';
 import { Campo } from '../Comuns.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-import { criarResgate } from '../../api/carteira.js';
+import { atualizarResgate, criarResgate, excluirResgate } from '../../api/carteira.js';
+import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { calcularValor, formatBRL } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
 import { ehIsento, impostoDoResgate, lerResgate, posicaoDoAporte } from '../../lib/carteira.js';
@@ -15,12 +16,16 @@ import { ehIsento, impostoDoResgate, lerResgate, posicaoDoAporte } from '../../l
 // O IMPOSTO DO RESGATE (09/11/2026, a pedido, o mockup "O IOF na carteira"): o valor é o que SAI do aporte (bruto, o que se
 // grava); embaixo, o rendimento que sai junto, o IOF e o IR sobre ele e quanto chega na conta (`impostoDoResgate`). Com o
 // IOF ainda valendo, a faixa âmbar diz quando ele zera e quanto chegaria a mais a partir de lá.
-export default function ModalResgate({ item, cal, hoje, onFechar, onSalvo }) {
+// EDITAR (16/11/2026, o histórico da renda fixa): `editando` = o resgate gravado (a linha de `inv_resgates`); o `item` vem
+// com os resgates do aporte SEM ele. Abre com a data e o valor dele, mostra como estava e grava por cima (`atualizarResgate`).
+const paraCampo = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export default function ModalResgate({ item, cal, hoje, editando = null, onFechar, onSalvo }) {
   const toast = useToast();
+  const confirmar = useConfirmacao();
   const { ap, inv, resgates } = item;
-  const [data, setData] = useState(hoje);
-  const [valor, setValor] = useState('');
-  const [tudo, setTudo] = useState(false);
+  const [data, setData] = useState(editando?.data ?? hoje);
+  const [valor, setValor] = useState(editando && !editando.tudo ? paraCampo(editando.valor_centavos) : '');
+  const [tudo, setTudo] = useState(!!editando?.tudo);
   const [salvando, setSalvando] = useState(false);
   const [tentou, setTentou] = useState(false);
 
@@ -44,21 +49,39 @@ export default function ModalResgate({ item, cal, hoje, onFechar, onSalvo }) {
     </div>
   );
 
+  // como estava (editando): o que saiu e o que chegou, pela conta do dia gravado
+  const antes = editando ? (() => {
+    const p0 = posicaoDoAporte(ap, inv, resgates.filter((x) => x.data <= editando.data), cal, editando.data);
+    return p0.encerrado ? null : impostoDoResgate(p0, editando.tudo ? null : Number(editando.valor_centavos));
+  })() : null;
+
   const salvar = async (e) => {
     e?.preventDefault();
     setTentou(true);
     if (erro || !r.dados) return;
     setSalvando(true);
     try {
-      await criarResgate(r.dados);
-      toast.success(r.dados.tudo ? 'Resgatou tudo: o aporte foi para os encerrados.' : `Resgate de ${formatBRL(r.dados.valor_centavos)} lançado.`);
+      if (editando) {
+        const { data: d, valor_centavos: v, tudo: t } = r.dados;
+        await atualizarResgate(editando.id, { data: d, valor_centavos: v, tudo: t });
+        toast.success('Resgate corrigido.');
+      } else {
+        await criarResgate(r.dados);
+        toast.success(r.dados.tudo ? 'Resgatou tudo: o aporte foi para os encerrados.' : `Resgate de ${formatBRL(r.dados.valor_centavos)} lançado.`);
+      }
       onSalvo();
     } catch (err) { toast.error(err.message); setSalvando(false); }
+  };
+  const excluir = async () => {
+    const ok = await confirmar({ titulo: 'Excluir o resgate?', confirmar: 'Excluir', perigo: true,
+      texto: `O resgate de ${editando.tudo ? 'tudo' : formatBRL(editando.valor_centavos)} em ${formatDate(editando.data)} sai, e o dinheiro volta a render neste aporte.` });
+    if (!ok) return;
+    try { await excluirResgate(editando.id); toast.success('Resgate excluído.'); onSalvo(); } catch (err) { toast.error(err.message); }
   };
 
   const desde = ap.origem === 'antigo' ? ap.aplicado_em ?? ap.data : ap.data;
   return (
-    <Modal open onClose={onFechar} title="Resgatar" maxWidth="max-w-md" subtitulo={`${inv.nome} · o aporte de ${formatDate(desde)}`}>
+    <Modal open onClose={onFechar} title={editando ? 'Editar o resgate' : 'Resgatar'} maxWidth="max-w-md" subtitulo={`${inv.nome} · o aporte de ${formatDate(desde)}`}>
       <form onSubmit={salvar} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Campo rotulo="Data do resgate"><CampoData value={data} onChange={setData} max={hoje} min={ap.data} /></Campo>
@@ -67,6 +90,11 @@ export default function ModalResgate({ item, cal, hoje, onFechar, onSalvo }) {
               onChange={(e) => setValor(e.target.value)} />
           </Campo>
         </div>
+        {editando && (
+          <p className="text-[12px] text-gray-500">
+            Como estava: {editando.tudo ? 'tudo' : formatBRL(editando.valor_centavos)} em {formatDate(editando.data)}{antes ? <>, chegou ≈ <b className="font-semibold text-gray-700">{formatBRL(antes.chega)}</b> na conta</> : ''}.
+          </p>
+        )}
         <label className="flex cursor-pointer items-center gap-2 text-[13px] text-gray-700">
           <Toggle compacto checked={tudo} onChange={setTudo} rotulo="Resgatar tudo" />
           Tudo{vale ? ` (${formatBRL(vale)} em ${formatDate(data)})` : ''}
@@ -95,9 +123,10 @@ export default function ModalResgate({ item, cal, hoje, onFechar, onSalvo }) {
           </div>
         )}
         <div className="flex items-center gap-2">
+          {editando && <button type="button" className="btn-secondary !text-red-700" onClick={excluir}>Excluir o resgate</button>}
           <span className="flex-1" />
           <button type="button" className="btn-secondary" onClick={onFechar}>Cancelar</button>
-          <button type="submit" className="btn-primary" disabled={salvando || (tentou && !!erro)}>{salvando ? 'Salvando…' : 'Resgatar'}</button>
+          <button type="submit" className="btn-primary" disabled={salvando || (tentou && !!erro)}>{salvando ? 'Salvando…' : editando ? 'Salvar' : 'Resgatar'}</button>
         </div>
       </form>
     </Modal>

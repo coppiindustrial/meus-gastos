@@ -5,7 +5,8 @@ import AbasPilula from '../AbasPilula.jsx';
 import Checkbox from '../Checkbox.jsx';
 import { Campo } from '../Comuns.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-import { criarResgates } from '../../api/carteira.js';
+import { criarResgates, excluirLote } from '../../api/carteira.js';
+import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { calcularValor, formatBRL } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
 import { aliquotaIOF, dataDoDeposito, ehIsento, fimDoIOF, planoDoResgate, resgatesDoPlano, rotuloTaxa } from '../../lib/carteira.js';
@@ -21,13 +22,28 @@ import { aliquotaIOF, dataDoDeposito, ehIsento, fimDoIOF, planoDoResgate, resgat
 const MODOS = [{ key: 'antigo', label: 'Do mais antigo' }, { key: 'escolho', label: 'Eu escolho' }];
 const pctTexto = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
-export default function ModalResgateInvestimento({ x, itens, cal, hoje, onFechar, onSalvo }) {
+// EDITAR O PEDIDO (16/11/2026, o histórico da renda fixa): `editando` = { lote, data, partes: [{ aporte_id, sai }] }, e os
+// `itens` vêm SEM os resgates do lote. Abre com a data e o total dele; "Do mais antigo" se foi assim que ele saiu, senão "Eu
+// escolho" com os aportes dele marcados. Salvar REFAZ o pedido pela conta nova: grava o novo (outro `lote`) e só então
+// apaga o de antes — se a segunda parte falhar, o pedido aparece duas vezes, mas nada se perde.
+const paraCampo = (c) => (Number(c) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export default function ModalResgateInvestimento({ x, itens, cal, hoje, editando = null, onFechar, onSalvo }) {
   const toast = useToast();
   const { inv } = x;
-  const [data, setData] = useState(hoje);
-  const [valor, setValor] = useState('');
-  const [modo, setModo] = useState('antigo');
-  const [escolhidos, setEscolhidos] = useState(() => new Set());
+  const confirmar = useConfirmacao();
+  const totalAntes = editando ? editando.partes.reduce((t, p) => t + p.sai, 0) : 0;
+  // foi do mais antigo? a conta de hoje, com o mesmo total e o mesmo dia, dá as mesmas partes
+  const [inicio] = useState(() => {
+    if (!editando) return { modo: 'antigo', escolhidos: new Set() };
+    const fifo = planoDoResgate({ itens, inv: x.inv, cal, data: editando.data, valor: totalAntes, hoje });
+    const deFifo = fifo.erro ? [] : fifo.linhas.filter((l) => l.sai > 0).map((l) => `${l.ap.id}:${l.sai}`).sort().join('|');
+    const doLote = editando.partes.map((p) => `${p.aporte_id}:${p.sai}`).sort().join('|');
+    return deFifo === doLote ? { modo: 'antigo', escolhidos: new Set() } : { modo: 'escolho', escolhidos: new Set(editando.partes.map((p) => p.aporte_id)) };
+  });
+  const [data, setData] = useState(editando?.data ?? hoje);
+  const [valor, setValor] = useState(editando ? paraCampo(totalAntes) : '');
+  const [modo, setModo] = useState(inicio.modo);
+  const [escolhidos, setEscolhidos] = useState(inicio.escolhidos);
   const [salvando, setSalvando] = useState(false);
   const centavos = calcularValor(valor);
   const marcados = modo === 'escolho' ? escolhidos : null;
@@ -51,16 +67,29 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, onFechar
     try {
       const lote = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null;
       const r = await criarResgates(resgatesDoPlano(plano, data, lote));
-      toast.success(`Resgate de ${formatBRL(plano.total)} lançado em ${usados.length} ${usados.length === 1 ? 'aporte' : 'aportes'}${r.semLote ? ' (sem a migration 032: cada pedaço se exclui sozinho)' : ''}.`);
+      if (editando) {
+        await excluirLote(editando.lote);
+        toast.success(`Resgate corrigido: ${formatBRL(plano.total)} de ${usados.length} ${usados.length === 1 ? 'aporte' : 'aportes'}.`);
+      } else {
+        toast.success(`Resgate de ${formatBRL(plano.total)} lançado em ${usados.length} ${usados.length === 1 ? 'aporte' : 'aportes'}${r.semLote ? ' (sem a migration 032: cada pedaço se exclui sozinho)' : ''}.`);
+      }
       onSalvo();
     } catch (err) { toast.error(err.message); setSalvando(false); }
+  };
+
+  const excluir = async () => {
+    const n = editando.partes.length;
+    const ok = await confirmar({ titulo: 'Excluir o resgate?', confirmar: 'Excluir o resgate', perigo: true,
+      texto: `O resgate de ${formatBRL(totalAntes)} em ${formatDate(editando.data)} sai${n > 1 ? ` dos ${n} aportes` : ''}, e o dinheiro volta a render neles.` });
+    if (!ok) return;
+    try { await excluirLote(editando.lote); toast.success('Resgate excluído.'); onSalvo(); } catch (err) { toast.error(err.message); }
   };
 
   const th = 'sticky top-0 z-10 whitespace-nowrap border-b border-gray-200 bg-hx-f9fafb px-2 py-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-gray-500';
   const td = 'h-[36px] whitespace-nowrap border-b border-gray-100 px-2 text-right tabular-nums';
   const escolho = modo === 'escolho';
   return (
-    <Modal open onClose={onFechar} title={`Resgatar de ${inv.nome}`} maxWidth="max-w-[min(900px,95vw)]"
+    <Modal open onClose={onFechar} title={`${editando ? 'Editar o resgate de' : 'Resgatar de'} ${inv.nome}`} maxWidth="max-w-[min(900px,95vw)]"
       subtitulo={`${inv.instituicao} · ${rotuloTaxa(inv.taxa, inv.indexador)} · ${plano.linhas.length} ${plano.linhas.length === 1 ? 'aporte' : 'aportes'} · vale ${formatBRL(valeTudo)} em ${formatDate(data)}`}>
       <form onSubmit={salvar} className="space-y-3.5">
         <div className="grid grid-cols-2 gap-3">
@@ -168,11 +197,17 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, onFechar
           </>
         )}
 
+        {editando && (
+          <p className="text-[12px] text-gray-500">
+            Como estava: {formatBRL(totalAntes)} em {formatDate(editando.data)}, de {editando.partes.length} {editando.partes.length === 1 ? 'aporte' : 'aportes'}. Salvar troca o pedido inteiro pela conta acima.
+          </p>
+        )}
         <div className="flex items-center gap-2">
+          {editando && <button type="button" className="btn-secondary !text-red-700" onClick={excluir}>Excluir o resgate</button>}
           <span className="flex-1 text-[11.5px] text-gray-400">o valor aceita conta (10000+5000)</span>
           <button type="button" className="btn-secondary" onClick={onFechar}>Cancelar</button>
           <button type="submit" className="btn-primary" disabled={salvando || !!erro}>
-            {salvando ? 'Salvando…' : `Resgatar ${plano.total ? formatBRL(plano.total) : ''}${usados.length ? ` de ${usados.length} ${usados.length === 1 ? 'aporte' : 'aportes'}` : ''}`}
+            {salvando ? 'Salvando…' : editando ? 'Salvar a correção' : `Resgatar ${plano.total ? formatBRL(plano.total) : ''}${usados.length ? ` de ${usados.length} ${usados.length === 1 ? 'aporte' : 'aportes'}` : ''}`}
           </button>
         </div>
       </form>

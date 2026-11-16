@@ -52,7 +52,7 @@ export default function WidgetTradingView({ ativo }) {
     <div className="flex h-full min-h-0 flex-col">
       <div ref={ref} className="tradingview-widget-container min-h-0 flex-1" />
       <div className="tradingview-widget-copyright shrink-0 px-1 pt-1.5 text-right text-[11px] text-gray-400">
-        <a href={link} target="_blank" rel="noopener nofollow noreferrer" className="text-[#2962ff] hover:underline">Gráfico de {ativo.ticker} por TradingView</a>
+        <a href={link} target="_blank" rel="noopener nofollow noreferrer" className="text-hx-2962ff hover:underline">Gráfico de {ativo.ticker} por TradingView</a>
       </div>
     </div>
   );

@@ -10,12 +10,15 @@ import ModalAporte from '../components/patrimonio/ModalAporte.jsx';
 import ModalResgate from '../components/patrimonio/ModalResgate.jsx';
 import ModalResgateInvestimento from '../components/patrimonio/ModalResgateInvestimento.jsx';
 import ModalCadastroCarteira from '../components/patrimonio/ModalCadastroCarteira.jsx';
+import ListaMovimentos from '../components/patrimonio/ListaMovimentos.jsx';
+import AbasPilula from '../components/AbasPilula.jsx';
+import { lsGet, lsSet } from '../lib/storage.js';
 import AvisoSemTaxas from '../components/patrimonio/AvisoSemTaxas.jsx';
 import useCarteira from '../components/patrimonio/useCarteira.js';
 import { useNoCelular } from '../lib/celular.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
-import { excluirAporte, marcarNaoReaplicar } from '../api/carteira.js';
+import { excluirAporte, excluirLote, excluirResgate, marcarNaoReaplicar } from '../api/carteira.js';
 import { noVencimento, nomeDoTipo, rotuloTaxa } from '../lib/carteira.js';
 import { exportCsv } from '../lib/exportCsv.js';
 import { formatBRL } from '../lib/dinheiro.js';
@@ -29,6 +32,10 @@ import { formatDate } from '../lib/format.js';
 // O VENCIMENTO (08/11/2026, migration 022): o "Reaplicar" do encerrado abre o aporte novo já com o LÍQUIDO do dia (o
 // valor menos o IR, como o automático do investimento que reaplica sozinho); excluir um aporte REAPLICADO marca o de antes
 // como "voltou para a conta" (`nao_reaplicar`), senão o app o reaplicaria de novo na próxima vez que abrisse.
+// AS MOVIMENTAÇÕES (16/11/2026, a opção A do mockup "Histórico da renda fixa"): a aba ao lado da Carteira, com tudo o que
+// entrou e saiu (`ListaMovimentos`). Lá se EDITA um resgate já feito: o de um aporte abre o `ModalResgate` com ele; o
+// pedido repartido, o `ModalResgateInvestimento` preenchido, e salvar refaz o pedido. A aba é lembrada em `rf_aba`.
+const ABAS = [{ key: 'carteira', label: 'Carteira' }, { key: 'movimentos', label: 'Movimentações' }];
 const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
 
 export default function Investimentos() {
@@ -38,8 +45,10 @@ export default function Investimentos() {
   const d = useCarteira();
   const [cadastro, setCadastro] = useState(false);
   const [aporte, setAporte] = useState(null); // { investimento_id?, aporte?, reaplicar? }
-  const [resgate, setResgate] = useState(null); // o item da carteira
-  const [resgateInv, setResgateInv] = useState(null); // o investimento do resgate repartido (o "Resgatar" da linha dele)
+  const [resgate, setResgate] = useState(null); // { item, editando? }: o item da carteira (e o resgate gravado, ao editar)
+  const [resgateInv, setResgateInv] = useState(null); // { x, editando? }: o resgate repartido (o "Resgatar" da linha do investimento)
+  const [aba, setAbaEstado] = useState(() => (lsGet('rf_aba') === 'movimentos' ? 'movimentos' : 'carteira'));
+  const setAba = (v) => { lsSet('rf_aba', v); setAbaEstado(v); };
   const [encerrados, setEncerrados] = useState(false);
   const [mais, setMais] = useState(null);
   const maisAberto = useRef(false);
@@ -69,8 +78,29 @@ export default function Investimentos() {
   const acoes = movel ? null : {
     aportar: (inv) => setAporte({ investimento_id: inv.id }),
     editar: (item) => setAporte({ aporte: item.ap }),
-    resgatar: (item) => setResgate(item),
-    resgatarInvestimento: (x) => setResgateInv(x),
+    resgatar: (item) => setResgate({ item }),
+    resgatarInvestimento: (x) => setResgateInv({ x }),
+    // o resgate de um movimento (a aba Movimentações): o pedido repartido no pop-up dele; o de um aporte, no do aporte
+    editarResgate: (m) => {
+      if (m.lote) {
+        const x = carteira.grupos.flatMap((g) => g.investimentos).find((y) => y.inv.id === m.inv.id) ?? { inv: m.inv, aportes: [] };
+        setResgateInv({ x, editando: { lote: m.lote, data: m.data, partes: m.partes.map((p) => ({ aporte_id: p.ap.id, sai: p.sai })) } });
+        return;
+      }
+      const item = carteira.itens.find((i) => i.ap.id === m.ap.id);
+      setResgate({ item: { ...item, resgates: item.resgates.filter((r) => r.id !== m.r.id) }, editando: m.r });
+    },
+    excluirResgate: async (m) => {
+      const n = m.partes.length;
+      const ok = await confirmar({ titulo: 'Excluir o resgate?', confirmar: 'Excluir', perigo: true,
+        texto: `O resgate de ${formatBRL(m.saiu)} em ${formatDate(m.data)} (${m.inv.nome}) sai${n > 1 ? ` dos ${n} aportes` : ''}, e o dinheiro volta a render. Não se desfaz.` });
+      if (!ok) return;
+      try {
+        if (m.lote) await excluirLote(m.lote); else await excluirResgate(m.r.id);
+        toast.success('Resgate excluído.');
+        recarregar();
+      } catch (err) { toast.error(err.message); }
+    },
     reaplicar: (item) => {
       const v = noVencimento(item.inv, item.pos);
       setAporte({ investimento_id: item.inv.id, reaplicar: { de: com022 ? item.ap.id : null, data: v.data, valor: v.liquido, venc: v } });
@@ -160,7 +190,11 @@ export default function Investimentos() {
           {/* SEM OS CARTÕES DE RESUMO (08/11/2026, a pedido): o vale hoje, o aplicado, o rendeu e o líquido moram no
               Patrimônio, que é onde se analisa; aqui é a tabela de lançar (o Total dela fecha a conta) */}
           <div className="mt-4">
-            <TabelaCarteira carteira={carteira} hoje={d.hoje} movel={movel} acoes={acoes} mostrarEncerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)} />
+            {aba === 'carteira'
+              ? <TabelaCarteira carteira={carteira} hoje={d.hoje} movel={movel} acoes={acoes} mostrarEncerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)}
+                inicio={<AbasPilula abas={ABAS} valor={aba} onChange={setAba} variante="claro" altura={31} folga={3} />} />
+              : <ListaMovimentos carteira={carteira} cadastro={d.cadastro} movel={movel} acoes={acoes}
+                inicio={<AbasPilula abas={ABAS} valor={aba} onChange={setAba} variante="claro" altura={31} folga={3} />} />}
           </div>
           {movel && <p className="mt-2 text-xs text-gray-500">Lançar, resgatar e editar ficam no computador.</p>}
         </>
@@ -178,11 +212,13 @@ export default function Investimentos() {
           onFechar={() => setAporte(null)} onSalvo={(ficar) => { if (!ficar) setAporte(null); recarregar(); }} />
       )}
       {resgateInv && (
-        <ModalResgateInvestimento x={resgateInv} itens={carteira.itens.filter((i) => i.inv.id === resgateInv.inv.id)} cal={carteira.cal} hoje={d.hoje}
+        <ModalResgateInvestimento x={resgateInv.x} editando={resgateInv.editando ?? null} cal={carteira.cal} hoje={d.hoje}
+          itens={carteira.itens.filter((i) => i.inv.id === resgateInv.x.inv.id)
+            .map((i) => (resgateInv.editando ? { ...i, resgates: i.resgates.filter((r) => r.lote !== resgateInv.editando.lote) } : i))}
           onFechar={() => setResgateInv(null)} onSalvo={() => { setResgateInv(null); recarregar(); }} />
       )}
       {resgate && (
-        <ModalResgate item={resgate} cal={carteira.cal} hoje={d.hoje} onFechar={() => setResgate(null)} onSalvo={() => { setResgate(null); recarregar(); }} />
+        <ModalResgate item={resgate.item} editando={resgate.editando ?? null} cal={carteira.cal} hoje={d.hoje} onFechar={() => setResgate(null)} onSalvo={() => { setResgate(null); recarregar(); }} />
       )}
     </div>
   );
