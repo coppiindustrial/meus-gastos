@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  categoriasFixasDoMes, celulaDoMes, comoVem, comoVemDoResumo, faixaDeMeses, perfilDaCategoria, previstoDoMes, seriesPorCategoria, tabelaCategoriasFixas,
+  categoriasFixasDoMes, celulaDoMes, comoVem, custoFixoDoAno, mediaDaCategoria, comoVemDoResumo, faixaDeMeses, perfilDaCategoria, previstoDoMes, seriesPorCategoria, tabelaCategoriasFixas,
 } from '../src/lib/categoriasFixas.js';
 import { custoFixo, jaComprometido } from '../src/lib/visaoGeral.js';
 import { addMeses } from '../src/lib/format.js';
@@ -105,6 +105,47 @@ test('tabela: as marcadas e ativas, agrupadas na ordem das categorias, com o rea
   const t27 = tabelaCategoriasFixas({ categorias: CATS, lancamentos: LANCS, parcelas: PARCELAS, ano: 2027, hoje: HOJE });
   assert.equal(t27.grupos[0].categorias[0].celulas[1].prev, 318000); // o IPTU de fev/27
   assert.equal(t27.grupos[2].categorias[0].celulas[7].total, 0); // ago/27: o seguro não teve em ago/26
+});
+
+test('média: a que vem todo mês pelos meses fechados com gasto; a anual pelo ano ÷ 12', () => {
+  const t = tabelaCategoriasFixas({ categorias: CATS, lancamentos: LANCS, parcelas: PARCELAS, ano: 2026, hoje: HOJE });
+  const [iptu, stream, seguro] = t.grupos.map((g) => g.categorias[0]);
+  assert.deepEqual([stream.media, stream.regra], [9480, '10 meses']); // jan a out; nov ainda não fechou
+  assert.deepEqual([iptu.media, iptu.regra], [26500, 'ano ÷ 12']); // 3.180,00 em fev
+  assert.equal(seguro.ano, 10 * 41230); // jan a jul, out, nov e a parcela de dez
+  assert.equal(seguro.media, Math.round((10 * 41230) / 12));
+  assert.equal(t.grupos[2].media, seguro.media);
+  assert.equal(t.media, 26500 + 9480 + seguro.media); // a soma das médias
+  // o ano que vem: a mensal sem mês fechado vai pelo previsto
+  const t27 = tabelaCategoriasFixas({ categorias: CATS, lancamentos: LANCS, parcelas: PARCELAS, ano: 2027, hoje: HOJE });
+  assert.deepEqual([t27.grupos[1].categorias[0].media, t27.grupos[1].categorias[0].regra], [9480, 'previsto']);
+  assert.deepEqual(mediaDaCategoria({ perfil: { tipo: 'sem', valor: 0 }, celulas: [], ano: 0, hoje: HOJE }), { media: 0, regra: '' });
+});
+
+test('custo fixo do ano: os fixos à mão + as categorias, mês a mês, e a média é a soma das médias', () => {
+  const comps = mesesDe('2026-01', '2026-12');
+  const cel = (estado, valor) => ({ estado, valor, sugerido: valor });
+  const matriz = {
+    comps,
+    totais: Object.fromEntries(comps.map((c) => [c, c < HOJE ? 50000 : c === HOJE ? 30000 : 0])),
+    linhas: [
+      { media: 30000, celulas: comps.map((c) => (c <= HOJE ? cel('lancado', 30000) : cel('futuro', 30000))) },
+      // a que não teve em dez e ainda falta lançar em nov
+      { media: 20000, celulas: comps.map((c) => (c < HOJE ? cel('lancado', 20000) : c === HOJE ? cel('pendente', 21000) : cel('pulado', 20000))) },
+    ],
+  };
+  const tabela = tabelaCategoriasFixas({ categorias: CATS, lancamentos: LANCS, parcelas: PARCELAS, ano: 2026, hoje: HOJE });
+  const { linhas } = custoFixoDoAno({ matriz, tabela, hoje: HOJE });
+  const [mao, cats, total] = linhas;
+  assert.deepEqual(mao.celulas[9], { conhecido: 50000, falta: 0 });
+  assert.deepEqual(mao.celulas[10], { conhecido: 30000, falta: 21000 }); // nov: o pendente
+  assert.deepEqual(mao.celulas[11], { conhecido: 0, falta: 30000 }); // dez: o futuro; o "não teve" fica de fora
+  assert.equal(mao.media, 50000);
+  assert.deepEqual(cats.celulas[10], { conhecido: 3490 + 41230, falta: 5990 }); // nov: o Spotify + o seguro; falta o resto do streaming
+  assert.deepEqual(cats.celulas[11], { conhecido: 41230, falta: 9480 }); // dez: a parcela do seguro + o streaming previsto
+  assert.equal(cats.media, tabela.media);
+  assert.deepEqual(total.celulas[11], { conhecido: 41230, falta: 39480 });
+  assert.equal(total.media, 50000 + tabela.media);
 });
 
 test('no mês (Visão geral): o total das categorias com a parte das parcelas à parte', () => {

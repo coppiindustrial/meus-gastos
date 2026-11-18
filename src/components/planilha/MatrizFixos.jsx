@@ -715,7 +715,10 @@ const MatrizFixos = forwardRef(function MatrizFixos({ matriz, hoje, setLancs, se
                   {totais[c] ? Math.round(totais[c] / 100).toLocaleString('pt-BR') : <span className="font-normal text-gray-300">—</span>}
                 </td>
               ))}
-              <td className="bg-hx-f9fafb" />
+              {/* A média do total = a soma das médias de cada fixo (fecha com a coluna de cima). */}
+              <td className="bg-hx-f9fafb px-2 text-right tabular-nums text-gray-900">
+                {(() => { const m = linhas.reduce((t, l) => t + (l.media ?? 0), 0); return m ? fmt(m) : ''; })()}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -846,7 +849,7 @@ function LegendaFixos({ linhas, destaque, onDestaque }) {
           ))}
           <div className="mt-2.5 border-t border-gray-100 pt-2.5">
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Colunas e números</div>
-            <p className="m-0 py-[3px]">Média = os meses lançados no ano ÷ quantos são. "Total lançado" soma o que já entrou em cada mês. Passe o mouse nos números e nos títulos dos meses para ver a conta.</p>
+            <p className="m-0 py-[3px]">Média = os meses lançados no ano ÷ quantos são. "Total lançado" soma o que já entrou em cada mês; a média dele é a soma das médias. Passe o mouse nos números e nos títulos dos meses para ver a conta.</p>
             <p className="m-0 py-[3px]">Clique no nome de um gasto fixo para editar o cadastro; no título de um mês, para selecionar a coluna inteira.</p>
           </div>
           <div className="mt-2.5 border-t border-gray-100 pt-2.5">

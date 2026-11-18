@@ -12,6 +12,7 @@ import { BuscaFaixa, SegMulti, SegUnico } from '../components/filtros/Segmentos.
 import MatrizFixos from '../components/planilha/MatrizFixos.jsx';
 import ModalCadastroFixos from '../components/ModalCadastroFixos.jsx';
 import TabelaCategoriasFixas from '../components/planilha/TabelaCategoriasFixas.jsx';
+import CustoFixoTotal from '../components/planilha/CustoFixoTotal.jsx';
 import ModalEscolherFixas from '../components/ModalEscolherFixas.jsx';
 import { MenuFixos } from '../components/dashboard/AvisoAgora.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
@@ -25,7 +26,7 @@ import {
   salvarRecorrencia,
 } from '../api/fixos.js';
 import { listarParcelasFuturas } from '../api/resumo.js';
-import { categoriasFixas, tabelaCategoriasFixas } from '../lib/categoriasFixas.js';
+import { categoriasFixas, custoFixoDoAno, tabelaCategoriasFixas } from '../lib/categoriasFixas.js';
 import { matrizDoAno, pendentesPorMes, recorrenciasDoHistorico, ultimoLancado } from '../lib/fixos.js';
 import { formatBRL, parseValor, valorParaCampo } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
@@ -280,6 +281,8 @@ export default function Fixos() {
     const cs = categorias.filter((c) => (!cats.length || cats.includes(c.id)) && (!t || semAcento(`${c.nome} ${c.grupo?.nome ?? ''}`).includes(t)));
     return tabelaCategoriasFixas({ categorias: cs, lancamentos: lancsCats, parcelas, ano, hoje });
   }, [categorias, lancsCats, parcelas, ano, hoje, busca, cats]);
+  // O CUSTO FIXO TOTAL (a faixa embaixo das duas tabelas): os fixos à mão + as categorias, com os mesmos filtros.
+  const custo = useMemo(() => custoFixoDoAno({ matriz, tabela: tabelaFixas, hoje }), [matriz, tabelaFixas, hoje]);
   const setPuladosLista = useCallback((fn) => setPulados((ps) => fn(ps ?? [])), []);
   const matrizRef = useRef(null);
   const pendMes = useMemo(() => pendentesPorMes(matriz), [matriz]);
@@ -413,7 +416,8 @@ export default function Fixos() {
       )}
 
       <TabelaCategoriasFixas tabela={tabelaFixas} hoje={hoje} onEscolher={() => setEscolher(true)} semMigracao={!temGastoFixo(categorias)}
-        marcadas={categoriasFixas(categorias).length} />
+        marcadas={categoriasFixas(categorias).length} modo={modo} />
+      {matriz.linhas.length > 0 && tabelaFixas.grupos.length > 0 && <CustoFixoTotal custo={custo} hoje={hoje} modo={modo} />}
       {escolher && <ModalEscolherFixas categorias={categorias} onFechar={() => setEscolher(false)} onSalvo={() => { setEscolher(false); carregar(); }} />}
 
       {cadastro && (

@@ -162,14 +162,64 @@ export function tabelaCategoriasFixas({ categorias = [], lancamentos = [], parce
       itens: itens.get(`${cat.id}|${comp}`) ?? [],
       parcelas: parc.get(cat.id)?.get(comp)?.itens ?? [],
     }));
-    g.categorias.push({ cat, perfil, como: comoVem(perfil), celulas, ano: soma(celulas.map((c) => c.total)) });
+    const total = soma(celulas.map((c) => c.total));
+    g.categorias.push({ cat, perfil, como: comoVem(perfil), celulas, ano: total, ...mediaDaCategoria({ perfil, celulas, ano: total, hoje }) });
   });
   grupos.forEach((g) => {
     g.totais = comps.map((_, i) => soma(g.categorias.map((c) => c.celulas[i].total)));
     g.ano = soma(g.totais);
+    g.media = soma(g.categorias.map((c) => c.media));
   });
   const totais = comps.map((_, i) => soma(grupos.map((g) => g.totais[i])));
-  return { comps, grupos, totais, ano: soma(totais) };
+  return { comps, grupos, totais, ano: soma(totais), media: soma(grupos.map((g) => g.media)) };
+}
+
+// A MÉDIA POR MÊS de uma categoria fixa no ano (18/11/2026, a opção B do mockup "Média do custo fixo"):
+// · a que vem TODO MÊS ('mensal') — a média dos meses FECHADOS do ano com gasto (o mês em andamento ainda não terminou);
+//   sem nenhum fechado no ano (o ano que vem), o previsto dela;
+// · a ANUAL ou de alguns meses (o IPTU, o IPVA, a manutenção) — o ano inteiro (o que veio + o previsto) ÷ 12: o quanto
+//   separar por mês. Dividir pelos meses com gasto faria o IPVA de setembro valer por mês.
+// Devolve { media, regra } — `regra` é o texto curto que a tabela mostra embaixo do número ('10 meses', 'ano ÷ 12', 'previsto').
+export function mediaDaCategoria({ perfil, celulas = [], ano = 0, hoje }) {
+  if (perfil?.tipo === 'mensal') {
+    const fechados = celulas.filter((c) => c.comp < hoje && c.real > 0).map((c) => c.real);
+    if (fechados.length) return { media: media(fechados), regra: fechados.length === 1 ? '1 mês' : `${fechados.length} meses` };
+    return { media: perfil.valor, regra: 'previsto' };
+  }
+  if (!ano) return { media: 0, regra: '' };
+  return { media: Math.round(ano / 12), regra: 'ano ÷ 12' };
+}
+
+// O CUSTO FIXO TOTAL do ano (a faixa embaixo das duas tabelas dos Gastos fixos): os fixos lançados à mão (a matriz de
+// `matrizDoAno`) + as categorias fixas (a tabela de `tabelaCategoriasFixas`), mês a mês. Cada célula é { conhecido, falta }:
+// · fixos à mão — `conhecido` = o lançado; `falta`, de hoje em diante, o sugerido dos que ainda não foram lançados
+//   (o "não teve" não conta);
+// · categorias — `conhecido` = o que caiu + as parcelas que já estão numa fatura; `falta` = o previsto que falta.
+// A média dos fixos à mão é a soma das médias de cada um (os meses lançados no ano); a das categorias, a da tabela; a do
+// total, a soma das duas. Devolve { comps, linhas: [{ chave: 'mao' | 'cats' | 'total', nome, celulas: [12], media }] }.
+export function custoFixoDoAno({ matriz, tabela, hoje }) {
+  const comps = matriz?.comps ?? tabela?.comps ?? [];
+  const mao = comps.map((comp, i) => ({
+    conhecido: matriz?.totais?.[comp] ?? 0,
+    falta: comp < hoje ? 0 : (matriz?.linhas ?? []).reduce((t, l) => {
+      const c = l.celulas[i];
+      return t + (c && (c.estado === 'pendente' || c.estado === 'futuro') ? Number(c.sugerido ?? 0) : 0);
+    }, 0),
+  }));
+  const cats = comps.map((_, i) => (tabela?.grupos ?? []).reduce((t, g) => {
+    g.categorias.forEach((c) => { const cel = c.celulas[i]; t.conhecido += cel.real + cel.parc; t.falta += cel.prev; });
+    return t;
+  }, { conhecido: 0, falta: 0 }));
+  const mediaMao = (matriz?.linhas ?? []).reduce((t, l) => t + (l.media ?? 0), 0);
+  const mediaCats = tabela?.media ?? 0;
+  return {
+    comps,
+    linhas: [
+      { chave: 'mao', nome: 'Fixos à mão', celulas: mao, media: mediaMao },
+      { chave: 'cats', nome: 'Categorias fixas', celulas: cats, media: mediaCats },
+      { chave: 'total', nome: 'Custo fixo total', celulas: comps.map((_, i) => ({ conhecido: mao[i].conhecido + cats[i].conhecido, falta: mao[i].falta + cats[i].falta })), media: mediaMao + mediaCats },
+    ],
+  };
 }
 
 // AS CATEGORIAS FIXAS NUM MÊS (o "Já comprometido" e o "Custo fixo" da Visão geral). `linhas`: as da `resumo_mensal` que

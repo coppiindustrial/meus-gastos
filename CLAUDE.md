@@ -539,7 +539,15 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   agrupada como nas Categorias, NÃO SE LANÇA — cada célula é o que caiu na categoria (o ponto da origem), a parcela que já
   está numa fatura (hachurada) e, de hoje em diante, o PREVISTO que falta (tracejado; o mês em andamento: o real e "+falta"
   embaixo); o balão diz as compras, clicar abre o mês nos Lançamentos com a categoria. Segue o ano, a busca e a categoria
-  da faixa. NOS LANÇAMENTOS NADA MUDA: o previsto nunca é lançamento. O PREVISTO (`lib/categoriasFixas.js`, testada):
+  da faixa, e o VALOR | VARIAÇÃO % da tela (`modo`, 18/11/2026: só a grade de cima trocava; na variação, o % sobre o que
+  caiu no mês anterior, sem o previsto). A MÉDIA DO CUSTO FIXO (18/11/2026, a opção B do mockup "Média do custo fixo"):
+  a última coluna da tabela é a MÉDIA (o "No ano" foi para o balão) — a 'mensal' pelos meses FECHADOS do ano com gasto,
+  a anual ou de alguns meses pelo ano inteiro (com o previsto) ÷ 12, o quanto separar por mês (`mediaDaCategoria`, a
+  regra curta embaixo do número: "10 meses", "ano ÷ 12", "previsto"); o grupo e o Total somam as médias. O "Total lançado"
+  da grade de cima ganha a soma das médias dos fixos. Embaixo das duas, a faixa "CUSTO FIXO TOTAL"
+  (`components/planilha/CustoFixoTotal.jsx`, `custoFixoDoAno`, testada): fixos à mão + categorias + o total, mês a mês (o
+  conhecido e, de hoje em diante, "+o que falta": o sugerido dos fixos não lançados, sem o "não teve", e o previsto das
+  categorias) e a média = a soma das duas médias; segue os filtros e o Valor | Variação %. NOS LANÇAMENTOS NADA MUDA: o previsto nunca é lançamento. O PREVISTO (`lib/categoriasFixas.js`, testada):
   pelos 12 meses fechados (desde o 1º com gasto), a que vem em todo mês (com 6 ou mais, pode faltar um) é 'mensal' = a
   média dos últimos 6; o resto é 'sazonal' = o mesmo mês do ano anterior já fechado (até 2 anos). De hoje em diante a
   célula é o MAIOR entre o previsto e o real + as parcelas. OS FIXOS À MÃO (origem 'fixo') ficam fora dessas contas (estão

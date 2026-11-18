@@ -12,10 +12,24 @@ import { competenciaCurta, formatDate, nomeCompetencia } from '../../lib/format.
 //
 // `tabela`: a de `tabelaCategoriasFixas`. `onEscolher`: abre o "Escolher categorias". `semMigracao`: falta a 033.
 // `marcadas`: quantas categorias estão marcadas (com os filtros da tela, a tabela pode vir vazia mesmo havendo).
+// `modo`: 'valor' | 'variacao' — o Valor | Variação % da tela vale também aqui (18/11/2026: só a grade de cima trocava).
+// Na variação, cada mês com gasto é o % sobre o que caiu no mês anterior (o real, sem o previsto nem as parcelas que vêm);
+// sem o mês anterior, "—"; o mês sem gasto fica vazio.
+// A ÚLTIMA COLUNA É A MÉDIA (18/11/2026, a opção B do mockup "Média do custo fixo"; antes era o "No ano", que foi para o
+// balão): a que vem todo mês pelos meses fechados com gasto, a anual pelo ano ÷ 12 (`mediaDaCategoria`); a do grupo e a
+// do Total, a soma das médias.
 
 const ORIGEM = { cartao: ['cartão', 'var(--origem-cartao)'], manual: ['avulso / boleto', 'var(--origem-manual)'], fixo: ['fixo', 'var(--origem-fixo)'] };
 const fmt = (v) => valorParaCampo(v);
 const LARG = 290;
+const pct = (atual, antes) => (antes ? Math.round(((atual - antes) / antes) * 100) : null);
+// a célula da variação: o % sobre o mês anterior, vermelho subindo e verde descendo (como na grade de cima)
+function Variacao({ atual, antes }) {
+  if (!atual) return null;
+  const v = pct(atual, antes);
+  if (v === null) return <span className="text-gray-300">—</span>;
+  return <span className={v > 0 ? 'text-hx-b91c1c' : v < 0 ? 'text-hx-15803d' : 'text-gray-400'}>{v > 0 ? '+' : ''}{v}%</span>;
+}
 
 // A origem que mais pesou no mês (o ponto da célula).
 const origemDe = (itens) => {
@@ -50,13 +64,17 @@ function Celula({ cel }) {
   );
 }
 
-export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMigracao, marcadas = 0 }) {
+export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMigracao, marcadas = 0, modo = 'valor' }) {
   const navigate = useNavigate();
   const balao = useBalao(LARG, 200);
   const { comps, grupos, totais } = tabela;
   const colHoje = comps.indexOf(hoje);
   const passa = (chave) => ({ onMouseMove: balao.aoMover(chave), onMouseLeave: balao.aoSair });
   const nCats = grupos.reduce((s, g) => s + g.categorias.length, 0);
+  const variacao = modo === 'variacao';
+  // o que caiu de fato em cada mês (a base da variação): por grupo e no total
+  const realDoGrupo = (g, i) => g.categorias.reduce((t, c) => t + c.celulas[i].real, 0);
+  const realTotal = (i) => grupos.reduce((t, g) => t + realDoGrupo(g, i), 0);
 
   // O conteúdo do balão de uma célula: as compras do mês, a parcela que vem e o que falta do previsto.
   const balaoDe = (chave) => {
@@ -64,6 +82,24 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
     if (tipo === 'g') {
       const g = grupos[gi];
       return { titulo: `${g.nome} · ${nomeCompetencia(comps[i])}`, itens: g.categorias.filter((c) => c.celulas[i].total).map((c) => ({ rotulo: c.cat.nome, valor: formatBRL(c.celulas[i].total) })) };
+    }
+    if (tipo === 'm') {
+      const ano = comps[0].slice(0, 4);
+      if (gi < 0) return { titulo: `Média das categorias · ${ano}`, itens: [{ rotulo: 'Por mês', valor: formatBRL(tabela.media) }, { rotulo: `No ano (com o previsto)`, valor: formatBRL(tabela.ano) }], nota: 'A soma das médias de cada categoria.' };
+      if (ci < 0) {
+        const g = grupos[gi];
+        return { titulo: `${g.nome} · média`, itens: g.categorias.map((c) => ({ rotulo: c.cat.nome, valor: formatBRL(c.media) })), nota: 'A soma das médias das categorias do grupo.' };
+      }
+      const c = grupos[gi].categorias[ci];
+      return {
+        titulo: `${c.cat.nome} · média`,
+        itens: [{ rotulo: 'Por mês', valor: formatBRL(c.media) }, { rotulo: `No ano (${ano}, com o previsto)`, valor: formatBRL(c.ano) }],
+        nota: c.regra === 'ano ÷ 12'
+          ? 'Não vem todo mês: o ano inteiro (o que veio e o previsto) dividido por 12 — o quanto separar por mês.'
+          : c.regra === 'previsto'
+            ? 'Vem todo mês, mas o ano ainda não tem mês fechado: vale o previsto.'
+            : `Vem todo mês: a média dos meses fechados com gasto (${c.regra}; o mês em andamento não entra).`,
+      };
     }
     if (tipo === 'n') {
       const c = grupos[gi].categorias[ci];
@@ -133,7 +169,7 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
                       {competenciaCurta(c).slice(0, 3)}
                     </th>
                   ))}
-                  <th className={`${th} !border-r-0`} title="O que veio no ano mais o previsto dos meses que faltam">No ano</th>
+                  <th {...passa('m:-1:-1:0')} className={`${th} !border-r-0 cursor-help`}>Média</th>
                 </tr>
               </thead>
               <tbody>
@@ -146,10 +182,10 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
                     {g.totais.map((v, i) => (
                       <td key={comps[i]} {...(v ? passa(`g:${gi}:0:${i}`) : {})}
                         className="h-8 border-b border-r border-gray-100 bg-hx-f6f7f8 px-2 text-right font-semibold tabular-nums text-gray-700">
-                        {v ? fmt(v) : ''}
+                        {variacao ? <Variacao atual={realDoGrupo(g, i)} antes={i ? realDoGrupo(g, i - 1) : 0} /> : v ? fmt(v) : ''}
                       </td>
                     ))}
-                    <td className="h-8 border-b border-gray-100 bg-hx-f6f7f8 px-2 text-right font-semibold tabular-nums text-gray-700">{g.ano ? fmt(g.ano) : ''}</td>
+                    <td {...(g.media ? passa(`m:${gi}:-1:0`) : {})} className="h-8 cursor-help border-b border-gray-100 bg-hx-f6f7f8 px-2 text-right font-semibold tabular-nums text-gray-700">{g.media ? fmt(g.media) : ''}</td>
                   </tr>,
                   ...g.categorias.map((c, ci) => (
                     <tr key={c.cat.id}>
@@ -163,24 +199,32 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
                         <td key={cel.comp} {...(cel.total ? passa(`c:${gi}:${ci}:${i}`) : {})}
                           onClick={() => { if (cel.itens.length) navigate(`/lancamentos?mes=${cel.comp}&cat=${c.cat.id}`); }}
                           className={`${td} ${cel.itens.length ? 'cursor-pointer hover:bg-gray-50' : ''}`}>
-                          <Celula cel={cel} />
+                          {variacao ? <Variacao atual={cel.real} antes={i ? c.celulas[i - 1].real : 0} /> : <Celula cel={cel} />}
                         </td>
                       ))}
-                      <td className={`${td} !border-r-0 bg-hx-f9fafb text-gray-500`}>{c.ano ? fmt(c.ano) : '—'}</td>
+                      <td {...(c.media ? passa(`m:${gi}:${ci}:0`) : {})} className={`${td} !border-r-0 cursor-help bg-hx-f9fafb py-1`}>
+                        {c.media ? (
+                          <span className="flex flex-col items-end leading-[1.2]">
+                            <span className="text-gray-700">{fmt(c.media)}</span>
+                            <small className="whitespace-nowrap text-[10px] text-gray-400">{c.regra}</small>
+                          </span>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
                     </tr>
                   )),
                 ])}
                 <tr>
                   <td className="sticky left-0 z-10 h-8 border-r border-gray-300 bg-hx-f9fafb px-3 text-left font-semibold text-gray-800">Total</td>
                   {totais.map((v, i) => (
-                    <td key={comps[i]} className="h-8 border-r border-gray-100 bg-hx-f9fafb px-2 text-right font-semibold tabular-nums text-gray-800">{v ? fmt(v) : ''}</td>
+                    <td key={comps[i]} className="h-8 border-r border-gray-100 bg-hx-f9fafb px-2 text-right font-semibold tabular-nums text-gray-800">{variacao ? <Variacao atual={realTotal(i)} antes={i ? realTotal(i - 1) : 0} /> : v ? fmt(v) : ''}</td>
                   ))}
-                  <td className="h-8 bg-hx-f9fafb px-2 text-right font-semibold tabular-nums text-gray-800">{fmt(tabela.ano)}</td>
+                  <td {...passa('m:-1:-1:0')} className="h-8 cursor-help bg-hx-f9fafb px-2 text-right font-semibold tabular-nums text-gray-800">{fmt(tabela.media)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-b-lg border border-t-0 border-gray-300 bg-hx-f9fafb px-3 py-2 text-[11.5px] text-gray-600">
+            {variacao && <span className="inline-flex items-center gap-1.5"><b className="font-semibold text-gray-700">%</b>sobre o que caiu no mês anterior</span>}
             <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full" style={{ background: ORIGEM.cartao[1] }} />cartão</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full" style={{ background: ORIGEM.manual[1] }} />avulso / boleto</span>
             <span className="inline-flex items-center gap-1.5"><span className="rounded-[3px] border border-dashed border-gray-300 px-1 text-[10.5px] italic text-gray-400">94,80</span>previsto (some quando o gasto entra)</span>
