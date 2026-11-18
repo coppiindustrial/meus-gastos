@@ -375,7 +375,7 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   dinheiro — o `base` do `mesAMes` × o índice do mês | `ColunasPct`; a prop é `indice`, NUNCA `ref`, que o React engole),
   o IR e quando ele cai, VENCIMENTOS (a linha do tempo por mês — já venceu, volta, reaplica, a marca de hoje, clicar filtra
   — e as abas Próximos | Histórico: o valor do dia, o IR, o líquido e para onde foi; o que venceu há até 30 dias fica PARA
-  AVALIAR até o "Visto", `inv_aportes.vencimento_visto`, migration 026), o dinheiro que entrou e saiu (barras divergentes; SÓ OS MESES COM MOVIMENTO — 09/11/2026, a opção A do mockup: entre dois distantes a quebra "//" e "N meses sem nada", `mesesComMovimento` em lib/patrimonio.js; a vaga MEDIDA encurta os rótulos no bloco estreito),
+  AVALIAR até o "Visto", `inv_aportes.vencimento_visto`, migration 026), o dinheiro que entrou e saiu (barras divergentes; SÓ OS MESES COM MOVIMENTO — 09/11/2026, a opção A do mockup: entre dois distantes a quebra "//" e "N meses sem nada", `mesesComMovimento` em lib/patrimonio.js; a vaga MEDIDA encurta os rótulos no bloco estreito; a saída de até meio passo do eixo ganha só o espaço dela embaixo do zero, sem marca negativa — 18/11/2026: R$ 700 abriam o eixo até −R$ 50 mil),
   quando o dinheiro fica livre (o % é do último degrau) e cada investimento (a tabela que ordena, com a taxa ao ano
   equivalente). Contas em `lib/patrimonio.js` (testada em `test/patrimonio.test.js`), desenho em
   `components/patrimonio/BlocosPatrimonio.jsx` e `GraficoPatrimonio.jsx`. O FILTRO refaz a carteira e o mês a mês só com os

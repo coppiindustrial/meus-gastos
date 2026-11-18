@@ -356,8 +356,12 @@ export function EntrouSaiu({ meses, ctrl, onMes }) {
   const base = escalaLinear(Math.max(hi, -lo, 1), 3);
   const passo = base.marcas[1] ?? base.teto;
   const topo = Math.max(passo, Math.ceil(hi / passo) * passo);
-  const fundo = -Math.ceil(-lo / passo) * passo;
-  const marcas = []; for (let v = fundo; v <= topo; v += passo) marcas.push(v);
+  // O LADO DE BAIXO SÓ COM O QUE A SAÍDA PEDE (18/11/2026, a pedido): com o mesmo passo do de cima, R$ 700 de resgate
+  // abriam o eixo até −R$ 50 mil (um terço do bloco vazio). Saída de até meio passo: a barra mais a folga do número
+  // embaixo dela (10% do topo), sem marca negativa; maior que isso, o passo inteiro, com as marcas.
+  const curta = -lo <= passo / 2;
+  const fundo = lo === 0 ? 0 : curta ? -(-lo * 1.15 + topo * 0.1) : -Math.ceil(-lo / passo) * passo;
+  const marcas = []; for (let v = curta ? 0 : fundo; v <= topo; v += passo) marcas.push(v);
   const esc = { marcas, fracao: (v) => (v - fundo) / (topo - fundo) };
   const fr = (c) => esc.fracao(c / 100);
   const zero = esc.fracao(0);
