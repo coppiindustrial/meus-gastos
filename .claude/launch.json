@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--port", "5182", "--strictPort"],
       "port": 5182
+    },
+    {
+      "name": "meus-gastos-producao",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "preview", "--port", "5183", "--strictPort"],
+      "port": 5183
     }
   ]
 }

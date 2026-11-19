@@ -208,7 +208,13 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
                             <button type="button" className="self-start truncate text-left font-medium text-gray-800 underline-offset-[3px] hover:underline"
                               style={{ textDecorationColor: 'var(--origem-fixo)' }}
                               onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => { balao.aoSair(); setComoPaga((x) => (x?.item.cat.id === c.cat.id ? null : { item: c, ancora: e.currentTarget.getBoundingClientRect() })); }}>
+                              onClick={(e) => {
+                                // mede AGORA: o `currentTarget` vira null depois do clique, e o React pode rodar o updater depois
+                                // (na versão publicada rodava, e a tela quebrava)
+                                const ancora = e.currentTarget.getBoundingClientRect();
+                                balao.aoSair();
+                                setComoPaga((x) => (x?.item.cat.id === c.cat.id ? null : { item: c, ancora }));
+                              }}>
                               {c.cat.nome}
                             </button>
                           ) : <span className="truncate font-medium text-gray-800">{c.cat.nome}</span>}

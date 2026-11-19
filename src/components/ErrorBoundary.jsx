@@ -3,10 +3,12 @@ import { Component } from 'react';
 // Se uma tela der erro ao desenhar, mostra um aviso NO LUGAR DELA (a barra lateral continua) em vez de
 // o React apagar o app inteiro. O Layout dá a chave pelo endereço: trocar de tela limpa o erro.
 export default class ErrorBoundary extends Component {
-  state = { falhou: false };
+  state = { falhou: false, mensagem: '' };
 
-  static getDerivedStateFromError() {
-    return { falhou: true };
+  // A MENSAGEM DO ERRO aparece embaixo (19/11/2026): sem ela, só o console dizia o que quebrou, e a captura da tela não
+  // bastava para achar a causa. É o texto do erro do JavaScript, nunca dado da tela.
+  static getDerivedStateFromError(error) {
+    return { falhou: true, mensagem: String(error?.message ?? error ?? '').slice(0, 300) };
   }
 
   componentDidCatch(error, info) {
@@ -20,6 +22,7 @@ export default class ErrorBoundary extends Component {
         <p className="font-semibold text-gray-800">Algo deu errado nesta tela</p>
         <p className="mt-1 text-sm text-gray-500">Seus dados estão salvos. Recarregue a página ou volte para outra tela.</p>
         <button type="button" className="btn-primary mt-4" onClick={() => window.location.reload()}>Recarregar</button>
+        {this.state.mensagem && <p className="mt-4 break-words font-mono text-[11px] text-gray-400">{this.state.mensagem}</p>}
       </div>
     );
   }
