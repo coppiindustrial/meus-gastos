@@ -24,7 +24,7 @@ export default function ModalEscolherFixas({ categorias, onFechar, onSalvo }) {
   useEffect(() => { listarResumoMensal().then(setResumo).catch(() => setResumo(false)); }, []); // false: não leu (o "como vem" fica em branco)
 
   const hoje = competenciaAtual();
-  const como = useMemo(() => comoVemDoResumo(resumo || [], hoje), [resumo, hoje]);
+  const como = useMemo(() => comoVemDoResumo(resumo || [], hoje, categorias), [resumo, hoje, categorias]);
   const grupos = useMemo(() => {
     const gs = [];
     categorias.filter((c) => c.grupo?.tipo === 'saida' && c.ativa !== false).forEach((c) => {

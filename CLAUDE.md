@@ -55,7 +55,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   ARRASTAR ROLA (02/11/2026): selecionando ou puxando a alça com o botão apertado, o cursor perto da borda VISÍVEL da
   caixa (ou fora dela) rola a grade — mais rápido quanto mais longe, e parado na borda segue rolando — e a faixa segue
   a célula sob o cursor (`elementFromPoint` preso à área útil; a caixa pode passar do fim da janela).
-  No celular continua a lista (só leitura + formulário).
+  No celular continua a lista (só leitura + formulário). SÓ A LEITURA MAIS NOVA GRAVA (19/11/2026, `leitura` no
+  `carregar`): a tela abre no mês lembrado e o `?mes=` troca logo depois — a resposta atrasada do lembrado mostrava os
+  lançamentos dele com a pílula no mês pedido.
   AMPLIAR A TABELA (03/11/2026, opção A do mockup): o ⤢ no grupo do cabeçalho esconde os cartões do resumo e a grade
   ganha a altura até o fim da janela (`ateOFim`, medida de onde a caixa começa; refeita no resize); ⤡ volta.
   Lembrado em `lancamentos_ampliada`.
@@ -558,7 +560,16 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   da grade de cima ganha a soma das médias dos fixos. Embaixo das duas, a faixa "CUSTO FIXO TOTAL"
   (`components/planilha/CustoFixoTotal.jsx`, `custoFixoDoAno`, testada): fixos à mão + categorias + o total, mês a mês (o
   conhecido e, de hoje em diante, "+o que falta": o sugerido dos fixos não lançados, sem o "não teve", e o previsto das
-  categorias) e a média = a soma das duas médias; segue os filtros e o Valor | Variação %. NOS LANÇAMENTOS NADA MUDA: o previsto nunca é lançamento. O PREVISTO (`lib/categoriasFixas.js`, testada):
+  categorias) e a média = a soma das duas médias; segue os filtros e o Valor | Variação %. A CATEGORIA PARCELADA (19/11/2026,
+  a opção B do mockup "Parcelamento da categoria fixa"; migration 034: `fixo_parcelas`, `fixo_inicio`, `fixo_renova`): o
+  seguro em 8 parcelas, pelo histórico, parecia "todo mês" e o previsto seguia para sempre. CLICAR NO NOME da categoria na
+  tabela abre o "Como paga" (`components/planilha/ComoPagaCategoria.jsx`, portado, o "dentro" marcado no mousedown do
+  React porque o calendário do `CampoMes` também vai ao body): Pelo histórico | Parcelado em N vezes a partir de um mês,
+  "renova todo ano" (só até 12); a sugestão é a última sequência de meses seguidos com gasto (`sugestaoDeParcelamento`).
+  Parcelada (`perfil.tipo` 'parcelado', `parcelaDoMes`, `cicloAtual`): o previsto só nos meses das parcelas, a PARCELA é a
+  média das últimas N que caíram, a célula diz "3/8", a média é a parcela ("parcela de 8×"), e o "como vem" "8× · mar a
+  out · renova". Vale também na Visão geral (`categoriasFixasDoMes`) e no "como vem" dos cadastros. Sem a 034, o nome não
+  abre nada. NOS LANÇAMENTOS NADA MUDA: o previsto nunca é lançamento. O PREVISTO (`lib/categoriasFixas.js`, testada):
   pelos 12 meses fechados (desde o 1º com gasto), a que vem em todo mês (com 6 ou mais, pode faltar um) é 'mensal' = a
   média dos últimos 6; o resto é 'sazonal' = o mesmo mês do ano anterior já fechado (até 2 anos). De hoje em diante a
   célula é o MAIOR entre o previsto e o real + as parcelas. OS FIXOS À MÃO (origem 'fixo') ficam fora dessas contas (estão

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  categoriasFixasDoMes, celulaDoMes, comoVem, custoFixoDoAno, mediaDaCategoria, comoVemDoResumo, faixaDeMeses, perfilDaCategoria, previstoDoMes, seriesPorCategoria, tabelaCategoriasFixas,
+  categoriasFixasDoMes, celulaDoMes, comoVem, custoFixoDoAno, mediaDaCategoria, comoVemDoResumo, faixaDeMeses, parcelaDoMes, parcelamentoDa, perfilDaCategoria, previstoDoMes, seriesPorCategoria, tabelaCategoriasFixas,
 } from '../src/lib/categoriasFixas.js';
 import { custoFixo, jaComprometido } from '../src/lib/visaoGeral.js';
 import { addMeses } from '../src/lib/format.js';
@@ -203,4 +203,61 @@ test('seriesPorCategoria: soma por mês, aceita os três nomes do valor', () => 
   const s = seriesPorCategoria([{ categoria_id: 'a', competencia: '2026-01-01', valor: 1 }, { categoria_id: 'a', competencia: '2026-01', valor_centavos: 2 },
     { categoria_id: 'a', competencia: '2026-02', total_centavos: '3' }, { categoria_id: null, competencia: '2026-01', valor: 9 }]);
   assert.deepEqual([...s.get('a')], [['2026-01', 3], ['2026-02', 3]]);
+});
+
+// ------------------------------------------------------------ a categoria parcelada (migration 034)
+const SEGURO = [['2026-03', 28456], ...mesesDe('2026-04', '2026-09').map((c) => [c, 28463]), ['2026-10', 31745]];
+const catSeguro = (extra = {}) => ({
+  id: 'seg', nome: 'Seguro', gasto_fixo: true, ativa: true, grupo: { id: 'g', nome: 'Carro', cor: '#000', tipo: 'saida' },
+  fixo_parcelas: 8, fixo_inicio: '2026-03-01', fixo_renova: true, ...extra,
+});
+
+test('parcelaDoMes: qual parcela cai no mês; com renova, o ciclo volta a cada 12 meses', () => {
+  const p = parcelamentoDa(catSeguro());
+  assert.deepEqual(p, { n: 8, inicio: '2026-03', fim: '2026-10', renova: true });
+  assert.deepEqual(['2026-02', '2026-03', '2026-10', '2026-11', '2027-02', '2027-03', '2027-10'].map((c) => parcelaDoMes(p, c)), [0, 1, 8, 0, 0, 1, 8]);
+  const sem = parcelamentoDa(catSeguro({ fixo_renova: false }));
+  assert.equal(parcelaDoMes(sem, '2027-03'), 0);
+  assert.equal(parcelamentoDa(catSeguro({ fixo_parcelas: null })), null);
+  assert.equal(parcelamentoDa(catSeguro({ fixo_parcelas: 24 })).renova, false); // renovar só com até 12
+});
+
+test('perfil parcelado: a parcela é a média das que caíram; o previsto só nos meses do parcelamento', () => {
+  assert.equal(perfilDaCategoria(serie(SEGURO), HOJE).tipo, 'mensal'); // sem dizer, o histórico acha que é todo mês
+  const pf = perfilDaCategoria(serie(SEGURO), HOJE, catSeguro());
+  assert.equal(pf.tipo, 'parcelado');
+  assert.equal(pf.valor, Math.round((28456 + 28463 * 6 + 31745) / 8));
+  assert.deepEqual(pf.meses, [3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.deepEqual(['2026-11', '2026-12', '2027-01', '2027-03', '2027-10'].map((c) => previstoDoMes(pf, serie(SEGURO), c, HOJE)), [0, 0, 0, pf.valor, pf.valor]);
+  assert.equal(comoVem(pf), '8× · mar a out · renova');
+  assert.equal(comoVem(perfilDaCategoria(serie(SEGURO), HOJE, catSeguro({ fixo_renova: false }))), '8× · mar/26 a out/26');
+  // sem nenhuma parcela ainda: o valor do histórico
+  assert.equal(perfilDaCategoria(serie([]), HOJE, catSeguro()).valor, 0);
+});
+
+test('tabela parcelada: a parcela de cada mês, nada previsto depois da última, a média é a parcela; 2027 renova', () => {
+  const lancs = SEGURO.map(([c, v]) => lanc('seg', c, v));
+  const t = tabelaCategoriasFixas({ categorias: [catSeguro()], lancamentos: lancs, ano: 2026, hoje: HOJE });
+  const c = t.grupos[0].categorias[0];
+  assert.deepEqual(c.celulas.map((x) => x.parcela), [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 0]);
+  assert.equal(c.celulas[10].total, 0);
+  assert.equal(c.celulas[11].total, 0);
+  assert.deepEqual([c.media, c.regra], [c.perfil.valor, 'parcela de 8×']);
+  assert.equal(c.como, '8× · mar a out · renova');
+  const t27 = tabelaCategoriasFixas({ categorias: [catSeguro()], lancamentos: lancs, ano: 2027, hoje: HOJE });
+  const c27 = t27.grupos[0].categorias[0];
+  assert.deepEqual(c27.celulas.map((x) => x.prev), [0, 0, ...Array(8).fill(c.perfil.valor), 0, 0]);
+  assert.equal(c27.media, c.perfil.valor);
+  // sem renovar, 2027 fica vazio e sem média
+  const t27s = tabelaCategoriasFixas({ categorias: [catSeguro({ fixo_renova: false })], lancamentos: lancs, ano: 2027, hoje: HOJE });
+  assert.deepEqual([t27s.grupos[0].categorias[0].ano, t27s.grupos[0].categorias[0].media], [0, 0]);
+});
+
+test('no mês (Visão geral): a parcelada não entra depois da última parcela', () => {
+  const linhas = SEGURO.map(([c, v]) => ({ categoria_id: 'seg', competencia: `${c}-01`, total_centavos: v }));
+  const doMes = categoriasFixasDoMes({ categorias: [catSeguro()], linhas, hoje: HOJE });
+  assert.equal(doMes('2026-12').valor, 0);
+  assert.ok(doMes('2027-03').valor > 0);
+  // pelo histórico (sem dizer o parcelamento), dezembro levava a média dos últimos 6 meses
+  assert.equal(categoriasFixasDoMes({ categorias: [catSeguro({ fixo_parcelas: null })], linhas, hoje: HOJE })('2026-12').valor, Math.round((28463 * 5 + 31745) / 6));
 });

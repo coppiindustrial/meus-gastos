@@ -77,7 +77,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
   const comFixo = temGastoFixo(categorias);
   const SEM_033 = 'Para marcar o gasto fixo, aplique a migration 033 (supabase/migrations/033_categoria_gasto_fixo.sql) no SQL Editor do Supabase.';
   const hojeComp = competenciaAtual();
-  const como = useMemo(() => comoVemDoResumo(resumo, hojeComp), [resumo, hojeComp]);
+  const como = useMemo(() => comoVemDoResumo(resumo, hojeComp, categorias), [resumo, hojeComp, categorias]);
 
   // SALVAR NÃO FECHA (30/10/2026, a pedido): a tela recarrega e devolve o banco novo (`grupos`/`categorias`); o
   // rascunho recomeça dele, e a busca, o filtro, os recolhidos e a rolagem ficam como estavam.

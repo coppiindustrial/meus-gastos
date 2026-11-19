@@ -1,5 +1,7 @@
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
+import ComoPagaCategoria from './ComoPagaCategoria.jsx';
 import { formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
 import { competenciaCurta, formatDate, nomeCompetencia } from '../../lib/format.js';
 
@@ -60,13 +62,19 @@ function Celula({ cel }) {
     <span className="flex flex-col items-end leading-[1.15]">
       {principal}
       {resto > 0 && <span className="text-[10.5px] italic text-gray-400">+{fmt(resto)}</span>}
+      {cel.parcela > 0 && !resto && <span className="text-[10px] text-gray-400">{cel.parcela}/{cel.de}</span>}
     </span>
   );
 }
 
-export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMigracao, marcadas = 0, modo = 'valor' }) {
+// O NOME DA CATEGORIA ABRE O "COMO PAGA" (19/11/2026, a opção B do mockup "Parcelamento da categoria fixa"; migration 034,
+// `parcelavel`): pelo histórico ou parcelado em N vezes (`ComoPagaCategoria`). A parcelada mostra qual parcela é embaixo
+// do valor (3/8) e não prevê nada depois da última. `onRecarregar`: a tela relê depois de salvar.
+export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMigracao, marcadas = 0, modo = 'valor', parcelavel = false, onRecarregar }) {
   const navigate = useNavigate();
   const balao = useBalao(LARG, 200);
+  const [comoPaga, setComoPaga] = useState(null); // { item, ancora }
+  const fecharComoPaga = useCallback(() => setComoPaga(null), []);
   const { comps, grupos, totais } = tabela;
   const colHoje = comps.indexOf(hoje);
   const passa = (chave) => ({ onMouseMove: balao.aoMover(chave), onMouseLeave: balao.aoSair });
@@ -94,7 +102,9 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
       return {
         titulo: `${c.cat.nome} · média`,
         itens: [{ rotulo: 'Por mês', valor: formatBRL(c.media) }, { rotulo: `No ano (${ano}, com o previsto)`, valor: formatBRL(c.ano) }],
-        nota: c.regra === 'ano ÷ 12'
+        nota: c.perfil.tipo === 'parcelado' && c.regra.startsWith('parcela')
+          ? `Parcelado em ${c.perfil.n}×: a média é a parcela (a média das que caíram).`
+          : c.regra === 'ano ÷ 12'
           ? 'Não vem todo mês: o ano inteiro (o que veio e o previsto) dividido por 12 — o quanto separar por mês.'
           : c.regra === 'previsto'
             ? 'Vem todo mês, mas o ano ainda não tem mês fechado: vale o previsto.'
@@ -106,11 +116,14 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
       return {
         titulo: `${c.cat.nome} · ${grupos[gi].nome}`,
         itens: [{ rotulo: `No ano (${comps[0].slice(0, 4)})`, valor: formatBRL(c.ano) }],
-        nota: c.perfil.tipo === 'mensal'
-          ? `Vem todo mês: o previsto é a média dos últimos meses (${formatBRL(c.perfil.valor)}).`
-          : c.perfil.tipo === 'sazonal'
-            ? `Vem em alguns meses (${c.como}): o previsto de cada mês é o que caiu no mesmo mês do ano anterior.`
-            : 'Nada nos últimos 12 meses: sem previsto.',
+        nota: (c.perfil.tipo === 'parcelado'
+          ? `Parcelado (${c.como}): o previsto só nos meses das parcelas, de ${formatBRL(c.perfil.valor)}.`
+          : c.perfil.tipo === 'mensal'
+            ? `Vem todo mês: o previsto é a média dos últimos meses (${formatBRL(c.perfil.valor)}).`
+            : c.perfil.tipo === 'sazonal'
+              ? `Vem em alguns meses (${c.como}): o previsto de cada mês é o que caiu no mesmo mês do ano anterior.`
+              : 'Nada nos últimos 12 meses: sem previsto.')
+          + (parcelavel ? ' Clique no nome para dizer como é pago.' : ''),
       };
     }
     const c = grupos[gi].categorias[ci];
@@ -127,7 +140,7 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
       titulo: `${c.cat.nome} · ${nomeCompetencia(cel.comp)}`,
       itens: itens.length > 8 ? [...itens.slice(0, 7), { rotulo: `mais ${itens.length - 7}…`, valor: '' }] : itens,
       nota: cel.prev
-        ? `Previsto ${formatBRL(cel.previsto)}: ${c.perfil.tipo === 'mensal' ? 'a média dos últimos meses' : 'o que caiu no mesmo mês do ano anterior'}. Some quando o gasto entra.`
+        ? `Previsto ${formatBRL(cel.previsto)}: ${c.perfil.tipo === 'parcelado' ? `a parcela ${cel.parcela}/${cel.de}` : c.perfil.tipo === 'mensal' ? 'a média dos últimos meses' : 'o que caiu no mesmo mês do ano anterior'}. Some quando o gasto entra.`
         : cel.itens.length ? 'Clique para abrir nos Lançamentos.' : undefined,
     };
   };
@@ -191,8 +204,15 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
                     <tr key={c.cat.id}>
                       <td {...passa(`n:${gi}:${ci}:0`)} className="sticky left-0 z-10 h-[38px] border-b border-r border-gray-300 bg-white py-1 pl-6 pr-2 text-left">
                         <span className="flex min-w-0 flex-col leading-[1.25]">
-                          <span className="truncate font-medium text-gray-800">{c.cat.nome}</span>
-                          <small className="truncate text-[10.5px] text-gray-400">{c.como}</small>
+                          {parcelavel ? (
+                            <button type="button" className="self-start truncate text-left font-medium text-gray-800 underline-offset-[3px] hover:underline"
+                              style={{ textDecorationColor: 'var(--origem-fixo)' }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => { balao.aoSair(); setComoPaga((x) => (x?.item.cat.id === c.cat.id ? null : { item: c, ancora: e.currentTarget.getBoundingClientRect() })); }}>
+                              {c.cat.nome}
+                            </button>
+                          ) : <span className="truncate font-medium text-gray-800">{c.cat.nome}</span>}
+                          <small className={`truncate text-[10.5px] ${c.perfil.tipo === 'parcelado' ? 'text-hx-92400e' : 'text-gray-400'}`}>{c.como}</small>
                         </span>
                       </td>
                       {c.celulas.map((cel, i) => (
@@ -234,7 +254,11 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
           </div>
         </>
       )}
-      {conteudo && <BalaoGrafico pos={balao.pos} largura={LARG} {...conteudo} />}
+      {conteudo && !comoPaga && <BalaoGrafico pos={balao.pos} largura={LARG} {...conteudo} />}
+      {comoPaga && (
+        <ComoPagaCategoria item={comoPaga.item} ancora={comoPaga.ancora} hoje={hoje} onFechar={fecharComoPaga}
+          onSalvo={() => { setComoPaga(null); onRecarregar?.(); }} />
+      )}
     </div>
   );
 }

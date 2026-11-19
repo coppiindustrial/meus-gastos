@@ -1,4 +1,4 @@
-import { addMeses } from './format.js';
+import { addMeses, competenciaCurta } from './format.js';
 import { formatBRL } from './dinheiro.js';
 
 // AS CATEGORIAS QUE SÃO GASTO FIXO (16/11/2026, o mockup "Fixos por categoria", as recomendadas; migration 033).
@@ -44,7 +44,61 @@ export function seriesPorCategoria(linhas = [], ids = null) {
 // Devolve { tipo, valor, meses } — `valor`: o previsto do mensal, ou a média dos meses com gasto no sazonal; `meses`: os
 // números (1–12) dos meses com gasto na janela.
 export const JANELA_MEDIA = 6;
-export function perfilDaCategoria(serie = new Map(), hoje) {
+// · 'parcelado' (19/11/2026, a opção B do mockup "Parcelamento da categoria fixa"; migration 034) — a pessoa disse como
+//   paga: N vezes a partir de um mês, e se renova todo ano no mesmo mês. O seguro de 8 parcelas pelo histórico parecia
+//   "todo mês" e o app o previa para sempre. O previsto vale só nos meses do parcelamento; o `valor` é a PARCELA: a média
+//   das últimas N que caíram (até o mês de hoje), ou, sem nenhuma, o do histórico. `cat`: a categoria (com `fixo_parcelas`,
+//   `fixo_inicio`, `fixo_renova`); sem parcelamento, o perfil sai do histórico como sempre.
+export function perfilDaCategoria(serie = new Map(), hoje, cat = null) {
+  const base = perfilDoHistorico(serie, hoje);
+  const p = parcelamentoDa(cat);
+  if (!p) return base;
+  const pagas = [...serie.keys()].filter((c) => c <= hoje && (serie.get(c) ?? 0) > 0 && parcelaDoMes(p, c)).sort().slice(-p.n);
+  const meses = Array.from({ length: Math.min(p.n, 12) }, (_, i) => Number(addMeses(p.inicio, i).slice(5, 7)));
+  return { tipo: 'parcelado', valor: pagas.length ? media(pagas.map((c) => serie.get(c))) : base.valor, meses, ...p };
+}
+
+// O PARCELAMENTO que a pessoa disse: { n, inicio: 'AAAA-MM', fim: 'AAAA-MM' (a última do 1º ciclo), renova } ou null.
+// Renovar só vale com até 12 parcelas (cada ciclo cabe num ano).
+export function parcelamentoDa(cat) {
+  const n = Number(cat?.fixo_parcelas ?? 0);
+  if (!(n > 0) || !cat?.fixo_inicio) return null;
+  const inicio = String(cat.fixo_inicio).slice(0, 7);
+  return { n, inicio, fim: addMeses(inicio, n - 1), renova: !!cat.fixo_renova && n <= 12 };
+}
+
+const mesesEntre = (a, b) => {
+  const [ya, ma] = a.split('-').map(Number);
+  const [yb, mb] = b.split('-').map(Number);
+  return (yb - ya) * 12 + (mb - ma);
+};
+// QUAL PARCELA cai no mês (1…n), ou 0 fora do parcelamento. Com `renova`, o ciclo recomeça a cada 12 meses do início.
+export function parcelaDoMes(p, comp) {
+  if (!p) return 0;
+  const d = mesesEntre(p.inicio, comp);
+  if (d < 0) return 0;
+  const k = p.renova ? d % 12 : d;
+  return k < p.n ? k + 1 : 0;
+}
+
+// O CICLO de agora (o "Como paga" mostra): o de hoje, ou o último que já começou; { de, ate } 'AAAA-MM'.
+export function cicloAtual(p, hoje) {
+  const d = mesesEntre(p.inicio, hoje);
+  const de = p.renova && d > 0 ? addMeses(p.inicio, Math.floor(d / 12) * 12) : p.inicio;
+  return { de, ate: addMeses(de, p.n - 1) };
+}
+
+// A SUGESTÃO para quem vai dizer o parcelamento: a última sequência de meses seguidos com gasto (até hoje) — o seguro de
+// março a outubro dá 8 vezes a partir de março. { n, inicio } ou null.
+export function sugestaoDeParcelamento(serie = new Map(), hoje) {
+  const com = [...serie.keys()].filter((c) => c <= hoje && (serie.get(c) ?? 0) > 0).sort();
+  if (!com.length) return null;
+  let inicio = com[com.length - 1];
+  while (com.includes(addMeses(inicio, -1))) inicio = addMeses(inicio, -1);
+  return { n: Math.min(60, mesesEntre(inicio, com[com.length - 1]) + 1), inicio };
+}
+
+function perfilDoHistorico(serie, hoje) {
   const fechados = Array.from({ length: 12 }, (_, i) => addMeses(hoje, i - 12));
   const tem = (c) => (serie.get(c) ?? 0) > 0;
   const primeiro = fechados.find(tem);
@@ -61,6 +115,7 @@ export function perfilDaCategoria(serie = new Map(), hoje) {
 
 // O PREVISTO de um mês (de hoje em diante) pelo perfil.
 export function previstoDoMes(perfil, serie = new Map(), comp, hoje) {
+  if (perfil.tipo === 'parcelado') return parcelaDoMes(perfil, comp) ? perfil.valor : 0;
   if (perfil.tipo === 'mensal') return perfil.valor;
   if (perfil.tipo !== 'sazonal') return 0;
   for (let k = 1; k <= 2; k += 1) {
@@ -90,6 +145,11 @@ export function faixaDeMeses(meses = []) {
 
 // O que o app entendeu do histórico, numa frase: "todo mês · R$ 94,80", "fev · R$ 3.180,00".
 export function comoVem(perfil) {
+  if (perfil.tipo === 'parcelado') {
+    return perfil.renova
+      ? `${perfil.n}× · ${faixaDeMeses(perfil.meses)} · renova`
+      : `${perfil.n}× · ${competenciaCurta(perfil.inicio)} a ${competenciaCurta(perfil.fim)}`;
+  }
   if (perfil.tipo === 'mensal') return `todo mês · ${formatBRL(perfil.valor)}`;
   if (perfil.tipo === 'sazonal') return `${faixaDeMeses(perfil.meses)} · ${formatBRL(perfil.valor)}`;
   return 'nada nos últimos 12 meses';
@@ -97,22 +157,26 @@ export function comoVem(perfil) {
 
 // "Como vem" de cada categoria pela `resumo_mensal` (os dois cadastros): Map<categoria_id, texto>. A categoria que só tem
 // fixo lançado à mão diz isso (ela já está na grade de cima dos Gastos fixos; marcar não muda nada nela).
-export function comoVemDoResumo(resumo = [], hoje) {
+// `categorias` (opcional): a parcelada diz o parcelamento, não o histórico.
+export function comoVemDoResumo(resumo = [], hoje, categorias = []) {
   const out = new Map();
+  const porId = new Map(categorias.map((c) => [c.id, c]));
   resumo.forEach((r) => { if (r.tipo === 'saida' && r.origem === 'fixo' && r.categoria_id) out.set(r.categoria_id, 'só o fixo lançado à mão'); });
-  seriesPorCategoria(linhasDoResumo(resumo)).forEach((serie, id) => out.set(id, comoVem(perfilDaCategoria(serie, hoje))));
+  seriesPorCategoria(linhasDoResumo(resumo)).forEach((serie, id) => out.set(id, comoVem(perfilDaCategoria(serie, hoje, porId.get(id)))));
   return out;
 }
 
 // A CÉLULA de um mês: o que veio (`real`), a parcela que já está numa fatura (`parc`, das parcelas que vêm) e o que ainda
 // falta do previsto (`prev`, tracejado). Nos meses passados, só o real. De hoje em diante, o total é o MAIOR entre o
 // previsto e o que já se sabe (real + parcela): o previsto some à medida que o real entra.
+// Na parcelada, `parcela` = qual parcela cai no mês (1…n; 0 fora) e `de` = n.
 export function celulaDoMes({ serie = new Map(), perfil, parcelas = 0, comp, hoje }) {
   const real = serie.get(comp) ?? 0;
-  if (comp < hoje) return { real, parc: 0, prev: 0, previsto: 0, total: real };
+  const k = perfil?.tipo === 'parcelado' ? { parcela: parcelaDoMes(perfil, comp), de: perfil.n } : {};
+  if (comp < hoje) return { real, parc: 0, prev: 0, previsto: 0, total: real, ...k };
   const previsto = previstoDoMes(perfil, serie, comp, hoje);
   const prev = Math.max(0, previsto - real - parcelas);
-  return { real, parc: parcelas, prev, previsto, total: real + parcelas + prev };
+  return { real, parc: parcelas, prev, previsto, total: real + parcelas + prev, ...k };
 }
 
 // As parcelas que vêm, por categoria e mês: Map<categoria_id, Map<comp, { valor, itens }>>.
@@ -155,7 +219,7 @@ export function tabelaCategoriasFixas({ categorias = [], lancamentos = [], parce
     let g = grupos.find((x) => x.id === gid);
     if (!g) { g = { id: gid, nome: cat.grupo?.nome ?? '', cor: cat.grupo?.cor ?? '#9ca3af', categorias: [] }; grupos.push(g); }
     const serie = series.get(cat.id) ?? new Map();
-    const perfil = perfilDaCategoria(serie, hoje);
+    const perfil = perfilDaCategoria(serie, hoje, cat);
     const celulas = comps.map((comp) => ({
       comp,
       ...celulaDoMes({ serie, perfil, parcelas: parc.get(cat.id)?.get(comp)?.valor ?? 0, comp, hoje }),
@@ -163,7 +227,7 @@ export function tabelaCategoriasFixas({ categorias = [], lancamentos = [], parce
       parcelas: parc.get(cat.id)?.get(comp)?.itens ?? [],
     }));
     const total = soma(celulas.map((c) => c.total));
-    g.categorias.push({ cat, perfil, como: comoVem(perfil), celulas, ano: total, ...mediaDaCategoria({ perfil, celulas, ano: total, hoje }) });
+    g.categorias.push({ cat, perfil, serie, como: comoVem(perfil), celulas, ano: total, ...mediaDaCategoria({ perfil, celulas, ano: total, hoje }) });
   });
   grupos.forEach((g) => {
     g.totais = comps.map((_, i) => soma(g.categorias.map((c) => c.celulas[i].total)));
@@ -180,7 +244,9 @@ export function tabelaCategoriasFixas({ categorias = [], lancamentos = [], parce
 // · a ANUAL ou de alguns meses (o IPTU, o IPVA, a manutenção) — o ano inteiro (o que veio + o previsto) ÷ 12: o quanto
 //   separar por mês. Dividir pelos meses com gasto faria o IPVA de setembro valer por mês.
 // Devolve { media, regra } — `regra` é o texto curto que a tabela mostra embaixo do número ('10 meses', 'ano ÷ 12', 'previsto').
+// · a PARCELADA — a parcela (o total ÷ as vezes), quando o ano tem parcela; o ano sem nenhuma segue a régua de baixo.
 export function mediaDaCategoria({ perfil, celulas = [], ano = 0, hoje }) {
+  if (perfil?.tipo === 'parcelado' && celulas.some((c) => c.parcela)) return { media: perfil.valor, regra: `parcela de ${perfil.n}×` };
   if (perfil?.tipo === 'mensal') {
     const fechados = celulas.filter((c) => c.comp < hoje && c.real > 0).map((c) => c.real);
     if (fechados.length) return { media: media(fechados), regra: fechados.length === 1 ? '1 mês' : `${fechados.length} meses` };
@@ -231,7 +297,7 @@ export function categoriasFixasDoMes({ categorias = [], linhas = [], parcelas = 
   const ids = new Set(fixas.map((c) => c.id));
   const series = seriesPorCategoria(linhas, ids);
   const parc = parcelasPorCategoria(parcelas, ids);
-  const perfis = new Map(fixas.map((c) => [c.id, perfilDaCategoria(series.get(c.id) ?? new Map(), hoje)]));
+  const perfis = new Map(fixas.map((c) => [c.id, perfilDaCategoria(series.get(c.id) ?? new Map(), hoje, c)]));
   return (comp) => {
     const out = { valor: 0, parcelas: 0, qtd: 0, porCategoria: [] };
     fixas.forEach((c) => {

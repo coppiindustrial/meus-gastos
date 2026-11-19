@@ -216,11 +216,16 @@ export default function Lancamentos() {
   }, [toast]);
 
   const limites = useMemo(() => limitesDoPeriodo(periodo, comp), [periodo, comp]);
+  // A LEITURA ATRASADA NÃO VALE (19/11/2026): a tela abre no mês lembrado e o endereço (?mes=) troca logo depois; se a
+  // resposta do mês lembrado chegava por último, a grade mostrava os lançamentos dele com a pílula no mês pedido (o
+  // clique numa célula das Categorias fixas abria fevereiro com os de novembro). Só a leitura mais nova grava.
+  const leitura = useRef(0);
   const carregar = useCallback(async () => {
+    const n = ++leitura.current;
     try {
       const linhas = noMes ? await listarDoMes(comp) : await listarPeriodo(limites);
-      setTodas(ordenarLinhas(linhas, ordemRef.current, { porMes: !noMes }));
-    } catch (err) { toast.error(err.message); setTodas([]); }
+      if (n === leitura.current) setTodas(ordenarLinhas(linhas, ordemRef.current, { porMes: !noMes }));
+    } catch (err) { if (n === leitura.current) { toast.error(err.message); setTodas([]); } }
   }, [noMes, comp, limites.de, limites.ate, toast]);
   useEffect(() => { setTodas(null); carregar(); }, [carregar]);
   useEffect(() => { listarResumoMensal().then(setResumo).catch((err) => toast.error(err.message)); }, [toast]);

@@ -58,6 +58,16 @@ export function marcarGastoFixo(ids, valor) {
 }
 export const temGastoFixo = (categorias) => categorias.some((c) => 'gasto_fixo' in c);
 
+// COMO A CATEGORIA FIXA É PAGA (migration 034): parcelada em `parcelas` vezes a partir de `inicio` ('AAAA-MM'), e se
+// `renova` todo ano; `null` volta ao "pelo histórico". `temParcelamento`: as colunas existem.
+export function salvarParcelamento(id, p) {
+  const campos = p
+    ? { fixo_parcelas: p.parcelas, fixo_inicio: `${p.inicio}-01`, fixo_renova: !!p.renova }
+    : { fixo_parcelas: null, fixo_inicio: null, fixo_renova: false };
+  return exigir(supabase.from('categorias').update(campos).eq('id', id));
+}
+export const temParcelamento = (categorias) => categorias.some((c) => 'fixo_parcelas' in c);
+
 // JUNTAR uma categoria em outra: os lançamentos, os gastos fixos e as regras dela passam para a que fica, e ela
 // sai. Sem transação (o PostgREST não tem): a ordem é a que deixa o banco são se parar no meio — mover tudo
 // primeiro, apagar por último (a regra apagaria em cascata se a categoria saísse antes).

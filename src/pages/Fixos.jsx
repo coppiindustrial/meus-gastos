@@ -20,7 +20,7 @@ import MenuContexto from '../components/MenuContexto.jsx';
 import Tooltip from '../components/Tooltip.jsx';
 import { IconLapis, IconSeta } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { listarCategorias, temGastoFixo } from '../api/cadastros.js';
+import { listarCategorias, temGastoFixo, temParcelamento } from '../api/cadastros.js';
 import {
   criarRecorrenciasDoHistorico, listarFixosSemRecorrencia, listarLancamentosDasCategorias, listarLancamentosDeFixos, listarPulados, listarRecorrencias,
   salvarRecorrencia,
@@ -416,7 +416,7 @@ export default function Fixos() {
       )}
 
       <TabelaCategoriasFixas tabela={tabelaFixas} hoje={hoje} onEscolher={() => setEscolher(true)} semMigracao={!temGastoFixo(categorias)}
-        marcadas={categoriasFixas(categorias).length} modo={modo} />
+        marcadas={categoriasFixas(categorias).length} modo={modo} parcelavel={temParcelamento(categorias)} onRecarregar={carregar} />
       {matriz.linhas.length > 0 && tabelaFixas.grupos.length > 0 && <CustoFixoTotal custo={custo} hoje={hoje} modo={modo} />}
       {escolher && <ModalEscolherFixas categorias={categorias} onFechar={() => setEscolher(false)} onSalvo={() => { setEscolher(false); carregar(); }} />}
 
