@@ -88,6 +88,23 @@ export function cicloAtual(p, hoje) {
   return { de, ate: addMeses(de, p.n - 1) };
 }
 
+// OS ÚLTIMOS 12 MESES do pop-up da categoria fixa (19/11/2026, a opção B do mockup "Categoria fixa · pop-up"): de 11 meses
+// atrás até hoje, o que caiu em cada um e, com o parcelamento `p` (o do rascunho, ou null = pelo histórico), qual parcela é.
+// `estado`: 'parcela' (caiu, numa parcela) · 'prevista' (parcela de hoje ou depois que ainda não caiu) · 'faltou' (parcela
+// de um mês fechado sem gasto: o parcelamento não bate) · 'fora' (caiu fora das parcelas) · 'gasto' (caiu, sem
+// parcelamento) · 'vazio'.
+export function ultimos12Meses(serie = new Map(), hoje, p = null) {
+  return Array.from({ length: 12 }, (_, i) => {
+    const comp = addMeses(hoje, i - 11);
+    const valor = Math.max(0, serie.get(comp) ?? 0);
+    const parcela = parcelaDoMes(p, comp);
+    const estado = !p ? (valor ? 'gasto' : 'vazio')
+      : parcela ? (valor ? 'parcela' : comp >= hoje ? 'prevista' : 'faltou')
+      : valor ? 'fora' : 'vazio';
+    return { comp, valor, parcela, estado };
+  });
+}
+
 // A SUGESTÃO para quem vai dizer o parcelamento: a última sequência de meses seguidos com gasto (até hoje) — o seguro de
 // março a outubro dá 8 vezes a partir de março. { n, inicio } ou null.
 export function sugestaoDeParcelamento(serie = new Map(), hoje) {

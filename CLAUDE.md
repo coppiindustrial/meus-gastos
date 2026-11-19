@@ -563,9 +563,15 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   categorias) e a média = a soma das duas médias; segue os filtros e o Valor | Variação %. A CATEGORIA PARCELADA (19/11/2026,
   a opção B do mockup "Parcelamento da categoria fixa"; migration 034: `fixo_parcelas`, `fixo_inicio`, `fixo_renova`): o
   seguro em 8 parcelas, pelo histórico, parecia "todo mês" e o previsto seguia para sempre. CLICAR NO NOME da categoria na
-  tabela abre o "Como paga" (`components/planilha/ComoPagaCategoria.jsx`, portado, o "dentro" marcado no mousedown do
-  React porque o calendário do `CampoMes` também vai ao body): Pelo histórico | Parcelado em N vezes a partir de um mês,
-  "renova todo ano" (só até 12); a sugestão é a última sequência de meses seguidos com gasto (`sugestaoDeParcelamento`).
+  tabela (também o botão direito e o Shift+F2 no nome) abre o POP-UP DELA, `components/planilha/ModalCategoriaFixa.jsx`
+  (19/11/2026, a opção B do mockup "Categoria fixa · pop-up", a pedido: o balão laranja preso ao nome destoava — agora é o
+  `Modal` com os campos, a caixa de marcar e os botões do "Editar gasto fixo", sem laranja; o NOME é o dos fixos de cima:
+  o ponto do grupo, o sublinhado cinza e o lápis no hover): os ÚLTIMOS 12 MESES (`ultimos12Meses`, testada: a parcela que
+  caiu acende na cor do grupo, a que vem tracejada, a parcela sem gasto e o gasto fora delas à parte — segue o rascunho),
+  Pelo histórico | Parcelado em N vezes a partir de um mês, "renova todo ano" (só até 12) e, no pé, "Tirar dos gastos
+  fixos" (`marcarGastoFixo`, com confirmação); a sugestão é a última sequência de meses seguidos com gasto
+  (`sugestaoDeParcelamento`). LER A POSIÇÃO DO CLIQUE FORA DO UPDATER do `setState`: o `currentTarget` vira null depois do
+  evento e, na versão publicada, o updater rodava depois (a tela quebrava ao clicar no nome — 19/11/2026).
   Parcelada (`perfil.tipo` 'parcelado', `parcelaDoMes`, `cicloAtual`): o previsto só nos meses das parcelas, a PARCELA é a
   média das últimas N que caíram, a célula diz "3/8", a média é a parcela ("parcela de 8×"), e o "como vem" "8× · mar a
   out · renova". Vale também na Visão geral (`categoriasFixasDoMes`) e no "como vem" dos cadastros. Sem a 034, o nome não

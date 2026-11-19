@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
-import ComoPagaCategoria from './ComoPagaCategoria.jsx';
+import ModalCategoriaFixa from './ModalCategoriaFixa.jsx';
 import { formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
 import { competenciaCurta, formatDate, nomeCompetencia } from '../../lib/format.js';
 
@@ -67,14 +67,15 @@ function Celula({ cel }) {
   );
 }
 
-// O NOME DA CATEGORIA ABRE O "COMO PAGA" (19/11/2026, a opção B do mockup "Parcelamento da categoria fixa"; migration 034,
-// `parcelavel`): pelo histórico ou parcelado em N vezes (`ComoPagaCategoria`). A parcelada mostra qual parcela é embaixo
-// do valor (3/8) e não prevê nada depois da última. `onRecarregar`: a tela relê depois de salvar.
+// O NOME DA CATEGORIA ABRE O POP-UP DELA (19/11/2026, a opção B do mockup "Categoria fixa · pop-up"; migration 034,
+// `parcelavel`): o `ModalCategoriaFixa`, no desenho do "Editar gasto fixo" — pelo histórico ou parcelado em N vezes, os
+// últimos 12 meses e "Tirar dos gastos fixos". O NOME É O DOS FIXOS DE CIMA (`MatrizFixos`): o ponto da cor do grupo, o
+// sublinhado cinza e o lápis no hover; o botão direito e o Shift+F2 (com o nome em foco) também abrem. A parcelada mostra
+// qual parcela é embaixo do valor (3/8) e não prevê nada depois da última. `onRecarregar`: a tela relê depois de salvar.
 export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMigracao, marcadas = 0, modo = 'valor', parcelavel = false, onRecarregar }) {
   const navigate = useNavigate();
   const balao = useBalao(LARG, 200);
-  const [comoPaga, setComoPaga] = useState(null); // { item, ancora }
-  const fecharComoPaga = useCallback(() => setComoPaga(null), []);
+  const [aberta, setAberta] = useState(null); // { item, cor, grupo }
   const { comps, grupos, totais } = tabela;
   const colHoje = comps.indexOf(hoje);
   const passa = (chave) => ({ onMouseMove: balao.aoMover(chave), onMouseLeave: balao.aoSair });
@@ -123,7 +124,7 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
             : c.perfil.tipo === 'sazonal'
               ? `Vem em alguns meses (${c.como}): o previsto de cada mês é o que caiu no mesmo mês do ano anterior.`
               : 'Nada nos últimos 12 meses: sem previsto.')
-          + (parcelavel ? ' Clique no nome para dizer como é pago.' : ''),
+          + (parcelavel ? ' Clique no nome para dizer como é pago (parcelado ou pelo histórico).' : ''),
       };
     }
     const c = grupos[gi].categorias[ci];
@@ -202,24 +203,30 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
                   </tr>,
                   ...g.categorias.map((c, ci) => (
                     <tr key={c.cat.id}>
-                      <td {...passa(`n:${gi}:${ci}:0`)} className="sticky left-0 z-10 h-[38px] border-b border-r border-gray-300 bg-white py-1 pl-6 pr-2 text-left">
-                        <span className="flex min-w-0 flex-col leading-[1.25]">
-                          {parcelavel ? (
-                            <button type="button" className="self-start truncate text-left font-medium text-gray-800 underline-offset-[3px] hover:underline"
-                              style={{ textDecorationColor: 'var(--origem-fixo)' }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => {
-                                // mede AGORA: o `currentTarget` vira null depois do clique, e o React pode rodar o updater depois
-                                // (na versão publicada rodava, e a tela quebrava)
-                                const ancora = e.currentTarget.getBoundingClientRect();
-                                balao.aoSair();
-                                setComoPaga((x) => (x?.item.cat.id === c.cat.id ? null : { item: c, ancora }));
-                              }}>
-                              {c.cat.nome}
+                      <td {...passa(`n:${gi}:${ci}:0`)} className="sticky left-0 z-10 h-[38px] border-b border-r border-gray-300 bg-white py-0.5 pl-[18px] pr-1 text-left">
+                        {(() => {
+                          const abrir = () => { balao.aoSair(); setAberta({ item: c, cor: g.cor, grupo: g.nome }); };
+                          const miolo = (
+                            <>
+                              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: g.cor ?? '#9ca3af' }} />
+                              <span className="flex min-w-0 flex-col leading-[1.25]">
+                                <span className="truncate text-gray-900 decoration-gray-400 underline-offset-[3px] group-hover/nome:underline">{c.cat.nome}</span>
+                                <small className="truncate text-[10.5px] text-gray-400">{c.como}</small>
+                              </span>
+                            </>
+                          );
+                          return parcelavel ? (
+                            <button type="button" onClick={abrir} onMouseDown={(e) => e.stopPropagation()}
+                              onContextMenu={(e) => { e.preventDefault(); abrir(); }}
+                              onKeyDown={(e) => { if (e.shiftKey && e.key === 'F2') { e.preventDefault(); abrir(); } }}
+                              className="group/nome flex w-full min-w-0 items-center gap-2 rounded-[4px] px-1.5 py-[3px] text-left transition-colors duration-[120ms] hover:bg-gray-200/70 active:bg-gray-200">
+                              {miolo}
+                              <svg viewBox="0 0 24 24" className="ml-auto h-3.5 w-3.5 shrink-0 text-gray-500 opacity-0 transition-opacity group-hover/nome:opacity-100" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+                              </svg>
                             </button>
-                          ) : <span className="truncate font-medium text-gray-800">{c.cat.nome}</span>}
-                          <small className={`truncate text-[10.5px] ${c.perfil.tipo === 'parcelado' ? 'text-hx-92400e' : 'text-gray-400'}`}>{c.como}</small>
-                        </span>
+                          ) : <span className="flex min-w-0 items-center gap-2 px-1.5 py-[3px]">{miolo}</span>;
+                        })()}
                       </td>
                       {c.celulas.map((cel, i) => (
                         <td key={cel.comp} {...(cel.total ? passa(`c:${gi}:${ci}:${i}`) : {})}
@@ -260,10 +267,10 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
           </div>
         </>
       )}
-      {conteudo && !comoPaga && <BalaoGrafico pos={balao.pos} largura={LARG} {...conteudo} />}
-      {comoPaga && (
-        <ComoPagaCategoria item={comoPaga.item} ancora={comoPaga.ancora} hoje={hoje} onFechar={fecharComoPaga}
-          onSalvo={() => { setComoPaga(null); onRecarregar?.(); }} />
+      {conteudo && !aberta && <BalaoGrafico pos={balao.pos} largura={LARG} {...conteudo} />}
+      {aberta && (
+        <ModalCategoriaFixa item={aberta.item} cor={aberta.cor} grupo={aberta.grupo} hoje={hoje} onFechar={() => setAberta(null)}
+          onSalvo={() => { setAberta(null); onRecarregar?.(); }} />
       )}
     </div>
   );

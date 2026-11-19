@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  categoriasFixasDoMes, celulaDoMes, comoVem, custoFixoDoAno, mediaDaCategoria, comoVemDoResumo, faixaDeMeses, parcelaDoMes, parcelamentoDa, perfilDaCategoria, previstoDoMes, seriesPorCategoria, tabelaCategoriasFixas,
+  categoriasFixasDoMes, celulaDoMes, comoVem, custoFixoDoAno, mediaDaCategoria, comoVemDoResumo, faixaDeMeses, parcelaDoMes, ultimos12Meses, parcelamentoDa, perfilDaCategoria, previstoDoMes, seriesPorCategoria, tabelaCategoriasFixas,
 } from '../src/lib/categoriasFixas.js';
 import { custoFixo, jaComprometido } from '../src/lib/visaoGeral.js';
 import { addMeses } from '../src/lib/format.js';
@@ -260,4 +260,26 @@ test('no mês (Visão geral): a parcelada não entra depois da última parcela',
   assert.ok(doMes('2027-03').valor > 0);
   // pelo histórico (sem dizer o parcelamento), dezembro levava a média dos últimos 6 meses
   assert.equal(categoriasFixasDoMes({ categorias: [catSeguro({ fixo_parcelas: null })], linhas, hoje: HOJE })('2026-12').valor, Math.round((28463 * 5 + 31745) / 6));
+});
+
+test('os últimos 12 meses do pop-up: parcela, prevista, faltou, fora e, sem parcelamento, só o gasto', () => {
+  const serie = new Map([['2026-02', 5000], ['2026-03', 28872], ['2026-04', 28872], ['2026-06', 28872]]);
+  const p = { n: 4, inicio: '2026-03', renova: false };
+  const hoje = '2026-06';
+  const f = ultimos12Meses(serie, '2026-07', p);
+  assert.equal(f.length, 12);
+  assert.equal(f[0].comp, '2025-08');
+  assert.equal(f[11].comp, '2026-07');
+  const de = (c) => f.find((x) => x.comp === c);
+  assert.equal(de('2026-02').estado, 'fora');
+  assert.deepEqual([de('2026-03').estado, de('2026-03').parcela], ['parcela', 1]);
+  assert.equal(de('2026-05').estado, 'faltou');
+  assert.equal(de('2026-06').estado, 'parcela');
+  assert.equal(de('2026-07').estado, 'vazio'); // depois da 4ª
+  // a parcela de hoje que ainda não caiu
+  assert.equal(ultimos12Meses(new Map(), hoje, p).find((x) => x.comp === hoje).estado, 'prevista');
+  // pelo histórico
+  const h = ultimos12Meses(serie, '2026-07', null);
+  assert.equal(h.find((x) => x.comp === '2026-03').estado, 'gasto');
+  assert.equal(h.find((x) => x.comp === '2026-05').estado, 'vazio');
 });
