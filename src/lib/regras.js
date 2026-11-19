@@ -57,6 +57,32 @@ export function ignoradosNoApp(regras, lancamentos) {
   });
   return out;
 }
+// A CATEGORIA QUE A REGRA DÁ E O QUE JÁ ENTROU COM OUTRA (19/11/2026): mudar a categoria de uma regra (o posto que
+// era Manutenção do carro e virou Gasolina) só decide as próximas importações. Estes são os lançamentos gravados em
+// que a regra é a PRIMEIRA que pega o estabelecimento (a ordem gravada, a régua do `ignoradosNoApp` e do uso) e que
+// estão com OUTRA categoria. Ficam de fora: a regra de ignorar, o lançamento sem categoria (é das Pendências), o à
+// mão (sem estabelecimento) e o de outro tipo que a categoria da regra (o crédito do extrato que virou entrada não
+// pega a categoria de gasto da regra) — `tipoDe(categoria_id)` → 'saida' | 'entrada' | undefined.
+// `antigas` (Map id da regra → a categoria de ANTES, ao salvar): só os que ainda estão com a categoria antiga — o
+// que a pessoa reclassificou à mão para uma terceira fica como está.
+// `lancamentos`: [{ id, estabelecimento, categoria_id, tipo, … }]. Devolve Map id da regra → [lançamentos].
+export function categoriaParaAplicar(regras, lancamentos, { tipoDe = () => undefined, antigas = null } = {}) {
+  const comp = regras.filter((r) => r.palavra_chave?.trim()).map((r) => ({ r, re: padraoDe(r.palavra_chave.trim()) }));
+  const out = new Map();
+  lancamentos.forEach((l) => {
+    const nome = (l.estabelecimento || '').trim();
+    if (!nome || !l.categoria_id) return;
+    const r = comp.find((c) => c.re.test(nome))?.r;
+    if (!r || r.ignorar || !r.categoria_id || l.categoria_id === r.categoria_id) return;
+    const tipo = tipoDe(r.categoria_id);
+    if (tipo && l.tipo && l.tipo !== tipo) return;
+    if (antigas && (!antigas.has(r.id) || antigas.get(r.id) !== l.categoria_id)) return;
+    if (!out.has(r.id)) out.set(r.id, []);
+    out.get(r.id).push(l);
+  });
+  return out;
+}
+
 // Na confirmação de tirar, vêm marcados todos MENOS o fixo do mês (o extrato o criou como o fixo: tirá-lo faz o mês
 // voltar a mostrá-lo "a lançar").
 export const ehFixo = (l) => l.origem === 'fixo' || !!l.recorrencia_id;

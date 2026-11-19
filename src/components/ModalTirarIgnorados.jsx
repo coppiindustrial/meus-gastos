@@ -20,7 +20,8 @@ import { useToast } from '../context/ToastContext.jsx';
 // `grupos`: [{ regra: { id, palavra_chave }, lancs: [{ id }] }] (de `ignoradosNoApp`). `onFeito()`: depois de tirar.
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 
-function deOnde(l, cartaoPorId) {
+// De onde veio o lançamento (também no `ModalAplicarCategoria`).
+export function deOnde(l, cartaoPorId) {
   const base = l.origem === 'cartao' ? ['Cartão', cartaoPorId.get(l.cartao_id)?.nome].filter(Boolean).join(' · ')
     : l.importado_de === 'extrato' ? 'Extrato' : ORIGENS[l.origem] ?? l.origem;
   return l.importado_de === 'planilha' ? `${base} · planilha` : base;

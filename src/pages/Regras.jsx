@@ -16,7 +16,8 @@ import { listarCategorias } from '../api/cadastros.js';
 import { atualizarRegra, classificarLancamentos, criarRegra, excluirRegra, listarNomesClassificaveis, listarPendencias, listarRegras } from '../api/regras.js';
 import { criarClassificador, regraPega } from '../lib/classificar.js';
 import ModalTirarIgnorados from '../components/ModalTirarIgnorados.jsx';
-import { alteracoesRegras, diferencaRegra, ignoradosNoApp, nomesDistintos, quemPega, totalAlteracoesRegras, usoDasRegras, validarRegras } from '../lib/regras.js';
+import ModalAplicarCategoria from '../components/ModalAplicarCategoria.jsx';
+import { alteracoesRegras, categoriaParaAplicar, diferencaRegra, ignoradosNoApp, nomesDistintos, quemPega, totalAlteracoesRegras, usoDasRegras, validarRegras } from '../lib/regras.js';
 import { competenciaCurta } from '../lib/format.js';
 import { lsGet, lsSet } from '../lib/storage.js';
 import { exportCsv } from '../lib/exportCsv.js';
@@ -27,6 +28,10 @@ import { useListaArrastavel } from '../lib/useListaArrastavel.js';
 // A DE IGNORAR TAMBÉM TIRA O QUE JÁ ENTROU (03/11/2026): a regra gravada como "Ignorar" que ainda pega lançamentos
 // ganha o aviso "N ainda no app · tirar", e salvar uma regra que virou (ou nasceu) "Ignorar" já pergunta — os dois
 // abrem o `ModalTirarIgnorados` (a lista, o fixo do mês desmarcado, o total das faturas refeito).
+// A CATEGORIA NOVA TAMBÉM VALE NO QUE JÁ ENTROU (19/11/2026, no mesmo jeito): salvar uma regra cuja categoria mudou
+// pergunta se os lançamentos que ela já pegou (os que ainda estão com a categoria antiga) passam para a nova, e a
+// regra gravada que pega lançamentos com outra categoria ganha o aviso "N com outra categoria · aplicar" — os dois
+// abrem o `ModalAplicarCategoria` (`categoriaParaAplicar` em lib/regras.js).
 //
 // A TELA (30/10/2026, opção A do mockup "Regras · overhaul"): a TABELA DE FORMULÁRIO do cadastro dos fixos e do das
 // categorias — a ordem é a alça ⠿ (arrastar = mudar a prioridade), a palavra e a categoria são campos, marcar várias
@@ -78,6 +83,8 @@ export default function Regras() {
   const [nomes, setNomes] = useState(null); // os nomes do histórico, para o uso
   const [lancs, setLancs] = useState(null); // os lançamentos com estabelecimento (o que as de ignorar ainda pegam)
   const [tirando, setTirando] = useState(null); // os grupos do `ModalTirarIgnorados`, ou null
+  const [aplicando, setAplicando] = useState(null); // os grupos do `ModalAplicarCategoria`, ou null
+  const tirarDepois = useRef(null); // o de tirar que o mesmo salvar pediu: abre quando o de aplicar fechar
   const [busca, setBusca] = useState('');
   const [cats, setCats] = useState([]);
   const [tipo, setTipo] = useState('');
@@ -119,10 +126,23 @@ export default function Regras() {
   const nEscondidas = uso ? [...uso.values()].filter((u) => u.aviso?.tipo === 'escondida').length : 0;
   // O que cada regra de ignorar GRAVADA ainda deixa no app (pela ordem gravada, como o uso).
   const ignorados = useMemo(() => (regras && lancs ? ignoradosNoApp(regras, lancs) : null), [regras, lancs]);
+  const gruposDe = (ids, mapa, lista) => ids.map((id) => ({ regra: (lista ?? []).find((r) => r.id === id) ?? { id, palavra_chave: '' }, lancs: mapa?.get(id) ?? [] }))
+    .filter((g) => g.lancs.length);
   const abrirTirar = (ids, mapa = ignorados, lista = regras) => {
-    const grupos = ids.map((id) => ({ regra: (lista ?? []).find((r) => r.id === id) ?? { id, palavra_chave: '' }, lancs: mapa?.get(id) ?? [] }))
-      .filter((g) => g.lancs.length);
+    const grupos = gruposDe(ids, mapa, lista);
     if (grupos.length) setTirando(grupos);
+  };
+  // O que cada regra GRAVADA pega com outra categoria que a dela (a mesma régua; o tipo da categoria filtra).
+  const tipoDe = useCallback((id) => categorias.find((c) => c.id === id)?.grupo?.tipo, [categorias]);
+  const outraCategoria = useMemo(() => (regras && lancs ? categoriaParaAplicar(regras, lancs, { tipoDe }) : null), [regras, lancs, tipoDe]);
+  const abrirAplicar = (ids, mapa = outraCategoria, lista = regras) => {
+    const grupos = gruposDe(ids, mapa, lista).filter((g) => g.regra.categoria_id);
+    if (grupos.length) setAplicando(grupos);
+    return grupos.length > 0;
+  };
+  const fecharAplicar = () => {
+    setAplicando(null);
+    if (tirarDepois.current) { setTirando(tirarDepois.current); tirarDepois.current = null; }
   };
 
   const catPorId = useMemo(() => new Map(categorias.map((c) => [c.id, c])), [categorias]);
@@ -209,6 +229,10 @@ export default function Regras() {
     }))) return;
     // as que viram (ou nascem) "Ignorar": depois de gravar, pergunta se tira o que elas já deixaram entrar
     const viraram = new Set([...alt.novas, ...alt.mudadas].filter((l) => l.ignorar && !l.orig?.ignorar).map((l) => l.palavra_chave.trim().toLowerCase()));
+    // as que trocaram uma categoria por outra: depois de gravar, pergunta se o que elas já pegaram com a antiga passa
+    // para a nova (o que foi reclassificado à mão para uma terceira fica de fora)
+    const trocaram = new Map(alt.mudadas.filter((l) => !l.ignorar && l.categoria_id && !l.orig.ignorar && l.orig.categoria_id && l.categoria_id !== l.orig.categoria_id)
+      .map((l) => [l.id, l.orig.categoria_id]));
     setSalvando(true);
     try {
       for (const l of alt.excluir) await excluirRegra(l.id);
@@ -220,11 +244,14 @@ export default function Regras() {
     }
     await carregar();
     setSalvando(false);
-    if (viraram.size) {
+    if (viraram.size || trocaram.size) {
       try {
         const [r2, ls] = await Promise.all([listarRegras(), listarNomesClassificaveis()]);
-        abrirTirar(r2.filter((r) => r.ignorar && viraram.has(r.palavra_chave.trim().toLowerCase())).map((r) => r.id), ignoradosNoApp(r2, ls), r2);
-      } catch { /* o aviso na linha da regra continua valendo */ }
+        const tirar = gruposDe(r2.filter((r) => r.ignorar && viraram.has(r.palavra_chave.trim().toLowerCase())).map((r) => r.id), ignoradosNoApp(r2, ls), r2);
+        // as duas perguntas do mesmo salvar vêm uma depois da outra: a da categoria primeiro
+        const aplicou = trocaram.size > 0 && abrirAplicar([...trocaram.keys()], categoriaParaAplicar(r2, ls, { tipoDe, antigas: trocaram }), r2);
+        if (tirar.length) { if (aplicou) tirarDepois.current = tirar; else setTirando(tirar); }
+      } catch { /* os avisos na linha da regra continuam valendo */ }
     }
   };
 
@@ -329,6 +356,13 @@ export default function Regras() {
               title="Ela é de ignorar, mas estes lançamentos entraram antes dela (ou com outra regra): clique para ver e tirar do app."
               className="inline-flex items-center rounded-[4px] bg-hx-fef3c7 px-1.5 py-0.5 font-semibold text-hx-92400e underline-offset-2 hover:underline">
               {ignorados.get(l.id).length} ainda no app · tirar
+            </button>
+          )}
+          {!l.novo && !l.excluir && outraCategoria?.get(l.id)?.length > 0 && (
+            <button type="button" onClick={() => abrirAplicar([l.id])}
+              title={`A regra dá ${catPorId.get(l.orig?.categoria_id)?.nome ?? 'uma categoria'}, mas estes lançamentos que ela pega estão com outra (entraram antes da mudança, ou foram reclassificados à mão): clique para ver e aplicar a categoria da regra.`}
+              className="inline-flex items-center rounded-[4px] bg-hx-fef3c7 px-1.5 py-0.5 font-semibold text-hx-92400e underline-offset-2 hover:underline">
+              {outraCategoria.get(l.id).length} com outra categoria · aplicar
             </button>
           )}
           {!l.novo && u?.aviso?.tipo === 'sem-uso' && (
@@ -485,6 +519,7 @@ export default function Regras() {
       )}
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
       {tirando && <ModalTirarIgnorados grupos={tirando} onFechar={() => setTirando(null)} onFeito={carregar} />}
+      {aplicando && <ModalAplicarCategoria grupos={aplicando} categorias={categorias} onFechar={fecharAplicar} onFeito={carregar} />}
     </div>
   );
 }

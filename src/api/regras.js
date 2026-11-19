@@ -42,9 +42,10 @@ export function criarRegra(campos) {
 }
 
 // Os nomes dos lançamentos que as regras classificam (fatura e extrato gravam o `estabelecimento`), para contar o
-// uso de cada regra (`usoDasRegras`).
+// uso de cada regra (`usoDasRegras`), o que as de ignorar ainda deixam no app e o que está com outra categoria que a
+// da regra (`categoriaParaAplicar`).
 export function listarNomesClassificaveis() {
-  return buscarTudo(() => supabase.from('lancamentos').select('id, estabelecimento, data, fatura_id')
+  return buscarTudo(() => supabase.from('lancamentos').select('id, estabelecimento, data, fatura_id, categoria_id, tipo')
     .not('estabelecimento', 'is', null).order('id'));
 }
 

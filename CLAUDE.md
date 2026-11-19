@@ -219,6 +219,17 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (`ehFixo`: o extrato o criou como o fixo; tirado, o mês volta a pedi-lo "a lançar"). "Tirar" = `tirarDoApp`
   (`api/regras.js`): apaga e REFAZ O TOTAL das faturas (`recalcularTotais` em `api/faturas.js` — o `total_centavos`
   guardado ficava com a compra; o "Ignorar sempre" das Pendências também passa por ele). Sem desfazer.
+  A CATEGORIA NOVA VALE NO QUE JÁ ENTROU (19/11/2026, a pedido: o posto Delta Joacaba passou de Manutenção do carro para
+  Gasolina e as compras de fev/26 ficaram na antiga), no mesmo jeito: `categoriaParaAplicar` (lib/regras.js, testada) —
+  os lançamentos em que a regra é a primeira que pega (a ordem gravada) e que estão com OUTRA categoria; fora o de
+  ignorar, o sem categoria (é das Pendências), o à mão e o de outro tipo que a categoria da regra (`tipoDe`: o crédito
+  do extrato que virou entrada). SALVAR uma regra que trocou de categoria pergunta, com `antigas` (só os que ainda estão
+  com a categoria de antes: o reclassificado à mão para uma terceira fica); a gravada que pega lançamentos com outra
+  categoria ganha o aviso "N com outra categoria · aplicar" (aí vêm todos os de outra, e a pessoa desmarca). Os dois
+  abrem `components/ModalAplicarCategoria.jsx` (data, nome, de onde, a de agora → a da regra, valor; todos marcados
+  menos o fixo do mês) e "Aplicar em N" = `classificarLancamentos` (tira de Revisar também). Se o mesmo salvar também
+  pede para tirar ignorados, esse pop-up vem depois (`tirarDepois`). `listarNomesClassificaveis` traz `categoria_id` e
+  `tipo`.
 
 ## Extrato da conta corrente
 

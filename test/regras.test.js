@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { alteracoesRegras, diferencaRegra, ehFixo, ignoradosNoApp, nomesDistintos, prioridades, quemPega, totalAlteracoesRegras, usoDasRegras, validarRegras } from '../src/lib/regras.js';
+import { alteracoesRegras, categoriaParaAplicar, diferencaRegra, ehFixo, ignoradosNoApp, nomesDistintos, prioridades, quemPega, totalAlteracoesRegras, usoDasRegras, validarRegras } from '../src/lib/regras.js';
 
 // Dados FICTÍCIOS.
 const R = (id, palavra_chave, categoria_id, prioridade, pos, extra = {}) => ({
@@ -84,4 +84,35 @@ test('diferencaRegra: categoria, ignorar e a nova; validarRegras', () => {
   assert.match(validarRegras([...regras, { ...nova, palavra_chave: 'posto' }]).motivo, /duas vezes/);
   assert.match(validarRegras([...regras, { ...nova, categoria_id: '' }]).motivo, /sem categoria/);
   assert.equal(validarRegras([...regras, { ...nova, palavra_chave: '', categoria_id: '' }]), null); // nova em branco não conta
+});
+
+test('categoriaParaAplicar: o que a regra pega com outra categoria; ao salvar, só os da categoria antiga', () => {
+  const gravadas = [
+    { id: 'p', palavra_chave: 'POSTO DELTA', categoria_id: 'gasolina', ignorar: false },
+    { id: 'q', palavra_chave: 'POSTO', categoria_id: 'carro', ignorar: false },
+    { id: 'r', palavra_chave: 'TRANSF', ignorar: true },
+    { id: 's', palavra_chave: 'PIX JOAO', categoria_id: 'presentes', ignorar: false },
+  ];
+  const lancs = [
+    { id: 1, estabelecimento: 'POSTO DELTA CIDADE', categoria_id: 'carro', tipo: 'saida' },     // antiga → aplica
+    { id: 2, estabelecimento: 'posto delta cidade', categoria_id: 'carro', tipo: 'saida' },
+    { id: 3, estabelecimento: 'POSTO DELTA CIDADE', categoria_id: 'lanche', tipo: 'saida' },    // reclassificado à mão
+    { id: 4, estabelecimento: 'POSTO DELTA CIDADE', categoria_id: 'gasolina', tipo: 'saida' },  // já está certo
+    { id: 5, estabelecimento: 'POSTO DELTA CIDADE', categoria_id: null, tipo: 'saida' },        // pendência
+    { id: 6, estabelecimento: 'POSTO OUTRO', categoria_id: 'gasolina', tipo: 'saida' },         // quem decide é a 'q'
+    { id: 7, estabelecimento: 'TRANSF CONTA', categoria_id: 'outros', tipo: 'saida' },          // de ignorar: fora
+    { id: 8, estabelecimento: 'PIX JOAO', categoria_id: 'salario', tipo: 'entrada' },           // outro tipo: fora
+    { id: 9, estabelecimento: null, descricao: 'Posto Delta', categoria_id: 'carro' },          // à mão
+  ];
+  const tipoDe = (c) => (c === 'salario' ? 'entrada' : 'saida');
+  const m = categoriaParaAplicar(gravadas, lancs, { tipoDe });
+  assert.deepEqual([...m.keys()], ['p', 'q']);
+  assert.deepEqual(m.get('p').map((l) => l.id), [1, 2, 3]);
+  assert.deepEqual(m.get('q').map((l) => l.id), [6]);
+  // ao salvar a 'p' (era 'carro'): só os que ainda estão com a antiga
+  const s1 = categoriaParaAplicar(gravadas, lancs, { tipoDe, antigas: new Map([['p', 'carro']]) });
+  assert.deepEqual([...s1.keys()], ['p']);
+  assert.deepEqual(s1.get('p').map((l) => l.id), [1, 2]);
+  // sem tipoDe, o tipo não filtra
+  assert.deepEqual(categoriaParaAplicar(gravadas, lancs).get('s').map((l) => l.id), [8]);
 });
