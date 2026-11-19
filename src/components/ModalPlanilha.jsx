@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { IconInfoContorno } from './icons.jsx';
 import Modal from './Modal.jsx';
 import AreaArrastar from './AreaArrastar.jsx';
 import Spinner from './Spinner.jsx';
@@ -136,7 +137,7 @@ export default function ModalPlanilha({ imp, onFechar, onDesfeito, onMudou }) {
         <>
           <div className="max-h-[66vh] space-y-3.5 overflow-auto px-5 py-4">
             <div className="flex items-start gap-2.5 rounded-md border border-gray-200 bg-hx-f9fafb px-3 py-2.5 text-[12.5px] leading-[1.5] text-gray-600">
-              <span aria-hidden="true" className="mt-[3px] grid h-[14px] w-[14px] shrink-0 place-items-center rounded-full border border-current text-[9px] font-bold leading-none text-gray-400">i</span>
+              <IconInfoContorno className="mt-[3px] h-[14px] w-[14px] text-gray-400" />
               <span>
                 A planilha antiga (<b className="font-semibold text-gray-800">{imp.arquivo || 'Gastos total.xlsx'}</b>) trazida para o app de uma vez,
                 no começo: as faturas que ela tinha, os fixos, os avulsos, as entradas e as regras de classificação. Daqui em diante

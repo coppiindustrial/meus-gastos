@@ -248,6 +248,19 @@ export function IconInfo({ className = 'h-[14px] w-[14px]' }) {
   );
 }
 
+// O "i" VAZADO do botão "Legenda" (19/11/2026, a pedido: "o i não está centralizado no círculo"): era a LETRA "i" num
+// span redondo com borda, e a letra se desenha pela linha de base da fonte, não pelo centro da caixa — saía torta. Aqui o
+// círculo e o "i" são do mesmo desenho, em PX inteiros (14 × 14, o traço de 1px no meio-pixel para ficar nítido).
+export function IconInfoContorno({ className = 'h-[14px] w-[14px]' }) {
+  return (
+    <svg viewBox="0 0 14 14" className={`shrink-0 ${className}`} fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="6.5" stroke="currentColor" strokeWidth="1" />
+      <circle cx="7" cy="4.25" r="0.85" fill="currentColor" />
+      <rect x="6.35" y="6" width="1.3" height="4.5" rx="0.4" fill="currentColor" />
+    </svg>
+  );
+}
+
 // Os dois IRMÃOS do `IconInfo`, e existem pelo mesmo motivo dele — só que o defeito que substituem é
 // pior. Os avisos de campo do formulário de envio vinham marcados com os EMOJI `⚠️` e `⏸️`, e emoji
 // não é glifo de texto: vem colorido de fábrica e ignora o `currentColor` do cartão, então um aviso

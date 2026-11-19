@@ -6,7 +6,7 @@ import AbasPilula from '../components/AbasPilula.jsx';
 import Toggle from '../components/Toggle.jsx';
 import Tooltip from '../components/Tooltip.jsx';
 import MenuContexto from '../components/MenuContexto.jsx';
-import { IconAbrir, IconSeta } from '../components/icons.jsx';
+import { IconAbrir, IconSeta, IconInfoContorno } from '../components/icons.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
 import { DivisorFaixa, FaixaProvider, Trilho } from '../components/filtros/FaixaFiltros.jsx';
 import { SegUnico } from '../components/filtros/Segmentos.jsx';
@@ -201,7 +201,7 @@ function Legenda({ conta, destaque, onDestaque }) {
         onClick={() => setPos(pos ? null : posicionarPopover(btn.current, { largura: 340, altura: 260, alinhar: 'direita' }))}
         className={`ml-auto inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-[4px] px-2 text-[11.5px] transition-colors ${
           pos ? 'bg-gray-100 text-gray-800' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'}`}>
-        <span aria-hidden="true" className="grid h-[13px] w-[13px] place-items-center rounded-full border border-current text-[8.5px] font-bold leading-none">i</span>
+        <IconInfoContorno />
         Legenda
       </button>
       {pos && createPortal(

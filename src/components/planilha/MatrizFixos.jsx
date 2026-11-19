@@ -1,4 +1,5 @@
 import { Fragment, forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { IconInfoContorno } from '../icons.jsx';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import MenuContexto from '../MenuContexto.jsx';
@@ -830,7 +831,7 @@ function LegendaFixos({ linhas, destaque, onDestaque }) {
         onClick={() => (aberto ? fechar() : setPos(posicionarPopover(btnRef.current, { largura: 360, altura: 460, alinhar: 'direita' })))}
         className={`ml-auto inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-[4px] px-2 text-[11.5px] transition-colors duration-[120ms] ${
           aberto ? 'bg-gray-100 text-gray-800' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800 active:bg-gray-200'}`}>
-        <span aria-hidden="true" className="grid h-[13px] w-[13px] place-items-center rounded-full border border-current text-[8.5px] font-bold leading-none">i</span>
+        <IconInfoContorno />
         Legenda
       </button>
       {aberto && createPortal(
