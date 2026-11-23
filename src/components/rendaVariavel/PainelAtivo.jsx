@@ -393,9 +393,12 @@ function ConteudoAtivo({ posicao, operacoes, ptax, dolar, hoje, onOperar, pronto
                   <div className="flex flex-col gap-1.5 rounded-[6px] border border-gray-200 bg-hx-f9fafb px-3 py-2.5 text-[12px] leading-[17px] text-gray-600">
                     <span><b className="font-semibold text-gray-900">{ativo.ticker}</b> não está no seu cadastro: o gráfico vem na hora, sem guardar.</span>
                     {onCadastrar && (
-                      <span className="flex flex-wrap gap-1.5">
-                        <button type="button" className="btn-secondary !h-[28px] !px-2.5 !text-[12px]" onClick={() => onCadastrar(ativo, false)}>Cadastrar</button>
-                        <button type="button" className="btn-secondary !h-[28px] !px-2.5 !text-[12px]" onClick={() => onCadastrar(ativo, true)}>Cadastrar e lançar uma compra</button>
+                      // UM EMBAIXO DO OUTRO, NA LARGURA TODA (23/11/2026): lado a lado, o segundo não cabia na coluna e o texto
+                      // quebrava em duas linhas dentro do botão de 28px, vazando da caixa
+                      <span className="flex flex-col gap-1.5">
+                        <button type="button" className="btn-secondary !h-[28px] w-full justify-center whitespace-nowrap !px-2.5 !text-[12px]" onClick={() => onCadastrar(ativo, false)}>Cadastrar</button>
+                        <button type="button" className="btn-secondary !h-[28px] w-full justify-center whitespace-nowrap !px-2.5 !text-[12px]" onClick={() => onCadastrar(ativo, true)}
+                          title="Cadastrar o ativo e lançar uma compra">Cadastrar e lançar compra</button>
                       </span>
                     )}
                   </div>
