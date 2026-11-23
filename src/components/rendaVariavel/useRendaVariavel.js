@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '../../context/ToastContext.jsx';
-import { atualizarCotacoes, listarRendaVariavel } from '../../api/rendaVariavel.js';
+import { atualizarCotacoes, buscarHistorico, listarRendaVariavel } from '../../api/rendaVariavel.js';
 import { cotacaoAgora, dolarDiario } from '../../api/indicadores.js';
 import { carteiraRV } from '../../lib/rendaVariavel.js';
 import { todayISO } from '../../lib/format.js';
@@ -14,6 +14,7 @@ import { todayISO } from '../../lib/format.js';
 // cada 15 minutos no pregão; fora dele, a releitura só confirma o fechamento). Depois, relê a tabela a cada 5 minutos com a
 // aba à vista.
 const VELHA_MS = 20 * 60 * 1000;
+const HISTORICO_PEDIDO = new Set(); // os ativos cujo histórico a tela já pediu nesta sessão (ver o efeito)
 export default function useRendaVariavel() {
   const toast = useToast();
   const [dados, setDados] = useState(undefined);
@@ -23,6 +24,8 @@ export default function useRendaVariavel() {
   const [erroFuncao, setErroFuncao] = useState(null);
   const hoje = todayISO();
   const pediu = useRef(false);
+  const aberta = useRef(true);
+  useEffect(() => { aberta.current = true; return () => { aberta.current = false; }; }, []);
 
   const carregar = useCallback(async () => {
     try { setDados(await listarRendaVariavel()); } catch (err) { toast.error(err.message); setDados({ ativos: [], operacoes: [], cotacoes: [], fechamentos: [] }); }
@@ -50,6 +53,29 @@ export default function useRendaVariavel() {
     const faltam = dados.ativos.some((a) => a.ativo !== false && !dados.cotacoes.some((c) => c.ativo_id === a.id));
     if (faltam || !mais || Date.now() - new Date(mais).getTime() > VELHA_MS) releer(false);
   }, [dados, releer]);
+
+  // O HISTÓRICO DE QUEM ESTÁ SEM CURVINHA (23/11/2026, a pedido): os 10 anos do Yahoo só vinham na primeira vez que se
+  // abria o gráfico do ativo, então o recém-cadastrado ficava só com as leituras do agendamento (um ponto por pregão) e sem
+  // a curvinha do mês, que pede 2. Agora a tela pede à função o histórico de quem tem menos de 2 fechamentos nos últimos 31
+  // dias, um de cada vez, uma vez por ativo na sessão (`HISTORICO_PEDIDO`), e relê quando algum chega.
+  useEffect(() => {
+    if (!dados?.ativos?.length) return;
+    const desde31 = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
+    const noMes = new Map();
+    dados.fechamentos.forEach((f) => { if (f.data >= desde31) noMes.set(f.ativo_id, (noMes.get(f.ativo_id) ?? 0) + 1); });
+    const faltam = dados.ativos.filter((a) => a.ativo !== false && (noMes.get(a.id) ?? 0) < 2 && !HISTORICO_PEDIDO.has(a.id));
+    if (!faltam.length) return;
+    faltam.forEach((a) => HISTORICO_PEDIDO.add(a.id));
+    (async () => {
+      let chegou = false;
+      for (const a of faltam) {
+        const r = await buscarHistorico(a.id);
+        if (!r?.erro && (r?.gravados ?? 0) > 0) chegou = true;
+      }
+      // (a tela pode ter recarregado no meio — a releitura das cotações —, então quem decide é se ela ainda está aberta)
+      if (aberta.current && chegou) carregar();
+    })();
+  }, [dados, carregar]);
 
   // o dólar: a PTAX desde a operação mais antiga do exterior (e no mínimo 40 dias, para o sugerido de hoje) e o de agora
   const desde = useMemo(() => {

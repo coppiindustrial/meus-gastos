@@ -489,7 +489,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   sem chave; a B3 com ".SA") grava 10 anos em `rv_fechamentos` com a abertura, a máxima, a mínima e o volume (migration
   030; sem ela, só o preço e as velas viram o fechamento). O painel pede na primeira vez (menos de 150 dias guardados) ou
   quando faltam os últimos dias (`historicoQueFalta`), uma vez por ativo por sessão; recusou, segue com o que há e o rodapé
-  avisa. O "intradia" (o 1D, de 5 em 5 min) vem na hora, sem gravar. O agendamento também grava a abertura, a máxima e a
+  avisa. A TELA TAMBÉM PEDE (23/11/2026, a pedido: o recém-cadastrado ficava sem a CURVINHA do mês, que pede 2 fechamentos
+  nos últimos 31 dias, até alguém abrir o gráfico dele): o `useRendaVariavel` pede o histórico de quem tem menos de 2, um de
+  cada vez, uma vez por ativo na sessão (`HISTORICO_PEDIDO`), e relê quando algum chega. O "intradia" (o 1D, de 5 em 5 min) vem na hora, sem gravar. O agendamento também grava a abertura, a máxima e a
   mínima do dia. A CARGA DA TELA lê os fechamentos só desde a primeira operação (no mínimo 45 dias): o histórico inteiro
   fica para o painel (`fechamentosDoAtivo`). O Yahoo ajusta o passado aos desdobramentos; o preço médio do gráfico também.
 - DESEMPENHO, VOLUME, DIVIDENDOS E RESULTADOS (13/11/2026, o mockup de mesmo nome, a OPÇÃO B; o resto, as recomendadas): a
