@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { carteiraRV, mesAMesRV, posicaoDoAtivo, precoDaOperacao, previaDaOperacao, proventosEm12Meses, proventosPorMes, totalDaOperacao, ultimoAte } from '../src/lib/rendaVariavel.js';
+import { carteiraRV, mesAMesRV, operacoesComDinheiro, posicaoDoAtivo, precoDaOperacao, totaisDasOperacoes, previaDaOperacao, proventosEm12Meses, proventosPorMes, totalDaOperacao, ultimoAte } from '../src/lib/rendaVariavel.js';
 
 // Dados FICTÍCIOS.
 const perto = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≠ ${b}`);
@@ -134,4 +134,29 @@ test('no Patrimônio: o formato do mês a mês e a soma com a renda fixa', async
   const s = somarMeses(rf, rv);
   assert.deepEqual(s.map((m) => [m.competencia, m.total, m.rendeu, m.valorizacao, m.proventos]), [['2026-09', 10500, 500, 500, 0], ['2026-10', 61000, 1000, 500, 90]]);
   perto(s[1].pct, 1090 / 60000);
+});
+
+test('operacoesComDinheiro: o que saiu e entrou em reais (o dólar da operação), o lucro da venda e o provento a receber fora dos totais', () => {
+  const ops = [
+    op({ id: 'c1', ativo_id: 'u1', tipo: 'compra', data: '2026-01-10', criado_em: '1', quantidade: 10, valor_centavos: 100000, taxas_centavos: 500, dolar: 5 }), // US$ 1.005 × 5
+    op({ id: 'v1', ativo_id: 'u1', tipo: 'venda', data: '2026-02-10', criado_em: '2', quantidade: 5, valor_centavos: 60000, taxas_centavos: 0, dolar: 5.5 }),   // US$ 600 × 5,5
+    op({ id: 'p1', ativo_id: 'f1', tipo: 'provento', provento: 'rendimento', data: '2026-02-12', criado_em: '3', valor_centavos: 11000 }),
+    op({ id: 'p2', ativo_id: 'f1', tipo: 'provento', provento: 'rendimento', data: '2026-03-12', criado_em: '4', valor_centavos: 12000 }), // a receber
+    op({ id: 'x', ativo_id: 'nao-existe', tipo: 'compra', data: '2026-01-01', quantidade: 1, valor_centavos: 100 }),
+  ];
+  const itens = operacoesComDinheiro([fii, eua], ops, { dolar: 6, hoje: '2026-03-01' });
+  assert.deepEqual(itens.map((x) => x.op.id), ['p2', 'p1', 'v1', 'c1']); // a mais nova em cima; a do ativo que não existe fica de fora
+  const [p2, p1, v1, c1] = itens;
+  assert.equal(c1.saiu, 100500 * 5);
+  assert.equal(v1.entrou, 60000 * 5.5);
+  perto(v1.lucro, 60000 * 5.5 - 100500 * 5 / 2);                       // o recebido − metade do custo em reais
+  assert.equal(p1.entrou, 11000);
+  assert.ok(p2.aReceber);
+  const t = totaisDasOperacoes(itens);
+  assert.equal(t.comprado, 502500);
+  assert.equal(t.vendido, 330000);
+  assert.equal(t.proventos, 11000);                                     // o a receber não soma
+  perto(t.lucro, 330000 - 251250);
+  assert.equal(t.saiu, 502500);
+  assert.equal(t.entrou, 330000 + 11000);
 });

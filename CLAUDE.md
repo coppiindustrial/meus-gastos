@@ -461,8 +461,12 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   cor e a marca do mercado (aberto com a hora, fechado, ou âmbar "sem cotação nova há N h" no pregão), o ativo recuado e as
   OPERAÇÕES no trilho (a compra com o lote de hoje, a venda com o lucro realizado, o desdobramento; os proventos ficam na coluna deles, na aba Operações e no Patrimônio); recolhe
   animado (`rv_fechadas`); no trilho "Exterior em US$" (`rv_usd`) e Centavos (`rv_centavos`); o balão na Cotação (o dia do
-  ativo) e no Resultado do exterior (a ação × o dólar). As OPERAÇÕES (`ListaOperacoes.jsx`): a lista com a faixa de
-  filtros (ativo, tipo). O POP-UP `ModalOperacao.jsx`: Compra · Venda · Provento · Desdobramento (o grupamento no mesmo), o
+  ativo) e no Resultado do exterior (a ação × o dólar). As OPERAÇÕES (`ListaOperacoes.jsx`), NO JEITO DAS MOVIMENTAÇÕES DA
+  RENDA FIXA (23/11/2026, a opção A do mockup "Operações por mês"): os filtros ativo, tipo e PERÍODO (todo o histórico ou um
+  ano), os quatro números do filtrado (comprado, vendido, proventos líquidos, lucro nas vendas), a lista SEPARADA POR MÊS (a
+  faixa com o que saiu e entrou) e as colunas "Saiu da conta" / "Entrou na conta" em reais (no exterior, pelo dólar da
+  operação; o lucro da venda no balão; o provento a receber aparece e não soma) — `operacoesComDinheiro` e
+  `totaisDasOperacoes` (lib/rendaVariavel.js, testadas). O POP-UP `ModalOperacao.jsx`: Compra · Venda · Provento · Desdobramento (o grupamento no mesmo), o
   dólar do dia sugerido pela PTAX (a do dia útil antes no fim de semana), "usar 30%" no retido dos EUA e a prévia (o preço
   médio na moeda e o custo médio em reais; o lucro da venda; vender mais do que tem não deixa).
 - NO PATRIMÔNIO (a pedido: "tudo somado", e os proventos lá em vez de uma aba): a CLASSE na faixa de filtros (Tudo · Renda

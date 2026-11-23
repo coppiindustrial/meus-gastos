@@ -189,6 +189,43 @@ export function mesAMesRV({ ativos, operacoes, fechamentos = [], cotacoes = [], 
   });
 }
 
+// ------------------------------------------------------------------ a aba Operações
+// AS OPERAÇÕES COMO DINHEIRO (23/11/2026, a opção A do mockup "Operações por mês", no jeito das Movimentações da Renda fixa):
+// cada operação com o que SAIU da conta (a compra, com as taxas) e o que ENTROU (a venda, sem as taxas; o provento líquido
+// do retido), em centavos de REAIS — no exterior pelo dólar da operação (sem ele, o de hoje: `dolar`) —, e o LUCRO da venda
+// (pelo custo médio, o do `posicaoDoAtivo`). O provento com data futura é o anunciado (`aReceber`): aparece, mas não soma.
+// Da mais nova para a mais antiga (no mesmo dia, a lançada depois em cima).
+export function operacoesComDinheiro(ativos, operacoes, { dolar = null, hoje } = {}) {
+  const lucroDe = new Map();
+  ativos.forEach((a) => posicaoDoAtivo(a, operacoes, { dolar, hoje }).linhas.forEach((l) => { if (l.lucro !== undefined) lucroDe.set(l.op, l.lucro); }));
+  const porId = new Map(ativos.map((a) => [a.id, a]));
+  return operacoes.filter((op) => porId.has(op.ativo_id)).map((op) => {
+    const ativo = porId.get(op.ativo_id);
+    const cambio = emDolar(ativo) ? num(op.dolar) ?? dolar ?? 0 : 1;
+    const valor = Number(op.valor_centavos ?? 0); const taxas = Number(op.taxas_centavos ?? 0);
+    const aReceber = op.tipo === 'provento' && !!hoje && op.data > hoje;
+    return {
+      op, ativo, aReceber,
+      saiu: op.tipo === 'compra' ? (valor + taxas) * cambio : 0,
+      entrou: op.tipo === 'venda' ? (valor - taxas) * cambio : op.tipo === 'provento' ? (valor - Number(op.retido_centavos ?? 0)) * cambio : 0,
+      lucro: op.tipo === 'venda' ? lucroDe.get(op) ?? null : null,
+    };
+  }).sort((a, b) => -porData(a.op, b.op));
+}
+// Os totais de uma lista delas (centavos de reais, exatos): o comprado, o vendido, os proventos recebidos e o lucro das
+// vendas; `saiu` e `entrou` (a faixa do mês) sem o provento a receber.
+export function totaisDasOperacoes(itens) {
+  const t = { comprado: 0, vendido: 0, proventos: 0, lucro: 0, saiu: 0, entrou: 0 };
+  itens.forEach((x) => {
+    if (x.op.tipo === 'compra') t.comprado += x.saiu;
+    else if (x.op.tipo === 'venda') { t.vendido += x.entrou; t.lucro += x.lucro ?? 0; }
+    else if (x.op.tipo === 'provento' && !x.aReceber) t.proventos += x.entrou;
+    t.saiu += x.saiu;
+    if (!x.aReceber) t.entrou += x.entrou;
+  });
+  return t;
+}
+
 // ------------------------------------------------------------------ a prévia do lançar
 // O que a operação nova faz com a posição: a quantidade, o preço médio (na moeda) e o custo médio em reais, antes e depois;
 // na venda, o lucro pelo custo médio. `op` no formato da tabela (quantidade, valor_centavos, taxas_centavos, dolar, fator).

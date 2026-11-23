@@ -146,7 +146,7 @@ export default function RendaVariavel() {
             {aba === 'carteira'
               ? <TabelaRendaVariavel carteira={carteira} hoje={d.hoje} dolar={d.dolar} movel={movel} acoes={acoes} inicio={inicio}
                 fechamentos={d.fechamentos} onGrafico={(p) => setGrafico({ alvo: { ativoId: p.ativo.id } })} />
-              : <ListaOperacoes ativos={d.ativos} operacoes={d.operacoes} hoje={d.hoje} movel={movel} acoes={acoes} inicio={inicio} />}
+              : <ListaOperacoes ativos={d.ativos} operacoes={d.operacoes} hoje={d.hoje} dolar={d.dolar} movel={movel} acoes={acoes} inicio={inicio} />}
           </section>
           {movel && <p className="mt-2 text-xs text-gray-500">Lançar, editar e o cadastro ficam no computador.</p>}
         </>
