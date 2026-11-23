@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Modal from './Modal.jsx';
 import SelectSimples from './SelectSimples.jsx';
 import { CirculoMais } from './icons.jsx';
 import Toggle from './Toggle.jsx';
+import { Alca } from './PecasCadastro.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
-import { excluirCartao, salvarCartao } from '../api/cadastros.js';
-import { ENSINAR_FORMATO, diferencaCartao, formatoDoValor, opcoesFormato, validarCartoes, valorDoFormato } from '../lib/cartoes.js';
+import { excluirCartao, salvarCartao, temOrdemCartoes } from '../api/cadastros.js';
+import { ENSINAR_FORMATO, diferencaCartao, formatoDoValor, opcoesFormato, ordensDosCartoes, validarCartoes, valorDoFormato } from '../lib/cartoes.js';
+import { useListaArrastavel } from '../lib/useListaArrastavel.js';
 import AssistenteModelo from './AssistenteModelo.jsx';
 
 // O CADASTRO DOS CARTÕES EM POP-UP (30/10/2026, opção A do mockup "Cartões · overhaul"): a tabela de formulário do
@@ -14,16 +16,26 @@ import AssistenteModelo from './AssistenteModelo.jsx';
 // 03/11/2026) acrescenta, a lixeira marca para sair,
 // e "Salvar alterações (N)" grava só a diferença (`diferencaCartao`). Cartão com lançamentos não se exclui: desativa.
 // `uso`: { cartaoId: nº de lançamentos }.
+// A ORDEM (23/11/2026, o mockup "Cadastros com movimento"; migration 035): a alça ⠿ no hover da linha arrasta (a do cadastro
+// dos investimentos e do das categorias); a ordem vale na tela Cartões, nas colunas do Importar e nas listas de cartão.
+// Mexeu, "Salvar alterações" renumera 1, 2, 3… (`ordensDosCartoes`). Sem a 035, a alça não aparece.
 
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 let seq = 0;
-const daLinha = (c) => ({ id: c.id, novo: false, excluir: false, orig: c, nome: c.nome, dia_vencimento: String(c.dia_vencimento), formato: c.formato, modelo_id: c.modelo_id ?? null, ativo: c.ativo });
+const daLinha = (c, pos) => ({ id: c.id, pos, novo: false, excluir: false, orig: c, nome: c.nome, dia_vencimento: String(c.dia_vencimento), formato: c.formato, modelo_id: c.modelo_id ?? null, ativo: c.ativo });
 
 // `modelos`: os modelos de importação do usuário (migration 011), opções do "Como a fatura entra".
 export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   const [linhas, setLinhas] = useState(() => cartoes.map(daLinha));
+  const com035 = temOrdemCartoes(cartoes);
+  const arrasto = useListaArrastavel({
+    ids: linhas.map((l) => l.id),
+    onReordenar: (ids) => setLinhas((ls) => ids.map((id) => ls.find((l) => l.id === id)).filter(Boolean)),
+  });
+  const ordens = useMemo(() => (com035 ? ordensDosCartoes(linhas) : new Map()), [com035, linhas]);
+  const mudouOrdem = (l) => !l.novo && !l.excluir && ordens.has(l.id);
   const [erro, setErro] = useState(null);
   const [salvando, setSalvando] = useState(false);
   // "Ensinar um formato novo" numa linha (a ação no pé da lista): o assistente, e o modelo salvo vai para ela (e para a lista).
@@ -33,7 +45,7 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
 
   const muda = (id, campo, v) => { setLinhas((ls) => ls.map((l) => (l.id === id ? { ...l, [campo]: v } : l))); setErro(null); };
   const conta = (l) => !(l.novo && (l.excluir || !l.nome.trim()));
-  const mudadas = linhas.filter((l) => conta(l) && (l.novo || l.excluir || Object.keys(diferencaCartao(l)).length));
+  const mudadas = linhas.filter((l) => conta(l) && (l.novo || l.excluir || Object.keys(diferencaCartao(l)).length || mudouOrdem(l)));
   const nAlt = mudadas.length;
 
   const novo = () => {
@@ -57,7 +69,8 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
     try {
       for (const l of sai) await excluirCartao(l.id);
       for (const l of mudadas.filter((x) => !x.excluir)) {
-        await salvarCartao({ ...(l.novo ? {} : { id: l.id }), nome: l.nome, dia_vencimento: l.dia_vencimento, formato: l.formato, modelo_id: l.modelo_id, ativo: l.ativo });
+        await salvarCartao({ ...(l.novo ? {} : { id: l.id }), nome: l.nome, dia_vencimento: l.dia_vencimento, formato: l.formato, modelo_id: l.modelo_id, ativo: l.ativo,
+          ...(ordens.has(l.id) ? { ordem: ordens.get(l.id) } : {}) });
       }
       toast.success(nAlt === 1 ? 'Alteração salva.' : `${nAlt} alterações salvas.`);
     } catch (err) {
@@ -73,21 +86,26 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
 
   return (
     <Modal open onClose={fechar} title="Cadastro dos cartões" maxWidth="max-w-[880px]" padding="p-0"
-      subtitulo={`${plural(linhas.filter((l) => !l.excluir && l.ativo).length, 'ativo', 'ativos')} · as faturas já importadas não mudam`}>
+      subtitulo={`${plural(linhas.filter((l) => !l.excluir && l.ativo).length, 'ativo', 'ativos')} · as faturas já importadas não mudam${com035 ? ' · arraste ⠿ para mudar a ordem' : ''}`}>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-[12.5px]">
-          <colgroup><col /><col style={{ width: 96 }} /><col style={{ width: 250 }} /><col style={{ width: 70 }} /><col style={{ width: 120 }} /><col style={{ width: 48 }} /></colgroup>
+          <colgroup><col style={{ width: 30 }} /><col /><col style={{ width: 96 }} /><col style={{ width: 250 }} /><col style={{ width: 70 }} /><col style={{ width: 120 }} /><col style={{ width: 48 }} /></colgroup>
           <thead><tr>
-            <th className={th}>Cartão</th><th className={`${th} text-right`}>Vence dia</th><th className={th}>Como a fatura entra</th>
+            <th className={th} aria-label="Ordem" /><th className={th}>Cartão</th><th className={`${th} text-right`}>Vence dia</th><th className={th}>Como a fatura entra</th>
             <th className={th}>Ativo</th><th className={`${th} text-right`}>Lançamentos</th><th className={th} />
           </tr></thead>
-          <tbody>
+          <tbody ref={arrasto.containerRef}>
             {linhas.map((l) => {
               const n = uso[l.id] ?? 0;
-              const mudou = l.novo || (!l.excluir && Object.keys(diferencaCartao(l)).length > 0);
+              const mudou = l.novo || (!l.excluir && (Object.keys(diferencaCartao(l)).length > 0 || mudouOrdem(l)));
               return (
-                <tr key={l.id} className={l.excluir ? 'opacity-50' : ''}>
-                  <td className={td} style={mudou ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>
+                // A classe de transição é obrigatória para o FLIP do arraste (os vizinhos deslizam).
+                <tr key={l.id} {...arrasto.itemProps(l.id)}
+                  className={`group/linha transition-[opacity,transform] duration-200 ease-out ${l.excluir ? 'opacity-50' : ''} ${arrasto.dragId === l.id ? '!opacity-40' : ''}`}>
+                  <td className={`${td} !pl-1.5 !pr-0`} style={mudou ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>
+                    <Alca props={com035 && !l.excluir ? arrasto.alcaProps(l.id) : null} rotulo="Arraste para mudar a ordem dos cartões" />
+                  </td>
+                  <td className={td}>
                     <span className="flex items-center gap-2">
                       <input data-cartao={l.id} className={`input !h-8 text-[12.5px] font-semibold ${l.excluir ? 'line-through' : ''} ${borda(l.id, 'nome')}`} disabled={l.excluir}
                         value={l.nome} placeholder="Nome do cartão" onChange={(e) => muda(l.id, 'nome', e.target.value)} />
@@ -117,7 +135,7 @@ export default function ModalCadastroCartoes({ cartoes, modelos = [], uso = {}, 
               );
             })}
             <tr>
-              <td colSpan={6} className="px-2 py-1.5">
+              <td colSpan={7} className="px-2 py-1.5">
                 <button type="button" onClick={novo}
                   className="inline-flex items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12.5px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900">
                   <CirculoMais />

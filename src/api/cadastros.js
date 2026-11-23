@@ -1,5 +1,6 @@
 import { exigir, supabase } from './supabase.js';
 import { CARTOES_SUGERIDOS, GRUPOS_SUGERIDOS } from '../lib/sugestoes.js';
+import { ordenarCartoes } from '../lib/cartoes.js';
 
 // Grupos, categorias e cartões. O `user_id` não vai em nenhum insert: o banco preenche com quem está
 // logado (`default auth.uid()`), e o RLS recusa qualquer outro.
@@ -105,15 +106,20 @@ export async function criarCategoriasSugeridas() {
 
 // ------------------------------------------------------------ Cartões
 
-export function listarCartoes() {
-  return exigir(supabase.from('cartoes').select('*').order('ativo', { ascending: false }).order('nome'));
+// Na ORDEM do cadastro (migration 035, a alça ⠿): ordenada aqui, e não na consulta, para seguir funcionando sem a coluna.
+export async function listarCartoes() {
+  return ordenarCartoes(await exigir(supabase.from('cartoes').select('*').order('ativo', { ascending: false }).order('nome')));
 }
+// a coluna `ordem` existe? (a 035 aplicada: toda linha a traz, mesmo null)
+export const temOrdemCartoes = (cartoes) => cartoes.length > 0 && cartoes.every((c) => 'ordem' in c);
 
 // `modelo_id` (migration 011): o modelo de importação do cartão com formato 'modelo'. Só vai nesse formato — antes da
 // migration a coluna não existe. Num formato pronto um `modelo_id` antigo pode ficar no banco: quem decide é o formato.
-export function salvarCartao({ id, nome, dia_vencimento, formato, ativo, modelo_id }) {
+// `ordem` (migration 035): só vai quando vem (sem a coluna, quem chama não manda).
+export function salvarCartao({ id, nome, dia_vencimento, formato, ativo, modelo_id, ordem }) {
   const dados = { nome: nome.trim(), dia_vencimento: Number(dia_vencimento), formato, ativo };
   if (formato === 'modelo') dados.modelo_id = modelo_id;
+  if (ordem !== undefined) dados.ordem = ordem;
   return exigir(id
     ? supabase.from('cartoes').update(dados).eq('id', id).select().single()
     : supabase.from('cartoes').insert(dados).select().single());

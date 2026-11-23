@@ -1,9 +1,29 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  diasAte, diferencaCartao, formatoDoValor, modeloParaLigar, opcoesFormato, proximoVencimento, resumoDosCartoes, rotuloFormato, validarCartoes,
-  valorDoFormato,
+  diasAte, diferencaCartao, formatoDoValor, modeloParaLigar, opcoesFormato, ordenarCartoes, ordensDosCartoes, proximoVencimento, resumoDosCartoes,
+  rotuloFormato, validarCartoes, valorDoFormato,
 } from '../src/lib/cartoes.js';
+
+test('ordenarCartoes: pela ordem do cadastro; sem ordem no fim; no empate, como vieram', () => {
+  const cs = [{ id: 'a', ordem: null }, { id: 'b', ordem: 2 }, { id: 'c' }, { id: 'd', ordem: 1 }];
+  assert.deepEqual(ordenarCartoes(cs).map((c) => c.id), ['d', 'b', 'a', 'c']);
+  // antes da 035 (ninguém tem ordem): a ordem da consulta
+  assert.deepEqual(ordenarCartoes([{ id: 'x' }, { id: 'y' }]).map((c) => c.id), ['x', 'y']);
+});
+
+test('ordensDosCartoes: sem mexer, só o novo ganha ordem (depois da maior); mexeu, renumera e grava os diferentes', () => {
+  const L = (id, pos, ordem, extra = {}) => ({ id, pos, novo: false, excluir: false, nome: id, orig: { ordem }, ...extra });
+  const novo = { id: 'n', novo: true, excluir: false, nome: 'Inter', orig: null };
+  // na ordem de quando abriu: nada muda, e o novo vai para o fim
+  assert.deepEqual([...ordensDosCartoes([L('nu', 0, 1), L('xp', 1, 2), novo])], [['n', 3]]);
+  // o novo sem nome não conta
+  assert.deepEqual([...ordensDosCartoes([L('nu', 0, 1), { ...novo, nome: '  ' }])], []);
+  // a XP subiu: renumera; os dois mudam
+  assert.deepEqual([...ordensDosCartoes([L('xp', 1, 2), L('nu', 0, 1)])], [['xp', 1], ['nu', 2]]);
+  // o que sai não conta na sequência (e a XP, que já era a 2, não precisa gravar)
+  assert.deepEqual([...ordensDosCartoes([L('in', 2, 3), L('nu', 0, 1, { excluir: true }), L('xp', 1, 2)])], [['in', 1]]);
+});
 
 // Dados FICTÍCIOS.
 const cartoes = [{ id: 'nu', nome: 'Nubank', dia_vencimento: 13, formato: 'nubank', ativo: true }, { id: 'in', nome: 'Inter', dia_vencimento: 5, formato: 'manual', ativo: false }];

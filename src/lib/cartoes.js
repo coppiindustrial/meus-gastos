@@ -120,6 +120,32 @@ export function diferencaCartao(l) {
   return Object.fromEntries(CAMPOS.filter((k) => conta(k) && campos[k] !== (l.orig[k] ?? (k === 'modelo_id' ? null : undefined))).map((k) => [k, campos[k]]));
 }
 
+// A ORDEM DOS CARTÕES (23/11/2026, migration 035; o mockup "Cadastros com movimento"): a `ordem` escolhida no cadastro
+// (a alça ⠿) vale em todo lugar que lista cartões. `ordenarCartoes`: pela `ordem` (o sem ordem — o cartão novo antes de
+// mexer, ou tudo antes da 035 — no fim), e no empate como vieram (a consulta já traz os ativos primeiro e pelo nome).
+export function ordenarCartoes(cartoes) {
+  const chave = (c) => (Number.isFinite(c.ordem) ? c.ordem : Infinity);
+  return cartoes.map((c, i) => ({ c, i })).sort((a, b) => chave(a.c) - chave(b.c) || a.i - b.i).map((x) => x.c);
+}
+
+// A ordem que o cadastro grava: { id → ordem }, só para quem muda. `linhas`: as da tela, na ordem da tela, com `pos` (a
+// posição ao abrir). Se os cartões que já existiam continuam na mesma sequência, só os NOVOS ganham ordem (depois da
+// maior); se a pessoa mexeu, renumera 1, 2, 3… e grava os que ficaram diferentes. Os que saem (`excluir`) e os novos sem
+// nome não contam.
+export function ordensDosCartoes(linhas) {
+  const ficam = linhas.filter((l) => !l.excluir && !(l.novo && !l.nome.trim()));
+  const antigos = ficam.filter((l) => !l.novo);
+  const igual = antigos.every((l, k) => k === 0 || antigos[k - 1].pos < l.pos);
+  const out = new Map();
+  if (igual) {
+    let o = Math.max(0, ...linhas.filter((l) => !l.novo).map((l) => l.orig.ordem ?? 0));
+    ficam.forEach((l) => { if (l.novo) { o += 1; out.set(l.id, o); } });
+    return out;
+  }
+  ficam.forEach((l, k) => { if (l.novo || l.orig.ordem !== k + 1) out.set(l.id, k + 1); });
+  return out;
+}
+
 // O primeiro problema que impede salvar, ou null.
 export function validarCartoes(linhas) {
   const ficam = linhas.filter((l) => !l.excluir && !(l.novo && !l.nome.trim()));

@@ -627,34 +627,9 @@ export function ordensDoCadastro(ids, cadastro) {
   return out;
 }
 
-// O ARRASTO DO CADASTRO. `ids`: a lista da tela como o `useListaArrastavel` devolve (`g:<grupo>` e `i:<investimento>`,
-// com o arrastado no lugar novo); `arrastado`: o id que se move; `antes`: a lista de antes. Devolve { grupos: [id do
-// grupo], linhas: [{ id, grupo }] } na ordem nova, ou null quando nada vale (o investimento acima da primeira instituição).
-// O INVESTIMENTO fica no grupo do cabeçalho acima dele (é assim que ele muda de instituição). A INSTITUIÇÃO leva os
-// investimentos dela junto; o hook só move o cabeçalho, então o lugar dela é decidido pelo bloco em que ele caiu:
-// descendo, depois desse bloco; subindo, antes dele (acima de tudo = a primeira).
-const semPrefixo = (x) => x.slice(2);
-function investimentosPorGrupo(lista) {
-  let g = null;
-  const out = [];
-  lista.forEach((x) => { if (x.startsWith('g:')) g = semPrefixo(x); else out.push({ id: semPrefixo(x), grupo: g }); });
-  return out;
-}
-export function arrastoDoCadastro(ids, arrastado, antes) {
-  const gruposAntes = antes.filter((x) => x.startsWith('g:'));
-  if (arrastado.startsWith('g:')) {
-    const pos = ids.indexOf(arrastado);
-    let dono = null;
-    for (let k = pos - 1; k >= 0; k -= 1) if (ids[k].startsWith('g:')) { dono = ids[k]; break; }
-    const outros = gruposAntes.filter((g) => g !== arrastado);
-    let at = 0;
-    if (dono) at = outros.indexOf(dono) + (gruposAntes.indexOf(dono) > gruposAntes.indexOf(arrastado) ? 1 : 0);
-    const grupos = [...outros.slice(0, at), arrastado, ...outros.slice(at)];
-    return { grupos: grupos.map(semPrefixo), linhas: investimentosPorGrupo(antes) };
-  }
-  if (!ids[0]?.startsWith('g:')) return null;
-  return { grupos: ids.filter((x) => x.startsWith('g:')).map(semPrefixo), linhas: investimentosPorGrupo(ids) };
-}
+// O ARRASTO DO CADASTRO: a instituição (`g:`) leva os investimentos (`i:`) junto; o investimento solto sob outra faixa muda
+// de instituição. A conta mora em lib/arrastoAgrupado.js (23/11/2026: o cadastro das categorias usa a mesma).
+export { arrastoAgrupado as arrastoDoCadastro } from './arrastoAgrupado.js';
 
 export const linhaDoCadastro = (i) => ({
   id: i.id, novo: false, orig: i, nome: i.nome, instituicao: i.instituicao, tipo: i.tipo, taxa: String(i.taxa).replace('.', ','),

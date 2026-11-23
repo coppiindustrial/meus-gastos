@@ -1,6 +1,35 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { alteracoes, diferencaCategoria, ordens, reorganizar, totalAlteracoes, validar } from '../src/lib/cadastroCategorias.js';
+import { arrastoAgrupado } from '../src/lib/arrastoAgrupado.js';
+
+test('arrastoAgrupado (o cadastro das categorias): o grupo leva as categorias; a categoria solta sob outra faixa muda de grupo', () => {
+  const antes = ['g:a', 'c:m', 'c:r', 'g:b', 'c:l', 'g:c', 'c:x'];
+  // o grupo C subiu e caiu dentro do bloco de B (o hook só move a faixa): subindo, vai ANTES de B
+  const r1 = arrastoAgrupado(['g:a', 'c:m', 'c:r', 'g:b', 'g:c', 'c:l', 'c:x'], 'g:c', antes);
+  assert.deepEqual(r1.grupos, ['a', 'c', 'b']);
+  assert.deepEqual(r1.linhas, [{ id: 'm', grupo: 'a' }, { id: 'r', grupo: 'a' }, { id: 'l', grupo: 'b' }, { id: 'x', grupo: 'c' }]);
+  // o grupo A desceu até o bloco de B: vai depois dele
+  assert.deepEqual(arrastoAgrupado(['c:m', 'c:r', 'g:b', 'g:a', 'c:l', 'g:c', 'c:x'], 'g:a', antes).grupos, ['b', 'a', 'c']);
+  // a categoria Restaurante foi para baixo da faixa de B: muda de grupo
+  const r2 = arrastoAgrupado(['g:a', 'c:m', 'g:b', 'c:r', 'c:l', 'g:c', 'c:x'], 'c:r', antes);
+  assert.deepEqual(r2.grupos, ['a', 'b', 'c']);
+  assert.deepEqual(r2.linhas.find((l) => l.id === 'r'), { id: 'r', grupo: 'b' });
+  // acima da primeira faixa não vale
+  assert.equal(arrastoAgrupado(['c:m', 'g:a', 'c:r', 'g:b', 'c:l', 'g:c', 'c:x'], 'c:m', antes), null);
+});
+
+test('arrastoAgrupado sem vaivém: as próprias categorias não contam, e no fundo do bloco de cima o grupo fica', () => {
+  const antes = ['g:a', 'c:m', 'c:r', 'g:b', 'c:l', 'c:k', 'g:c', 'c:x'];
+  // o cursor passou por cima de uma categoria do PRÓPRIO grupo B: nada muda
+  assert.deepEqual(arrastoAgrupado(['g:a', 'c:m', 'c:r', 'c:l', 'g:b', 'c:k', 'g:c', 'c:x'], 'g:b', antes).grupos, ['a', 'b', 'c']);
+  // C subindo, ainda no fundo do bloco de B (o grupo logo acima): fica
+  assert.equal(arrastoAgrupado(['g:a', 'c:m', 'c:r', 'g:b', 'c:l', 'g:c', 'c:k', 'c:x'], 'g:c', antes), null);
+  // C subindo, chegou à faixa de B (logo abaixo dela): passa para antes de B
+  assert.deepEqual(arrastoAgrupado(['g:a', 'c:m', 'c:r', 'g:b', 'g:c', 'c:l', 'c:k', 'c:x'], 'g:c', antes).grupos, ['a', 'c', 'b']);
+  // A descendo, na fronteira antes da faixa de C (a metade de cima dela): fica depois de B
+  assert.deepEqual(arrastoAgrupado(['c:m', 'c:r', 'g:b', 'c:l', 'c:k', 'g:a', 'g:c', 'c:x'], 'g:a', antes).grupos, ['b', 'a', 'c']);
+});
 
 // Dados FICTÍCIOS.
 const G = (id, nome, ordem, extra = {}) => ({ id, nome, tipo: 'saida', cor: '#111', novo: false, excluir: false, orig: { nome, tipo: 'saida', cor: '#111', ordem }, ...extra });

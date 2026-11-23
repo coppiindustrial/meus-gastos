@@ -85,12 +85,14 @@ function celulaFatura(comp, hoje, cartao, fats) {
 // A TABELA DO ANO: as colunas (um cartão por coluna, na ordem do nome, + o extrato) e uma linha por mês, do
 // mais recente ao mais antigo. `extratos` null = a tabela `importacoes` ainda não existe (migration 007):
 // a coluna do extrato some. Cada linha diz quantas fontes estão pendentes (`faltam`).
+const ordemDe = (c) => (Number.isFinite(c.ordem) ? c.ordem : Infinity); // Infinity − Infinity = NaN: cai no nome
 export function mesesDoAno({ ano, hoje, cartoes, faturas, extratos }) {
   const porCartao = new Map(cartoes.map((c) => [c.id, faturas.filter((f) => f.cartao_id === c.id)]));
   const doAno = (c) => porCartao.get(c.id).some((f) => f.competencia.startsWith(`${ano}-`));
   const colunas = [...cartoes]
     .filter((c) => (c.ativo && porCartao.get(c.id).length) || doAno(c))
-    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    // a ORDEM do cadastro (migration 035); sem ela (ou no empate), pelo nome
+    .sort((a, b) => (ordemDe(a) - ordemDe(b)) || a.nome.localeCompare(b.nome, 'pt-BR'))
     .map((c) => ({ key: c.id, tipo: 'fatura', cartao: c }));
   if (extratos) colunas.push({ key: 'extrato', tipo: 'extrato' });
   const unidos = extratos ? unirPeriodos(extratos) : [];

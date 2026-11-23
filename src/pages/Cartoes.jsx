@@ -287,7 +287,8 @@ export default function Cartoes() {
   const cartoes = dados?.cartoes ?? null;
   const resumo = useMemo(() => (dados ? resumoDosCartoes({ ...dados, hoje }) : {}), [dados, hoje]);
   const modeloDe = (c) => (c.formato === 'modelo' ? dados?.modelos.find((m) => m.id === c.modelo_id) ?? null : null);
-  const ordenados = useMemo(() => (cartoes ? [...cartoes].sort((a, b) => Number(b.ativo) - Number(a.ativo) || a.nome.localeCompare(b.nome, 'pt-BR')) : []), [cartoes]);
+  // os ativos primeiro e, entre eles, a ORDEM do cadastro (a alça ⠿, migration 035 — `listarCartoes` já vem nela)
+  const ordenados = useMemo(() => (cartoes ? cartoes.map((c, i) => ({ c, i })).sort((a, b) => Number(b.c.ativo) - Number(a.c.ativo) || a.i - b.i).map((x) => x.c) : []), [cartoes]);
 
   const abrirCadastro = async () => {
     const ps = await Promise.all((cartoes ?? []).map((c) => contarUsoCartao(c.id).then((n) => [c.id, n]).catch(() => [c.id, 0])));

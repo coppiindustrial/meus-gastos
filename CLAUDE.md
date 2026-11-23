@@ -109,6 +109,19 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   recolhido ficam montadas e escondidas — o arrasto vê todas). SALVAR NÃO FECHA: a tela recarrega e o rascunho
   recomeça do banco novo. O ARRASTO TERMINA MESMO SEM `dragend` (`useListaArrastavel`, 30/10/2026): a linha que
   muda de lugar às vezes perde o evento, e o `dragId` preso deixava a linha esmaecida; o fim vem também da janela.
+  NO JEITO DO CADASTRO DOS INVESTIMENTOS (23/11/2026, o mockup "Cadastros com movimento", a pedido: "o mais próximo
+  possível"): o GRUPO é a FAIXA (`bg-hx-f3f4f6`, a barra da cor na borda, o quadradinho da cor que abre as cores, o nome
+  em 14px), a SETA de 20px e a ALÇA ⠿ no hover (as de `components/PecasCadastro.jsx`, as mesmas do `ModalCadastroCarteira`),
+  o "+ categoria" no hover e "Adicionar categoria em X" no fim do grupo; os ▲▼ SAÍRAM: a alça da faixa ARRASTA O GRUPO com
+  as categorias (`arrastoAgrupado` em `lib/arrastoAgrupado.js`, a conta dos investimentos, testada). CAMPOS QUIETOS
+  (tabela `.quieto`), a caixa de marcar só no hover (ou com alguma marcada), as colunas em grupos (a categoria · uso ·
+  como conta). No cabeçalho do pop-up: "Só as ativas", a busca, "+ NOVO GRUPO" (também na linha do fim — a pedido: senão
+  só rolando até lá) e o ⇕ no trilho. Com busca ou "Só as ativas" a alça não arrasta. AS LINHAS SÃO MEMOIZADAS
+  (`LinhaGrupo`/`LinhaCategoria`, as ações por uma ref: recolher redesenhava as ~70 linhas e travava) e o grupo vai num
+  `Fragment` COM A CHAVE — numa lista sem chave o React casava pela posição, e o grupo arrastado era remontado (a alça
+  sumia no meio do gesto). O ARRASTO DO GRUPO NÃO VAI E VOLTA (`arrastoAgrupado`, 23/11/2026; vale também nos
+  investimentos): os itens do próprio grupo não contam, a fronteira entre blocos põe depois do de cima, e subindo o grupo
+  só passa o de cima quando chega à faixa dele — o `dragover` contínuo do cursor parado fazia o grupo pular sem parar.
 
 ## Importar (a tela, 28/10/2026)
 
@@ -205,6 +218,11 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   cadastro dos fixos — 03/11/2026; o + do círculo tracejado é o `IconMais`, nunca o caractere "+", que não centra)
   · ▾ Exportar CSV / Importar; "+ Novo cartão" = o formulário de um (clicar no nome
   do bloco também o abre).
+  A ORDEM DOS CARTÕES (23/11/2026, o mockup "Cadastros com movimento"; MIGRATION 035, `cartoes.ordem`): a alça ⠿ no hover
+  do cadastro arrasta; "Salvar" grava a `ordem` (`ordensDosCartoes`: sem mexer, só o novo ganha a seguinte; mexeu,
+  renumera 1, 2, 3…). Vale em toda lista de cartão: `listarCartoes` ordena (`ordenarCartoes`, no JS — sem a coluna, a
+  ordem de antes), a tela Cartões (os ativos primeiro, entre eles a ordem) e as colunas do Importar (`mesesDoAno`; sem
+  ordem, pelo nome). Sem a 035 a alça não aparece (`temOrdemCartoes`).
 - REGRAS (`pages/Regras.jsx`): a TABELA DE FORMULÁRIO dos cadastros — a ordem é a alça ⠿ (a primeira que pega
   decide), palavra e categoria (ou "Ignorar") são campos, marcar várias muda a categoria ou exclui, "Salvar
   alterações (N)" grava a diferença. A prioridade só conta como alteração se a ORDEM mudou (aí renumera 1, 2, 3…; a

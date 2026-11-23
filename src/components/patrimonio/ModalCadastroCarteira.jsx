@@ -4,7 +4,8 @@ import SelectSimples from '../SelectSimples.jsx';
 import Toggle from '../Toggle.jsx';
 import Tooltip from '../Tooltip.jsx';
 import { Trilho as TrilhoFaixa } from '../filtros/FaixaFiltros.jsx';
-import { CirculoMais, IconExpandirTudo, IconGrip } from '../icons.jsx';
+import { CirculoMais, IconExpandirTudo } from '../icons.jsx';
+import { Alca, Seta } from '../PecasCadastro.jsx';
 import { CORES_INSTITUICAO } from './TabelaCarteira.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
@@ -51,21 +52,7 @@ const NO_VENCIMENTO = [{ value: 'conta', label: 'volta para a conta' }, { value:
 const CHAVE_FECHADAS = 'cadastro_inv_fechadas';
 const lerFechadas = () => { try { return new Set(JSON.parse(lsGet(CHAVE_FECHADAS) ?? '[]')); } catch { return new Set(); } };
 
-// a seta da faixa (a da carteira): caixa de 20px e ícone de 12 (a diferença par, sem meio pixel)
-const Seta = ({ aberto, onClick, rotulo }) => (
-  <button type="button" onClick={onClick} aria-expanded={aberto} aria-label={rotulo}
-    className="group/seta flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200">
-    <svg viewBox="0 0 24 24" className={`h-[12px] w-[12px] shrink-0 text-gray-500 transition-[transform,color] duration-150 group-hover/seta:text-gray-800 ${aberto ? 'rotate-90' : ''}`} fill="none"
-      stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
-  </button>
-);
-// a alça ⠿: aparece no hover da linha (o ícone de 9 × 14 numa caixa de 17 × 24)
-const Alca = ({ props, rotulo }) => (
-  <span {...props} title={rotulo}
-    className="flex h-[24px] w-[17px] shrink-0 cursor-grab items-center justify-center rounded-[4px] text-gray-400 opacity-0 transition-[opacity,color,background-color] hover:bg-gray-200 hover:text-gray-700 focus-visible:opacity-100 active:cursor-grabbing group-hover/linha:opacity-100">
-    <IconGrip />
-  </span>
-);
+// a seta da faixa e a alça ⠿: `components/PecasCadastro.jsx` (as mesmas do cadastro das categorias)
 // a pílula liga/desliga do "Vence em": tracejada desligada, cheia ligada
 const Pilula = ({ ligado, onChange, disabled, dica, children }) => (
   <Tooltip label={dica}>

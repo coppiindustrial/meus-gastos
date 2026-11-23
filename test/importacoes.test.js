@@ -29,6 +29,11 @@ test('colunas: um cartão por coluna (por nome) e o extrato no fim', () => {
   assert.equal(tabela.linhas.length, 12);
 });
 
+test('colunas: com a ORDEM do cadastro (migration 035) ela manda; o cartão sem ordem vai para o fim, pelo nome', () => {
+  const t = mesesDoAno({ ano: 2026, hoje, cartoes: [{ ...nubank, ordem: 2 }, { ...xp, ordem: 1 }, { ...velho, ordem: null }], faturas, extratos });
+  assert.deepEqual(t.colunas.map((c) => c.key), ['xp', 'nu', 'vl', 'extrato']);
+});
+
 test('fatura: importada, da planilha, falta (já venceu), futura e antes de existir', () => {
   assert.equal(linha('2026-09').celulas.nu.estado, 'ok');
   assert.equal(linha('2026-07').celulas.nu.planilha, true);
