@@ -389,8 +389,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   então apaga o lote de antes (falhando no meio, aparece duas vezes, nada se perde). O aporte abre o "Editar aporte". E `ModalCadastroCarteira` (a tabela de formulário
   dos fixos, agrupada pela instituição — o nome do grupo é um campo; o investimento com aportes não se exclui, desativa).
   O CADASTRO COM HIERARQUIA E MOVIMENTO (09/11/2026, a opção A do mockup "Cadastro dos investimentos"): a instituição é a
-  FAIXA da carteira (a cor dela, a seta que recolhe animado — `cadastro_inv_fechadas` —, o ⇕ no cabeçalho do pop-up, o
-  "+ investimento" no hover), o investimento recuado; a ALÇA ⠿ arrasta a instituição (com os dela) ou o investimento
+  FAIXA da carteira (a cor dela, a seta que recolhe animado — `cadastro_inv_fechadas` —, o cabeçalho do pop-up num trilho
+  só como o do cadastro das categorias: ⇕ | Nova instituição, segmentos de 25px — 23/11/2026; o "+ investimento" no hover), o investimento recuado; a ALÇA ⠿ arrasta a instituição (com os dela) ou o investimento
   (solto sob outra faixa, muda de instituição) — `arrastoDoCadastro`; os CAMPOS QUIETOS (`.quieto` no index.css: só o
   texto até o hover da linha ou o foco), as colunas em GRUPOS e as PÍLULAS "−1 dia" / "fds → seg." no Vence em. A ORDEM
   SEM MIGRATION: a instituição é texto, então vale a do primeiro investimento dela (`instituicoesEmOrdem`, a menor

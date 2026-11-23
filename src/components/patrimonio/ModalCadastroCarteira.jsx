@@ -3,7 +3,7 @@ import Modal from '../Modal.jsx';
 import SelectSimples from '../SelectSimples.jsx';
 import Toggle from '../Toggle.jsx';
 import Tooltip from '../Tooltip.jsx';
-import { Trilho as TrilhoFaixa } from '../filtros/FaixaFiltros.jsx';
+import { DivisorFaixa, Trilho as TrilhoFaixa } from '../filtros/FaixaFiltros.jsx';
 import { CirculoMais, IconExpandirTudo } from '../icons.jsx';
 import { Alca, Seta } from '../PecasCadastro.jsx';
 import { CORES_INSTITUICAO } from './TabelaCarteira.jsx';
@@ -370,16 +370,26 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
     );
   };
 
-  // o ⇕ no cabeçalho do pop-up, no trilho do DRE
-  const acoes = grupos.length > 0 && (
+  // O CABEÇALHO DO POP-UP NUM TRILHO SÓ, como o do cadastro das categorias (23/11/2026, a pedido: o ⇕ sozinho no trilho
+  // parecia maior que o de lá): ⇕ | Nova instituição (também na linha do fim), os segmentos de 25px.
+  const SEG = 'inline-flex h-[25px] shrink-0 items-center gap-2 whitespace-nowrap rounded-[3px] px-2 text-[12.5px] transition-colors hover:bg-gray-200';
+  const acoes = (
     <TrilhoFaixa className="mr-1 shrink-0">
-      <Tooltip label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}>
-        <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}
-          onClick={() => setFechadas(tudoAberto ? new Set(grupos.map((g) => g.id)) : new Set())}
-          className="inline-flex h-[24px] w-[28px] shrink-0 items-center justify-center rounded-[4px] text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900">
-          <IconExpandirTudo fechar={tudoAberto} />
-        </button>
-      </Tooltip>
+      {grupos.length > 0 && (
+        <>
+          <Tooltip label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}>
+            <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}
+              onClick={() => setFechadas(tudoAberto ? new Set(grupos.map((g) => g.id)) : new Set())}
+              className={`${SEG} w-[30px] justify-center !px-0 text-gray-600 hover:text-gray-900`}>
+              <IconExpandirTudo fechar={tudoAberto} />
+            </button>
+          </Tooltip>
+          <DivisorFaixa />
+        </>
+      )}
+      <button type="button" onClick={novaInstituicao} className={`${SEG} font-semibold text-gray-800 hover:text-gray-900`}>
+        <CirculoMais borda="text-gray-500" />Nova instituição
+      </button>
     </TrilhoFaixa>
   );
 
