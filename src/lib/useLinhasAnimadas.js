@@ -65,7 +65,6 @@ export default function useLinhasAnimadas(todas, visiveis, caixaRef) {
     const desfazer = () => {
       for (const a of animacoes.current) {
         a.anim.cancel();
-        if (a.el) { a.el.style.position = ''; a.el.style.zIndex = ''; }
         if (a.caixa) a.caixa.style.overflowY = '';
       }
       animacoes.current = [];
@@ -111,8 +110,10 @@ export default function useLinhasAnimadas(todas, visiveis, caixaRef) {
     // SÓ O QUE SE VÊ ANIMA (23/11/2026): recolher um grupo no alto do cadastro das categorias animava as ~70 linhas de
     // baixo, cada uma virando uma camada (`position`, `z-index`, `transform`) — e o gesto travava. A linha cujo caminho
     // inteiro (de onde parte até onde chega) fica fora da parte visível da caixa (e da janela) não anima: ninguém a vê
-    // pular. A parte visível é a maior das duas alturas da caixa no gesto. A linha que fica, sem animar, é coberta pelas
-    // que deslizam (essas vão com `z-index`).
+    // pular. A parte visível é a maior das duas alturas da caixa no gesto.
+    // SEM `position`/`z-index` NAS LINHAS: escrevê-los no começo e apagá-los no fim refazia o layout da tabela inteira
+    // duas vezes por gesto. Não fazem falta: a linha com `transform` (ou opacidade) animada já é um contexto de
+    // empilhamento e se desenha por cima das paradas, na ordem do documento — e tudo o que ela cruza também anima.
     const visTopo = Math.max(rCaixa.top + caixa.clientTop, 0);
     const visBase = Math.min(rCaixa.top + Math.max(hCaixa, inicio, fim), window.innerHeight);
     const seVe = (i, de, ate) => {
@@ -129,9 +130,7 @@ export default function useLinhasAnimadas(todas, visiveis, caixaRef) {
       const em = (q) => e + (s - e) * q;
       const ve = dec.sai.has(id) ? seVe(i, e, em(0.9)) : dec.entra.has(id) ? seVe(i, em(0.1), s) : seVe(i, e, s);
       if ((s || e) && ve) {
-        el.style.position = 'relative';
-        el.style.zIndex = '11';
-        animacoes.current.push({ el, anim: el.animate([{ transform: `translateY(${-e}px)` }, { transform: `translateY(${-s}px)` }], opcoes) });
+        animacoes.current.push({ anim: el.animate([{ transform: `translateY(${-e}px)` }, { transform: `translateY(${-s}px)` }], opcoes) });
       }
       if (dec.sai.has(id)) {
         if (ve) animacoes.current.push({ anim: el.animate([{ opacity: 1 }, { opacity: 0 }], opcoes) });
@@ -146,9 +145,7 @@ export default function useLinhasAnimadas(todas, visiveis, caixaRef) {
     // baixo: sem isto ele pulava inteiro no primeiro quadro ao abrir e no último ao recolher (o "soco").
     if (s || e) {
       caixa.querySelectorAll('[data-segue]').forEach((el) => {
-        el.style.position = 'relative';
-        el.style.zIndex = '11';
-        animacoes.current.push({ el, anim: el.animate([{ transform: `translateY(${-e}px)` }, { transform: `translateY(${-s}px)` }], opcoes) });
+        animacoes.current.push({ anim: el.animate([{ transform: `translateY(${-e}px)` }, { transform: `translateY(${-s}px)` }], opcoes) });
       });
     }
 

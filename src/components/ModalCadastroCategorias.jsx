@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import Modal from './Modal.jsx';
 import SelectSimples from './SelectSimples.jsx';
 import Toggle from './Toggle.jsx';
@@ -31,6 +31,7 @@ import useLinhasAnimadas, { atributosLinha } from '../lib/useLinhasAnimadas.js';
 // aparecem nos Gastos fixos, no "Já comprometido" e no "Custo fixo". Só nos grupos de gasto.
 
 const TIPOS = [{ value: 'saida', label: 'Gasto' }, { value: 'entrada', label: 'Entrada' }];
+const SEM_033 = 'Para marcar o gasto fixo, aplique a migration 033 (supabase/migrations/033_categoria_gasto_fixo.sql) no SQL Editor do Supabase.';
 const semAcento = (s) => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 let seq = 0;
@@ -75,7 +76,6 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
   const alternarGrupo = (id) => { const n = new Set(recolhidos); if (n.has(id)) n.delete(id); else n.add(id); setRecolhidos(n); };
   const corpoRef = useRef(null);
   const comFixo = temGastoFixo(categorias);
-  const SEM_033 = 'Para marcar o gasto fixo, aplique a migration 033 (supabase/migrations/033_categoria_gasto_fixo.sql) no SQL Editor do Supabase.';
   const hojeComp = competenciaAtual();
   const como = useMemo(() => comoVemDoResumo(resumo, hojeComp, categorias), [resumo, hojeComp, categorias]);
 
@@ -114,7 +114,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
     onReordenar: (ids) => setCats((cs) => reorganizar(ids, cs)),
   });
 
-  const alt = alteracoes(grupos, cats);
+  const alt = useMemo(() => alteracoes(grupos, cats), [grupos, cats]);
   const nAlt = totalAlteracoes(alt);
   const mudaGrupo = (id, campo, v) => { setGrupos((gs) => gs.map((g) => (g.id === id ? { ...g, [campo]: v } : g))); setErro(null); };
   const mudaCat = (id, campo, v) => { setCats((cs) => cs.map((c) => (c.id === id ? { ...c, [campo]: v } : c))); setErro(null); };
@@ -213,10 +213,26 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
     setSalvando(false);
   };
 
-  const borda = (id, campo) => (erro?.id === id && erro.campo === campo ? '!border-hx-e5484d' : '');
   const th = 'sticky top-0 z-10 h-8 border-b border-gray-200 bg-hx-f9fafb px-2 text-left text-[10.5px] font-semibold uppercase tracking-wide text-gray-500';
-  const td = 'border-b border-gray-100 px-2 py-1.5';
-  const opcoesGrupo = grupos.filter((g) => !g.excluir).map((g) => ({ value: g.id, label: g.nome || '(grupo novo)' }));
+  const opcoesGrupo = useMemo(() => grupos.filter((g) => !g.excluir).map((g) => ({ value: g.id, label: g.nome || '(grupo novo)' })), [grupos]);
+
+  // AS LINHAS SÃO MEMOIZADAS (23/11/2026: recolher e abrir travavam — cada clique redesenhava as ~70 linhas, com o
+  // seletor, as chaves e o campo de cada uma, no começo e de novo no fim da animação). Uma linha só se refaz quando
+  // muda o que ela mostra; as ações vêm por esta REF, sempre as da última renderização (nada de closure velha), e o
+  // arrasto entra com o `dragId` e a ordem (`chave`), que mudam os ouvintes dele.
+  const acoesLinha = useRef(null);
+  acoesLinha.current = {
+    alternarGrupo, subirGrupo, mudaGrupo, mudaCat, moverPara, alternarMarca, novaCategoria,
+    alternarCor: (id) => setCorAberta((a) => (a === id ? null : id)),
+    tirarGrupoNovo: (id) => setGrupos((gs) => gs.filter((y) => y.id !== id)),
+    tirarCatNova: (id) => setCats((cs) => cs.filter((y) => y.id !== id)),
+    manterCat: (id) => setCats((cs) => cs.map((y) => (y.id === id ? { ...y, excluir: false, juntarEm: null } : y))),
+    fixoDoGrupo: (id, valor) => setCats((cs) => {
+      const doG = new Set(ficamNoGrupo(cs, id));
+      return cs.map((c) => (doG.has(c) ? { ...c, gasto_fixo: valor } : c));
+    }),
+  };
+  const doArrasto = { arrasto, arrastando: arrasto.dragId, chave: linhas.map((x) => x.id).join('|') };
   const visiveisN = cats.filter((c) => !c.excluir && !c.juntarEm).length;
 
   const acoes = (
@@ -260,58 +276,11 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
                 const g = x.grupo;
                 const i = grupos.indexOf(g);
                 const mudou = g.novo || (!g.excluir && Object.keys(diferencaGrupo(g, alt.ordens.grupo.get(g.id))).length > 0);
+                const doG = ficamNoGrupo(cats, g.id);
                 return [
-                  <tr key={x.id} {...arrasto.itemProps(x.id)} {...atributosLinha(x.id, estado)} className={`transition-[opacity,transform] duration-200 ease-out ${g.excluir ? 'opacity-45' : ''}`}>
-                    <td className={`${td} bg-hx-f6f7f8 !px-0 text-center`} style={mudou && !g.excluir ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>
-                      <button type="button" onClick={() => alternarGrupo(g.id)} disabled={!!t} aria-expanded={!x.fechado}
-                        title={x.fechado ? 'Expandir o grupo' : 'Recolher o grupo'} aria-label={x.fechado ? `Expandir ${g.nome}` : `Recolher ${g.nome}`}
-                        className="mx-auto inline-flex h-7 w-6 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200 disabled:opacity-40">
-                        <IconChevron aberto={!x.fechado} />
-                      </button>
-                    </td>
-                    <td className={`${td} bg-hx-f6f7f8 !px-0`}>
-                      <span className="flex flex-col items-center leading-none">
-                        <button type="button" disabled={i === 0} onClick={() => subirGrupo(g.id, -1)} title="Subir o grupo"
-                          className="h-3.5 w-5 text-[10px] text-gray-400 hover:text-gray-700 disabled:opacity-30">▲</button>
-                        <button type="button" disabled={i === grupos.length - 1} onClick={() => subirGrupo(g.id, 1)} title="Descer o grupo"
-                          className="h-3.5 w-5 text-[10px] text-gray-400 hover:text-gray-700 disabled:opacity-30">▼</button>
-                      </span>
-                    </td>
-                    <td className={`${td} bg-hx-f6f7f8`}>
-                      <span className="flex items-center gap-2">
-                        <button type="button" onClick={() => setCorAberta(corAberta === g.id ? null : g.id)} disabled={g.excluir} title="Cor do grupo"
-                          className="h-5 w-5 shrink-0 rounded-[5px] ring-1 ring-black/10 transition-transform hover:scale-110" style={{ background: g.cor }} />
-                        <input data-nome={g.id} className={`input !h-8 font-semibold text-[12.5px] ${g.excluir ? 'line-through' : ''} ${borda(g.id, 'nome')}`} disabled={g.excluir}
-                          value={g.nome} placeholder="Nome do grupo" onChange={(e) => mudaGrupo(g.id, 'nome', e.target.value)} />
-                      </span>
-                    </td>
-                    <td className={`${td} bg-hx-f6f7f8`}>
-                      <SelectSimples value={g.tipo} onChange={(v) => mudaGrupo(g.id, 'tipo', v)} opcoes={TIPOS} disabled={g.excluir} compacto />
-                    </td>
-                    <td className={`${td} bg-hx-f6f7f8 text-right text-[11.5px] text-gray-400`} colSpan={3}>{plural(x.n, 'categoria', 'categorias')}</td>
-                    <td className={`${td} bg-hx-f6f7f8`}>
-                      {g.tipo === 'saida' && !g.excluir && x.n > 0 && (() => {
-                        const doG = ficamNoGrupo(cats, g.id);
-                        const on = doG.filter((c) => c.gasto_fixo).length;
-                        const todos = on === doG.length;
-                        return (
-                          <span className="flex items-center gap-2 text-[11.5px] text-gray-500" title={comFixo ? 'Marca ou desmarca todas as categorias do grupo' : SEM_033}>
-                            <Toggle compacto checked={todos} misto={on > 0 && !todos} disabled={!comFixo} rotulo={`O grupo ${g.nome} é gasto fixo`}
-                              onChange={() => setCats((cs) => cs.map((c) => (doG.includes(c) ? { ...c, gasto_fixo: !todos } : c)))} />
-                            {todos ? 'o grupo inteiro' : on ? `${on} de ${doG.length}` : ''}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className={`${td} bg-hx-f6f7f8`}>
-                      <span className="flex items-center justify-end gap-1">
-                        <button type="button" onClick={() => novaCategoria(g.id)} disabled={g.excluir}
-                          className="inline-flex h-7 items-center gap-1 rounded-[4px] px-1.5 text-[11.5px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">+ categoria</button>
-                        <BotaoLixo marcado={g.excluir} bloqueado={x.n > 0 && !g.excluir} titulo={x.n > 0 ? 'Só sai o grupo vazio: mova as categorias antes' : g.excluir ? 'Não excluir' : 'Excluir o grupo (ao salvar)'}
-                          onClick={() => (g.novo ? setGrupos((gs) => gs.filter((y) => y.id !== g.id)) : mudaGrupo(g.id, 'excluir', !g.excluir))} />
-                      </span>
-                    </td>
-                  </tr>,
+                  <LinhaGrupo key={x.id} id={x.id} g={g} estado={estado} primeiro={i === 0} ultimo={i === grupos.length - 1} n={x.n}
+                    fechado={x.fechado} buscando={!!t} mudou={mudou} erroNome={erro?.id === g.id && erro.campo === 'nome'} comFixo={comFixo}
+                    fixos={doG.filter((c) => c.gasto_fixo).length} doG={doG.length} {...doArrasto} acoes={acoesLinha} />,
                   corAberta === g.id && (
                     <tr key={`${x.id}:cor`}>
                       <td colSpan={9} className="border-b border-gray-100 bg-hx-f9fafb px-4 py-2">
@@ -329,61 +298,12 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
               }
               const c = x.cat;
               const sai = c.excluir || !!c.juntarEm;
-              const n = qtd[c.id] ?? 0;
               const mudou = c.novo || (!sai && Object.keys(diferencaCategoria(c, alt.ordens.categoria.get(c.id))).length > 0);
               return (
-                // A classe de transição é obrigatória para o FLIP do arraste (os vizinhos deslizam).
-                <tr key={x.id} {...arrasto.itemProps(x.id)} {...atributosLinha(x.id, estado)}
-                  className={`transition-[opacity,transform] duration-200 ease-out ${sai ? 'opacity-50' : ''} ${marcadas.has(c.id) ? 'bg-blue-50' : ''} ${
-                    arrasto.dragId === x.id ? '!opacity-40' : ''}`}>
-                  <td className={`${td} text-center`} style={mudou && !sai ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>
-                    {!c.novo && !sai && (
-                      <input type="checkbox" checked={marcadas.has(c.id)} onChange={() => alternarMarca(c.id)} aria-label={`Marcar ${c.nome}`} className="h-3.5 w-3.5 cursor-pointer accent-gray-800" />
-                    )}
-                  </td>
-                  <td className={`${td} !px-0`}>
-                    {!filtrando && !sai ? (
-                      <span {...arrasto.alcaProps(x.id)} title="Arraste para mudar a ordem ou o grupo"
-                        className="mx-auto flex h-8 w-5 cursor-grab items-center justify-center rounded-[4px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 active:cursor-grabbing">
-                        <IconGrip />
-                      </span>
-                    ) : <span className="mx-auto flex h-8 w-5 items-center justify-center text-gray-200"><IconGrip /></span>}
-                  </td>
-                  <td className={`${td} pl-9`}>
-                    <span className="flex items-center gap-2">
-                      <input data-nome={c.id} className={`input !h-8 text-[12.5px] ${sai ? 'line-through' : ''} ${!c.ativa && !sai ? 'text-gray-400' : ''} ${borda(c.id, 'nome')}`}
-                        disabled={sai} value={c.nome} placeholder="Nome da categoria" onChange={(e) => mudaCat(c.id, 'nome', e.target.value)} />
-                      {c.juntarEm && <span className="shrink-0 whitespace-nowrap rounded-[4px] bg-hx-fef3c7 px-1.5 py-0.5 text-[11px] font-semibold text-hx-92400e">junta em {nomeDe(c.juntarEm)}</span>}
-                      {c.novo && <span className="shrink-0 rounded-[4px] bg-hx-dcfce7 px-1.5 py-0.5 text-[11px] font-semibold text-hx-166534">nova</span>}
-                    </span>
-                  </td>
-                  <td className={td}>
-                    {sai ? <span className="px-2 text-gray-400">—</span>
-                      : <SelectSimples value={c.grupo_id} onChange={(v) => moverPara([c.id], v)} opcoes={opcoesGrupo} compacto />}
-                  </td>
-                  <td className={`${td} text-right tabular-nums text-gray-600`}>{n || <span className="text-gray-300">—</span>}</td>
-                  <td className={`${td} text-right tabular-nums text-gray-500`}>{regras[c.id] || <span className="text-gray-300">—</span>}</td>
-                  <td className={td}><Toggle compacto checked={c.ativa} disabled={sai} onChange={(v) => mudaCat(c.id, 'ativa', v)} rotulo={`${c.nome} ativa`} /></td>
-                  <td className={`${td} ${c.gasto_fixo && !sai ? 'bg-hx-fffbeb' : ''}`}>
-                    {x.grupo.tipo === 'saida' && (
-                      <span className="flex min-w-0 items-center gap-2" title={comFixo ? undefined : SEM_033}>
-                        <Toggle compacto checked={c.gasto_fixo} disabled={sai || !comFixo} onChange={(v) => mudaCat(c.id, 'gasto_fixo', v)} rotulo={`${c.nome} é gasto fixo`} />
-                        <span className={`truncate text-[11.5px] ${c.gasto_fixo && !sai ? 'text-hx-92400e' : 'text-gray-400'}`} title={como.get(c.id) ? `Pelo histórico: ${como.get(c.id)}` : undefined}>
-                          {como.get(c.id) ?? (c.novo ? '' : 'sem gasto')}
-                        </span>
-                      </span>
-                    )}
-                  </td>
-                  <td className={`${td} text-right`}>
-                    <BotaoLixo marcado={sai} bloqueado={!sai && n > 0}
-                      titulo={sai ? 'Não excluir / não juntar' : n > 0 ? `Tem ${plural(n, 'lançamento', 'lançamentos')}: marque e junte com outra, ou desative` : 'Excluir (ao salvar)'}
-                      onClick={() => {
-                        if (c.novo) setCats((cs) => cs.filter((y) => y.id !== c.id));
-                        else if (sai) setCats((cs) => cs.map((y) => (y.id === c.id ? { ...y, excluir: false, juntarEm: null } : y)));
-                        else mudaCat(c.id, 'excluir', true);
-                      }} />
-                  </td>
-                </tr>
+                <LinhaCategoria key={x.id} id={x.id} c={c} estado={estado} tipoGrupo={x.grupo.tipo} marcada={marcadas.has(c.id)}
+                  erroNome={erro?.id === c.id && erro.campo === 'nome'} filtrando={filtrando} mudou={mudou} n={qtd[c.id] ?? 0} nRegras={regras[c.id] ?? 0}
+                  comFixo={comFixo} como={como.get(c.id)} opcoesGrupo={opcoesGrupo} nomeJunta={c.juntarEm ? nomeDe(c.juntarEm) : null}
+                  {...doArrasto} acoes={acoesLinha} />
               );
             })}
             {linhas.length === 0 && <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-400">Nada com “{busca.trim()}”.</td></tr>}
@@ -436,6 +356,122 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
     </Modal>
   );
 }
+
+// AS LINHAS DA TABELA, MEMOIZADAS: só se refazem quando um valor que elas mostram muda. O `arrasto` (um objeto novo a
+// cada renderização) fica de fora da comparação — o que muda os ouvintes dele (`arrastando`, `chave`) está nela.
+const igualSemArrasto = (a, b) => Object.keys(a).every((k) => k === 'arrasto' || a[k] === b[k]);
+const TD = 'border-b border-gray-100 px-2 py-1.5';
+const BORDA_ERRO = '!border-hx-e5484d';
+
+const LinhaGrupo = memo(({ id, g, estado, primeiro, ultimo, n, fechado, buscando, mudou, erroNome, comFixo, fixos, doG, arrasto, acoes }) => {
+  const todos = fixos === doG;
+  return (
+    <tr {...arrasto.itemProps(id)} {...atributosLinha(id, estado)} className={`transition-[opacity,transform] duration-200 ease-out ${g.excluir ? 'opacity-45' : ''}`}>
+      <td className={`${TD} bg-hx-f6f7f8 !px-0 text-center`} style={mudou && !g.excluir ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>
+        <button type="button" onClick={() => acoes.current.alternarGrupo(g.id)} disabled={buscando} aria-expanded={!fechado}
+          title={fechado ? 'Expandir o grupo' : 'Recolher o grupo'} aria-label={fechado ? `Expandir ${g.nome}` : `Recolher ${g.nome}`}
+          className="mx-auto inline-flex h-7 w-6 items-center justify-center rounded-[4px] transition-colors hover:bg-gray-200 disabled:opacity-40">
+          <IconChevron aberto={!fechado} />
+        </button>
+      </td>
+      <td className={`${TD} bg-hx-f6f7f8 !px-0`}>
+        <span className="flex flex-col items-center leading-none">
+          <button type="button" disabled={primeiro} onClick={() => acoes.current.subirGrupo(g.id, -1)} title="Subir o grupo"
+            className="h-3.5 w-5 text-[10px] text-gray-400 hover:text-gray-700 disabled:opacity-30">▲</button>
+          <button type="button" disabled={ultimo} onClick={() => acoes.current.subirGrupo(g.id, 1)} title="Descer o grupo"
+            className="h-3.5 w-5 text-[10px] text-gray-400 hover:text-gray-700 disabled:opacity-30">▼</button>
+        </span>
+      </td>
+      <td className={`${TD} bg-hx-f6f7f8`}>
+        <span className="flex items-center gap-2">
+          <button type="button" onClick={() => acoes.current.alternarCor(g.id)} disabled={g.excluir} title="Cor do grupo"
+            className="h-5 w-5 shrink-0 rounded-[5px] ring-1 ring-black/10 transition-transform hover:scale-110" style={{ background: g.cor }} />
+          <input data-nome={g.id} className={`input !h-8 font-semibold text-[12.5px] ${g.excluir ? 'line-through' : ''} ${erroNome ? BORDA_ERRO : ''}`} disabled={g.excluir}
+            value={g.nome} placeholder="Nome do grupo" onChange={(e) => acoes.current.mudaGrupo(g.id, 'nome', e.target.value)} />
+        </span>
+      </td>
+      <td className={`${TD} bg-hx-f6f7f8`}>
+        <SelectSimples value={g.tipo} onChange={(v) => acoes.current.mudaGrupo(g.id, 'tipo', v)} opcoes={TIPOS} disabled={g.excluir} compacto />
+      </td>
+      <td className={`${TD} bg-hx-f6f7f8 text-right text-[11.5px] text-gray-400`} colSpan={3}>{plural(n, 'categoria', 'categorias')}</td>
+      <td className={`${TD} bg-hx-f6f7f8`}>
+        {g.tipo === 'saida' && !g.excluir && n > 0 && (
+          <span className="flex items-center gap-2 text-[11.5px] text-gray-500" title={comFixo ? 'Marca ou desmarca todas as categorias do grupo' : SEM_033}>
+            <Toggle compacto checked={todos} misto={fixos > 0 && !todos} disabled={!comFixo} rotulo={`O grupo ${g.nome} é gasto fixo`}
+              onChange={() => acoes.current.fixoDoGrupo(g.id, !todos)} />
+            {todos ? 'o grupo inteiro' : fixos ? `${fixos} de ${doG}` : ''}
+          </span>
+        )}
+      </td>
+      <td className={`${TD} bg-hx-f6f7f8`}>
+        <span className="flex items-center justify-end gap-1">
+          <button type="button" onClick={() => acoes.current.novaCategoria(g.id)} disabled={g.excluir}
+            className="inline-flex h-7 items-center gap-1 rounded-[4px] px-1.5 text-[11.5px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">+ categoria</button>
+          <BotaoLixo marcado={g.excluir} bloqueado={n > 0 && !g.excluir} titulo={n > 0 ? 'Só sai o grupo vazio: mova as categorias antes' : g.excluir ? 'Não excluir' : 'Excluir o grupo (ao salvar)'}
+            onClick={() => (g.novo ? acoes.current.tirarGrupoNovo(g.id) : acoes.current.mudaGrupo(g.id, 'excluir', !g.excluir))} />
+        </span>
+      </td>
+    </tr>
+  );
+}, igualSemArrasto);
+
+const LinhaCategoria = memo(({ id, c, estado, tipoGrupo, marcada, erroNome, filtrando, mudou, n, nRegras, comFixo, como, opcoesGrupo, nomeJunta, arrastando, arrasto, acoes }) => {
+  const sai = c.excluir || !!c.juntarEm;
+  return (
+    // A classe de transição é obrigatória para o FLIP do arraste (os vizinhos deslizam).
+    <tr {...arrasto.itemProps(id)} {...atributosLinha(id, estado)}
+      className={`transition-[opacity,transform] duration-200 ease-out ${sai ? 'opacity-50' : ''} ${marcada ? 'bg-blue-50' : ''} ${
+        arrastando === id ? '!opacity-40' : ''}`}>
+      <td className={`${TD} text-center`} style={mudou && !sai ? { boxShadow: 'inset 3px 0 0 #f59e0b' } : undefined}>
+        {!c.novo && !sai && (
+          <input type="checkbox" checked={marcada} onChange={() => acoes.current.alternarMarca(c.id)} aria-label={`Marcar ${c.nome}`} className="h-3.5 w-3.5 cursor-pointer accent-gray-800" />
+        )}
+      </td>
+      <td className={`${TD} !px-0`}>
+        {!filtrando && !sai ? (
+          <span {...arrasto.alcaProps(id)} title="Arraste para mudar a ordem ou o grupo"
+            className="mx-auto flex h-8 w-5 cursor-grab items-center justify-center rounded-[4px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 active:cursor-grabbing">
+            <IconGrip />
+          </span>
+        ) : <span className="mx-auto flex h-8 w-5 items-center justify-center text-gray-200"><IconGrip /></span>}
+      </td>
+      <td className={`${TD} pl-9`}>
+        <span className="flex items-center gap-2">
+          <input data-nome={c.id} className={`input !h-8 text-[12.5px] ${sai ? 'line-through' : ''} ${!c.ativa && !sai ? 'text-gray-400' : ''} ${erroNome ? BORDA_ERRO : ''}`}
+            disabled={sai} value={c.nome} placeholder="Nome da categoria" onChange={(e) => acoes.current.mudaCat(c.id, 'nome', e.target.value)} />
+          {nomeJunta && <span className="shrink-0 whitespace-nowrap rounded-[4px] bg-hx-fef3c7 px-1.5 py-0.5 text-[11px] font-semibold text-hx-92400e">junta em {nomeJunta}</span>}
+          {c.novo && <span className="shrink-0 rounded-[4px] bg-hx-dcfce7 px-1.5 py-0.5 text-[11px] font-semibold text-hx-166534">nova</span>}
+        </span>
+      </td>
+      <td className={TD}>
+        {sai ? <span className="px-2 text-gray-400">—</span>
+          : <SelectSimples value={c.grupo_id} onChange={(v) => acoes.current.moverPara([c.id], v)} opcoes={opcoesGrupo} compacto />}
+      </td>
+      <td className={`${TD} text-right tabular-nums text-gray-600`}>{n || <span className="text-gray-300">—</span>}</td>
+      <td className={`${TD} text-right tabular-nums text-gray-500`}>{nRegras || <span className="text-gray-300">—</span>}</td>
+      <td className={TD}><Toggle compacto checked={c.ativa} disabled={sai} onChange={(v) => acoes.current.mudaCat(c.id, 'ativa', v)} rotulo={`${c.nome} ativa`} /></td>
+      <td className={`${TD} ${c.gasto_fixo && !sai ? 'bg-hx-fffbeb' : ''}`}>
+        {tipoGrupo === 'saida' && (
+          <span className="flex min-w-0 items-center gap-2" title={comFixo ? undefined : SEM_033}>
+            <Toggle compacto checked={c.gasto_fixo} disabled={sai || !comFixo} onChange={(v) => acoes.current.mudaCat(c.id, 'gasto_fixo', v)} rotulo={`${c.nome} é gasto fixo`} />
+            <span className={`truncate text-[11.5px] ${c.gasto_fixo && !sai ? 'text-hx-92400e' : 'text-gray-400'}`} title={como ? `Pelo histórico: ${como}` : undefined}>
+              {como ?? (c.novo ? '' : 'sem gasto')}
+            </span>
+          </span>
+        )}
+      </td>
+      <td className={`${TD} text-right`}>
+        <BotaoLixo marcado={sai} bloqueado={!sai && n > 0}
+          titulo={sai ? 'Não excluir / não juntar' : n > 0 ? `Tem ${plural(n, 'lançamento', 'lançamentos')}: marque e junte com outra, ou desative` : 'Excluir (ao salvar)'}
+          onClick={() => {
+            if (c.novo) acoes.current.tirarCatNova(c.id);
+            else if (sai) acoes.current.manterCat(c.id);
+            else acoes.current.mudaCat(c.id, 'excluir', true);
+          }} />
+      </td>
+    </tr>
+  );
+}, igualSemArrasto);
 
 const Ico = ({ children }) => (
   <svg viewBox="0 0 24 24" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
