@@ -93,28 +93,51 @@ export default function useLinhasAnimadas(todas, visiveis, caixaRef) {
     const aVista = linhas.filter((x) => x.estado !== 'fechada').map((x) => x.linha.id);
     const opcoes = { duration: MS_COLAPSO, easing: 'ease-out', fill: 'both' };
     const els = aVista.map((id) => caixa.querySelector(`tr[data-linha="${CSS.escape(id)}"]`));
-    const alturas = els.map((el) => (el ? el.getBoundingClientRect().height : 0));
-    const hCaixa = caixa.getBoundingClientRect().height;
+    const rects = els.map((el) => (el ? el.getBoundingClientRect() : null));
+    const alturas = rects.map((r) => (r ? r.height : 0));
+    const rCaixa = caixa.getBoundingClientRect();
+    const hCaixa = rCaixa.height;
     const tabela = caixa.querySelector('table');
     const conteudo = tabela ? tabela.getBoundingClientRect().height : caixa.scrollHeight;
     const cabe = caixa.scrollHeight <= caixa.clientHeight + 1;
     const moldura = cabe ? hCaixa - conteudo : caixa.offsetHeight - caixa.clientHeight;
     const maxH = parseFloat(getComputedStyle(caixa).maxHeight);
+    const maxInterno = Number.isFinite(maxH) ? maxH - moldura : Infinity;
+    const somar = (ids) => aVista.reduce((t, id, i) => t + (ids.has(id) ? alturas[i] : 0), 0);
+    // a altura da caixa de onde parte e até onde vai (o conteúdo sem as que entram / sem as que saem)
+    const inicio = Math.min(conteudo - somar(dec.entra), maxInterno) + moldura;
+    const fim = Math.min(conteudo - somar(dec.sai), maxInterno) + moldura;
+
+    // SÓ O QUE SE VÊ ANIMA (23/11/2026): recolher um grupo no alto do cadastro das categorias animava as ~70 linhas de
+    // baixo, cada uma virando uma camada (`position`, `z-index`, `transform`) — e o gesto travava. A linha cujo caminho
+    // inteiro (de onde parte até onde chega) fica fora da parte visível da caixa (e da janela) não anima: ninguém a vê
+    // pular. A parte visível é a maior das duas alturas da caixa no gesto. A linha que fica, sem animar, é coberta pelas
+    // que deslizam (essas vão com `z-index`).
+    const visTopo = Math.max(rCaixa.top + caixa.clientTop, 0);
+    const visBase = Math.min(rCaixa.top + Math.max(hCaixa, inicio, fim), window.innerHeight);
+    const seVe = (i, de, ate) => {
+      const r = rects[i];
+      return !!r && r.top - Math.max(de, ate) < visBase && r.bottom - Math.min(de, ate) > visTopo;
+    };
     let s = 0;
     let e = 0;
     aVista.forEach((id, i) => {
       const el = els[i];
       if (!el) return;
-      if (s || e) {
+      // o caminho conta enquanto a linha se vê: a que SAI até 90% do gesto (depois já quase sumiu), a que ENTRA a partir
+      // de 10% (antes ainda não apareceu); o deslize anda na mesma curva da opacidade
+      const em = (q) => e + (s - e) * q;
+      const ve = dec.sai.has(id) ? seVe(i, e, em(0.9)) : dec.entra.has(id) ? seVe(i, em(0.1), s) : seVe(i, e, s);
+      if ((s || e) && ve) {
         el.style.position = 'relative';
         el.style.zIndex = '11';
         animacoes.current.push({ el, anim: el.animate([{ transform: `translateY(${-e}px)` }, { transform: `translateY(${-s}px)` }], opcoes) });
       }
       if (dec.sai.has(id)) {
-        animacoes.current.push({ anim: el.animate([{ opacity: 1 }, { opacity: 0 }], opcoes) });
+        if (ve) animacoes.current.push({ anim: el.animate([{ opacity: 1 }, { opacity: 0 }], opcoes) });
         s += alturas[i];
       } else if (dec.entra.has(id)) {
-        animacoes.current.push({ anim: el.animate([{ opacity: 0 }, { opacity: 1 }], opcoes) });
+        if (ve) animacoes.current.push({ anim: el.animate([{ opacity: 0 }, { opacity: 1 }], opcoes) });
         e += alturas[i];
       }
     });
@@ -131,9 +154,6 @@ export default function useLinhasAnimadas(todas, visiveis, caixaRef) {
 
     // A CAIXA ACOMPANHA O DESLIZE: a altura anima de onde estava até onde vai ficar. O `overflowY:
     // hidden` durante o gesto impede uma barra de rolagem de aparecer enquanto o conteúdo está maior.
-    const maxInterno = Number.isFinite(maxH) ? maxH - moldura : Infinity;
-    const inicio = Math.min(conteudo - e, maxInterno) + moldura;
-    const fim = Math.min(conteudo - s, maxInterno) + moldura;
     if (Math.abs(inicio - fim) >= 0.5) {
       caixa.style.overflowY = 'hidden';
       animacoes.current.push({ caixa, anim: caixa.animate([{ height: `${inicio}px` }, { height: `${fim}px` }], opcoes) });
