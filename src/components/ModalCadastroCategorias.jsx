@@ -3,7 +3,7 @@ import Modal from './Modal.jsx';
 import SelectSimples from './SelectSimples.jsx';
 import Toggle from './Toggle.jsx';
 import Tooltip from './Tooltip.jsx';
-import { Trilho as TrilhoFaixa } from './filtros/FaixaFiltros.jsx';
+import { DivisorFaixa, Trilho as TrilhoFaixa } from './filtros/FaixaFiltros.jsx';
 import { CirculoMais, IconExpandirTudo } from './icons.jsx';
 import { Alca, Seta } from './PecasCadastro.jsx';
 import { lsGet, lsSet } from '../lib/storage.js';
@@ -28,9 +28,9 @@ import useLinhasAnimadas, { atributosLinha } from '../lib/useLinhasAnimadas.js';
 // NO JEITO DO CADASTRO DOS INVESTIMENTOS (23/11/2026, o mockup "Cadastros com movimento", a pedido: "deixe o mais próximo
 // possível"):
 //   · o GRUPO é a FAIXA (`bg-hx-f3f4f6`, a barra da cor dele na borda, o quadradinho da cor que abre as cores, o nome em
-//     14px semibold), com a SETA de 20px que recolhe (animado; lembrado em `cadastro_categorias_recolhidos`), o "+ categoria"
-//     no hover e, no fim de cada grupo, "Adicionar categoria em X"; o ⇕ no cabeçalho do pop-up (no trilho), ao lado da busca,
-//     do "Só as ativas" e do "+ Novo grupo" (também na linha do fim — a pedido, o do cabeçalho: senão só rolando até lá);
+//     14px semibold), com a SETA de 20px que recolhe (animado; lembrado em `cadastro_categorias_recolhidos`) e, no fim de cada
+//     grupo, "Adicionar categoria em X" (o "+ categoria" no hover da faixa saiu, a pedido); no cabeçalho do pop-up, UM
+//     TRILHO SÓ: a busca | Só as ativas | ⇕ | Novo grupo (também na linha do fim — senão só rolando até lá);
 //   · a ALÇA ⠿ (no hover, a de `PecasCadastro`) ARRASTA o grupo (com as categorias dele) ou a categoria — solta sob outra
 //     faixa, ela muda de grupo (`useListaArrastavel` + `arrastoAgrupado`, a conta do cadastro dos investimentos). Os ▲▼
 //     dos grupos saíram. Com busca ou "Só as ativas" a lista é parcial e a alça não arrasta;
@@ -266,26 +266,40 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
   const visiveisN = cats.filter((c) => !c.excluir && !c.juntarEm).length;
   const algumaMarcada = marcadas.size > 0;
 
-  // O CABEÇALHO DO POP-UP: o "Só as ativas", a busca, o "+ Novo grupo" e o ⇕ no trilho (o dos investimentos)
+  // O CABEÇALHO DO POP-UP NUM TRILHO SÓ (23/11/2026, a opção A do mockup "Cadastros com movimento · cabeçalho", a pedido:
+  // a busca, o "Novo grupo" e o ⇕ soltos "não se conversavam"): a busca sem caixa própria | Só as ativas | ⇕ | Novo grupo,
+  // separados pelo divisor da faixa de filtros — a mesma altura (31px) e o mesmo cinza.
+  const SEG = 'inline-flex h-[25px] shrink-0 items-center gap-2 whitespace-nowrap rounded-[3px] px-2 text-[12.5px] transition-colors hover:bg-gray-200';
   const acoes = (
-    <span className="flex items-center gap-2.5">
-      <label className="inline-flex cursor-pointer items-center gap-2 whitespace-nowrap text-[12.5px] text-gray-600">
-        <Toggle compacto checked={soAtivas} onChange={setSoAtivas} rotulo="Só as ativas" /> Só as ativas
+    <TrilhoFaixa className="mr-1 shrink-0">
+      <label className={`${SEG} w-[230px] cursor-text text-gray-400 hover:bg-transparent`}>
+        <svg viewBox="0 0 14 14" className="h-[14px] w-[14px] shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+          <circle cx="6" cy="6" r="4.25" /><path d="M9.2 9.2L12 12" />
+        </svg>
+        <input className="min-w-0 flex-1 bg-transparent text-[12.5px] text-gray-800 outline-none placeholder:text-gray-400" placeholder="Buscar categoria ou grupo"
+          aria-label="Buscar categoria ou grupo" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        {busca && (
+          <button type="button" onClick={() => setBusca('')} aria-label="Limpar a busca" className="shrink-0 rounded-[3px] p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700">
+            <svg viewBox="0 0 14 14" className="h-[10px] w-[10px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7" /></svg>
+          </button>
+        )}
       </label>
-      <input className="input !h-8 w-[220px] text-[12.5px]" placeholder="Buscar categoria ou grupo" value={busca} onChange={(e) => setBusca(e.target.value)} />
-      <button type="button" onClick={novoGrupo}
-        className="inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[6px] border border-gray-300 px-2.5 text-[12.5px] font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900">
+      <DivisorFaixa />
+      <label className={`${SEG} cursor-pointer text-gray-600 hover:text-gray-900`}>
+        <Toggle compacto checked={soAtivas} onChange={setSoAtivas} rotulo="Só as ativas" />Só as ativas
+      </label>
+      <DivisorFaixa />
+      <Tooltip label={t ? 'Buscando, tudo fica aberto' : tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}>
+        <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'} onClick={alternarTudo} disabled={!!t}
+          className={`${SEG} w-[30px] justify-center !px-0 text-gray-600 hover:text-gray-900 disabled:opacity-40 disabled:hover:bg-transparent`}>
+          <IconExpandirTudo fechar={tudoAberto} />
+        </button>
+      </Tooltip>
+      <DivisorFaixa />
+      <button type="button" onClick={novoGrupo} className={`${SEG} font-semibold text-gray-800 hover:text-gray-900`}>
         <CirculoMais borda="text-gray-500" />Novo grupo
       </button>
-      <TrilhoFaixa className="mr-1 shrink-0">
-        <Tooltip label={t ? 'Buscando, tudo fica aberto' : tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}>
-          <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'} onClick={alternarTudo} disabled={!!t}
-            className="inline-flex h-[24px] w-[28px] shrink-0 items-center justify-center rounded-[4px] text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900 disabled:opacity-40">
-            <IconExpandirTudo fechar={tudoAberto} />
-          </button>
-        </Tooltip>
-      </TrilhoFaixa>
-    </span>
+    </TrilhoFaixa>
   );
 
   const th = 'h-8 border-b border-gray-200 bg-hx-f9fafb px-2 text-left text-[10.5px] font-semibold uppercase tracking-wide text-gray-500';
@@ -335,12 +349,22 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
                   {corAberta === g.id && (
                     <tr>
                       <td colSpan={COLUNAS} className="border-b border-gray-100 bg-hx-f9fafb py-2 pl-[82px] pr-4">
-                        <span className="flex flex-wrap items-center gap-2">
-                          <span className="mr-1 text-[11.5px] text-gray-500">Cor de {g.nome || 'o grupo novo'}:</span>
-                          {CORES_GRUPO.map((cor) => (
-                            <button key={cor} type="button" aria-label={`Cor ${cor}`} onClick={() => { mudaGrupo(g.id, 'cor', cor); setCorAberta(null); }}
-                              className={`h-6 w-6 rounded-md transition ${g.cor === cor ? 'ring-2 ring-gray-800 ring-offset-2' : 'hover:scale-110'}`} style={{ background: cor }} />
-                          ))}
+                        <span className="flex items-start gap-3">
+                          <span className="mt-1 shrink-0 text-[11.5px] text-gray-500">Cor de {g.nome || 'o grupo novo'}:</span>
+                          {/* as 24 cores em duas linhas de 12 (as de antes em cima) */}
+                          <span className="grid grid-cols-12 gap-2">
+                          {CORES_GRUPO.map((cor) => {
+                            // a cor de OUTRO grupo leva um pontinho (pode repetir, mas fica à vista)
+                            const de = grupos.find((y) => y !== g && !y.excluir && y.cor === cor);
+                            return (
+                              <button key={cor} type="button" aria-label={`Cor ${cor}${de ? ` (em uso: ${de.nome})` : ''}`} title={de ? `Em uso: ${de.nome}` : undefined}
+                                onClick={() => { mudaGrupo(g.id, 'cor', cor); setCorAberta(null); }}
+                                className={`flex h-6 w-6 items-center justify-center rounded-md transition ${g.cor === cor ? 'ring-2 ring-gray-800 ring-offset-2' : 'hover:scale-110'}`} style={{ background: cor }}>
+                                {de && <span className="h-[6px] w-[6px] rounded-full bg-white/70" aria-hidden="true" />}
+                              </button>
+                            );
+                          })}
+                          </span>
                         </span>
                       </td>
                     </tr>
@@ -484,13 +508,9 @@ const LinhaGrupo = memo(({ id, g, estado, n, fechado, buscando, filtrando, mudou
         )}
       </td>
       <td className={`${TDG} pr-2`}>
+        {/* o "+ categoria" que aparecia no hover saiu (23/11/2026, a pedido): a categoria nova entra pelo "Adicionar
+            categoria em X", no fim do grupo */}
         <span className="flex items-center justify-end gap-0.5">
-          {!g.excluir && (
-            <button type="button" onClick={() => acoes.current.novaCategoria(g.id)}
-              className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-[5px] px-2 py-1 text-[12px] font-medium text-gray-600 opacity-0 transition-[opacity,color,background-color] hover:bg-gray-200 hover:text-gray-900 focus-visible:opacity-100 group-hover/linha:opacity-100">
-              <CirculoMais />categoria
-            </button>
-          )}
           <BotaoLixo marcado={g.excluir} bloqueado={n > 0 && !g.excluir} titulo={n > 0 ? 'Só sai o grupo vazio: mova as categorias antes' : g.excluir ? 'Não excluir' : g.novo ? 'Tirar o grupo novo' : 'Excluir o grupo (ao salvar)'}
             onClick={() => (g.novo ? acoes.current.tirarGrupoNovo(g.id) : acoes.current.mudaGrupo(g.id, 'excluir', !g.excluir))} />
         </span>

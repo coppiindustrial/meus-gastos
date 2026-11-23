@@ -112,11 +112,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   NO JEITO DO CADASTRO DOS INVESTIMENTOS (23/11/2026, o mockup "Cadastros com movimento", a pedido: "o mais próximo
   possível"): o GRUPO é a FAIXA (`bg-hx-f3f4f6`, a barra da cor na borda, o quadradinho da cor que abre as cores, o nome
   em 14px), a SETA de 20px e a ALÇA ⠿ no hover (as de `components/PecasCadastro.jsx`, as mesmas do `ModalCadastroCarteira`),
-  o "+ categoria" no hover e "Adicionar categoria em X" no fim do grupo; os ▲▼ SAÍRAM: a alça da faixa ARRASTA O GRUPO com
+  "Adicionar categoria em X" no fim do grupo (o "+ categoria" no hover da faixa saiu, a pedido); os ▲▼ SAÍRAM: a alça da faixa ARRASTA O GRUPO com
   as categorias (`arrastoAgrupado` em `lib/arrastoAgrupado.js`, a conta dos investimentos, testada). CAMPOS QUIETOS
   (tabela `.quieto`), a caixa de marcar só no hover (ou com alguma marcada), as colunas em grupos (a categoria · uso ·
-  como conta). No cabeçalho do pop-up: "Só as ativas", a busca, "+ NOVO GRUPO" (também na linha do fim — a pedido: senão
-  só rolando até lá) e o ⇕ no trilho. Com busca ou "Só as ativas" a alça não arrasta. AS LINHAS SÃO MEMOIZADAS
+  como conta). O CABEÇALHO DO POP-UP É UM TRILHO SÓ (a opção A do mockup "· cabeçalho", a pedido: soltos "não se
+  conversavam"): a busca sem caixa própria | Só as ativas | ⇕ | NOVO GRUPO (também na linha do fim — senão só rolando até
+  lá), o `Trilho` + `DivisorFaixa` da faixa de filtros. AS CORES DOS GRUPOS SÃO 24 (`CORES_GRUPO`, as 12 de antes primeiro;
+  a cor de outro grupo leva um pontinho e o nome no hover). Com busca ou "Só as ativas" a alça não arrasta. AS LINHAS SÃO MEMOIZADAS
   (`LinhaGrupo`/`LinhaCategoria`, as ações por uma ref: recolher redesenhava as ~70 linhas e travava) e o grupo vai num
   `Fragment` COM A CHAVE — numa lista sem chave o React casava pela posição, e o grupo arrastado era remontado (a alça
   sumia no meio do gesto). O ARRASTO DO GRUPO NÃO VAI E VOLTA (`arrastoAgrupado`, 23/11/2026; vale também nos

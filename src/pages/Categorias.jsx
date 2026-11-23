@@ -58,7 +58,7 @@ function ModalGrupo({ grupo, onFechar, onSalvo }) {
           <SegmentedFiltro opcoes={TIPOS} value={form.tipo} onChange={(tipo) => setForm({ ...form, tipo })} ariaLabel="Tipo do grupo" />
         </Campo>
         <Campo rotulo="Cor">
-          <div className="flex flex-wrap gap-2">
+          <div className="grid w-max grid-cols-8 gap-2">
             {CORES_GRUPO.map((cor) => (
               <button key={cor} type="button" onClick={() => setForm({ ...form, cor })} aria-label={`Cor ${cor}`}
                 className={`h-7 w-7 rounded-md transition ${form.cor === cor ? 'ring-2 ring-gray-800 ring-offset-2' : 'hover:scale-110'}`}

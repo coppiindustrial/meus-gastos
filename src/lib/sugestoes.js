@@ -24,7 +24,12 @@ export const CARTOES_SUGERIDOS = [
 ];
 
 // Cores oferecidas para os grupos (as mesmas da sugestão, mais algumas).
+// 24 CORES (23/11/2026, a pedido: as 12 de antes estavam todas em uso). As 12 primeiras são as de antes, na mesma ordem
+// (o grupo novo pega a primeira livre); as outras 12 são tons que faltavam — índigo, violeta, fúcsia, rosa, âmbar, lima,
+// esmeralda, céu, azul-marinho, bordô, marrom e pedra.
 export const CORES_GRUPO = [
   '#ea580c', '#0d9488', '#2563eb', '#16a34a', '#9333ea', '#db2777',
   '#ca8a04', '#475569', '#6b7280', '#15803d', '#dc2626', '#0891b2',
+  '#4f46e5', '#8b5cf6', '#c026d3', '#f43f5e', '#f59e0b', '#65a30d',
+  '#10b981', '#0ea5e9', '#1e40af', '#991b1b', '#9a3412', '#78716c',
 ];
