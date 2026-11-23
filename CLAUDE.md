@@ -707,6 +707,16 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   linha que a separa (`LegendaSeries` com `borda`), hover = guia tracejada + meses a 40% + ponto no saldo. Colunas
   SOBREPOSTAS: entradas larga, gastos estreita na frente (recuo 23%), CADA BARRA COM O SEU NÚMERO sem a unidade
   (o da barra mais alta sobe quando tocaria o outro — `posRotulo`).
+- O RENDIMENTO NAS ENTRADAS (23/11/2026, o mockup "O rendimento nas entradas", as recomendadas): o que a RENDA FIXA rendeu
+  no mês (o `rendeu` do `mesAMes`, pelo `useCarteira` — o mesmo do Patrimônio) + os PROVENTOS recebidos (`listarProventos`
+  em api/rendaVariavel.js: só os ativos e as operações de provento; o anunciado, de data futura, fora; a valorização da
+  renda variável NÃO entra) — `rendimentoPorMes` em lib/visaoGeral.js, testada. Nas COLUNAS, empilhado em cima das
+  entradas no verde claro (`--serie-rendimento`, um tom por tema) e o número de cima é entradas + rendimento; nas LINHAS e
+  no ACUMULADO, a tracejada "Com o rendimento" (`--serie-rendimento-linha`; no acumulado, a faixa entre ela e as entradas)
+  e o "+ rendimento" no fim da linha. O balão separa (renda fixa e proventos quando há os dois) e diz que o SALDO É
+  ENTRADAS − GASTOS: o rendimento fica no investimento e não muda o saldo, o "Saldo do mês" nem o cartão Entradas. O
+  ampliado ganha a coluna Rendimento (tabela e CSV). Só aparece sem filtro de origem ou categoria e sem "só gastos"; sem
+  investimento, nada muda.
 - AS LINHAS E O ACUMULADO COM NÚMERO (05/11/2026, opção D do mockup "Entradas × gastos em linhas": a A com o final da
   B; `LinhasEntradasGastos`): cada mês com o seu número (a régua das colunas, sem a unidade; a série de cima acima do
   ponto, a de baixo abaixo; até `rotulosAte` meses), cada linha TERMINA com o nome e o valor do último mês fechado

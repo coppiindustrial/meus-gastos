@@ -19,6 +19,7 @@ import { exportCsv } from '../../lib/exportCsv.js';
 //
 // `linhas`: as da `resumo_mensal` já filtradas por tipo/origem/categoria. `comps`: o período da tela.
 // `desenhar(porMes, anterior, { rotulosAte })`: o gráfico na forma escolhida (quem sabe das formas é a tela).
+// `rendimento`: { 'AAAA-MM': { rf, prov, total } } ou null — a coluna Rendimento (23/11/2026; fora do saldo e do acumulado).
 
 const ABAS_PERIODO = [{ key: 'tela', label: 'Período da tela' }, { key: 'tudo', label: 'Todo o histórico' }];
 const BTN_ICONE = 'inline-flex h-[28px] w-[28px] items-center justify-center rounded-[4px] text-gray-400 transition hover:bg-gray-100 hover:text-gray-600';
@@ -26,7 +27,7 @@ const TH = 'whitespace-nowrap border-b border-gray-200 px-2.5 py-2 text-[10.5px]
 const TD = 'whitespace-nowrap border-b border-gray-100 px-2.5 py-1.5 tabular-nums';
 const TF = 'whitespace-nowrap border-t border-gray-200 bg-hx-f9fafb px-2.5 py-2 font-semibold tabular-nums';
 
-export default function AmpliadoEntradasGastos({ onClose, linhas, comps, textoPer, comparar, forma, seletorForma, series, ctrl, onMes, desenhar }) {
+export default function AmpliadoEntradasGastos({ onClose, linhas, comps, textoPer, comparar, forma, seletorForma, series, ctrl, onMes, desenhar, rendimento = null }) {
   const [quais, setQuais] = useState('tela');
   const [cheio, setCheio] = useState(false);
   const historico = useMemo(() => compsDoHistorico(linhas), [linhas]);
@@ -40,9 +41,10 @@ export default function AmpliadoEntradasGastos({ onClose, linhas, comps, textoPe
   const linhasTab = r.porMes.filter((m) => m.temDado).map((m) => {
     acum += m.saldo;
     const ant = anterior?.[m.competencia] ?? 0;
-    return { ...m, acumulado: acum, anterior: ant, variacao: anterior ? variacao(m.gastos, ant) : null };
+    return { ...m, acumulado: acum, anterior: ant, variacao: anterior ? variacao(m.gastos, ant) : null, rend: rendimento?.[m.competencia]?.total ?? 0 };
   });
   const soma = (k) => linhasTab.reduce((s, m) => s + m[k], 0);
+  const comRend = !!rendimento && linhasTab.some((m) => m.rend > 0);
   const totAnt = soma('anterior');
   const varTotal = anterior && totAnt ? variacao(soma('gastos'), totAnt) : null;
   const pctVar = (v) => (v === null ? '—' : `${v > 0 ? '+' : ''}${v}%`);
@@ -51,6 +53,7 @@ export default function AmpliadoEntradasGastos({ onClose, linhas, comps, textoPe
   const exportar = () => exportCsv(`entradas-gastos-${quais === 'tudo' ? 'historico' : `${comps[0]}-${comps[comps.length - 1]}`}`, linhasTab, [
     { key: 'competencia', label: 'Mês' },
     { key: 'entradas', label: 'Entradas', tipo: 'dinheiro', map: (m) => m.entradas / 100 },
+    ...(comRend ? [{ key: 'rend', label: 'Rendimento', tipo: 'dinheiro', map: (m) => m.rend / 100 }] : []),
     { key: 'cartao', label: 'Cartão', tipo: 'dinheiro', map: (m) => m.cartao / 100 },
     { key: 'fixo', label: 'Fixos', tipo: 'dinheiro', map: (m) => m.fixo / 100 },
     { key: 'manual', label: 'Avulsos', tipo: 'dinheiro', map: (m) => m.manual / 100 },
@@ -95,8 +98,8 @@ export default function AmpliadoEntradasGastos({ onClose, linhas, comps, textoPe
           <thead className="bg-hx-f9fafb">
             <tr>
               <th className={`${TH} text-left`}>Mês</th>
-              {['Entradas', 'Cartão', 'Fixos', 'Avulsos', 'Gastos', 'Saldo', 'Acumulado', ...(anterior ? ['Um ano antes', 'Variação'] : []), 'Lanç.'].map((h) => (
-                <th key={h} className={`${TH} text-right ${['Entradas', 'Gastos', 'Saldo'].includes(h) ? '' : so}`} title={h === 'Lanç.' ? 'Lançamentos' : h === 'Um ano antes' ? 'Gastos no mesmo mês um ano antes' : undefined}>{h}</th>
+              {['Entradas', ...(comRend ? ['Rendimento'] : []), 'Cartão', 'Fixos', 'Avulsos', 'Gastos', 'Saldo', 'Acumulado', ...(anterior ? ['Um ano antes', 'Variação'] : []), 'Lanç.'].map((h) => (
+                <th key={h} className={`${TH} text-right ${['Entradas', 'Gastos', 'Saldo'].includes(h) ? '' : so}`} title={h === 'Lanç.' ? 'Lançamentos' : h === 'Um ano antes' ? 'Gastos no mesmo mês um ano antes' : h === 'Rendimento' ? 'O que a renda fixa rendeu + os proventos (fora do saldo)' : undefined}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -105,6 +108,7 @@ export default function AmpliadoEntradasGastos({ onClose, linhas, comps, textoPe
               <tr key={m.competencia} className="cursor-pointer hover:bg-hx-f9fafb" onClick={() => onMes(m.competencia)} title="Abrir os lançamentos do mês">
                 <td className={`${TD} text-gray-800`}>{movel ? competenciaCurta(m.competencia) : nomeCompetencia(m.competencia)}</td>
                 <td className={`${TD} text-right text-green-700`}>{formatBRL(m.entradas)}</td>
+                {comRend && <td className={`${TD} text-right text-gray-500 ${so}`}>{m.rend ? formatBRL(m.rend) : '—'}</td>}
                 <td className={`${TD} text-right text-gray-500 ${so}`}>{formatBRL(m.cartao)}</td>
                 <td className={`${TD} text-right text-gray-500 ${so}`}>{formatBRL(m.fixo)}</td>
                 <td className={`${TD} text-right text-gray-500 ${so}`}>{formatBRL(m.manual)}</td>
@@ -122,6 +126,7 @@ export default function AmpliadoEntradasGastos({ onClose, linhas, comps, textoPe
               <tr>
                 <td className={`${TF} text-gray-800`}>{movel ? 'Total' : `Total · ${linhasTab.length} ${linhasTab.length === 1 ? 'mês' : 'meses'}`}</td>
                 <td className={`${TF} text-right text-green-700`}>{formatBRL(soma('entradas'))}</td>
+                {comRend && <td className={`${TF} text-right text-gray-700 ${so}`}>{formatBRL(soma('rend'))}</td>}
                 <td className={`${TF} text-right text-gray-700 ${so}`}>{formatBRL(soma('cartao'))}</td>
                 <td className={`${TF} text-right text-gray-700 ${so}`}>{formatBRL(soma('fixo'))}</td>
                 <td className={`${TF} text-right text-gray-700 ${so}`}>{formatBRL(soma('manual'))}</td>

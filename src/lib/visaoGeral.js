@@ -1,4 +1,5 @@
 import { addMeses } from './format.js';
+import { posicaoDoAtivo } from './rendaVariavel.js';
 import { matrizDoAno } from './fixos.js';
 import { categoriasFixas, categoriasFixasDoMes, linhasDoResumo } from './categoriasFixas.js';
 
@@ -338,4 +339,22 @@ export function parcelasComprometidas({ parcelas = [], cartoes = [], resumo = []
     total, parcelas: vem.length, compras: compras.size, ate: meses.length ? meses[meses.length - 1].competencia : null,
     meses, porCartao: ordenar(porCartao), renda, pctRenda: renda ? total / renda : null,
   };
+}
+
+// O RENDIMENTO DE CADA MÊS no "Entradas × gastos" (23/11/2026, o mockup "O rendimento nas entradas", a pedido): o que a
+// RENDA FIXA rendeu no mês (o `rendeu` do `mesAMes` — a mesma conta do Patrimônio, sem o IR) + os PROVENTOS recebidos (o
+// líquido do retido, em reais; os de data futura, anunciados, ficam de fora). A valorização da renda variável não entra
+// (sobe e desce). NÃO É ENTRADA NA CONTA: o saldo segue entradas − gastos. `mesesRF`: os do `mesAMes`. `ativos` e
+// `proventos`: os da renda variável (as operações de tipo 'provento'). Devolve { 'AAAA-MM': { rf, prov, total } } — só os
+// meses com algum rendimento.
+export function rendimentoPorMes({ mesesRF = [], ativos = [], proventos = [], hoje }) {
+  const out = {};
+  const pegar = (c) => (out[c] ??= { rf: 0, prov: 0, total: 0 });
+  mesesRF.forEach((m) => { if (m.rendeu) pegar(m.competencia).rf += Math.round(m.rendeu); });
+  ativos.forEach((a) => posicaoDoAtivo(a, proventos, { hoje }).proventos.forEach((p) => {
+    if (p.aReceber) return;
+    pegar(p.data.slice(0, 7)).prov += Math.round(p.liquidoReais);
+  }));
+  Object.values(out).forEach((v) => { v.total = v.rf + v.prov; });
+  return out;
 }

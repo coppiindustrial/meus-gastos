@@ -770,6 +770,11 @@ html[data-tema='escuro'] {
    entrada. Violeta, validado contra o verde das entradas e o vermelho do "Faltou" nos dois temas. */
 :root { --serie-sobrou: #6f56d9; }
 html[data-tema='escuro'] { --serie-sobrou: #7d6ae8; }
+/* O RENDIMENTO NO "ENTRADAS × GASTOS" (23/11/2026, o mockup "O rendimento nas entradas"): o verde claro empilhado em cima
+   das entradas (o mesmo tom, mais leve — é dinheiro que rende, não que entra na conta) e a linha tracejada das formas Linhas
+   e Acumulado. */
+:root { --serie-rendimento: #9edcc1; --serie-rendimento-linha: #3fb886; }
+html[data-tema='escuro'] { --serie-rendimento: #2b6a52; --serie-rendimento-linha: #4cc293; }
 
 /* A CRUZ DO GRUPO × MÊS (`components/graficos/TabelaGrupoMes.jsx`): a linha e a coluna da célula sob o cursor
    acendem. Vai como CAMADA por cima do fundo (o tom de cada célula é a intensidade do mês, no `background-color`

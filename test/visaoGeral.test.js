@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  anoAnterior, compsDoHistorico, custoFixo, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaMovelDosFixos, mediaPorMes, parcelasComprometidas, periodo, resumoPeriodo, variacao,
+  anoAnterior, compsDoHistorico, custoFixo, filtrar, foraDoNormal, gruposPorMes, jaComprometido, mediaMovelDosFixos, mediaPorMes, parcelasComprometidas, periodo, rendimentoPorMes, resumoPeriodo, variacao,
 } from '../src/lib/visaoGeral.js';
 
 // Linhas no formato da view resumo_mensal (valores fictícios).
@@ -242,4 +242,28 @@ test('custoFixo: o próximo mês pela média móvel, o de hoje à parte, o hist�
   assert.equal(r.renda, 1000000);
   assert.equal(r.pctRenda, 0.33);
   assert.equal(custoFixo({ hoje: '2026-11' }).pctRenda, null);
+});
+
+test('rendimento do mês: o que a renda fixa rendeu + os proventos recebidos (o anunciado fica de fora)', () => {
+  const mesesRF = [
+    { competencia: '2026-09', rendeu: 240110 },
+    { competencia: '2026-10', rendeu: 251000 },
+    { competencia: '2026-11', rendeu: 0 },
+  ];
+  const ativos = [
+    { id: 'fii', ticker: 'HGLG11', tipo: 'fii' },
+    { id: 'mu', ticker: 'MU', tipo: 'acao_eua', moeda: 'USD' },
+  ];
+  const proventos = [
+    { ativo_id: 'fii', tipo: 'provento', provento: 'rendimento', data: '2026-09-15', valor_centavos: 21367, retido_centavos: 0 },
+    // no exterior: o líquido do retido, em reais pelo dólar do dia
+    { ativo_id: 'mu', tipo: 'provento', provento: 'dividendo', data: '2026-10-20', valor_centavos: 1000, retido_centavos: 300, dolar: '5.5' },
+    // anunciado (depois de hoje): não entra
+    { ativo_id: 'fii', tipo: 'provento', provento: 'rendimento', data: '2026-12-15', valor_centavos: 22000, retido_centavos: 0 },
+  ];
+  const r = rendimentoPorMes({ mesesRF, ativos, proventos, hoje: '2026-11-23' });
+  assert.deepEqual(r['2026-09'], { rf: 240110, prov: 21367, total: 261477 });
+  assert.deepEqual(r['2026-10'], { rf: 251000, prov: 3850, total: 254850 });
+  assert.equal(r['2026-11'], undefined); // nada no mês
+  assert.equal(r['2026-12'], undefined);
 });

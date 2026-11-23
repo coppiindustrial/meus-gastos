@@ -11,7 +11,7 @@ import { CartaoCustoFixo, CartaoParcelas } from '../components/graficos/CartoesC
 
 import { COR_ENTRADAS, COR_GASTOS } from '../components/graficos/Graficos.jsx';
 import {
-  BarrasGrupos, COR_ANTERIOR, COR_CATS_FIXAS, COR_FALTOU, COR_SALDO, COR_SOBROU, CORES_ORIGEM, ColunasEntradasGastos, ForaDoNormal, HACHURA_PARCELAS, JaComprometido,
+  BarrasGrupos, COR_ANTERIOR, COR_CATS_FIXAS, COR_RENDIMENTO, COR_RENDIMENTO_LINHA, COR_FALTOU, COR_SALDO, COR_SOBROU, CORES_ORIGEM, ColunasEntradasGastos, ForaDoNormal, HACHURA_PARCELAS, JaComprometido,
   LinhasEntradasGastos, ORIGENS_MES, OrigemPorMes, RoscaOrigem, SaldoDoMes,
 } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
@@ -26,8 +26,10 @@ import { lancarFixo, listarLancamentosDeFixos, listarPulados, listarRecorrencias
 import { comprometidoPorMes } from '../lib/resumo.js';
 import { matrizDoAno, pendentesPorMes } from '../lib/fixos.js';
 import {
-  anoAnterior, filtrar, foraDoNormal, gruposPorMes, custoFixo, jaComprometido, mediaPorMes, parcelasComprometidas, resumoPeriodo, variacao,
+  anoAnterior, filtrar, foraDoNormal, gruposPorMes, custoFixo, jaComprometido, mediaPorMes, parcelasComprometidas, rendimentoPorMes, resumoPeriodo, variacao,
 } from '../lib/visaoGeral.js';
+import useCarteira from '../components/patrimonio/useCarteira.js';
+import { listarProventos } from '../api/rendaVariavel.js';
 import { brlCurto, formatBRL } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
 import { exportCsv } from '../lib/exportCsv.js';
@@ -161,6 +163,15 @@ export default function VisaoGeral() {
     } catch (err) { toast.error(err.message); setLinhas((l) => l ?? []); } finally { setCarregando(false); }
   }, [toast]);
   useEffect(() => { carregar(); }, [carregar]);
+  // O RENDIMENTO DE CADA MÊS (23/11/2026, o mockup "O rendimento nas entradas"): o que a renda fixa rendeu (o mês a mês do
+  // `useCarteira`, o mesmo do Patrimônio) + os proventos recebidos. Vai em cima das entradas no "Entradas × gastos" e NÃO
+  // entra no saldo. Sem investimento (ou sem as migrations), fica vazio e nada muda.
+  const carteira = useCarteira();
+  const [prov, setProv] = useState(null);
+  useEffect(() => { listarProventos().then(setProv).catch(() => setProv(null)); }, []);
+  const rendimento = useMemo(() => rendimentoPorMes({
+    mesesRF: carteira.meses, ativos: prov?.ativos ?? [], proventos: prov?.proventos ?? [], hoje: carteira.hoje,
+  }), [carteira.meses, carteira.hoje, prov]);
 
   const comps = useMemo(() => compsDoPeriodo(per), [per]);
   const compsComDado = useMemo(() => new Set((linhas ?? []).map((l) => l.competencia)), [linhas]);
@@ -248,8 +259,18 @@ export default function VisaoGeral() {
   const tituloMedia = (oQue) => `A média conta só os meses com ${oQue} lançados${r.porMes.some((m) => m.competencia === hojeComp) ? ', sem o mês atual (em andamento)' : ''}.`;
   const gastosPorMes = Object.fromEntries(r.porMes.map((m) => [m.competencia, m.gastos]));
   const comDado = r.porMes.filter((m) => m.temDado);
+  // O RENDIMENTO só aparece com o que ele é comparável: sem filtro de origem ou categoria e sem "só gastos".
+  const mostraRend = !origens.length && !cats.length && tipo !== 'saida' && Object.keys(rendimento).length > 0;
+  const comRendimento = (porMes) => (mostraRend ? porMes.map((m) => {
+    const x = rendimento[m.competencia];
+    return x ? { ...m, rendimento: x.total, rendRF: x.rf, rendProv: x.prov } : m;
+  }) : porMes);
+  const temRendNoPeriodo = mostraRend && comps.some((c) => rendimento[c]?.total > 0);
   const series = [
     { key: 'entradas', rotulo: 'Entradas', cor: COR_ENTRADAS },
+    ...(temRendNoPeriodo ? [forma === 'colunas'
+      ? { key: 'rendimento', rotulo: 'Rendimento', cor: COR_RENDIMENTO }
+      : { key: 'rendimento', rotulo: 'Com o rendimento', cor: COR_RENDIMENTO_LINHA, forma: 'tracejado' }] : []),
     { key: 'gastos', rotulo: 'Gastos', cor: COR_GASTOS },
     // a linha do saldo do mês volta (29/10/2026, a pedido): o bloco "Saldo do mês" detalha, mas aqui ela ajuda a ler
     ...(forma !== 'acumulado' ? [{ key: 'saldo', rotulo: 'Saldo', cor: COR_SALDO, forma: 'linha' }] : []),
@@ -267,7 +288,8 @@ export default function VisaoGeral() {
 
   // O mês a mês na forma escolhida, na altura de quem o contém (o bloco do grid, ou o ampliado — que passa
   // os SEUS meses: o período da tela ou o histórico inteiro).
-  const graficoMeses = (porMes = r.porMes, ant = anterior, { rotulosAte } = {}) => {
+  const graficoMeses = (porMesSem = r.porMes, ant = anterior, { rotulosAte } = {}) => {
+    const porMes = comRendimento(porMesSem);
     if (forma === 'linhas' || forma === 'acumulado') {
       return <LinhasEntradasGastos meses={porMes} anterior={ant} ctrl={ctrl} onMes={abrirMes} acumulado={forma === 'acumulado'} rotulosAte={rotulosAte} />;
     }
@@ -532,7 +554,7 @@ export default function VisaoGeral() {
         {ampliado && (
           <AmpliadoEntradasGastos onClose={() => setAmpliado(false)} linhas={filtradas} comps={comps} textoPer={textoPer}
             comparar={comparar === 'anterior'} forma={forma} seletorForma={seletorForma} series={series} ctrl={ctrl}
-            onMes={abrirMes} desenhar={graficoMeses} />
+            onMes={abrirMes} desenhar={graficoMeses} rendimento={mostraRend ? rendimento : null} />
         )}
       </>
     );
@@ -554,7 +576,7 @@ export default function VisaoGeral() {
       {ampliado && (
         <AmpliadoEntradasGastos onClose={() => setAmpliado(false)} linhas={filtradas} comps={comps} textoPer={textoPer}
           comparar={comparar === 'anterior'} forma={forma} seletorForma={seletorForma} series={series} ctrl={ctrl}
-          onMes={abrirMes} desenhar={graficoMeses} />
+          onMes={abrirMes} desenhar={graficoMeses} rendimento={mostraRend ? rendimento : null} />
       )}
     </>
   );

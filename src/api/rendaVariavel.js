@@ -91,3 +91,18 @@ export const atualizarEventos = (ativoId) => chamar({ acao: 'eventos', ativo_id:
 // A BUSCA DO CADASTRO: pelo nome ou pelo ticker ("nvidia" → NVDA), nas bolsas dos EUA e na B3:
 // { itens: [{ ticker, nome, mercado, tipo, bolsa }] } ou { erro }
 export const buscarAtivos = (q) => chamar({ acao: 'buscar', q });
+
+// OS PROVENTOS (o rendimento da Visão geral, 23/11/2026): os ativos e só as operações de provento — sem as cotações e os
+// fechamentos, que a Visão geral não usa. Sem a migration 027, devolve null.
+export async function listarProventos() {
+  try {
+    const [ativos, proventos] = await Promise.all([
+      exigir(supabase.from('rv_ativos').select('*')),
+      buscarTudo(() => supabase.from('rv_operacoes').select('*').eq('tipo', 'provento').order('data').order('criado_em')),
+    ]);
+    return { ativos, proventos };
+  } catch (err) {
+    if (semTabela(err)) return null;
+    throw err;
+  }
+}

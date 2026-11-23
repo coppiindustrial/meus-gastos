@@ -16,6 +16,15 @@ import { variacao } from '../../lib/visaoGeral.js';
 
 export const COR_SALDO = varCor('#374151', 'texto');
 export const COR_ANTERIOR = varCor('#9ca3af', 'texto');
+// O RENDIMENTO (23/11/2026, o mockup "O rendimento nas entradas"): o verde claro em cima das entradas; a linha, tracejada.
+export const COR_RENDIMENTO = 'var(--serie-rendimento)';
+export const COR_RENDIMENTO_LINHA = 'var(--serie-rendimento-linha)';
+// os itens do balão de um mês com rendimento: o total e, havendo os dois, a renda fixa e os proventos
+const itensRendimento = (m, rend = m.rendimento) => (rend > 0 ? [
+  { rotulo: 'Rendimento', valor: formatBRL(rend), cor: COR_RENDIMENTO },
+  ...(m.rendRF && m.rendProv ? [{ rotulo: '· renda fixa', valor: formatBRL(m.rendRF) }, { rotulo: '· proventos', valor: formatBRL(m.rendProv) }] : []),
+] : []);
+const NOTA_RENDIMENTO = 'O saldo é entradas − gastos: o rendimento fica no investimento';
 const pct = (f) => `${f * 100}%`;
 const sinal = (v) => (v === null ? '' : `${v > 0 ? '+' : ''}${v}%`);
 // NA TELA ESTREITA, UM MÊS A CADA TRÊS, contados do último (04/11/2026, a regra do celular do Gestor): um sim, um não
@@ -85,7 +94,7 @@ const RECUO_GASTOS = 23;
 export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 230, rotulosAte = 12 }) {
   const balao = useBalao(250, 170);
   const n = meses.length;
-  const valores = meses.flatMap((m) => [m.entradas, m.gastos, m.saldo, anterior?.[m.competencia] ?? 0]);
+  const valores = meses.flatMap((m) => [m.entradas + (m.rendimento ?? 0), m.gastos, m.saldo, anterior?.[m.competencia] ?? 0]);
   const esc = escalaLinear(Math.max(1, ...valores) / 100);
   const fr = (c) => esc.fracao(Math.max(0, c) / 100);
   const x = (i) => ((i + 0.5) / n) * 100;
@@ -140,8 +149,14 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
           {/* Camadas, na ordem do Gestor: barras → linhas → números → guia → ponto → alvos do cursor. */}
           {vagas((m) => (m.temDado ? (
             <>
-              <div className="absolute inset-x-0 bottom-0 rounded-t-[2px] transition-opacity duration-150"
+              <div className={`absolute inset-x-0 bottom-0 transition-opacity duration-150 ${m.rendimento > 0 ? '' : 'rounded-t-[2px]'}`}
                 style={{ height: pct(fr(m.entradas)), background: COR_ENTRADAS, opacity: ctrl.opSerie('entradas') }} />
+              {/* O RENDIMENTO empilhado em cima das entradas (o verde claro) */}
+              {m.rendimento > 0 && (
+                <div className="absolute inset-x-0 rounded-t-[2px] transition-opacity duration-150"
+                  style={{ bottom: pct(fr(m.entradas)), height: pct(fr(m.entradas + m.rendimento) - fr(m.entradas)), background: COR_RENDIMENTO,
+                    boxShadow: `inset 0 1px 0 ${COR_RENDIMENTO_LINHA}`, opacity: ctrl.opSerie('rendimento') }} />
+              )}
               <div className="absolute bottom-0 rounded-t-[2px] transition-opacity duration-150"
                 style={{ left: `${RECUO_GASTOS}%`, right: `${RECUO_GASTOS}%`, height: pct(fr(m.gastos)), background: COR_GASTOS, opacity: ctrl.opSerie('gastos') }} />
             </>
@@ -165,7 +180,8 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
           ))}
           {comRotulo && vagas((m) => m.temDado && (
             <>
-              {m.entradas > 0 && rotulo(fr(m.entradas), m.gastos > 0 ? fr(m.gastos) : null, rot(m.entradas), 'entradas')}
+              {/* o número de cima é entradas + rendimento (o balão separa) */}
+              {m.entradas > 0 && rotulo(fr(m.entradas + (m.rendimento ?? 0)), m.gastos > 0 ? fr(m.gastos) : null, rot(m.entradas + (m.rendimento ?? 0)), 'entradas')}
               {m.gastos > 0 && rotulo(fr(m.gastos), m.entradas > 0 ? fr(m.entradas) : null, rot(m.gastos), 'gastos')}
             </>
           ), 'pointer-events-none')}
@@ -187,11 +203,12 @@ export function ColunasEntradasGastos({ meses, anterior, ctrl, onMes, altura = 2
         <BalaoGrafico pos={balao.pos} largura={250} titulo={nomeCompetencia(ativo.competencia)}
           itens={ativo.temDado ? [
             { rotulo: 'Entradas', valor: formatBRL(ativo.entradas), cor: COR_ENTRADAS },
+            ...itensRendimento(ativo),
             { rotulo: 'Gastos', valor: formatBRL(ativo.gastos), cor: COR_GASTOS },
             { rotulo: 'Saldo', valor: formatBRL(ativo.saldo), cor: COR_SALDO },
             ...(anterior ? [{ rotulo: `Gastos em ${Number(ativo.competencia.slice(0, 4)) - 1}`, valor: formatBRL(anterior[ativo.competencia] ?? 0), cor: COR_ANTERIOR }] : []),
           ] : []}
-          nota={ativo.temDado ? [notaAtivo, onMes && 'Clique para ver os lançamentos do mês'].filter(Boolean).join('. ') : 'Nenhum lançamento neste mês.'} />
+          nota={ativo.temDado ? [notaAtivo, ativo.rendimento > 0 && NOTA_RENDIMENTO, onMes && 'Clique para ver os lançamentos do mês'].filter(Boolean).join('. ') : 'Nenhum lançamento neste mês.'} />
       )}
     </div>
   );
@@ -255,11 +272,15 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
   const acum = (campo) => { let t = 0; return meses.map((m) => (m.temDado ? (t += m[campo]) : null)); };
   const ent = acumulado ? acum('entradas') : meses.map((m) => (m.temDado ? m.entradas : null));
   const gas = acumulado ? acum('gastos') : meses.map((m) => (m.temDado ? m.gastos : null));
+  // AS ENTRADAS COM O RENDIMENTO (a tracejada clara acima das entradas), só quando há rendimento no período
+  const temRend = meses.some((m) => m.temDado && m.rendimento > 0);
+  const rendAc = (() => { let t = 0; return meses.map((m) => (m.temDado ? (t += m.rendimento ?? 0) : null)); })();
+  const er = temRend ? ent.map((v, j) => (v === null ? null : v + (acumulado ? (rendAc[j] ?? 0) : (meses[j].rendimento ?? 0)))) : null;
   // o saldo do mês (só no mensal: no acumulado, a distância entre as curvas já é o que sobrou)
   const sal = acumulado ? null : meses.map((m) => (m.temDado ? m.saldo : null));
   let tAnt = 0;
   const ant = anterior ? meses.map((m) => { const v = anterior[m.competencia] ?? 0; tAnt += v; return acumulado ? tAnt : (v || null); }) : null;
-  const todos = [...ent, ...gas, ...(sal ?? []), ...(ant ?? [])].filter((v) => v !== null);
+  const todos = [...ent, ...(er ?? []), ...gas, ...(sal ?? []), ...(ant ?? [])].filter((v) => v !== null);
   const esc = escalaLinear(Math.max(1, ...todos) / 100);
   const fr = (c) => esc.fracao(Math.max(0, c) / 100);
   const x = (i) => ((i + 0.5) / n) * 100;
@@ -340,12 +361,14 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
   const mesU = u >= 0 ? competenciaCurta(meses[u].competencia).slice(0, 3) : '';
   const fins = u >= 0 && direita ? [
     { chave: 'entradas', rotulo: acumulado ? `Entradas até ${mesU}` : `Entradas · ${mesU}`, v: ent[u], cor: COR_ENTRADAS },
+    // o rendimento: o rótulo fica na altura da tracejada, e o número é só o rendimento
+    ...(er && er[u] !== null && er[u] > ent[u] ? [{ chave: 'rendimento', rotulo: acumulado ? `+ rendimento até ${mesU}` : `+ rendimento · ${mesU}`, v: er[u] - ent[u], pos: er[u], cor: COR_RENDIMENTO_LINHA }] : []),
     { chave: 'gastos', rotulo: acumulado ? `Gastos até ${mesU}` : `Gastos · ${mesU}`, v: gas[u], cor: COR_GASTOS },
     ...(sal ? [{ chave: 'saldo', rotulo: `Saldo · ${mesU}`, v: sal[u], cor: COR_SALDO }] : []),
   ].filter((f) => f.v !== null) : [];
   const hIn = Math.max(1, caixa.h - 16); // a caixa do gráfico (o `pt-4` fica de fora)
   const wIn = Math.max(1, caixa.w - CALHA_ESQ - direita);
-  fins.forEach((f) => { f.yPonto = (1 - fr(f.v)) * hIn; f.y = f.yPonto; });
+  fins.forEach((f) => { f.yPonto = (1 - fr(f.pos ?? f.v)) * hIn; f.y = f.yPonto; });
   const ordem = [...fins].sort((a, b) => a.y - b.y);
   ordem.forEach((f, j) => { if (j && f.y - ordem[j - 1].y < FOLGA_FIM) f.y = ordem[j - 1].y + FOLGA_FIM; });
   const sobra = ordem.length ? ordem[ordem.length - 1].y - (hIn - 6) : 0;
@@ -375,6 +398,15 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
         <GradeEsq esc={esc} direita={direita}>
           <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
             {ant && linha(ant, COR_ANTERIOR, ctrl.opSerie('anterior'), { tracejado: true, larg: 1.5 })}
+            {/* o rendimento: no acumulado, a faixa entre as entradas e as entradas com ele; nos dois, a tracejada */}
+            {er && acumulado && trechos(er).map((pts, t) => {
+              const base = trechos(ent)[t] ?? [];
+              return pts.length > 1 && base.length === pts.length ? (
+                <polygon key={`r${pts[0]}`} points={[...pts, ...[...base].reverse()].map((p) => p.join(',')).join(' ')} fill={COR_RENDIMENTO}
+                  fillOpacity=".55" style={{ opacity: ctrl.opSerie('rendimento'), transition: 'opacity .15s' }} />
+              ) : null;
+            })}
+            {er && linha(er, COR_RENDIMENTO_LINHA, ctrl.opSerie('rendimento'), { tracejado: true, larg: 1.75 })}
             {linha(ent, COR_ENTRADAS, ctrl.opSerie('entradas'), { area: true })}
             {linha(gas, COR_GASTOS, ctrl.opSerie('gastos'), { area: true })}
             {sal && linha(sal, COR_SALDO, ctrl.opSerie('saldo'), { larg: 1.5 })}
@@ -443,11 +475,12 @@ export function LinhasEntradasGastos({ meses, anterior, ctrl, onMes, acumulado =
         <BalaoGrafico pos={balao.pos} largura={250} titulo={`${nomeCompetencia(m.competencia)}${acumulado ? ' · acumulado' : ''}${i === k ? ' · em andamento' : ''}`}
           itens={m.temDado ? [
             { rotulo: 'Entradas', valor: formatBRL(ent[i]), cor: COR_ENTRADAS },
+            ...(er ? itensRendimento(acumulado ? {} : m, er[i] - ent[i]) : []),
             { rotulo: 'Gastos', valor: formatBRL(gas[i]), cor: COR_GASTOS },
             { rotulo: acumulado ? 'Sobrou até aqui' : 'Saldo', valor: formatBRL(ent[i] - gas[i]), cor: COR_SALDO },
             ...(ant ? [{ rotulo: `Gastos ${acumulado ? 'até aqui ' : ''}um ano antes`, valor: formatBRL(ant[i] ?? 0), cor: COR_ANTERIOR }] : []),
           ] : []}
-          nota={m.temDado ? [i === k && 'O mês ainda não fechou.', onMes && 'Clique para ver os lançamentos do mês'].filter(Boolean).join(' ') || undefined : 'Nenhum lançamento neste mês.'} />
+          nota={m.temDado ? [i === k && 'O mês ainda não fechou.', er && er[i] > ent[i] && `${NOTA_RENDIMENTO}.`, onMes && 'Clique para ver os lançamentos do mês'].filter(Boolean).join(' ') || undefined : 'Nenhum lançamento neste mês.'} />
       )}
     </div>
   );
