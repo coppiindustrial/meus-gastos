@@ -125,10 +125,13 @@ export default function SelectBusca({
     <div className={className}>
       <button ref={btnRef} type="button" onClick={abrir} disabled={disabled} aria-haspopup="listbox" aria-expanded={aberto}
         className={`input flex items-center justify-between gap-2 text-left ${compacto ? '!h-8 text-[12.5px]' : ''} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
-        <span className={`flex min-w-0 items-center gap-2 ${sel ? 'text-gray-800' : 'text-gray-400'}`}>
+        {/* O NOME E O GRUPO DIVIDEM O ESPAÇO (23/11/2026, a pedido: no cadastro dos fixos, "· Saúde e bem-estar" comia o
+            nome da categoria): os dois partem de metade (`basis-0 grow`) e nunca passam do próprio texto (`max-w-max`) —
+            o que um não usa vai para o outro; sem caber, cada um corta com "…" na sua metade. */}
+        <span className={`flex min-w-0 flex-1 items-center gap-2 ${sel ? 'text-gray-800' : 'text-gray-400'}`}>
           {sel?.grupo?.cor && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: sel.grupo.cor }} />}
-          <span className="truncate">{sel ? sel.label : placeholder}</span>
-          {sel?.grupo && <span className="hidden shrink-0 text-gray-400 sm:inline">· {sel.grupo.nome}</span>}
+          <span className="min-w-0 max-w-max grow basis-0 truncate">{sel ? sel.label : placeholder}</span>
+          {sel?.grupo && <span className="hidden min-w-0 max-w-max grow basis-0 truncate text-gray-400 sm:inline">· {sel.grupo.nome}</span>}
         </span>
         <IconSeta className={`shrink-0 text-gray-400 transition-transform duration-200 ${aberto ? 'rotate-180' : ''}`} />
       </button>
