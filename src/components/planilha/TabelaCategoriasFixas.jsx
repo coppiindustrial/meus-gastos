@@ -210,7 +210,9 @@ export default function TabelaCategoriasFixas({ tabela, hoje, onEscolher, semMig
                             <>
                               <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: g.cor ?? '#9ca3af' }} />
                               <span className="flex min-w-0 flex-col leading-[1.25]">
-                                <span className="truncate text-gray-900 decoration-gray-400 underline-offset-[3px] group-hover/nome:underline">{c.cat.nome}</span>
+                                {/* o pb + -mb dá lugar ao sublinhado: o `truncate` corta o que passa da caixa, e ele (3px abaixo da letra) sumia em
+                                    alguns nomes, conforme a linha caía na fração de pixel (23/11/2026) */}
+                                <span className="-mb-[3px] truncate pb-[3px] text-gray-900 decoration-gray-400 underline-offset-[3px] group-hover/nome:underline">{c.cat.nome}</span>
                                 <small className="truncate text-[10.5px] text-gray-400">{c.como}</small>
                               </span>
                             </>
