@@ -38,7 +38,13 @@ import {
 // "Não teve" — o fixo que não existiu naquele mês sai das pendências e fica hachurado (`fixos_pulados`,
 // migration 006). Lançar um valor num mês "não teve", ou Delete nele, desfaz a marca.
 //
-// `matriz`: { comps, linhas, totais }. `setLancs` / `setPulados`: as listas da página (a matriz é
+// AGRUPADA PELA CATEGORIA (23/11/2026, a opção A do mockup "Gastos fixos agrupados"): `matriz.grupos` (de
+// `agruparMatriz`) põe uma FAIXA antes das linhas de cada grupo — a barra da cor, o nome e o lançado do grupo em cada mês,
+// como na tabela das categorias fixas. A faixa não é linha da planilha (os `r` são os de `linhas`): as setas e o arrastar
+// a pulam, e clicar nela seleciona os fixos do grupo. O nome do fixo vai em duas linhas ("dia 1 · Condomínio"), na altura
+// da tabela de baixo (38px).
+//
+// `matriz`: { comps, linhas, totais, grupos? }. `setLancs` / `setPulados`: as listas da página (a matriz é
 // recalculada delas). `pulosAtivos`: a migration 006 já foi aplicada. `modo`: 'valor' | 'variacao'.
 
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
@@ -52,6 +58,8 @@ const MatrizFixos = forwardRef(function MatrizFixos({ matriz, hoje, setLancs, se
   const navigate = useNavigate();
   const caixaRef = useRef(null);
   const { comps, linhas, totais } = matriz;
+  const grupos = matriz.grupos ?? [];
+  const grupoEm = new Map(grupos.map((g, gi) => [g.de, gi])); // a faixa do grupo vem antes da linha `de` dele
   const n = linhas.length;
   const colHoje = comps.indexOf(hoje);
   const [sel, setSel] = useState({ r: 0, c: Math.max(0, colHoje) });
@@ -519,6 +527,23 @@ const MatrizFixos = forwardRef(function MatrizFixos({ matriz, hoje, setLancs, se
         nota: rec.ativa ? 'Clique para editar o cadastro.' : 'Inativo: não aparece para lançar. Clique para editar.',
       };
     }
+    if (tipo === 'g') {
+      const g = grupos[Number(a)];
+      if (!g) return null;
+      const ls = linhas.slice(g.de, g.ate + 1);
+      if (b === undefined) {
+        return { titulo: g.nome, itens: [{ rotulo: plural(ls.length, 'fixo', 'fixos'), valor: `${formatBRL(g.media)}/mês`, cor: g.cor }],
+          nota: 'A média é a soma das médias dos fixos do grupo. Clique para selecionar os fixos dele.' };
+      }
+      const c = Number(b);
+      const lanc = ls.filter((l) => l.celulas[c].estado === 'lancado');
+      const v = c > 0 ? pct(g.totais[c], g.totais[c - 1]) : null;
+      return {
+        titulo: `${g.nome} · ${nomeCompetencia(comps[c])}`,
+        itens: lanc.map((l) => ({ rotulo: l.rec.descricao, valor: formatBRL(l.celulas[c].valor) })),
+        nota: v !== null ? `${v > 0 ? '+' : ''}${v}% sobre o mês anterior.` : undefined,
+      };
+    }
     if (tipo === 'h' && a === 'nome') return { titulo: 'Gasto fixo', nota: 'Clique num nome para editar o cadastro (nome, dia, categoria, valor padrão e vigência). Clique aqui para selecionar tudo.' };
     if (tipo === 'p') {
       const lista = a === 'todos' ? pendAno : (pendMes[comps[Number(a)]] ?? []);
@@ -613,16 +638,48 @@ const MatrizFixos = forwardRef(function MatrizFixos({ matriz, hoje, setLancs, se
           </thead>
           <tbody>
             {linhas.map((l, r) => (
-              <tr key={l.rec.id}>
+              <Fragment key={l.rec.id}>
+              {grupoEm.has(r) && (() => {
+                const gi = grupoEm.get(r);
+                const g = grupos[gi];
+                const acesa = faixa.r0 <= g.de && faixa.r1 >= g.ate && faixa.c0 === 0 && faixa.c1 === comps.length - 1;
+                return (
+                  <tr>
+                    <td {...passa(`g:${gi}`)}
+                      onMouseDown={(e) => { if (e.button !== 0) return; e.preventDefault(); focar(); setSel({ r: g.de, c: 0 }); setExt({ r: g.ate, c: comps.length - 1 }); }}
+                      className={`sticky left-0 z-10 h-8 cursor-pointer select-none border-b border-r border-gray-300 px-3 text-left font-semibold text-gray-800 transition-colors duration-[120ms] hover:bg-gray-200 ${acesa ? 'bg-hx-eef2f7' : 'bg-hx-f6f7f8'}`}
+                      style={{ boxShadow: `inset 3px 0 0 ${g.cor}` }}>
+                      <span className="block truncate">{g.nome}</span>
+                    </td>
+                    {g.totais.map((v, i) => {
+                      const varia = i > 0 && v ? pct(v, g.totais[i - 1]) : null;
+                      return (
+                        <td key={comps[i]} {...(v ? passa(`g:${gi}:${i}`) : {})}
+                          className="h-8 border-b border-r border-gray-100 bg-hx-f6f7f8 px-2 text-right font-semibold tabular-nums text-gray-700">
+                          {!v ? '' : modo === 'variacao'
+                            ? (varia === null ? <span className="text-gray-300">—</span> : <span className={varia > 0 ? 'text-hx-b91c1c' : varia < 0 ? 'text-hx-15803d' : 'text-gray-400'}>{varia > 0 ? '+' : ''}{varia}%</span>)
+                            : fmt(v)}
+                        </td>
+                      );
+                    })}
+                    <td {...passa(`g:${gi}`)} className="h-8 cursor-help border-b border-gray-100 bg-hx-f6f7f8 px-2 text-right font-semibold tabular-nums text-gray-700">{g.media ? fmt(g.media) : ''}</td>
+                  </tr>
+                );
+              })()}
+              <tr>
                 <td onContextMenu={(e) => abrirMenu(e, r, sel.c)}
-                  className={`sticky left-0 z-10 h-8 select-none border-b border-r border-gray-300 px-1.5 ${r >= faixa.r0 && r <= faixa.r1 ? 'bg-hx-eef2f7' : 'bg-white'}`}>
+                  className={`sticky left-0 z-10 h-[38px] select-none border-b border-r border-gray-300 py-0.5 ${grupos.length ? 'pl-[18px] pr-1' : 'px-1.5'} ${r >= faixa.r0 && r <= faixa.r1 ? 'bg-hx-eef2f7' : 'bg-white'}`}>
                   {/* O NOME É UM BOTÃO: o hover acende a caixa, sublinha o nome e mostra o lápis — diz que
                       clicar abre o cadastro (antes era um clique duplo que ninguém adivinhava). */}
                   <button type="button" onClick={() => onEditar(l.rec)} onMouseDown={(e) => e.stopPropagation()} {...passa(`n:${r}`)}
                     className="group/nome flex w-full min-w-0 items-center gap-2 rounded-[4px] px-1.5 py-[3px] text-left transition-colors duration-[120ms] hover:bg-gray-200/70 active:bg-gray-200">
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: l.rec.categoria?.grupo?.cor ?? '#9ca3af' }} />
-                    <span className={`truncate decoration-gray-400 underline-offset-[3px] group-hover/nome:underline ${l.rec.ativa ? 'text-gray-900' : 'text-gray-400'}`}>{l.rec.descricao}</span>
-                    <span className="shrink-0 text-[11px] text-gray-400">dia {l.rec.dia_do_mes}</span>
+                    {/* duas linhas, como na tabela das categorias fixas: o nome e "dia 1 · Condomínio" (o pb + -mb dá lugar
+                        ao sublinhado, que o `truncate` cortava) */}
+                    <span className="flex min-w-0 flex-col leading-[1.25]">
+                      <span className={`-mb-[3px] truncate pb-[3px] decoration-gray-400 underline-offset-[3px] group-hover/nome:underline ${l.rec.ativa ? 'text-gray-900' : 'text-gray-400'}`}>{l.rec.descricao}</span>
+                      <small className="truncate text-[10.5px] text-gray-400">dia {l.rec.dia_do_mes}{l.rec.categoria?.nome ? ` · ${l.rec.categoria.nome}` : ''}</small>
+                    </span>
                     <svg viewBox="0 0 24 24" className="ml-auto h-3.5 w-3.5 shrink-0 text-gray-500 opacity-0 transition-opacity group-hover/nome:opacity-100" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M4 20h4L19 9l-4-4L4 16v4z" />
                     </svg>
@@ -656,7 +713,7 @@ const MatrizFixos = forwardRef(function MatrizFixos({ matriz, hoje, setLancs, se
                       {...passa(chave)}
                       onDoubleClick={() => comecar(r, c)} onContextMenu={(e) => abrirMenu(e, r, c)}
                       style={{ boxShadow: [sombra(r, c), cel.estado === 'pendente' && !sombra(r, c) ? 'inset 0 0 0 1px #fcd34d' : null].filter(Boolean).join(',') || undefined }}
-                      className={`relative h-8 cursor-cell select-none border-b border-r border-gray-100 px-2 text-right tabular-nums transition-opacity duration-150 hover:brightness-[.97] ${fundo} ${
+                      className={`relative h-[38px] cursor-cell select-none border-b border-r border-gray-100 px-2 text-right tabular-nums transition-opacity duration-150 hover:brightness-[.97] ${fundo} ${
                         multi && naFaixa(faixa, r, c) && !(sel.r === r && sel.c === c) && cel.estado !== 'pendente' && cel.estado !== 'fora' ? 'bg-hx-eff5ff' : ''} ${
                         apagada(cel) ? 'opacity-20' : ''}`}>
                       {conteudo}
@@ -680,10 +737,11 @@ const MatrizFixos = forwardRef(function MatrizFixos({ matriz, hoje, setLancs, se
                   );
                 })}
                 <td {...passa(`m:${r}`)}
-                  className="h-8 cursor-help border-b border-gray-100 bg-hx-f9fafb px-2 text-right tabular-nums text-gray-500 transition-colors duration-[120ms] hover:bg-gray-200 hover:text-gray-900">
+                  className="h-[38px] cursor-help border-b border-gray-100 bg-hx-f9fafb px-2 text-right tabular-nums text-gray-500 transition-colors duration-[120ms] hover:bg-gray-200 hover:text-gray-900">
                   {l.media ? fmt(l.media) : '—'}
                 </td>
               </tr>
+              </Fragment>
             ))}
             {/* A LINHA "A LANÇAR": quantos pendentes cada mês tem. Clicar seleciona o mês (no rótulo, todos os
                 meses até o último com pendente); a barra de baixo lança ou marca "não teve". */}

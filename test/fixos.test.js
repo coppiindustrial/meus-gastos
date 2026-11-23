@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dataNoMes, recorrenciasDoHistorico, situacaoDoMes, ultimosPorRecorrencia, vigente, matrizDoAno, pendentesPorMes, ultimoLancado } from '../src/lib/fixos.js';
+import { agruparMatriz, dataNoMes, recorrenciasDoHistorico, situacaoDoMes, ultimosPorRecorrencia, vigente, matrizDoAno, pendentesPorMes, ultimoLancado } from '../src/lib/fixos.js';
 
 const rec = (id, extra = {}) => ({ id, descricao: id, dia_do_mes: 5, ativa: true, inicio: '2026-04-01', fim: null, valor_padrao_centavos: 10000, ...extra });
 
@@ -110,4 +110,31 @@ test('ultimoLancado: o lançamento mais recente de cada recorrência, de qualque
     { recorrencia_id: 'b', competencia: '2025-12', valor_centavos: 70 },
   ]);
   assert.deepEqual(u, { a: { valor_centavos: 250, competencia: '2026-10' }, b: { valor_centavos: 70, competencia: '2025-12' } });
+});
+
+test('agruparMatriz: as linhas em blocos pelo grupo da categoria, na ordem das Categorias; o sem categoria no fim', () => {
+  const cats = [
+    { id: 'luz', grupo: { id: 'casa', nome: 'Casa', cor: '#14b8a6' } },
+    { id: 'net', grupo: { id: 'casa', nome: 'Casa', cor: '#14b8a6' } },
+    { id: 'fisio', grupo: { id: 'saude', nome: 'Saúde', cor: '#ec4899' } },
+  ];
+  const recs = [
+    rec('Fisioterapia', { categoria_id: 'fisio', dia_do_mes: 1 }),
+    rec('Luz', { categoria_id: 'luz', dia_do_mes: 2 }),
+    rec('Avulso', { categoria_id: null, dia_do_mes: 3 }),
+    rec('Internet', { categoria_id: 'net', dia_do_mes: 4 }),
+  ];
+  const lancs = [
+    { id: 'l1', recorrencia_id: 'Luz', competencia: '2026-05', valor_centavos: 20000 },
+    { id: 'l2', recorrencia_id: 'Internet', competencia: '2026-05', valor_centavos: 15000 },
+    { id: 'l3', recorrencia_id: 'Fisioterapia', competencia: '2026-05', valor_centavos: 16000 },
+  ];
+  const m = agruparMatriz(matrizDoAno(recs, lancs, 2026, '2026-06'), cats);
+  assert.deepEqual(m.linhas.map((l) => l.rec.id), ['Luz', 'Internet', 'Fisioterapia', 'Avulso']); // dentro do grupo, a ordem de antes
+  assert.deepEqual(m.grupos.map((g) => [g.id, g.de, g.ate]), [['casa', 0, 1], ['saude', 2, 2], ['sem', 3, 3]]);
+  assert.equal(m.grupos[0].totais[4], 35000); // maio: a luz + a internet
+  assert.equal(m.grupos[0].media, 35000);
+  // as pendências seguem os índices novos
+  const pend = pendentesPorMes(m)['2026-06'];
+  assert.deepEqual(pend.map((p) => [p.r, p.rec.id]), [[0, 'Luz'], [1, 'Internet'], [2, 'Fisioterapia'], [3, 'Avulso']]);
 });

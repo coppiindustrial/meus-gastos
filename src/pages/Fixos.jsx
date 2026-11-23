@@ -27,7 +27,7 @@ import {
 } from '../api/fixos.js';
 import { listarParcelasFuturas } from '../api/resumo.js';
 import { categoriasFixas, custoFixoDoAno, tabelaCategoriasFixas } from '../lib/categoriasFixas.js';
-import { matrizDoAno, pendentesPorMes, recorrenciasDoHistorico, ultimoLancado } from '../lib/fixos.js';
+import { agruparMatriz, matrizDoAno, pendentesPorMes, recorrenciasDoHistorico, ultimoLancado } from '../lib/fixos.js';
 import { formatBRL, parseValor, valorParaCampo } from '../lib/dinheiro.js';
 import { addMeses, competenciaAtual, competenciaCurta, nomeCompetencia } from '../lib/format.js';
 import { useNoCelular, useSlotTopo } from '../lib/celular.js';
@@ -273,7 +273,9 @@ export default function Fixos() {
       && (!cats.length || cats.includes(r.categoria_id ?? 'sem'))
       && (!t || semAcento(`${r.descricao} ${r.categoria?.nome ?? ''}`).includes(t)));
   }, [recs, busca, situacao, cats]);
-  const matriz = useMemo(() => matrizDoAno(filtrados, lancs, ano, hoje, pulados ?? []), [filtrados, lancs, ano, hoje, pulados]);
+  // A GRADE AGRUPADA PELO GRUPO DA CATEGORIA (23/11/2026, `agruparMatriz`): a ordem das linhas muda aqui, antes das
+  // pendências e da grade, para os índices de todas serem os mesmos.
+  const matriz = useMemo(() => agruparMatriz(matrizDoAno(filtrados, lancs, ano, hoje, pulados ?? []), categorias), [filtrados, lancs, ano, hoje, pulados, categorias]);
   const ultimos = useMemo(() => ultimoLancado(lancs), [lancs]);
   // A busca e o filtro de categoria da faixa valem também para as categorias fixas (pelo nome dela ou do grupo).
   const tabelaFixas = useMemo(() => {
@@ -282,7 +284,7 @@ export default function Fixos() {
     return tabelaCategoriasFixas({ categorias: cs, lancamentos: lancsCats, parcelas, ano, hoje });
   }, [categorias, lancsCats, parcelas, ano, hoje, busca, cats]);
   // O CUSTO FIXO TOTAL (a faixa embaixo das duas tabelas): os fixos à mão + as categorias, com os mesmos filtros.
-  const custo = useMemo(() => custoFixoDoAno({ matriz, tabela: tabelaFixas, hoje }), [matriz, tabelaFixas, hoje]);
+  const custo = useMemo(() => custoFixoDoAno({ matriz, tabela: tabelaFixas, hoje, categorias }), [matriz, tabelaFixas, hoje, categorias]);
   const setPuladosLista = useCallback((fn) => setPulados((ps) => fn(ps ?? [])), []);
   const matrizRef = useRef(null);
   const pendMes = useMemo(() => pendentesPorMes(matriz), [matriz]);

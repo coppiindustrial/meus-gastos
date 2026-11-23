@@ -129,6 +129,44 @@ export function matrizDoAno(recorrencias, lancamentos, ano, hoje, pulados = []) 
   return { comps, linhas, totais };
 }
 
+// A ORDEM DOS GRUPOS das categorias (a das Categorias: `listarCategorias` já vem por grupo): { grupo_id: posição }.
+export function ordemDosGrupos(categorias = []) {
+  const pos = new Map();
+  categorias.forEach((c, i) => { const g = c.grupo?.id ?? c.grupo_id; if (g != null && !pos.has(g)) pos.set(g, i); });
+  return pos;
+}
+const SEM_GRUPO = { id: 'sem', nome: 'Sem categoria', cor: '#9ca3af' };
+
+// A GRADE AGRUPADA PELA CATEGORIA (23/11/2026, a opção A do mockup "Gastos fixos agrupados", a pedido: "mais similar à
+// tabela das categorias fixas"): as linhas da `matrizDoAno` em blocos pelo GRUPO da categoria de cada fixo, na ordem das
+// Categorias (o sem categoria no fim), mantendo a ordem de antes dentro do grupo. Devolve a matriz com as `linhas`
+// reordenadas — os índices `r` da grade, das pendências e dos menus passam a ser os desta ordem — e os `grupos`:
+// [{ id, nome, cor, de, ate (as linhas r dele), totais: [12] (o lançado), media (a soma das médias) }].
+export function agruparMatriz(matriz, categorias = []) {
+  const porCat = new Map(categorias.map((c) => [c.id, c]));
+  const pos = ordemDosGrupos(categorias);
+  const grupoDe = (rec) => {
+    const c = porCat.get(rec.categoria_id);
+    if (!c) return { ...SEM_GRUPO, pos: Number.MAX_SAFE_INTEGER };
+    const id = c.grupo?.id ?? c.grupo_id;
+    return { id, nome: c.grupo?.nome ?? '', cor: c.grupo?.cor ?? SEM_GRUPO.cor, pos: pos.get(id) ?? Number.MAX_SAFE_INTEGER - 1 };
+  };
+  const itens = matriz.linhas.map((l, k) => ({ l, k, g: grupoDe(l.rec) })).sort((a, b) => (a.g.pos - b.g.pos) || (a.k - b.k));
+  const linhas = itens.map((x) => x.l);
+  const grupos = [];
+  itens.forEach((x, r) => {
+    let g = grupos[grupos.length - 1];
+    if (!g || g.id !== x.g.id) { g = { id: x.g.id, nome: x.g.nome, cor: x.g.cor, de: r, ate: r }; grupos.push(g); }
+    g.ate = r;
+  });
+  grupos.forEach((g) => {
+    const ls = linhas.slice(g.de, g.ate + 1);
+    g.totais = matriz.comps.map((_, i) => ls.reduce((s, l) => s + (l.celulas[i].estado === 'lancado' ? l.celulas[i].valor : 0), 0));
+    g.media = ls.reduce((s, l) => s + (l.media ?? 0), 0);
+  });
+  return { ...matriz, linhas, grupos };
+}
+
 // AS PENDÊNCIAS DA MATRIZ (até o mês atual), por mês: { comp: [{ r, c, rec, sugerido }] }. É o que a linha
 // "A lançar" da grade conta e o que o aviso "Agora" da Visão geral lista.
 export function pendentesPorMes(matriz) {

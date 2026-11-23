@@ -283,3 +283,33 @@ test('os últimos 12 meses do pop-up: parcela, prevista, faltou, fora e, sem par
   assert.equal(h.find((x) => x.comp === '2026-03').estado, 'gasto');
   assert.equal(h.find((x) => x.comp === '2026-05').estado, 'vazio');
 });
+
+test('custo fixo por grupo: os fixos à mão e as categorias do mesmo grupo juntos, na ordem das Categorias', () => {
+  const comps = mesesDe('2026-01', '2026-12');
+  const cel = (estado, valor) => ({ estado, valor, sugerido: valor });
+  const matriz = {
+    comps,
+    linhas: [
+      { media: 30000, celulas: comps.map((c) => (c <= HOJE ? cel('lancado', 30000) : cel('futuro', 30000))) }, // Casa
+      { media: 20000, celulas: comps.map((c) => (c <= HOJE ? cel('lancado', 20000) : cel('futuro', 20000))) }, // sem categoria
+    ],
+    grupos: [{ id: 'casa', nome: 'Casa', cor: '#f97316', de: 0, ate: 0 }, { id: 'sem', nome: 'Sem categoria', cor: '#9ca3af', de: 1, ate: 1 }],
+  };
+  const tabela = tabelaCategoriasFixas({ categorias: CATS, lancamentos: LANCS, parcelas: PARCELAS, ano: 2026, hoje: HOJE });
+  const { grupos, linhas } = custoFixoDoAno({ matriz, tabela, hoje: HOJE, categorias: CATS });
+  assert.deepEqual(grupos.map((g) => g.id), ['casa', 'ass', 'carro', 'sem']);
+  const casa = grupos[0];
+  assert.equal(casa.mao.media, 30000);
+  assert.equal(casa.cats.media, tabela.grupos[0].media); // o IPTU
+  assert.equal(casa.total.media, 30000 + tabela.grupos[0].media);
+  assert.deepEqual(casa.total.celulas[1], { conhecido: 30000 + 318000, falta: 0 }); // fev: o fixo + o IPTU
+  assert.equal(grupos[1].mao, null); // Assinaturas: só categoria fixa
+  assert.equal(grupos[3].cats, null); // o sem categoria: só fixo à mão
+  // os grupos somam o total
+  const total = linhas[2];
+  comps.forEach((_, i) => {
+    const soma = grupos.reduce((s, g) => s + g.total.celulas[i].conhecido + g.total.celulas[i].falta, 0);
+    assert.equal(soma, total.celulas[i].conhecido + total.celulas[i].falta);
+  });
+  assert.equal(grupos.reduce((s, g) => s + g.total.media, 0), total.media);
+});

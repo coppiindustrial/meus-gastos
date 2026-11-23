@@ -280,27 +280,57 @@ export function mediaDaCategoria({ perfil, celulas = [], ano = 0, hoje }) {
 // · categorias — `conhecido` = o que caiu + as parcelas que já estão numa fatura; `falta` = o previsto que falta.
 // A média dos fixos à mão é a soma das médias de cada um (os meses lançados no ano); a das categorias, a da tabela; a do
 // total, a soma das duas. Devolve { comps, linhas: [{ chave: 'mao' | 'cats' | 'total', nome, celulas: [12], media }] }.
-export function custoFixoDoAno({ matriz, tabela, hoje }) {
+// POR GRUPO (23/11/2026, a opção B do mockup "Custo fixo por grupo", a pedido: "aparecer o somatório das categorias"):
+// `grupos` = [{ id, nome, cor, mao, cats, total }] na ordem das Categorias (`categorias`; o sem categoria no fim) — cada
+// parte { celulas, media } ou null (o grupo só com fixos à mão não tem `cats`). Os grupos dos fixos vêm da `matriz` agrupada
+// (`agruparMatriz`: `grupos` com `de`/`ate`); sem eles, a matriz inteira conta como um grupo só.
+export function custoFixoDoAno({ matriz, tabela, hoje, categorias = [] }) {
   const comps = matriz?.comps ?? tabela?.comps ?? [];
-  const mao = comps.map((comp, i) => ({
-    conhecido: matriz?.totais?.[comp] ?? 0,
-    falta: comp < hoje ? 0 : (matriz?.linhas ?? []).reduce((t, l) => {
-      const c = l.celulas[i];
-      return t + (c && (c.estado === 'pendente' || c.estado === 'futuro') ? Number(c.sugerido ?? 0) : 0);
-    }, 0),
-  }));
-  const cats = comps.map((_, i) => (tabela?.grupos ?? []).reduce((t, g) => {
-    g.categorias.forEach((c) => { const cel = c.celulas[i]; t.conhecido += cel.real + cel.parc; t.falta += cel.prev; });
-    return t;
-  }, { conhecido: 0, falta: 0 }));
-  const mediaMao = (matriz?.linhas ?? []).reduce((t, l) => t + (l.media ?? 0), 0);
-  const mediaCats = tabela?.media ?? 0;
+  const somaCel = (a, b) => comps.map((_, i) => ({ conhecido: a[i].conhecido + b[i].conhecido, falta: a[i].falta + b[i].falta }));
+  const doMao = (linhas) => ({
+    celulas: comps.map((comp, i) => ({
+      conhecido: linhas.reduce((t, l) => t + (l.celulas[i]?.estado === 'lancado' ? l.celulas[i].valor : 0), 0),
+      falta: comp < hoje ? 0 : linhas.reduce((t, l) => {
+        const c = l.celulas[i];
+        return t + (c && (c.estado === 'pendente' || c.estado === 'futuro') ? Number(c.sugerido ?? 0) : 0);
+      }, 0),
+    })),
+    media: linhas.reduce((t, l) => t + (l.media ?? 0), 0),
+  });
+  const doCats = (grupos) => ({
+    celulas: comps.map((_, i) => grupos.reduce((t, g) => {
+      g.categorias.forEach((c) => { const cel = c.celulas[i]; t.conhecido += cel.real + cel.parc; t.falta += cel.prev; });
+      return t;
+    }, { conhecido: 0, falta: 0 })),
+    media: grupos.reduce((t, g) => t + (g.media ?? 0), 0),
+  });
+  const linhasMao = matriz?.linhas ?? [];
+  const mao = doMao(linhasMao);
+  mao.celulas.forEach((c, i) => { if (matriz?.totais && matriz.totais[comps[i]] !== undefined) c.conhecido = matriz.totais[comps[i]]; });
+  const cats = doCats(tabela?.grupos ?? []);
+
+  // os grupos: os dos fixos (da matriz agrupada) e os das categorias fixas, juntos pelo id
+  const pos = new Map();
+  categorias.forEach((c, i) => { const g = c.grupo?.id ?? c.grupo_id; if (g != null && !pos.has(g)) pos.set(g, i); });
+  const porId = new Map();
+  const pegar = (id, nome, cor) => {
+    if (!porId.has(id)) porId.set(id, { id, nome, cor, mao: null, cats: null });
+    return porId.get(id);
+  };
+  (matriz?.grupos ?? []).forEach((g) => { pegar(g.id, g.nome, g.cor).mao = doMao(linhasMao.slice(g.de, g.ate + 1)); });
+  (tabela?.grupos ?? []).forEach((g) => { pegar(g.id, g.nome, g.cor).cats = doCats([g]); });
+  const vazio = { celulas: comps.map(() => ({ conhecido: 0, falta: 0 })), media: 0 };
+  const grupos = [...porId.values()]
+    .map((g) => ({ ...g, total: { celulas: somaCel((g.mao ?? vazio).celulas, (g.cats ?? vazio).celulas), media: (g.mao?.media ?? 0) + (g.cats?.media ?? 0) } }))
+    .sort((a, b) => (pos.get(a.id) ?? (a.id === 'sem' ? Infinity : 1e9)) - (pos.get(b.id) ?? (b.id === 'sem' ? Infinity : 1e9)));
+
   return {
     comps,
+    grupos,
     linhas: [
-      { chave: 'mao', nome: 'Fixos à mão', celulas: mao, media: mediaMao },
-      { chave: 'cats', nome: 'Categorias fixas', celulas: cats, media: mediaCats },
-      { chave: 'total', nome: 'Custo fixo total', celulas: comps.map((_, i) => ({ conhecido: mao[i].conhecido + cats[i].conhecido, falta: mao[i].falta + cats[i].falta })), media: mediaMao + mediaCats },
+      { chave: 'mao', nome: 'Fixos à mão', celulas: mao.celulas, media: mao.media },
+      { chave: 'cats', nome: 'Categorias fixas', celulas: cats.celulas, media: cats.media },
+      { chave: 'total', nome: 'Custo fixo total', celulas: somaCel(mao.celulas, cats.celulas), media: mao.media + cats.media },
     ],
   };
 }

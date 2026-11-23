@@ -523,6 +523,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (ou corrige o lançado), Ctrl+Enter lança os pendentes da seleção, Delete exclui, Ctrl+V cola do Excel, Ctrl+Z/Y.
   O cadastro continua no modal (clique no nome, Shift+F2 ou botão direito). Legenda no jeito da do DRE: as marcas
   acima da grade são clicáveis (destacam aquele tipo de célula) e o botão "Legenda" explica tudo.
+  AGRUPADA PELA CATEGORIA (23/11/2026, a opção A do mockup "Gastos fixos agrupados", a pedido: "mais similar à de baixo"):
+  `agruparMatriz` (lib/fixos.js, testada) põe as linhas em blocos pelo GRUPO da categoria de cada fixo, na ordem das
+  Categorias (`ordemDosGrupos`; o sem categoria no fim), e a página agrupa ANTES das pendências e da grade (os `r` de
+  todas são os da ordem nova). A grade desenha uma FAIXA antes de cada grupo (a barra da cor, o lançado do grupo em cada
+  mês, a média = a soma das médias; o balão lista os fixos do mês) que NÃO É LINHA DA PLANILHA: as setas e o arrastar a
+  pulam, clicar nela seleciona os fixos do grupo. O nome do fixo em duas linhas ("dia 1 · Condomínio"), 38px, como na
+  tabela das categorias fixas.
 - O QUE FALTA LANÇAR (28/10/2026, opções A + B): conta os pendentes de TODOS os meses até hoje (`pendentesPorMes`).
   (A) "Lançar N ▾" no cabeçalho = o `MenuFixos` (de `AvisoAgora.jsx`, o mesmo do aviso da Visão geral) por mês,
   com "Lançar" e "Não teve" em cada fixo, "Lançar os N" e "Ver na grade". (B) A linha "A lançar" da grade, com um
@@ -560,7 +567,12 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   da grade de cima ganha a soma das médias dos fixos. Embaixo das duas, a faixa "CUSTO FIXO TOTAL"
   (`components/planilha/CustoFixoTotal.jsx`, `custoFixoDoAno`, testada): fixos à mão + categorias + o total, mês a mês (o
   conhecido e, de hoje em diante, "+o que falta": o sugerido dos fixos não lançados, sem o "não teve", e o previsto das
-  categorias) e a média = a soma das duas médias; segue os filtros e o Valor | Variação %. A CATEGORIA PARCELADA (19/11/2026,
+  categorias) e a média = a soma das duas médias; segue os filtros e o Valor | Variação %. POR GRUPO (23/11/2026, a opção
+  B do mockup "Custo fixo por grupo", a pedido: "aparecer o somatório das categorias"): uma linha por GRUPO da categoria
+  (os fixos à mão + as categorias fixas dele — `grupos` de `custoFixoDoAno`, que recebe `categorias` para a ordem; testada:
+  os grupos fecham com o total), com a barra da cor e quanto ele pesa na média ("43%"); a seta abre "Fixos à mão" e
+  "Categorias fixas" (só as que ele tem), ⇕ abre ou recolhe todos (lembrado em `custo_fixo_abertos`, só os ids); o
+  "Custo fixo total" embaixo. A CATEGORIA PARCELADA (19/11/2026,
   a opção B do mockup "Parcelamento da categoria fixa"; migration 034: `fixo_parcelas`, `fixo_inicio`, `fixo_renova`): o
   seguro em 8 parcelas, pelo histórico, parecia "todo mês" e o previsto seguia para sempre. CLICAR NO NOME da categoria na
   tabela (também o botão direito e o Shift+F2 no nome) abre o POP-UP DELA, `components/planilha/ModalCategoriaFixa.jsx`
