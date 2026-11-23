@@ -106,7 +106,8 @@ export default function RendaVariavel() {
       { rotulo: 'Exportar a carteira (CSV)', sub: 'cada ativo: quantidade, preço médio, posição, resultado', desabilitado: !nAtivos, motivo: !nAtivos ? 'nenhum ativo' : undefined, onEscolher: exportar },
     ] });
   };
-  const inicio = <AbasPilula abas={ABAS} valor={aba} onChange={setAba} variante="claro" altura={31} folga={3} />;
+  // `lembrar`: a Carteira e as Operações desenham cada uma a sua pílula; com ele, trocar de aba desliza (AbasPilula)
+  const inicio = <AbasPilula abas={ABAS} valor={aba} onChange={setAba} variante="claro" altura={31} folga={3} lembrar="rv_aba" />;
 
   return (
     <div>

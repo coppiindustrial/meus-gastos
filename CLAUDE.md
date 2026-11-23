@@ -380,7 +380,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   pelo `lote` (migration 032; sem ela, grava sem): no `ModalAporte` a linha diz "parte de um resgate em N aportes" e o ✕
   exclui o pedido inteiro (`excluirLote`).
   AS MOVIMENTAÇÕES (16/11/2026, a opção A do mockup "Histórico da renda fixa", com as recomendadas): a pílula "Carteira |
-  Movimentações" no cartão (`rf_aba`; a `TabelaCarteira` recebe as abas no `inicio`) e `ListaMovimentos`: tudo o que entrou e
+  Movimentações" no cartão (`rf_aba`; a `TabelaCarteira` recebe as abas no `inicio`; cada aba desenha a SUA pílula, então ela
+  vai com `lembrar` — 23/11/2026, a pedido: a nova nasce na aba de antes e DESLIZA, como a dos Gastos fixos; o mesmo na Renda
+  variável, `rv_aba`) e `ListaMovimentos`: tudo o que entrou e
   saiu, do mais novo para o mais antigo e separado por mês — o aporte, o "já estava aplicado" (na data do DEPÓSITO, com o
   aplicado), o resgate (o pedido do mesmo `lote` numa linha só; a seta abre as partes), o vencimento que VOLTOU para a conta e
   o REAPLICADO (não entra nem sai, mas o IR sai) —, com o que entrou, o que saiu, o IR + IOF, o que chegou na conta e o que

@@ -46,8 +46,14 @@ import { useLayoutEffect, useRef } from 'react';
 //
 // `abas`: [{ key, label, qtd?, aria? }] · `valor`: a key ativa · `onChange(key)`. `aria` é o nome
 // acessível da aba quando o `label` é só um ícone (a troca Lista | Calendário da Fila).
+//
+// `lembrar` (23/11/2026, Meus Gastos): um nome. Na Renda fixa e na Renda variável a pílula mora DENTRO do conteúdo de
+// cada aba (a Carteira e a lista ao lado desenham cada uma a sua), então trocar de aba MONTA uma pílula nova — que nascia
+// já no lugar, sem o deslize que a dos Gastos fixos (que não remonta) tem. Com `lembrar`, a pílula guarda a aba em que
+// estava; a que nasce de novo com o mesmo nome e outra aba parte da de antes e DESLIZA até a nova.
+const ULTIMA = new Map();
 export default function AbasPilula({
-  abas, valor, onChange, className = '', variante = 'grafite', cheia = false, altura, folga = 3, qtdSolta = false,
+  abas, valor, onChange, className = '', variante = 'grafite', cheia = false, altura, folga = 3, qtdSolta = false, lembrar,
 }) {
   const btnRefs = useRef({});
   const indRef = useRef(null);
@@ -116,8 +122,8 @@ export default function AbasPilula({
     // espessura da borda. O defeito apareceu primeiro na variante clara, que era a única com borda;
     // hoje as DUAS têm, e é por isso que o desconto vem do `getComputedStyle` e não de um número
     // escrito à mão — ele vale para qualquer casca.
-    const medir = (animar) => {
-      const btn = btnRefs.current[valor];
+    const medir = (animar, chave = valor) => {
+      const btn = btnRefs.current[chave];
       if (!btn) return;
       const rb = btn.getBoundingClientRect();
       const rt = track.getBoundingClientRect();
@@ -133,8 +139,13 @@ export default function AbasPilula({
 
     // Na MONTAGEM a pílula nasce no lugar (`medir(false)`) e não abre a janela de troca do
     // `ResizeObserver`; dali em diante toda troca desliza, como sempre.
-    const animar = montado.current;
+    let animar = montado.current;
     montado.current = true;
+    // `lembrar`: nasceu numa aba diferente da última com o mesmo nome — começa lá (sem animar) e desliza até aqui
+    // (só logo depois de uma troca: entrar na tela mais tarde não desliza)
+    const ult = lembrar ? ULTIMA.get(lembrar) : null;
+    const antes = ult && Date.now() - ult.em < 1500 ? ult.valor : null;
+    if (!animar && antes && antes !== valor && btnRefs.current[antes]) { medir(false, antes); animar = true; }
     if (animar) trocaEm.current = Date.now();
     medir(animar);
     larguraTrilho.current = track.getBoundingClientRect().width;
@@ -164,7 +175,7 @@ export default function AbasPilula({
     });
     ro.observe(track);
     return () => ro.disconnect();
-  }, [valor, assinatura, cheia, altura, folga]);
+  }, [valor, assinatura, cheia, altura, folga, lembrar]);
 
   return (
     // O padding vai INLINE, e não como `p-[Npx]`: valor arbitrário do Tailwind não aceita variável.
@@ -178,7 +189,7 @@ export default function AbasPilula({
           claro ? 'border border-gray-300 bg-realce' : 'bg-pilula'}`} />
       {abas.map((a) => (
         <button key={a.key} type="button" ref={(el) => { btnRefs.current[a.key] = el; }}
-          onClick={() => onChange(a.key)} aria-pressed={valor === a.key} aria-label={a.aria || undefined} title={a.aria || undefined}
+          onClick={() => { if (lembrar) ULTIMA.set(lembrar, { valor, em: Date.now() }); onChange(a.key); }} aria-pressed={valor === a.key} aria-label={a.aria || undefined} title={a.aria || undefined}
           // A ENTRELINHA sai da altura útil do trilho, arredondada para ÍMPAR (ver o bloco acima) —
           // é ela que centra o TEXTO. Com `altura` o botão não tem padding vertical, e a entrelinha
           // herdada (18,75px numa caixa de 24) deixava os glifos acima do centro. O `flex

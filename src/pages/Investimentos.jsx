@@ -192,9 +192,9 @@ export default function Investimentos() {
           <div className="mt-4">
             {aba === 'carteira'
               ? <TabelaCarteira carteira={carteira} hoje={d.hoje} movel={movel} acoes={acoes} mostrarEncerrados={encerrados} onEncerrados={() => setEncerrados((e) => !e)}
-                inicio={<AbasPilula abas={ABAS} valor={aba} onChange={setAba} variante="claro" altura={31} folga={3} />} />
+                inicio={<AbasPilula abas={ABAS} valor={aba} onChange={setAba} variante="claro" altura={31} folga={3} lembrar="rf_aba" />} />
               : <ListaMovimentos carteira={carteira} cadastro={d.cadastro} movel={movel} acoes={acoes}
-                inicio={<AbasPilula abas={ABAS} valor={aba} onChange={setAba} variante="claro" altura={31} folga={3} />} />}
+                inicio={<AbasPilula abas={ABAS} valor={aba} onChange={setAba} variante="claro" altura={31} folga={3} lembrar="rf_aba" />} />}
           </div>
           {movel && <p className="mt-2 text-xs text-gray-500">Lançar, resgatar e editar ficam no computador.</p>}
         </>
