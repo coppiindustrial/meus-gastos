@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import Tooltip from '../Tooltip.jsx';
 import Toggle from '../Toggle.jsx';
-import { Trilho as TrilhoFaixa } from '../filtros/FaixaFiltros.jsx';
+import { DivisorFaixa, Trilho as TrilhoFaixa } from '../filtros/FaixaFiltros.jsx';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { COR_ENTRADAS } from '../graficos/Graficos.jsx';
 import { Etiqueta } from '../Comuns.jsx';
@@ -405,22 +405,27 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
         {inicio}
         <span className="text-[11.5px] text-gray-400">{qtdInv} {qtdInv === 1 ? 'investimento' : 'investimentos'} em {grupos.length} {grupos.length === 1 ? 'instituição' : 'instituições'} · o valor de hoje é a conta de cada aporte pelo CDI de cada dia</span>
         <span className="flex-1" />
+        {/* O ⇕ NO MESMO TRILHO dos Centavos, separado pelo divisor (23/11/2026, a pedido: igual ao do cadastro das
+            categorias — antes era um botão solto ao lado) */}
         {!movel && (
           <TrilhoFaixa className="shrink-0">
-            <span className="flex h-[24px] items-center gap-2 px-2">
+            <span className="flex h-[25px] items-center gap-2 px-2">
               <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => setCentavos(!centavos)} className="whitespace-nowrap text-[12px] font-medium text-gray-600">Centavos</button>
               <Toggle compacto rotulo="Mostrar os centavos nos valores" checked={centavos} onChange={setCentavos} />
             </span>
+            {recolhiveis.length > 0 && (
+              <>
+                <DivisorFaixa />
+                <Tooltip label={tudoFechado ? 'Expandir tudo' : 'Recolher tudo'}>
+                  <button type="button" aria-label={tudoFechado ? 'Expandir tudo' : 'Recolher tudo'}
+                    className="inline-flex h-[25px] w-[30px] shrink-0 items-center justify-center rounded-[3px] text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900"
+                    onClick={() => setFechadas(() => (tudoFechado ? new Set() : new Set(recolhiveis)))}>
+                    <IconExpandirTudo fechar={!tudoFechado} />
+                  </button>
+                </Tooltip>
+              </>
+            )}
           </TrilhoFaixa>
-        )}
-        {!movel && recolhiveis.length > 0 && (
-          <Tooltip label={tudoFechado ? 'Expandir tudo' : 'Recolher tudo'}>
-            <button type="button" aria-label={tudoFechado ? 'Expandir tudo' : 'Recolher tudo'}
-              className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[6px] text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
-              onClick={() => setFechadas(() => (tudoFechado ? new Set() : new Set(recolhiveis)))}>
-              <IconExpandirTudo fechar={!tudoFechado} />
-            </button>
-          </Tooltip>
         )}
       </div>
       <div ref={caixaRef} className="min-h-0 overflow-x-auto" onMouseLeave={() => { balao.aoSair(); setSobLinha(null); }}>

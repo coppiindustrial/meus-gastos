@@ -372,26 +372,27 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
         {!movel && (
           <TrilhoFaixa className="shrink-0">
             {temUsd && (<>
-              <span className="flex h-[24px] items-center gap-2 px-2">
+              <span className="flex h-[25px] items-center gap-2 px-2">
                 <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => setEmUsd(!emUsd)} className="whitespace-nowrap text-[12px] font-medium text-gray-600">Exterior em US$</button>
                 <Toggle compacto rotulo="Mostrar os preços do exterior em dólar" checked={emUsd} onChange={setEmUsd} />
               </span>
               <DivisorFaixa />
             </>)}
-            <span className="flex h-[24px] items-center gap-2 px-2">
+            <span className="flex h-[25px] items-center gap-2 px-2">
               <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => setCentavos(!centavos)} className="whitespace-nowrap text-[12px] font-medium text-gray-600">Centavos</button>
               <Toggle compacto rotulo="Mostrar os centavos nos valores" checked={centavos} onChange={setCentavos} />
             </span>
+            {/* o ⇕ no MESMO TRILHO, depois do divisor (23/11/2026, a pedido: igual ao do cadastro das categorias e ao da
+                Renda fixa — antes era um botão solto ao lado) */}
+            <DivisorFaixa />
+            <Tooltip label={tudoFechado ? 'Expandir tudo' : 'Recolher tudo'}>
+              <button type="button" aria-label={tudoFechado ? 'Expandir tudo' : 'Recolher tudo'}
+                className="inline-flex h-[25px] w-[30px] shrink-0 items-center justify-center rounded-[3px] text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900"
+                onClick={() => setFechadas(() => (tudoFechado ? new Set() : new Set(todas.filter((x) => x.tipo === 'grupo' || x.tipo === 'ativo').map((x) => x.id))))}>
+                <IconExpandirTudo fechar={!tudoFechado} />
+              </button>
+            </Tooltip>
           </TrilhoFaixa>
-        )}
-        {!movel && (
-          <Tooltip label={tudoFechado ? 'Expandir tudo' : 'Recolher tudo'}>
-            <button type="button" aria-label={tudoFechado ? 'Expandir tudo' : 'Recolher tudo'}
-              className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[6px] text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
-              onClick={() => setFechadas(() => (tudoFechado ? new Set() : new Set(todas.filter((x) => x.tipo === 'grupo' || x.tipo === 'ativo').map((x) => x.id))))}>
-              <IconExpandirTudo fechar={!tudoFechado} />
-            </button>
-          </Tooltip>
         )}
       </div>
       <div ref={caixaRef} className="min-h-0 overflow-x-auto" onMouseLeave={() => { balao.aoSair(); setSobLinha(null); }}>
