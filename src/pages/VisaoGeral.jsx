@@ -241,7 +241,7 @@ export default function VisaoGeral() {
 
   const filtrando = Boolean(!ehPadrao(per, competenciaAtual()) || tipo || origens.length || cats.length);
   const limpar = () => { setPer(periodoPadrao(competenciaAtual())); setTipo(''); setOrigens([]); setCats([]); };
-  const abrirMes = (comp) => { lsSet('lancamentos_mes', comp); navigate('/lancamentos'); };
+  const abrirMes = (comp) => navigate(`/lancamentos?mes=${comp}`);
   const alternarOrigem = (k) => setOrigens((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
 
   const textoPer = textoDoPeriodo(per);

@@ -24,7 +24,6 @@ import { listarModelos } from '../api/modelos.js';
 import { formatBRL, numeroK } from '../lib/dinheiro.js';
 import { competenciaCurta, formatDate, nomeCompetencia, todayISO } from '../lib/format.js';
 import { useNoCelular } from '../lib/celular.js';
-import { lsSet } from '../lib/storage.js';
 import { exportCsv } from '../lib/exportCsv.js';
 
 // CARTÕES (30/10/2026, opção A do mockup "Cartões · overhaul"): UM BLOCO POR CARTÃO com o que se quer saber dele — a
@@ -300,7 +299,7 @@ export default function Cartoes() {
     try { await criarCartoesSugeridos(); toast.success('Cartões criados.'); carregar(); } catch (err) { toast.error(err.message); }
     setCriando(false);
   };
-  const verLancamentos = (comp) => { lsSet('lancamentos_mes', comp); navigate('/lancamentos'); };
+  const verLancamentos = (comp) => navigate(`/lancamentos?mes=${comp}`);
 
   const exportar = () => exportCsv('cartoes', ordenados, [
     { key: 'nome', label: 'Cartão' },

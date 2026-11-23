@@ -56,8 +56,11 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   caixa (ou fora dela) rola a grade — mais rápido quanto mais longe, e parado na borda segue rolando — e a faixa segue
   a célula sob o cursor (`elementFromPoint` preso à área útil; a caixa pode passar do fim da janela).
   No celular continua a lista (só leitura + formulário). SÓ A LEITURA MAIS NOVA GRAVA (19/11/2026, `leitura` no
-  `carregar`): a tela abre no mês lembrado e o `?mes=` troca logo depois — a resposta atrasada do lembrado mostrava os
+  `carregar`): a tela abria no mês lembrado e o `?mes=` trocava logo depois — a resposta atrasada do lembrado mostrava os
   lançamentos dele com a pílula no mês pedido.
+  A TELA ABRE SEMPRE NO MÊS DE HOJE (23/11/2026, a pedido; o `lancamentos_mes` do navegador saiu): quem leva a um mês
+  (o "Ver os lançamentos" dos Fixos, Cartões, Importar e Visão geral, a busca rápida) manda `?mes=` no endereço, lido já
+  no `useState` do mês.
   AMPLIAR A TABELA (03/11/2026, opção A do mockup): o ⤢ no grupo do cabeçalho esconde os cartões do resumo e a grade
   ganha a altura até o fim da janela (`ateOFim`, medida de onde a caixa começa; refeita no resize); ⤡ volta.
   Lembrado em `lancamentos_ampliada`.

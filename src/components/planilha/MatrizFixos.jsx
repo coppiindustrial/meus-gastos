@@ -13,7 +13,6 @@ import { pendentesPorMes } from '../../lib/fixos.js';
 import { faixaDe, ladrilhar, lerBloco, naFaixa } from '../../lib/planilha.js';
 import { formatBRL, parseValor, valorParaCampo } from '../../lib/dinheiro.js';
 import { addMeses, competenciaCurta, nomeCompetencia } from '../../lib/format.js';
-import { lsSet } from '../../lib/storage.js';
 import posicionarPopover from '../../lib/posicionarPopover.js';
 import useEscape from '../../lib/useEscape.js';
 import { copiarTexto } from '../../lib/copiar.js';
@@ -435,7 +434,7 @@ const MatrizFixos = forwardRef(function MatrizFixos({ matriz, hoje, setLancs, se
         ? { rotulo: lanc === 1 ? 'Excluir o lançamento' : `Excluir ${lanc} lançamentos`, icone: <IcoLixeira />, atalho: 'Delete', perigo: true, onEscolher: excluirLancados }
         : { rotulo: 'Excluir o lançamento', icone: <IcoLixeira />, atalho: 'Delete', desabilitado: true, motivo: 'nada lançado na seleção' },
       { sep: true },
-      { rotulo: `Ver os lançamentos de ${competenciaCurta(comp)}`, icone: <IcoAbrir />, onEscolher: () => { lsSet('lancamentos_mes', comp); navigate('/lancamentos'); } },
+      { rotulo: `Ver os lançamentos de ${competenciaCurta(comp)}`, icone: <IcoAbrir />, onEscolher: () => navigate(`/lancamentos?mes=${comp}`) },
       { rotulo: `Editar “${rec?.descricao}”…`, icone: <IcoEtiqueta />, atalho: 'Shift+F2', sub: 'nome, dia, categoria, valor padrão e vigência', onEscolher: () => onEditar(rec) },
       { rotulo: `Encerrar a partir de ${competenciaCurta(comp)}`, icone: <IcoLimparFim />, sub: `o último mês passa a ser ${competenciaCurta(addMeses(comp, -1))}`, onEscolher: () => encerrar(rec, comp) },
       { rotulo: 'Excluir o gasto fixo', icone: <IcoLixeira />, perigo: true, sub: 'os lançamentos já feitos continuam', onEscolher: () => excluirCadastro(rec) },

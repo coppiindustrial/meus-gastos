@@ -23,7 +23,6 @@ import { formatBRL } from '../lib/dinheiro.js';
 import { competenciaCurta, formatDate, formatDateTime, nomeCompetencia, todayISO } from '../lib/format.js';
 import posicionarPopover from '../lib/posicionarPopover.js';
 import useEscape from '../lib/useEscape.js';
-import { lsSet } from '../lib/storage.js';
 
 // A TELA IMPORTAR: o lugar único de tudo o que se importa. "Por mês" = uma linha por mês do ano, uma coluna por
 // FONTE (cada cartão e o extrato) e em cada célula QUANDO aquilo entrou ou o que falta (as contas em
@@ -443,7 +442,7 @@ export default function Importar() {
                           const cel = l.celulas[c.key];
                           return (
                             <Celula key={c.key} cel={cel} col={c} comp={l.comp} apagada={destaque && tipoDe(cel) !== destaque}
-                              onAgir={() => { setDica(null); agir(c, cel); }} onAbrir={() => { setDica(null); lsSet('lancamentos_mes', l.comp); navigate('/lancamentos'); }} onDica={mostrarDica} />
+                              onAgir={() => { setDica(null); agir(c, cel); }} onAbrir={() => { setDica(null); navigate(`/lancamentos?mes=${l.comp}`); }} onDica={mostrarDica} />
                           );
                         })}
                         <td className="h-[38px] border-b border-gray-100 px-3"><Situacao linha={l} /></td>

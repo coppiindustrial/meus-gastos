@@ -35,7 +35,6 @@ import useIndiceBusca from '../lib/useIndiceBusca.js';
 const OPCOES_TIPO = [{ value: '', label: 'Todos' }, { value: 'saida', label: 'Gastos' }, { value: 'entrada', label: 'Entradas' }];
 const OPCOES_ORIGEM = Object.entries(ORIGENS).map(([value, label]) => ({ value, label }));
 const OPCOES_REVISAR = [{ value: '', label: 'Todos' }, { value: 'sim', label: 'Só os a revisar', chip: 'A revisar' }];
-const LS_MES = 'lancamentos_mes';
 const LS_ORDEM = 'lancamentos_ordem';
 // AMPLIAR A TABELA (03/11/2026, opção A do mockup "Lançamentos · ampliar a tabela"): o ⤢ do grupo do cabeçalho
 // esconde os cartões do resumo e a grade desce até o fim da janela; o ⤡ volta. Lembrado no navegador.
@@ -165,8 +164,10 @@ export default function Lancamentos() {
   const [filtrosMovel, setFiltrosMovel] = useState(false);
   const [periodoMovel, setPeriodoMovel] = useState(false);
   const [params, setParams] = useSearchParams();
-  const [comp, setCompEstado] = useState(() => lsGet(LS_MES) || competenciaAtual());
-  const setComp = (c) => { setCompEstado(c); lsSet(LS_MES, c); };
+  // A TELA ABRE SEMPRE NO MÊS DE HOJE (23/11/2026, a pedido: antes lembrava o último mês visto, em `lancamentos_mes`).
+  // Quem quer abrir num mês (o "Ver os lançamentos" dos Fixos, Cartões, Importar, Visão geral, a busca rápida) manda
+  // `?mes=` no endereço — lido já aqui, para não piscar o mês de hoje antes.
+  const [comp, setComp] = useState(() => (/^\d{4}-\d{2}$/.test(params.get('mes') ?? '') ? params.get('mes') : competenciaAtual()));
   const [periodo, setPeriodoEstado] = useState('mes');
   const mudarPeriodo = (p, c = comp) => { setPeriodoEstado(p); if (c !== comp) setComp(c); };
   const [ampliada, setAmpliadaEstado] = useState(() => lsGet(LS_AMPLIADA) === 'sim');
