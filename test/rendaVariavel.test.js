@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { carteiraRV, mesAMesRV, operacoesComDinheiro, posicaoDoAtivo, precoDaOperacao, totaisDasOperacoes, previaDaOperacao, proventosEm12Meses, proventosPorMes, totalDaOperacao, ultimoAte } from '../src/lib/rendaVariavel.js';
+import { carteiraRV, mesAMesRV, operacoesComDinheiro, ordensDosAtivos, posicaoDoAtivo, precoDaOperacao, totaisDasOperacoes, previaDaOperacao, proventosEm12Meses, proventosPorMes, totalDaOperacao, ultimoAte } from '../src/lib/rendaVariavel.js';
 
 // Dados FICTÍCIOS.
 const perto = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≠ ${b}`);
@@ -159,4 +159,16 @@ test('operacoesComDinheiro: o que saiu e entrou em reais (o dólar da operação
   perto(t.lucro, 330000 - 251250);
   assert.equal(t.saiu, 502500);
   assert.equal(t.entrou, 330000 + 11000);
+});
+
+test('a ordem dos ativos no cadastro: abrir não muda nada; o novo vai depois da maior; mexer renumera', () => {
+  const l = (id, pos, ordem, extra = {}) => ({ id, ticker: id, pos, orig: { ordem }, ...extra });
+  // abriu e salvou sem mexer: nada (a ordem do banco é 0 em todos e a tela já veio agrupada)
+  assert.equal(ordensDosAtivos([l('AAPL', 0, 0), l('MU', 1, 0), l('KNCR11', 2, 0)]).size, 0);
+  // o novo ganha a seguinte à maior; o novo vazio não conta
+  const novo = ordensDosAtivos([l('AAPL', 0, 3), l('MU', 1, 5), { id: 'n1', novo: true, ticker: 'NVDA' }, { id: 'n2', novo: true, ticker: ' ' }]);
+  assert.deepEqual([...novo], [['n1', 6]]);
+  // trocou dois de lugar: renumera 1, 2, 3 (só o que muda); o excluído sai da conta
+  const mexeu = ordensDosAtivos([l('MU', 1, 0), l('AAPL', 0, 0), l('X', 2, 0, { excluir: true }), l('KNCR11', 3, 3)]);
+  assert.deepEqual([...mexeu], [['MU', 1], ['AAPL', 2]]);
 });

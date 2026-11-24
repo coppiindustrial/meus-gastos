@@ -276,3 +276,22 @@ export function somarMeses(rf, rv) {
     };
   });
 }
+
+// A ORDEM DOS ATIVOS NO CADASTRO (24/11/2026, a opção A do mockup "Cadastro dos ativos · organizar"): `linhas` na ordem da
+// tela, agrupada pela classe ({ id, novo, excluir, ticker, pos, orig }); `pos` = o lugar dela quando o cadastro abriu, JÁ
+// AGRUPADO (senão só abrir contava como mexer: no banco os de classes diferentes se intercalam pelo ticker). Sem mexer, só
+// os novos ganham a ordem seguinte à maior; mexeu, renumera 1, 2, 3… Devolve Map id → ordem só com o que muda (a regra do
+// `ordensDosCartoes`).
+export function ordensDosAtivos(linhas) {
+  const ficam = linhas.filter((l) => !l.excluir && !(l.novo && !String(l.ticker ?? '').trim()));
+  const antigos = ficam.filter((l) => !l.novo);
+  const igual = antigos.every((l, k) => k === 0 || antigos[k - 1].pos < l.pos);
+  const out = new Map();
+  if (igual) {
+    let o = Math.max(0, ...linhas.filter((l) => !l.novo).map((l) => Number(l.orig?.ordem ?? 0)));
+    ficam.forEach((l) => { if (l.novo) { o += 1; out.set(l.id, o); } });
+    return out;
+  }
+  ficam.forEach((l, k) => { if (l.novo || Number(l.orig?.ordem ?? 0) !== k + 1) out.set(l.id, k + 1); });
+  return out;
+}

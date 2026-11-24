@@ -164,6 +164,8 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
   const desk = (c) => (c.desk && movel ? 'hidden' : '');
   const aceso = (id) => (sobLinha === id ? 'gm-acesa' : '');
   const numTd = 'px-3 text-right tabular-nums';
+  // a HIERARQUIA em três degraus, a da renda fixa (24/11/2026, a opção A do mockup "Carteira · hierarquia das fontes")
+  const NUM_FAIXA = 'text-[13.5px] font-bold text-gray-900';
   const peso = (v) => (total.valor > 0 ? v / total.valor : 0);
   const acoesTd = (cls, filhos) => (!movel && (
     <td className={cls}>{filhos && <span className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/linha:opacity-100 focus-within:opacity-100">{filhos}</span>}</td>
@@ -215,20 +217,20 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
       const comPos = g.posicoes.some((p) => p.quantidade > 0); // só cadastrado, sem compra: os totais ficam vazios (nada de "R$ 0")
       return (
         <tr key={l.id} {...attrs} className="group/linha" onMouseEnter={() => setSobLinha(l.id)}>
-          <td className={`relative h-[46px] cursor-pointer pl-3 pr-3 ${faixa}`} onClick={() => alternar(l.id)}>
+          <td className={`relative h-[48px] cursor-pointer pl-3 pr-3 ${faixa}`} onClick={() => alternar(l.id)}>
             <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-[3px]" style={{ background: g.classe.cor }} />
             <span className="flex items-center gap-2">
               <Seta aberto={aberto} onClick={(e) => { e.stopPropagation(); alternar(l.id); }} rotulo={aberto ? `Recolher ${g.classe.nome}` : `Abrir ${g.classe.nome}`} />
-              <span className="truncate text-[14px] font-semibold text-gray-900">{g.classe.nome}</span>
-              <span className="shrink-0 text-[11.5px] font-normal text-gray-500">{n ? `${n} ${n === 1 ? 'ativo' : 'ativos'} · ${g.classe.moeda === 'USD' ? 'US$' : 'R$'}` : 'nenhum ativo'}</span>
+              <span className="truncate text-[15px] font-bold text-gray-900">{g.classe.nome}</span>
+              <span className="shrink-0 text-[12px] font-normal text-gray-500">{n ? `${n} ${n === 1 ? 'ativo' : 'ativos'} · ${g.classe.moeda === 'USD' ? 'US$' : 'R$'}` : 'nenhum ativo'}</span>
             </span>
           </td>
           <td className={`${faixa} ${movel ? 'hidden' : ''}`} />
           <td className={`${faixa} ${movel ? 'hidden' : ''}`} />
           <td className={`${faixa} px-3 text-right`}>{n > 0 && <MarcaMercado posicoes={g.posicoes} mercado={g.classe.mercado} />}</td>
-          <td className={`${faixa} ${numTd} text-[13.5px] font-semibold text-gray-900`}>{comPos ? reais(g.totais.valor) : ''}</td>
-          <td className={`${faixa} ${numTd} font-semibold`}>{comPos ? <span className={corDe(g.totais.resultado)}>{sinal(g.totais.resultado)}{reais(Math.abs(g.totais.resultado))}</span> : ''}</td>
-          <td className={`${faixa} ${numTd} font-semibold text-gray-700 ${movel ? 'hidden' : ''}`}>{g.totais.proventos ? reais(g.totais.proventos) : ''}</td>
+          <td className={`${faixa} ${numTd} ${NUM_FAIXA}`}>{comPos ? reais(g.totais.valor) : ''}</td>
+          <td className={`${faixa} ${numTd} ${NUM_FAIXA}`}>{comPos ? <span className={corDe(g.totais.resultado)}>{sinal(g.totais.resultado)}{reais(Math.abs(g.totais.resultado))}</span> : ''}</td>
+          <td className={`${faixa} ${numTd} ${NUM_FAIXA} ${movel ? 'hidden' : ''}`}>{g.totais.proventos ? reais(g.totais.proventos) : ''}</td>
           <td className={`${faixa} px-3 font-semibold text-gray-700 ${movel ? 'hidden' : ''}`}>{comPos ? <Barrinha fracao={peso(g.totais.valor)} cor={g.classe.cor} /> : ''}</td>
           {acoesTd(faixa)}
         </tr>
@@ -266,8 +268,8 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
               </span>
             </span>
           </td>
-          <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{p.quantidade ? qtdTexto(p.quantidade) : '—'}</td>
-          <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>
+          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>{p.quantidade ? qtdTexto(p.quantidade) : '—'}</td>
+          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>
             {preco(p, p.precoMedio)}
             {p.usd && p.custoMedioReais && <span className="block text-[11px] text-gray-400">{formatBRL(Math.round(p.custoMedioReais * 100))}</span>}
           </td>
@@ -275,12 +277,12 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
             <span className="flex items-center justify-end gap-2">
               {!movel && onGrafico && <Curvinha precos={doMes.get(p.ativo.id)} rotulo={`Ver o gráfico de ${p.ativo.ticker}`} onClick={() => onGrafico(p)} />}
               <span className="block cursor-help" onMouseMove={mover(l.id, 'cot')} onMouseLeave={balao.aoSair}>
-                <span className={`underline decoration-gray-300 decoration-dotted underline-offset-[3px] ${p.semCotacao ? 'text-gray-400' : 'text-gray-800'}`}>{preco(p, p.preco)}</span>
+                <span className={`underline decoration-gray-300 decoration-dotted underline-offset-[3px] ${p.semCotacao ? 'text-gray-400' : 'text-gray-700'}`}>{preco(p, p.preco)}</span>
                 <span className={`block text-[11px] ${p.semCotacao ? 'text-amber-700' : corDe(p.variacaoDia ?? 0)}`}>{p.semCotacao ? 'sem cotação' : `${pct(p.variacaoDia, 2)} no dia`}</span>
               </span>
             </span>
           </td>
-          <td className={`${td} ${numTd} font-semibold text-gray-900`}>
+          <td className={`${td} ${numTd} font-medium text-gray-800`}>
             {p.quantidade ? reais(p.valorReais) : <span className="font-normal text-gray-400">—</span>}
             {p.usd && p.quantidade > 0 && <span className="block text-[11px] font-normal text-gray-400">{moeda(true, p.valorMoeda / 100)}</span>}
           </td>
@@ -290,7 +292,7 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
               <span className="block text-[11.5px] text-gray-500">{pct(p.resPct)}{p.usd ? ' · câmbio' : ''}</span>
             </>) : null}
           </td>
-          <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>
+          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>
             {p.proventos12 ? (<>{reais(p.proventos12)}<span className="block text-[11px] text-gray-400">{p.usd ? 'líquido' : `${((p.proventos12 / p.custoReais) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% do custo`}</span></>) : <span className="text-gray-400">—</span>}
           </td>
           <td className={`${td} px-3 text-gray-700 ${movel ? 'hidden' : ''}`}>{p.quantidade ? <Barrinha fracao={peso(p.valorReais)} cor={g.classe.cor} /> : null}</td>
@@ -319,18 +321,18 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
           <td className={`relative pr-3 ${td}`}>
             <Trilho ultimo={l.ultimo} />
             <span className="flex flex-wrap items-baseline gap-x-2" style={{ paddingLeft: movel ? 56 : RECUO_OP }}>
-              <span className="tabular-nums text-gray-700">{formatDate(op.data)}</span>
+              <span className="tabular-nums text-gray-600">{formatDate(op.data)}</span>
               <span className="text-[11.5px] text-gray-400">{desc}</span>
               {futuro && op.tipo === 'provento' && <span className="self-center"><Etiqueta tom="ambar">a receber</Etiqueta></span>}
             </span>
           </td>
-          <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{op.quantidade ? qtdTexto(op.quantidade) : ''}</td>
-          <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>
+          <td className={`${td} ${numTd} text-gray-500 ${movel ? 'hidden' : ''}`}>{op.quantidade ? qtdTexto(op.quantidade) : ''}</td>
+          <td className={`${td} ${numTd} text-gray-500 ${movel ? 'hidden' : ''}`}>
             {pOp !== null && (p.usd && !emUsd ? moeda(false, pOp * Number(op.dolar ?? dolar ?? 0)) : moeda(p.usd, pOp))}
             {p.usd && op.dolar && op.tipo !== 'desdobramento' && op.tipo !== 'grupamento' && <span className="block text-[11px] text-gray-400">dólar {Number(op.dolar).toLocaleString('pt-BR', { minimumFractionDigits: 4 })}</span>}
           </td>
           <td className={td} />
-          <td className={`${td} ${numTd} text-gray-700`}>
+          <td className={`${td} ${numTd} text-gray-600`}>
             {lote ? reais(lote.valor) : op.tipo === 'venda' ? <span className="text-gray-500">recebeu {reais(recebido)}</span> : null}
           </td>
           <td className={`${td} ${numTd}`}>
@@ -409,8 +411,8 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
           </tr></thead>
           <tbody>
             {desenhadas.map(linha)}
-            <tr data-segue="" className="font-semibold">
-              <td className="h-10 border-t border-gray-200 bg-hx-f9fafb px-3 text-gray-800">Total</td>
+            <tr data-segue="" className="text-[14px] font-bold">
+              <td className="h-[50px] border-t border-gray-200 bg-hx-f9fafb px-3 text-gray-900">Total</td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${movel ? 'hidden' : ''}`} />
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${movel ? 'hidden' : ''}`} />
               <td className="border-t border-gray-200 bg-hx-f9fafb" />
@@ -419,7 +421,7 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
                 {total.custo ? <span className={corDe(total.resultado)}>{sinal(total.resultado)}{reais(Math.abs(total.resultado))}</span> : '—'}
                 {total.custo > 0 && <span className="block text-[11.5px] font-normal text-gray-500">{pct(total.resPct)}</span>}
               </td>
-              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{total.proventos ? reais(total.proventos) : '—'}</td>
+              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-900 ${movel ? 'hidden' : ''}`}>{total.proventos ? reais(total.proventos) : '—'}</td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb px-3 text-gray-700 ${movel ? 'hidden' : ''}`}>{total.valor ? '100%' : ''}</td>
               {!movel && <td className="border-t border-gray-200 bg-hx-f9fafb" />}
             </tr>

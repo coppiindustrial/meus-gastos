@@ -79,13 +79,33 @@ const Trilho = ({ ultimo }) => (
   </>
 );
 
-// O vencimento: até 45 dias, a pílula âmbar com quantos faltam; depois, a data.
-function Vence({ data, hoje }) {
+// O VENCIMENTO (24/11/2026, a opção A do mockup "Carteira · hierarquia das fontes"; antes, a pílula âmbar e o "o próximo"
+// solto em cima): a data em cima e o QUANDO embaixo, em texto — âmbar, com o ponto, até 45 dias.
+const quando = (n) => (n <= 0 ? 'vence hoje' : n <= 45 ? `em ${n} ${n === 1 ? 'dia' : 'dias'}`
+  : n < 730 ? `em ${Math.round(n / 30.44)} meses` : `em ${Math.round(n / 365.25)} anos`);
+function Vence({ data, hoje, antes = '', depois = '', fraco = false }) {
   if (!data) return <span className="text-[12px] text-gray-400">—</span>;
   const n = diasEntre(hoje, data);
-  if (n <= 45) return <Etiqueta tom="ambar">{n <= 0 ? 'vence hoje' : `em ${n} ${n === 1 ? 'dia' : 'dias'}`} · {dataCurta(data)}</Etiqueta>;
-  return <span className="text-[12.5px] tabular-nums text-gray-700">{formatDate(data)}</span>;
+  const perto = n <= 45;
+  return (
+    <span className="block leading-tight">
+      <span className={`block text-[12.5px] tabular-nums ${fraco ? 'text-gray-500' : 'text-gray-700'}`}>{formatDate(data)}</span>
+      <span className={`mt-[3px] flex items-center gap-[5px] whitespace-nowrap text-[11px] ${perto ? 'font-medium text-amber-700' : 'text-gray-400'}`}>
+        {perto && <span aria-hidden="true" className="h-[6px] w-[6px] shrink-0 rounded-full bg-amber-500" />}
+        {[antes, quando(n), depois].filter(Boolean).join(' · ')}
+      </span>
+    </span>
+  );
 }
+// o resgate diário: texto quieto com o ícone (era a pílula azul)
+const ResgateDiario = () => (
+  <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] text-gray-500">
+    <svg viewBox="0 0 24 24" className="h-[13px] w-[13px] shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 21v-5h5" />
+    </svg>
+    resgate diário
+  </span>
+);
 
 // AS LARGURAS SÃO FIXAS no computador (08/11/2026, a pedido): com a largura pelo conteúdo, abrir um investimento
 // alargava o IR (a pílula da alíquota e o "→ 15% em…" dos aportes) e as outras colunas andavam. `largura` = o caso mais
@@ -213,6 +233,10 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
     <td className={cls}>{filhos && <span className="flex justify-end gap-1 opacity-0 transition-opacity group-hover/linha:opacity-100 focus-within:opacity-100">{filhos}</span>}</td>
   ));
   const numTd = 'px-3 text-right tabular-nums';
+  // A HIERARQUIA (24/11/2026, a opção A do mockup "Carteira · hierarquia das fontes": antes a instituição e o investimento
+  // tinham quase o mesmo peso): TRÊS DEGRAUS — a instituição 15 · 700 e os números 13,5 · 700 no mais forte; o investimento
+  // 13 · 500 e os números 400 cinza (o Vale hoje e o Líquido 500); o aporte 12,5 · 400 mais cinza; o Total 14 · 700.
+  const NUM_FAIXA = 'text-[13.5px] font-bold text-gray-900';
   const ir = (t) => (t.ir > 0 ? reais(t.ir) : <span className="font-normal text-gray-400">—</span>);
   const iof = (t) => (t.iof > 0 ? <span className="text-amber-700">{reais(t.iof)}</span> : <span className="font-normal text-gray-400">—</span>);
 
@@ -225,21 +249,21 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
       const n = g.investimentos.length;
       return (
         <tr key={l.id} {...attrs} className="group/linha" onMouseEnter={() => setSobLinha(l.id)}>
-          <td className={`relative h-[46px] cursor-pointer pl-3 pr-3 ${faixa}`} onClick={() => alternar(l.id)}>
+          <td className={`relative h-[48px] cursor-pointer pl-3 pr-3 ${faixa}`} onClick={() => alternar(l.id)}>
             <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-[3px]" style={{ background: cor[g.instituicao] }} />
             <span className="flex items-center gap-2">
               <Seta aberto={aberto} onClick={(e) => { e.stopPropagation(); alternar(l.id); }} rotulo={aberto ? `Recolher ${g.instituicao}` : `Abrir ${g.instituicao}`} />
-              <span className="truncate text-[14px] font-semibold text-gray-900">{g.instituicao}</span>
-              {!movel && <span className="shrink-0 text-[11.5px] font-normal text-gray-500">{n} {n === 1 ? 'investimento' : 'investimentos'}</span>}
+              <span className="truncate text-[15px] font-bold text-gray-900">{g.instituicao}</span>
+              {!movel && <span className="shrink-0 text-[12px] font-normal text-gray-500">{n} {n === 1 ? 'investimento' : 'investimentos'}</span>}
             </span>
           </td>
           <td className={`${faixa} ${movel ? 'hidden' : ''}`} />
-          <td className={`${faixa} ${numTd} font-semibold text-gray-700 ${movel ? 'hidden' : ''}`}>{reais(g.totais.aplicado)}</td>
-          <td className={`${faixa} ${numTd} text-[13.5px] font-semibold text-gray-900`}>{reais(g.totais.vale)}</td>
-          <td className={`${faixa} ${numTd} font-semibold`}><span className={g.totais.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(g.totais.rendeu)}{reais(Math.abs(g.totais.rendeu))}</span></td>
-          <td className={`${faixa} ${numTd} font-semibold text-gray-700 ${movel ? 'hidden' : ''}`}>{ir(g.totais)}</td>
-          <td className={`${faixa} ${numTd} font-semibold ${movel ? 'hidden' : ''}`}>{iof(g.totais)}</td>
-          <td className={`${faixa} ${numTd} font-semibold text-gray-900 ${movel ? 'hidden' : ''}`}>{reais(g.totais.liquido)}</td>
+          <td className={`${faixa} ${numTd} ${NUM_FAIXA} ${movel ? 'hidden' : ''}`}>{reais(g.totais.aplicado)}</td>
+          <td className={`${faixa} ${numTd} ${NUM_FAIXA}`}>{reais(g.totais.vale)}</td>
+          <td className={`${faixa} ${numTd} ${NUM_FAIXA}`}><span className={g.totais.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(g.totais.rendeu)}{reais(Math.abs(g.totais.rendeu))}</span></td>
+          <td className={`${faixa} ${numTd} ${NUM_FAIXA} ${movel ? 'hidden' : ''}`}>{ir(g.totais)}</td>
+          <td className={`${faixa} ${numTd} ${NUM_FAIXA} ${movel ? 'hidden' : ''}`}>{iof(g.totais)}</td>
+          <td className={`${faixa} ${numTd} ${NUM_FAIXA} ${movel ? 'hidden' : ''}`}>{reais(g.totais.liquido)}</td>
           {acoesTd(faixa)}
         </tr>
       );
@@ -266,22 +290,19 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
             </span>
           </td>
           <td className={`px-3 ${td} ${movel ? 'hidden' : ''}`}>
-            {x.inv.resgate === 'diaria' ? (
-              <span className="inline-flex h-[20px] items-center whitespace-nowrap rounded-full px-2 text-[11px] font-semibold"
-                style={{ background: 'color-mix(in srgb, var(--serie-gastos) 13%, transparent)', color: 'var(--serie-gastos)' }}>resgate diário</span>
-            ) : x.proximoVencimento ? (
-              <span className="flex flex-col items-start gap-0.5"><span className="text-[11px] text-gray-400">o próximo</span><Vence data={x.proximoVencimento} hoje={hoje} /></span>
-            ) : <span className="inline-flex h-[20px] items-center rounded-full bg-gray-100 px-2 text-[11px] font-semibold text-gray-600">no vencimento</span>}
+            {x.inv.resgate === 'diaria' ? <ResgateDiario />
+              : x.proximoVencimento ? <Vence data={x.proximoVencimento} hoje={hoje} antes={x.aportes.filter((it) => it.ap.vencimento).length > 1 ? 'o próximo' : ''} />
+                : <span className="text-[12px] text-gray-500">no vencimento</span>}
           </td>
-          <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{n ? reais(x.totais.aplicado) : '—'}</td>
-          <td className={`${td} ${numTd} font-semibold text-gray-900`}>{n ? reais(x.totais.vale) : <span className="font-normal text-gray-400">—</span>}</td>
+          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>{n ? reais(x.totais.aplicado) : '—'}</td>
+          <td className={`${td} ${numTd} font-medium text-gray-800`}>{n ? reais(x.totais.vale) : <span className="font-normal text-gray-400">—</span>}</td>
           <td className={`${td} ${numTd}`}>
             {n ? (<><span className={x.totais.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(x.totais.rendeu)}{reais(Math.abs(x.totais.rendeu))}</span>
               <span className="block text-[11.5px] text-gray-500">{pctTexto(x.totais.aplicado ? x.totais.rendeu / x.totais.aplicado : null)}</span></>) : null}
           </td>
-          <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{n ? (!pagaIR(x.inv) ? <span className="text-gray-400">isento</span> : ir(x.totais)) : null}</td>
+          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>{n ? (!pagaIR(x.inv) ? <span className="text-gray-400">isento</span> : ir(x.totais)) : null}</td>
           <td className={`${td} ${numTd} ${movel ? 'hidden' : ''}`}>{n ? iof(x.totais) : null}</td>
-          <td className={`${td} ${numTd} font-semibold text-gray-900 ${movel ? 'hidden' : ''}`}>{n ? reais(x.totais.liquido) : null}</td>
+          <td className={`${td} ${numTd} font-medium text-gray-800 ${movel ? 'hidden' : ''}`}>{n ? reais(x.totais.liquido) : null}</td>
           {acoesTd(`${td} px-2`, acoes && (x.inv.ativo !== false || (n && x.inv.resgate === 'diaria')) && (
             <>
               {x.inv.ativo !== false && <BotaoLinha titulo={`Aportar em ${x.inv.nome}`} onClick={() => acoes.aportar(x.inv)}><IconAplicar /></BotaoLinha>}
@@ -303,7 +324,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
           <td className={`relative pr-3 ${td}`}>
             <Trilho ultimo={l.ultimo} />
             <span className="flex flex-wrap items-baseline gap-x-2" style={{ paddingLeft: movel ? 56 : RECUO_APORTE }}>
-              <span className="tabular-nums text-gray-700">{antigo && !ap.aplicado_em ? `saldo de ${formatDate(ap.data)}` : formatDate(data)}</span>
+              <span className="tabular-nums text-gray-600">{antigo && !ap.aplicado_em ? `saldo de ${formatDate(ap.data)}` : formatDate(data)}</span>
               <span className="text-[11.5px] text-gray-400">
                 {antigo ? `já estava aplicado${ap.aplicado_em ? ` · banco em ${formatDate(ap.data).slice(0, 5)}` : ''}` : `${pos.idade} ${pos.idade === 1 ? 'dia' : 'dias'}${ap.reaplicado_de ? ' · reaplicado' : ''}`}
               </span>
@@ -315,18 +336,17 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
             </span>
           </td>
           <td className={`px-3 ${td} ${movel ? 'hidden' : ''}`}>
-            <Vence data={ap.vencimento} hoje={hoje} />
-            {ap.vencimento && inv.no_vencimento === 'reaplica' && !ap.nao_reaplicar && <span className="block text-[11px] text-gray-400">reaplica sozinho</span>}
+            <Vence data={ap.vencimento} hoje={hoje} fraco depois={inv.no_vencimento === 'reaplica' && !ap.nao_reaplicar ? 'reaplica' : ''} />
           </td>
-          <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>
+          <td className={`${td} ${numTd} text-gray-500 ${movel ? 'hidden' : ''}`}>
             {reais(pos.aplicado)}
             {resgates.length > 0 && <span className="block text-[11px] text-gray-400">resgatou {reais0(resgates.reduce((s, r) => s + Number(r.valor_centavos ?? 0), 0))}</span>}
           </td>
-          <td className={`${td} ${numTd} cursor-help text-gray-800`} onMouseMove={mover(l.id, 'vale')} onMouseLeave={balao.aoSair}>
+          <td className={`${td} ${numTd} cursor-help text-gray-600`} onMouseMove={mover(l.id, 'vale')} onMouseLeave={balao.aoSair}>
             <span className="underline decoration-gray-300 decoration-dotted underline-offset-[3px]">{reais(pos.vale)}</span>
           </td>
           <td className={`${td} ${numTd} text-green-700`}>{sinal(pos.rendeu)}{reais(Math.abs(pos.rendeu))}</td>
-          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`} onMouseMove={mover(l.id, 'ir')} onMouseLeave={balao.aoSair}>
+          <td className={`${td} ${numTd} text-gray-500 ${movel ? 'hidden' : ''}`} onMouseMove={mover(l.id, 'ir')} onMouseLeave={balao.aoSair}>
             {!pagaIR(inv) ? <span className="text-gray-400">isento</span> : (
               <span className="inline-flex items-center justify-end gap-1.5">
                 <Etiqueta tom={pos.semData ? 'ambar' : TOM_ALIQUOTA[pos.aliquota] ?? 'cinza'}>{pctAliq(pos.aliquota)}</Etiqueta>
@@ -342,7 +362,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
               <span className="block text-[11px] font-medium text-amber-700">zera em {dataCurta(fimDoIOF(pos.partida.desdeIR)).slice(0, 5)} · {30 - pos.idade} {30 - pos.idade === 1 ? 'dia' : 'dias'}</span>
             </td>
           ) : <td className={`${td} ${numTd} text-gray-400 ${movel ? 'hidden' : ''}`}>—</td>}
-          <td className={`${td} ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{reais(pos.liquido)}</td>
+          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>{reais(pos.liquido)}</td>
           {acoesTd(`${td} px-2`, acoes && (
             <>
               <BotaoLinha titulo="Resgatar deste aporte" onClick={() => acoes.resgatar(l.item)}><IconResgatar /></BotaoLinha>
@@ -444,16 +464,16 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
           </tr></thead>
           <tbody>
             {desenhadas.map(linha)}
-            <tr data-segue="" className="font-semibold">
-              <td className="h-10 border-t border-gray-200 bg-hx-f9fafb px-3 text-gray-800">Total</td>
+            <tr data-segue="" className="text-[14px] font-bold">
+              <td className="h-[50px] border-t border-gray-200 bg-hx-f9fafb px-3 text-gray-900">Total</td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${movel ? 'hidden' : ''}`} />
-              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{reais(total.aplicado)}</td>
+              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-900 ${movel ? 'hidden' : ''}`}>{reais(total.aplicado)}</td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-900`}>{reais(total.vale)}</td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd}`}>
                 <span className={total.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(total.rendeu)}{reais(Math.abs(total.rendeu))}</span>
                 <span className="block text-[11.5px] font-normal text-gray-500">{pctTexto(total.aplicado ? total.rendeu / total.aplicado : null)}</span>
               </td>
-              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-700 ${movel ? 'hidden' : ''}`}>{ir(total)}</td>
+              <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-900 ${movel ? 'hidden' : ''}`}>{ir(total)}</td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} ${movel ? 'hidden' : ''}`}>{iof(total)}</td>
               <td className={`border-t border-gray-200 bg-hx-f9fafb ${numTd} text-gray-900 ${movel ? 'hidden' : ''}`}>{reais(total.liquido)}</td>
               {!movel && <td className="border-t border-gray-200 bg-hx-f9fafb" />}

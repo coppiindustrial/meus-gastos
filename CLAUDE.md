@@ -441,6 +441,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   e até o dia em que você olhou o banco vale o número dele descontado o índice de cada dia — é o que AINDA está lá (o
   depósito que teve saques aparece no passado só com o que sobrou) e, por construção, rende exatamente a taxa nesses meses.
   O `useCarteira` busca o CDI desde o depósito mais antigo. Os Indicadores leem o mesmo mês a mês ("Sua carteira × CDI × IPCA").
+- A HIERARQUIA DAS FONTES NA CARTEIRA (24/11/2026, a opção A do mockup "Carteira · hierarquia das fontes", a pedido: a
+  instituição e o investimento tinham quase o mesmo peso): TRÊS DEGRAUS — a faixa 15 · 700 e os números 13,5 · 700 brancos
+  (`NUM_FAIXA`); o investimento 13 · 500 e os números 400 cinza (o Vale hoje e o Líquido 500); o aporte 12,5 · 400 mais
+  cinza; o Total 14 · 700. Vale também na `TabelaRendaVariavel` (a classe, o ativo, a operação). A COLUNA VENCE SEM PÍLULAS:
+  a data em cima e o QUANDO embaixo ("o próximo · em 8 dias" só quando há mais de um vencimento; âmbar com o ponto até 45
+  dias; "em N meses" depois; "· reaplica" no aporte que reaplica — a coluna tem 149px úteis), e "resgate diário" é texto
+  quieto com o ícone (`ResgateDiario`).
 - O EXTRATO do Nubank: RDB e "dinheiro guardado" voltam a ficar só como "Fora: investimento" (não viram aporte).
 
 ## Renda variável (13/11/2026, o mockup "Renda variável", tabela A)
@@ -475,7 +482,13 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   `previaDaOperacao` e, para o Patrimônio, `noFormatoDoPatrimonio` e `somarMeses`.
 - A TELA: o cabeçalho de Investimentos (✎ `ModalCadastroAtivos`, a tabela de formulário dos cadastros, "Salvar alterações
   (N)"; O TICKER SE PROCURA PELO NOME — `CampoTicker`, 13/11/2026, a pedido: "nvidia" → NVDA, pela ação "buscar" da função, a
-  busca do Yahoo só com as bolsas dos EUA e a B3, ação ou ETF; escolher preenche o ticker, o tipo, um palpite, e o nome; ▾ atualizar as cotações agora e o CSV; "+ Lançar operação") e o cartão com a pílula Carteira | Operações
+  busca do Yahoo só com as bolsas dos EUA e a B3, ação ou ETF; escolher preenche o ticker, o tipo, um palpite, e o nome;
+  AGRUPADO PELA CLASSE — 24/11/2026, a opção A do mockup "Cadastro dos ativos · organizar", a pedido: com muitos ativos a
+  lista só ficava difícil de administrar —, no jeito do cadastro dos investimentos: a faixa Exterior · FIIs · Ações da B3
+  (a cor da carteira, recolhe animado, `cadastro_rv_fechadas`), o tipo curto na linha ("Ação", "ETF"; mudar para outra
+  classe leva a linha para a faixa dela), campos quietos, a coluna EM USO (as operações), "Adicionar em X" no fim de cada
+  classe, a ALÇA ⠿ que reordena DENTRO da classe e grava a `ordem` (`ordensDosAtivos`, testada: o `pos` é o da tela já
+  agrupada, senão só abrir contava como mexer), e o cabeçalho num trilho só: a busca | Só os ativos | ⇕ | Novo ativo; ▾ atualizar as cotações agora e o CSV; "+ Lançar operação") e o cartão com a pílula Carteira | Operações
   (`rv_aba`). A CARTEIRA (`TabelaRendaVariavel.jsx`) é a `TabelaCarteira` um nível acima: a faixa da classe com a barra da
   cor e a marca do mercado (aberto com a hora, fechado, ou âmbar "sem cotação nova há N h" no pregão), o ativo recuado e as
   OPERAÇÕES no trilho (a compra com o lote de hoje, a venda com o lucro realizado, o desdobramento; os proventos ficam na coluna deles, na aba Operações e no Patrimônio); recolhe
