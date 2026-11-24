@@ -317,7 +317,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   cortado, e arredondando o app ficava 7 centavos acima num investimento de 12 depósitos);
   o "já estava aplicado" sem `aplicado_em` vai pelo maior, 22,5% (`semData`: o líquido nunca fica a mais).
   O IOF À VISTA (09/11/2026, o mockup "O IOF na carteira"): regressivo pela idade (96% no 1º dia … 3% no 29º, zero no 30º
-  — `fimDoIOF`), sai do rendimento ANTES do IR e vale também na LCI e na LCA. `somarPosicoes` devolve o `ir` e o `iof`
+  — `fimDoIOF`), sai do rendimento ANTES do IR. A LCI E A LCA NÃO PAGAM IOF (24/11/2026, a pedido, conferido no Decreto
+  6.306/2007, art. 32, § 2º, em vigor: a LCA tem alíquota zero — inciso V; a LCI não está na lista, mas o prazo mínimo do CMN
+  é de meses, então ela nunca sai nos 30 primeiros dias) — `semIOF(tipo)` e o `livreDeIOF` da posição, na posição, no
+  vencimento, no resgate e na prévia do aporte (antes o app cobrava delas o IOF dos 30 dias). `somarPosicoes` devolve o `ir` e o `iof`
   SEPARADOS (antes o `ir` era os dois). A carteira tem a COLUNA IOF (a pílula âmbar com o % do dia, o valor, "zera em
   dd/mm · N dias"; o balão com a curva dos 30 dias; LARGURA_MINIMA 1400); o RESGATAR mostra o rendimento que sai junto,
   o IOF, o IR e quanto chega na conta (`impostoDoResgate`, testada) — O VALOR DIGITADO É O QUE CHEGA NA CONTA (16/11/2026, a

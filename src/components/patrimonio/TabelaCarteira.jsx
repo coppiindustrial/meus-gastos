@@ -166,7 +166,7 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
       };
     }
     if (a.col === 'ir') {
-      if (ehIsento(inv.tipo)) return { titulo, itens: [{ rotulo: 'Rendeu', valor: formatBRL(pos.rendeu) }, { rotulo: 'IR', valor: 'isento' }], nota: `${nomeDoTipo(inv.tipo)} é isenta de IR para pessoa física.${pos.iof ? ' O IOF dos 30 primeiros dias vale para ela também (a coluna ao lado).' : ''}` };
+      if (ehIsento(inv.tipo)) return { titulo, itens: [{ rotulo: 'Rendeu', valor: formatBRL(pos.rendeu) }, { rotulo: 'IR', valor: 'isento' }], nota: `${nomeDoTipo(inv.tipo)} é isenta de IR para pessoa física, e não paga IOF.` };
       const q = pos.semData ? null : proximaQueda(ap.origem === 'antigo' ? ap.aplicado_em : ap.data, hoje);
       return {
         titulo: `${titulo} · se resgatasse hoje`,

@@ -133,7 +133,7 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, editando
                 const usado = l.sai > 0;
                 const ordem = usado ? usados.indexOf(l) + 1 : null;
                 const idade = l.pos.idade;
-                const iofDia = idade !== null && idade < 30 ? aliquotaIOF(idade) : 0;
+                const iofDia = idade !== null && idade < 30 && !l.pos.livreDeIOF ? aliquotaIOF(idade) : 0;
                 const cor = !usado ? 'text-gray-400' : 'text-gray-700';
                 const fundo = usado && !l.tudo ? 'bg-amber-50' : '';
                 return (

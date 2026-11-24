@@ -401,10 +401,15 @@ test('o IOF: o dia em que zera, o imposto do resgate (bruto) e os totais com o I
   // sem IOF (mais de 30 dias): nada de IOF nem de "a partir de"
   const velho = impostoDoResgate(posicaoDoAporte(novo('2026-06-03', 1000000), inv(100), [], cal, HOJE), 100000);
   assert.deepEqual([velho.iof, velho.semIOF, velho.fimIOF], [0, null, null]);
-  // a LCI paga o IOF, não o IR
-  const lci = impostoDoResgate(posicaoDoAporte(novo('2026-10-11', 1000000), inv(95, { tipo: 'lci' }), [], cal, HOJE));
-  assert.ok(lci.iof > 0);
-  assert.equal(lci.ir, 0);
+  // a LCI e a LCA não pagam nem o IOF nem o IR (24/11/2026: a LCA tem alíquota zero de IOF no Decreto 6.306, art. 32, § 2º,
+  // V; a LCI tem prazo mínimo e nunca sai nos 30 primeiros dias) — nem no resgate, nem na posição, nem no vencimento
+  for (const tipo of ['lci', 'lca']) {
+    const pos = posicaoDoAporte(novo('2026-10-11', 1000000), inv(95, { tipo }), [], cal, HOJE);
+    assert.ok(pos.idade < 30 && pos.rendeu > 0);
+    assert.deepEqual([pos.iof, pos.ir, pos.liquido], [0, 0, pos.vale]);
+    const r = impostoDoResgate(pos);
+    assert.deepEqual([r.iof, r.ir, r.chega], [0, 0, pos.vale]);
+  }
   // os totais: cada imposto na sua soma, o líquido sem os dois
   const t = somarPosicoes([{ pos: p }, { pos: posicaoDoAporte(novo('2026-06-03', 1000000), inv(100), [], cal, HOJE) }]);
   assert.equal(t.iof, p.iof);

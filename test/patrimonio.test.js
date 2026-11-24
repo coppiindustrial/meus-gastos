@@ -132,17 +132,17 @@ test('quando o dinheiro fica livre, o IR por alíquota, as quedas e cada investi
   assert.equal(posicaoDoAporte(aportes[0], cadastro[0], [], cal, HOJE).vale, d.vale);
 });
 
-test('as quedas: o fim do IOF entra como uma queda, também na isenta', () => {
+test('as quedas: o fim do IOF entra como uma queda (a LCI e a LCA, sem IOF, não)', () => {
   const cadastro = [cad('d'), cad('l', { tipo: 'lci' })];
   const aportes = [ap('d1', 'd', '2026-10-11', 1000000), ap('l1', 'l', '2026-10-20', 500000), ap('d2', 'd', '2026-06-03', 800000)];
   const c = montarCarteira({ cadastro, aportes, resgates: [], cdi: CDI, hoje: HOJE });
   const abertos = c.itens.filter((x) => !x.pos.encerrado);
   const q = proximasQuedas(abertos, HOJE);
   const iof = q.filter((x) => x.tipo === 'iof');
-  assert.deepEqual(iof.map((x) => [x.item.ap.id, x.data, x.de, x.para]), [['d1', '2026-11-10', 0.1, 0], ['l1', '2026-11-19', 0.4, 0]]);
+  assert.deepEqual(iof.map((x) => [x.item.ap.id, x.data, x.de, x.para]), [['d1', '2026-11-10', 0.1, 0]]); // a LCI de 20/10 não paga IOF
   const d1 = abertos.find((x) => x.ap.id === 'd1').pos;
   assert.equal(iof[0].economia, d1.iof + d1.ir - Math.floor(d1.rendeu * 0.225));
-  assert.equal(iof[1].economia, abertos.find((x) => x.ap.id === 'l1').pos.iof); // a LCI: o IOF inteiro
+  assert.equal(abertos.find((x) => x.ap.id === 'l1').pos.iof, 0);
   assert.deepEqual(q.map((x) => x.data), [...q.map((x) => x.data)].sort()); // pela data, junto das do IR
   assert.ok(q.some((x) => x.tipo === 'ir'));
   // o IR por alíquota: o IR e o IOF separados, fechando com a carteira

@@ -29,6 +29,11 @@ export const TIPOS = [
 ];
 export const nomeDoTipo = (t) => ({ cdb: 'CDB', rdb: 'RDB', lci: 'LCI', lca: 'LCA', outro: 'Outro' })[t] ?? t;
 export const ehIsento = (tipo) => tipo === 'lci' || tipo === 'lca';
+// SEM IOF (24/11/2026, conferido no Decreto 6.306/2007, art. 32, § 2º, em vigor): a LCA tem alíquota ZERO de IOF (inciso V).
+// A LCI não está na lista, mas o CMN dá a ela prazo mínimo de meses antes do resgate, então ela nunca é resgatada nos 30
+// primeiros dias, que é quando o IOF regressivo existe. Na conta do app, as duas ficam sem IOF (antes o app cobrava o IOF dos
+// 30 primeiros dias delas — a LCA aplicada hoje aparecia com o IOF de 96% do rendimento).
+export const semIOF = (tipo) => tipo === 'lci' || tipo === 'lca';
 // O ÍNDICE (08/11/2026, migration 025): 'cdi' — a taxa é o % do CDI; 'pre' — prefixado, a taxa é o % ao ano; 'ipca' —
 // IPCA + a taxa ao ano. Sem a coluna, 'cdi'.
 export const INDEXADORES = [{ value: 'cdi', label: '% do CDI' }, { value: 'ipca', label: 'IPCA +' }, { value: 'pre', label: 'Prefixado' }];
@@ -59,7 +64,9 @@ export const fimDoIOF = (desde) => maisDias(desde, 30);
 // mesma proporção), com o IOF e o IR pela idade e alíquota da posição no dia. "Tudo" leva o valor inteiro e paga sobre o
 // rendimento inteiro. (Antes de hoje o digitado era o que SAÍA, com o imposto dentro dele.)
 const rendimentoDe = (pos, v) => Math.max(0, Math.round(Math.max(0, pos.rendeu) * (v / pos.vale)));
-const comImposto = (pos, pedido) => { const t = impostos(rendimentoDe(pos, pedido), pos.idade, pos.aliquota ?? 0); return pedido + t.iof + t.ir; };
+// a idade que conta para o IOF (null = sem IOF: a LCI e a LCA — `semIOF`)
+const idadeDoIOF = (pos) => (pos.livreDeIOF ? null : pos.idade);
+const comImposto = (pos, pedido) => { const t = impostos(rendimentoDe(pos, pedido), idadeDoIOF(pos), pos.aliquota ?? 0); return pedido + t.iof + t.ir; };
 // O IMPOSTO DE UM RESGATE: `valor` é o que SAIU do aporte (o gravado; null = tudo). Acha o pedido (o maior cujo pedido +
 // impostos cabe no que saiu) e devolve { sai, pedido, rendimento (o do pedido), iof, ir, chega, aliquota, aliquotaIOF,
 // semIOF: o IR se fosse a partir do fim do IOF, fimIOF }.
@@ -75,11 +82,11 @@ export function impostoDoResgate(pos, valor = null) {
   }
   const rendimento = rendimentoDe(pos, pedido);
   const aliquota = pos.aliquota ?? 0;
-  const { iof, ir } = impostos(rendimento, pos.idade, aliquota);
-  const semIOF = iof ? impostos(rendimento, 30, aliquota).ir : null;
+  const { iof, ir } = impostos(rendimento, idadeDoIOF(pos), aliquota);
+  const irSemIOF = iof ? impostos(rendimento, 30, aliquota).ir : null;
   return {
     sai, pedido, rendimento, iof, ir, chega: sai - iof - ir, aliquota, aliquotaIOF: iof ? aliquotaIOF(pos.idade) : 0,
-    semIOF, fimIOF: iof && pos.partida?.desdeIR ? fimDoIOF(pos.partida.desdeIR) : null,
+    semIOF: irSemIOF, fimIOF: iof && pos.partida?.desdeIR ? fimDoIOF(pos.partida.desdeIR) : null,
   };
 }
 // O QUE SAI DO APORTE para chegar `liquido` na conta: o pedido + o IOF e o IR sobre o rendimento dele (o valor inteiro
@@ -249,7 +256,7 @@ export function posicaoDoAporte(ap, inv, resgates, cal, dia, eventosAte = dia) {
     saidas.push({ data: e.data, valor: x });
   }
   if (encerrado) {
-    return { vale: 0, aplicado: 0, rendeu: 0, ir: 0, iof: 0, liquido: 0, aliquota: null, idade: null, semData: false, encerrado, saidas, partida: p, conta: null, exato: { vale: 0, aplicado: 0 } };
+    return { vale: 0, aplicado: 0, rendeu: 0, ir: 0, iof: 0, liquido: 0, aliquota: null, idade: null, semData: false, livreDeIOF: semIOF(inv?.tipo), encerrado, saidas, partida: p, conta: null, exato: { vale: 0, aplicado: 0 } };
   }
   const conta = { de, ...fator(cal, de, dia, taxa, idx) };
   // `exato`: sem arredondar — o TOTAL do investimento soma os exatos e arredonda no fim, como o banco (arredondando cada
@@ -262,8 +269,9 @@ export function posicaoDoAporte(ap, inv, resgates, cal, dia, eventosAte = dia) {
   const idade = semData ? null : diasEntre(p.desdeIR, dia);
   const aliquota = ehIsento(inv?.tipo) ? 0 : semData ? FAIXAS_IR[0].aliquota : aliquotaIR(idade);
   const ganho = Math.max(0, rendeu);
-  const { iof, ir } = impostos(ganho, idade, aliquota);
-  return { vale, aplicado: apl, rendeu, ir, iof, liquido: vale - ir - iof, aliquota, idade, semData, encerrado: null, saidas, partida: p, conta, exato };
+  const livreDeIOF = semIOF(inv?.tipo);
+  const { iof, ir } = impostos(ganho, livreDeIOF ? null : idade, aliquota);
+  return { vale, aplicado: apl, rendeu, ir, iof, liquido: vale - ir - iof, aliquota, idade, semData, livreDeIOF, encerrado: null, saidas, partida: p, conta, exato };
 }
 
 // ------------------------------------------------------------ o vencimento: volta para a conta ou reaplica
@@ -276,7 +284,7 @@ export function noVencimento(inv, pos) {
   const desde = pos.partida?.desdeIR ?? null;
   const idade = desde ? diasEntre(desde, e.data) : null;
   const aliquota = ehIsento(inv?.tipo) ? 0 : idade === null ? FAIXAS_IR[0].aliquota : aliquotaIR(idade);
-  const { iof, ir } = impostos(ganho, idade, aliquota);
+  const { iof, ir } = impostos(ganho, semIOF(inv?.tipo) ? null : idade, aliquota);
   return { data: e.data, valor: e.valor, aplicado: e.aplicado, ir, iof, liquido: e.valor - ir - iof, aliquota, idade };
 }
 
