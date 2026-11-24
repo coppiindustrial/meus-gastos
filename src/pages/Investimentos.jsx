@@ -19,7 +19,7 @@ import { useNoCelular } from '../lib/celular.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useConfirmacao } from '../context/ConfirmContext.jsx';
 import { excluirAporte, excluirLote, excluirResgate, marcarNaoReaplicar } from '../api/carteira.js';
-import { noVencimento, nomeDoTipo, rotuloTaxa } from '../lib/carteira.js';
+import { noVencimento, nomeDoTipoDe, rotuloTaxa } from '../lib/carteira.js';
 import { exportCsv } from '../lib/exportCsv.js';
 import { formatBRL } from '../lib/dinheiro.js';
 import { formatDate } from '../lib/format.js';
@@ -130,7 +130,7 @@ export default function Investimentos() {
     exportCsv('carteira', linhas, [
       { key: 'inst', label: 'Instituição', map: (r) => r.g.instituicao },
       { key: 'inv', label: 'Investimento', map: (r) => r.x.inv.nome },
-      { key: 'tipo', label: 'Tipo', map: (r) => nomeDoTipo(r.x.inv.tipo) },
+      { key: 'tipo', label: 'Tipo', map: (r) => nomeDoTipoDe(r.x.inv) },
       { key: 'taxa', label: 'Rende', map: (r) => rotuloTaxa(r.x.inv.taxa, r.x.inv.indexador) },
       { key: 'origem', label: 'Aporte', map: (r) => (r.item.ap.origem === 'antigo' ? 'já estava aplicado' : 'dinheiro novo') },
       { key: 'data', label: 'Data do aporte', tipo: 'data', map: (r) => (r.item.ap.origem === 'antigo' ? r.item.ap.aplicado_em ?? '' : r.item.ap.data) },
@@ -203,7 +203,7 @@ export default function Investimentos() {
       <MenuContexto menu={mais} onFechar={() => setMais(null)} />
       {cadastro && (
         <ModalCadastroCarteira cadastro={d.cadastro} aportes={d.aportes} aportesPorInv={aportesPorInv} hoje={d.hoje} com022={com022 || !d.cadastro.length} com023={com023 || !d.cadastro.length} com025={com025 || !d.cadastro.length}
-          onFechar={() => setCadastro(false)} onSalvo={() => { setCadastro(false); recarregar(); }} />
+          tipos={d.tipos} onTiposSalvos={recarregar} onFechar={() => setCadastro(false)} onSalvo={() => { setCadastro(false); recarregar(); }} />
       )}
       {aporte && (
         <ModalAporte inicial={aporte} cadastro={d.cadastro} cal={carteira.cal} hoje={d.hoje}

@@ -6,6 +6,7 @@ import SelectBusca from './SelectBusca.jsx';
 // portada, o mesmo tamanho de letra e o mesmo teclado em todos os seletores do app.
 //
 // `opcoes`: [{ value, label }].
-export default function SelectSimples({ value, onChange, opcoes, disabled = false, className = '', placeholder = 'Selecione…', compacto = false, acao }) {
-  return <SelectBusca semBusca value={value} onChange={onChange} opcoes={opcoes} disabled={disabled} className={className} placeholder={placeholder} compacto={compacto} acao={acao} />;
+// `grupoNoBotao` (padrão true): false tira o "· grupo" do botão (o campo Tipo dos investimentos: "CRA", não "CRA · Seus tipos").
+export default function SelectSimples({ value, onChange, opcoes, disabled = false, className = '', placeholder = 'Selecione…', compacto = false, acao, grupoNoBotao }) {
+  return <SelectBusca semBusca value={value} onChange={onChange} opcoes={opcoes} disabled={disabled} className={className} placeholder={placeholder} compacto={compacto} acao={acao} grupoNoBotao={grupoNoBotao} />;
 }

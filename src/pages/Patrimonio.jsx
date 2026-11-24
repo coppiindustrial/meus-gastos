@@ -25,7 +25,7 @@ import AvisoSemTaxas from '../components/patrimonio/AvisoSemTaxas.jsx';
 import { IconOlho } from '../components/icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { marcarVencimentoVisto } from '../api/carteira.js';
-import { mesAMes, montarCarteira, nomeDoTipo, rotuloTaxa } from '../lib/carteira.js';
+import { chaveDoTipo, mesAMes, montarCarteira, nomeDoTipoDe, rotuloTaxa } from '../lib/carteira.js';
 import {
   escadaDeLiquidez, filtrarCarteira, irPorAliquota, linhaDoTempoVencimentos, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
   textoDoPeriodo, vencimentos,
@@ -190,7 +190,7 @@ export default function Patrimonio() {
 
   // OS FILTROS (a faixa da Visão geral): as opções saem da carteira inteira
   const opcoesInst = [...new Set(d.cadastro.map((i) => i.instituicao.trim()))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((n) => ({ value: n, label: n, cor: cores[n] }));
-  const opcoesTipo = [...new Set(d.cadastro.map((i) => i.tipo))].map((tp) => ({ value: tp, label: nomeDoTipo(tp) }));
+  const opcoesTipo = [...new Map(d.cadastro.map((i) => [chaveDoTipo(i), nomeDoTipoDe(i)])).entries()].map(([value, label]) => ({ value, label }));
   const opcoesInv = opcoesInst.map((g) => ({ titulo: g.label, cor: g.cor, itens: d.cadastro.filter((i) => i.instituicao.trim() === g.value).map((i) => ({ value: i.id, label: i.nome, grupo: g.label })) }));
   const filtrando = per !== 'tudo' || classe !== 'tudo' || insts.length > 0 || tipos.length > 0 || invs.length > 0;
   const limpar = () => { setPer('tudo'); setClasse('tudo'); setInsts([]); setTipos([]); setInvs([]); };
@@ -205,8 +205,8 @@ export default function Patrimonio() {
   // tipo filtra a tela
   const grupos = new Map();
   abertos.forEach((x) => {
-    const k = ondePor === 'tipo' ? x.inv.tipo : ondePor === 'taxa' ? rotuloTaxa(x.inv.taxa, x.inv.indexador) : ondePor === 'resgate' ? x.inv.resgate : x.inv.instituicao.trim();
-    const rot = ondePor === 'tipo' ? nomeDoTipo(k) : ondePor === 'resgate' ? (k === 'diaria' ? 'A qualquer hora' : 'Só no vencimento') : k;
+    const k = ondePor === 'tipo' ? chaveDoTipo(x.inv) : ondePor === 'taxa' ? rotuloTaxa(x.inv.taxa, x.inv.indexador) : ondePor === 'resgate' ? x.inv.resgate : x.inv.instituicao.trim();
+    const rot = ondePor === 'tipo' ? nomeDoTipoDe(x.inv) : ondePor === 'resgate' ? (k === 'diaria' ? 'A qualquer hora' : 'Só no vencimento') : k;
     grupos.set(k, { key: k, rotulo: rot, valor: (grupos.get(k)?.valor ?? 0) + x.pos.vale });
   });
   const ondeEf = soRV ? 'classe' : ondePor === 'classe' && !comRV ? 'inst' : ondePor;

@@ -11,7 +11,7 @@ import { atualizarAporte, criarAporte, excluirLote, excluirResgate } from '../..
 import { taxasDiarias } from '../../api/taxas.js';
 import { calcularValor, formatBRL, valorParaCampo } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
-import { aliquotaIOF, aliquotaIR, calendario, fimDoIOF, diaUtilAntes, diasEntre, fimDeSemana, lerAporte, maisDias, posicaoDoAporte, rendeuDoDeposito, rotuloTaxa, semIOF, sugerirVencimento } from '../../lib/carteira.js';
+import { aliquotaIOF, aliquotaIR, calendario, fimDoIOF, diaUtilAntes, diasEntre, fimDeSemana, lerAporte, maisDias, posicaoDoAporte, rendeuDoDeposito, rotuloTaxa, pagaIOF, pagaIR, sugerirVencimento } from '../../lib/carteira.js';
 
 // LANÇAR UM APORTE (07/11/2026, o mockup "Carteira por aportes"): um pop-up só, com duas abas.
 //   · DINHEIRO NOVO — o investimento, a data, o valor e o vencimento. Ponto final.
@@ -148,10 +148,10 @@ export default function ModalAporte({ inicial = {}, cadastro, resgates = [], tod
 
   // O IMPOSTO DA PRÉVIA (09/11/2026): o IR e, nos 29 primeiros dias, o IOF do dia (de 96% a 3% do rendimento) e quando zera
   const idadeHoje = previa?.desde ? Math.max(0, diasEntre(previa.desde, hoje)) : null;
-  const isentoPrevia = !!inv && ['lci', 'lca'].includes(inv.tipo);
+  const isentoPrevia = !!inv && !pagaIR(inv);
   const pctTxt = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
   // a LCI e a LCA não pagam IOF (`semIOF`, 24/11/2026: a LCA tem alíquota zero no decreto; a LCI tem prazo mínimo)
-  const iofAte = previa?.desde && idadeHoje < 30 && !semIOF(inv?.tipo) ? fimDoIOF(previa.desde) : null;
+  const iofAte = previa?.desde && idadeHoje < 30 && pagaIOF(inv) ? fimDoIOF(previa.desde) : null;
   const textoImposto = (() => {
     if (!previa) return '';
     const ir = isentoPrevia ? 'isenta de IR' : previa.desde ? `IR ${pctTxt(aliquotaIR(idadeHoje))}` : `IR 22,5% (sem a data do ${f.modo === 'novo' ? 'aporte' : 'depósito'})`;

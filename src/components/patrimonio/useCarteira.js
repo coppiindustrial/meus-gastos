@@ -82,6 +82,8 @@ export default function useCarteira() {
   return {
     carregar, dados, semMigration: dados === null, carregando: dados === undefined, hoje,
     cadastro: base.cadastro, aportes: base.aportes, resgates: base.resgates,
+    // os tipos de investimento da pessoa (migration 036); null = sem a migration
+    tipos: dados ? dados.tipos ?? null : null,
     carteira, meses, cdi, ipca, cdiMes, semTaxas: falhou && !cdi && base.aportes.length > 0, tentarTaxas,
   };
 }

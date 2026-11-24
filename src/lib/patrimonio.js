@@ -3,7 +3,7 @@
 // da tela, o período dos gráficos de meses, os VENCIMENTOS (os próximos, pela conta, e o HISTÓRICO, com o que aconteceu),
 // a linha do tempo deles, quando o dinheiro fica livre, o IR por alíquota e as próximas quedas, e cada investimento.
 // Valores em centavos; datas 'AAAA-MM-DD'; competência 'AAAA-MM'.
-import { aliquotaIOF, calendario, diasEntre, fimDoIOF, impostos, maisDias, noVencimento, posicaoDoAporte, proximaQueda, sugerirVencimento } from './carteira.js';
+import { aliquotaIOF, calendario, chaveDoTipo, diasEntre, fimDoIOF, impostos, maisDias, noVencimento, posicaoDoAporte, proximaQueda, sugerirVencimento } from './carteira.js';
 import { addMeses, competenciaCurta } from './format.js';
 
 const compDe = (iso) => iso.slice(0, 7);
@@ -13,7 +13,7 @@ const compDe = (iso) => iso.slice(0, 7);
 export function filtrarCarteira({ cadastro = [], aportes = [], resgates = [] }, { insts = [], tipos = [], invs = [] } = {}) {
   if (!insts.length && !tipos.length && !invs.length) return { cadastro, aportes, resgates, filtrado: false };
   const cad = cadastro.filter((i) => (!insts.length || insts.includes(i.instituicao.trim()))
-    && (!tipos.length || tipos.includes(i.tipo)) && (!invs.length || invs.includes(i.id)));
+    && (!tipos.length || tipos.includes(chaveDoTipo(i))) && (!invs.length || invs.includes(i.id)));
   const ids = new Set(cad.map((i) => i.id));
   const aps = aportes.filter((a) => ids.has(a.investimento_id));
   const apIds = new Set(aps.map((a) => a.id));

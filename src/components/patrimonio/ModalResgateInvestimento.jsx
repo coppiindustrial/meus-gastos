@@ -9,7 +9,7 @@ import { criarResgates, excluirLote } from '../../api/carteira.js';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { calcularValor, formatBRL } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
-import { aliquotaIOF, dataDoDeposito, ehIsento, fimDoIOF, planoDoResgate, resgatesDoPlano, rotuloTaxa } from '../../lib/carteira.js';
+import { aliquotaIOF, dataDoDeposito, pagaIR, fimDoIOF, planoDoResgate, resgatesDoPlano, rotuloTaxa } from '../../lib/carteira.js';
 
 // RESGATAR PELO INVESTIMENTO (16/11/2026, a opção A do mockup "Resgatar pelo investimento"): o "Resgatar" da linha do
 // investimento (o "pai"). A data e o valor que CHEGA NA CONTA (16/11/2026, a pedido: como no Nubank, o banco tira a mais
@@ -53,7 +53,7 @@ export default function ModalResgateInvestimento({ x, itens, cal, hoje, editando
   const valeTudo = plano.linhas.reduce((t, l) => t + l.pos.vale, 0);
   const erro = valor.trim() && centavos === null ? 'O valor não é um número.' : plano.erro;
   const mostrarErro = erro && (valor.trim() || erro !== 'Falta o valor que chega na conta.');
-  const isento = ehIsento(inv.tipo);
+  const isento = !pagaIR(inv);
   const comIOF = usados.filter((l) => l.imp.iof > 0);
   const alternar = (id) => setEscolhidos((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const nMarcados = plano.linhas.filter((l) => l.marcado).length;

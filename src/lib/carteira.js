@@ -34,6 +34,16 @@ export const ehIsento = (tipo) => tipo === 'lci' || tipo === 'lca';
 // primeiros dias, que é quando o IOF regressivo existe. Na conta do app, as duas ficam sem IOF (antes o app cobrava o IOF dos
 // 30 primeiros dias delas — a LCA aplicada hoje aparecia com o IOF de 96% do rendimento).
 export const semIOF = (tipo) => tipo === 'lci' || tipo === 'lca';
+// OS TIPOS DA PESSOA (24/11/2026, migration 036): o investimento com `tipo_proprio` ({ nome, paga_ir, paga_iof }, que a
+// `listarCarteira` junta) segue o que ela cadastrou; sem ele, o tipo pronto. Toda conta e toda tela perguntam por aqui.
+export const pagaIR = (inv) => (inv?.tipo_proprio ? !!inv.tipo_proprio.paga_ir : !ehIsento(inv?.tipo));
+export const pagaIOF = (inv) => (inv?.tipo_proprio ? !!inv.tipo_proprio.paga_iof : !semIOF(inv?.tipo));
+export const nomeDoTipoDe = (inv) => inv?.tipo_proprio?.nome ?? nomeDoTipo(inv?.tipo);
+// a chave do tipo para agrupar e filtrar (o próprio pelo id, o pronto pelo código) e o valor do campo Tipo do cadastro
+export const chaveDoTipo = (inv) => (inv?.tipo_id && inv?.tipo_proprio ? `p:${inv.tipo_id}` : inv?.tipo);
+// como o tipo conta, em palavras (o cinza das listas e do cadastro dos tipos)
+export const regraDosImpostos = (ir, iof) => (ir && iof ? 'IR de 22,5% a 15% pela idade · IOF até o 30º dia'
+  : ir ? 'IR de 22,5% a 15% pela idade · sem IOF' : iof ? 'isento de IR · IOF até o 30º dia' : 'sem IR e sem IOF: o líquido é o valor de hoje');
 // O ÍNDICE (08/11/2026, migration 025): 'cdi' — a taxa é o % do CDI; 'pre' — prefixado, a taxa é o % ao ano; 'ipca' —
 // IPCA + a taxa ao ano. Sem a coluna, 'cdi'.
 export const INDEXADORES = [{ value: 'cdi', label: '% do CDI' }, { value: 'ipca', label: 'IPCA +' }, { value: 'pre', label: 'Prefixado' }];
@@ -256,7 +266,7 @@ export function posicaoDoAporte(ap, inv, resgates, cal, dia, eventosAte = dia) {
     saidas.push({ data: e.data, valor: x });
   }
   if (encerrado) {
-    return { vale: 0, aplicado: 0, rendeu: 0, ir: 0, iof: 0, liquido: 0, aliquota: null, idade: null, semData: false, livreDeIOF: semIOF(inv?.tipo), encerrado, saidas, partida: p, conta: null, exato: { vale: 0, aplicado: 0 } };
+    return { vale: 0, aplicado: 0, rendeu: 0, ir: 0, iof: 0, liquido: 0, aliquota: null, idade: null, semData: false, livreDeIOF: !pagaIOF(inv), encerrado, saidas, partida: p, conta: null, exato: { vale: 0, aplicado: 0 } };
   }
   const conta = { de, ...fator(cal, de, dia, taxa, idx) };
   // `exato`: sem arredondar — o TOTAL do investimento soma os exatos e arredonda no fim, como o banco (arredondando cada
@@ -267,9 +277,9 @@ export function posicaoDoAporte(ap, inv, resgates, cal, dia, eventosAte = dia) {
   const rendeu = vale - apl;
   const semData = !p.desdeIR;
   const idade = semData ? null : diasEntre(p.desdeIR, dia);
-  const aliquota = ehIsento(inv?.tipo) ? 0 : semData ? FAIXAS_IR[0].aliquota : aliquotaIR(idade);
+  const aliquota = !pagaIR(inv) ? 0 : semData ? FAIXAS_IR[0].aliquota : aliquotaIR(idade);
   const ganho = Math.max(0, rendeu);
-  const livreDeIOF = semIOF(inv?.tipo);
+  const livreDeIOF = !pagaIOF(inv);
   const { iof, ir } = impostos(ganho, livreDeIOF ? null : idade, aliquota);
   return { vale, aplicado: apl, rendeu, ir, iof, liquido: vale - ir - iof, aliquota, idade, semData, livreDeIOF, encerrado: null, saidas, partida: p, conta, exato };
 }
@@ -283,8 +293,8 @@ export function noVencimento(inv, pos) {
   const ganho = Math.max(0, e.valor - e.aplicado);
   const desde = pos.partida?.desdeIR ?? null;
   const idade = desde ? diasEntre(desde, e.data) : null;
-  const aliquota = ehIsento(inv?.tipo) ? 0 : idade === null ? FAIXAS_IR[0].aliquota : aliquotaIR(idade);
-  const { iof, ir } = impostos(ganho, semIOF(inv?.tipo) ? null : idade, aliquota);
+  const aliquota = !pagaIR(inv) ? 0 : idade === null ? FAIXAS_IR[0].aliquota : aliquotaIR(idade);
+  const { iof, ir } = impostos(ganho, pagaIOF(inv) ? idade : null, aliquota);
   return { data: e.data, valor: e.valor, aplicado: e.aplicado, ir, iof, liquido: e.valor - ir - iof, aliquota, idade };
 }
 
@@ -640,7 +650,7 @@ export function ordensDoCadastro(ids, cadastro) {
 export { arrastoAgrupado as arrastoDoCadastro } from './arrastoAgrupado.js';
 
 export const linhaDoCadastro = (i) => ({
-  id: i.id, novo: false, orig: i, nome: i.nome, instituicao: i.instituicao, tipo: i.tipo, taxa: String(i.taxa).replace('.', ','),
+  id: i.id, novo: false, orig: i, nome: i.nome, instituicao: i.instituicao, tipo: chaveDoTipo(i), taxa: String(i.taxa).replace('.', ','),
   resgate: i.resgate, prazo_meses: i.prazo_meses ? String(i.prazo_meses) : '', vence_dia_antes: !!i.vence_dia_antes,
   indexador: i.indexador ?? 'cdi', vence_dia_util: !!i.vence_dia_util, no_vencimento: i.no_vencimento ?? 'conta', ativo: i.ativo !== false, excluir: false,
 });
@@ -652,9 +662,13 @@ export const linhaVaziaDoCadastro = (l) => l.novo && !l.nome.trim();
 const lerTaxa = (t) => { const n = Number(String(t ?? '').replace(/\s|%/g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
 // As colunas de `inv_cadastro` de uma linha. O `no_vencimento` só vai quando é "reaplica" e o `vence_dia_util` quando é
 // true (os padrões do banco): sem as migrations 022 e 023, o cadastro de antes segue gravando.
+// O TIPO PRÓPRIO (migration 036) vem no campo como `p:<id>`: grava `tipo = 'outro'` e o `tipo_id`; o `tipo_id` só vai quando
+// existe (sem a 036, o cadastro de antes segue gravando).
+const tipoProprioDe = (l) => (String(l.tipo ?? '').startsWith('p:') ? l.tipo.slice(2) : null);
 export function dadosDoCadastro(l) {
+  const proprio = tipoProprioDe(l);
   return {
-    nome: l.nome.trim(), instituicao: l.instituicao.trim(), tipo: l.tipo, taxa: lerTaxa(l.taxa), resgate: l.resgate,
+    nome: l.nome.trim(), instituicao: l.instituicao.trim(), tipo: proprio ? 'outro' : l.tipo, ...(proprio ? { tipo_id: proprio } : {}), taxa: lerTaxa(l.taxa), resgate: l.resgate,
     prazo_meses: l.prazo_meses ? Number(l.prazo_meses) : null, vence_dia_antes: !!l.vence_dia_antes, ativo: !!l.ativo,
     ...(l.no_vencimento === 'reaplica' ? { no_vencimento: 'reaplica' } : {}),
     ...(l.vence_dia_util ? { vence_dia_util: true } : {}),
@@ -664,7 +678,9 @@ export function dadosDoCadastro(l) {
 // O que mudou numa linha que já existia ({} = nada).
 export function diferencaDoCadastro(l) {
   if (l.novo) return dadosDoCadastro(l);
-  const { no_vencimento: _nv, vence_dia_util: _du, indexador: _ix, ...d } = dadosDoCadastro(l); const o = l.orig; const out = {};
+  const { no_vencimento: _nv, vence_dia_util: _du, indexador: _ix, tipo_id: _ti, ...d } = dadosDoCadastro(l); const o = l.orig; const out = {};
+  // o tipo próprio: muda quando o id muda (voltar a um pronto manda `tipo_id: null`)
+  if ((o.tipo_id ?? null) !== tipoProprioDe(l)) out.tipo_id = tipoProprioDe(l);
   Object.entries(d).forEach(([k, v]) => {
     const antes = k === 'taxa' ? Number(o.taxa) : k === 'prazo_meses' ? (o.prazo_meses ?? null) : k === 'ativo' ? o.ativo !== false : k === 'vence_dia_antes' ? !!o.vence_dia_antes : o[k];
     if (v !== antes) out[k] = v;

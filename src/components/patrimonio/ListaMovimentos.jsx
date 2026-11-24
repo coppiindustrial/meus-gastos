@@ -7,7 +7,7 @@ import { IconLapis, IconLixeira } from '../icons.jsx';
 import { CORES_INSTITUICAO } from './TabelaCarteira.jsx';
 import { formatBRL } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
-import { dataDoDeposito, instituicoesEmOrdem, movimentosDaCarteira, totaisDosMovimentos } from '../../lib/carteira.js';
+import { dataDoDeposito, instituicoesEmOrdem, movimentosDaCarteira, pagaIOF, pagaIR, totaisDosMovimentos } from '../../lib/carteira.js';
 
 // AS MOVIMENTAÇÕES DA RENDA FIXA (16/11/2026, a opção A do mockup "Histórico da renda fixa", com as recomendadas): a aba ao
 // lado da Carteira. Tudo o que entrou e saiu, do mais novo para o mais antigo e separado por mês (a faixa do mês com o que
@@ -138,7 +138,7 @@ export default function ListaMovimentos({ carteira, cadastro, movel, acoes, inic
                       const grupoInst = m.inv.instituicao.trim();
                       const varios = m.partes && m.partes.length > 1;
                       const aberto = abertos.has(m.id);
-                      const isento = m.saiu > 0 && !m.ir && !m.iof && (m.inv.tipo === 'lci' || m.inv.tipo === 'lca');
+                      const isento = m.saiu > 0 && !m.ir && !m.iof && !pagaIR(m.inv) && !pagaIOF(m.inv);
                       const item = porAporte.get(m.ap.id);
                       const ehAporte = m.tipo === 'aporte' || m.tipo === 'antigo' || m.tipo === 'reaplicado';
                       return (

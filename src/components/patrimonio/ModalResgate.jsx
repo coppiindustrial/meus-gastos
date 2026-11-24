@@ -8,7 +8,7 @@ import { atualizarResgate, criarResgate, excluirResgate } from '../../api/cartei
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
 import { calcularValor, formatBRL } from '../../lib/dinheiro.js';
 import { formatDate } from '../../lib/format.js';
-import { brutoParaChegar, ehIsento, impostoDoResgate, lerResgate, posicaoDoAporte } from '../../lib/carteira.js';
+import { brutoParaChegar, pagaIR, impostoDoResgate, lerResgate, posicaoDoAporte } from '../../lib/carteira.js';
 
 // RESGATAR DE UM APORTE (07/11/2026, a carteira do zero): a data e o valor, ou "Tudo". O resgate sai DAQUELE aporte: o que
 // ele tinha de aplicado e de rendimento diminui na mesma proporção (como o banco), e o resto continua rendendo. "Tudo" (ou
@@ -50,7 +50,7 @@ export default function ModalResgate({ item, cal, hoje, editando = null, onFecha
   const ficaAplicado = !erro && r.dados && !r.dados.tudo && vale ? Math.round(pos.aplicado * (fica / vale)) : 0;
   const imp = !erro && r.dados ? impostoDoResgate(pos, r.dados.tudo ? null : r.dados.valor_centavos) : null;
   const pct = (a) => `${(a * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
-  const isento = ehIsento(inv.tipo);
+  const isento = !pagaIR(inv);
   const impostos = imp && (
     <div className="space-y-1">
       <div className="flex justify-between gap-3"><span>Rendimento que sai junto</span><span className="tabular-nums">{formatBRL(imp.rendimento)}</span></div>

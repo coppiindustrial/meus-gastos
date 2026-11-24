@@ -26,7 +26,7 @@ const ALTURA = 400;
 
 export default function SelectBusca({
   value, onChange, opcoes, placeholder = 'Selecione…', buscaPlaceholder = 'Buscar…', className = '', disabled = false, semBusca = false, acao,
-  compacto = false,
+  compacto = false, grupoNoBotao = true,
 }) {
   const [aberto, setAberto] = useState(false);
   const [pos, setPos] = useState(null);
@@ -129,9 +129,9 @@ export default function SelectBusca({
             nome da categoria): os dois partem de metade (`basis-0 grow`) e nunca passam do próprio texto (`max-w-max`) —
             o que um não usa vai para o outro; sem caber, cada um corta com "…" na sua metade. */}
         <span className={`flex min-w-0 flex-1 items-center gap-2 ${sel ? 'text-gray-800' : 'text-gray-400'}`}>
-          {sel?.grupo?.cor && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: sel.grupo.cor }} />}
+          {(sel?.grupo?.cor ?? sel?.cor) && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: sel.grupo?.cor ?? sel.cor }} />}
           <span className="min-w-0 max-w-max grow basis-0 truncate">{sel ? sel.label : placeholder}</span>
-          {sel?.grupo && <span className="hidden min-w-0 max-w-max grow basis-0 truncate text-gray-400 sm:inline">· {sel.grupo.nome}</span>}
+          {sel?.grupo && grupoNoBotao && <span className="hidden min-w-0 max-w-max grow basis-0 truncate text-gray-400 sm:inline">· {sel.grupo.nome}</span>}
         </span>
         <IconSeta className={`shrink-0 text-gray-400 transition-transform duration-200 ${aberto ? 'rotate-180' : ''}`} />
       </button>

@@ -6,7 +6,7 @@ import {
   linhaDoCadastro, mesAMes, montarCarteira, noVencimento, partidaDoAporte, posicaoDoAporte, proximaQueda, reaplicacoesDevidas,
   rendeuDoDeposito, rotuloTaxa, somarPosicoes, sugerirVencimento, validarCadastro, vencidosAntesDeReaplicar,
   arrastoDoCadastro, instituicoesEmOrdem, investimentosEmOrdem, ordensDoCadastro, planoDoResgate, resgatesDoPlano, dataDoDeposito,
-  movimentosDaCarteira, totaisDosMovimentos, valorDoInvestimentoEm, impostoDoResgate as impostoDoResgateM,
+  movimentosDaCarteira, totaisDosMovimentos, valorDoInvestimentoEm, impostoDoResgate as impostoDoResgateM, pagaIR, pagaIOF, nomeDoTipoDe, chaveDoTipo,
 } from '../src/lib/carteira.js';
 
 // O CDI de cada dia útil de 01/04 a 05/11/2026 (a série 12 do Banco Central, dado público), como `api/taxas.js` entrega.
@@ -590,4 +590,31 @@ test('as movimentações: aporte, já estava aplicado, resgate, o pedido reparti
   assert.equal(t.saiu, lote.saiu + r1.saiu + volta.saiu);
   assert.equal(t.impostos, ms.reduce((s2, m) => s2 + m.ir + m.iof, 0));
   assert.ok(reap.ir > 0);
+});
+
+test('os tipos da pessoa (migration 036): o tipo próprio decide o nome e os impostos; o campo grava outro + tipo_id', () => {
+  const cra = { id: 't1', nome: 'CRA', paga_ir: false, paga_iof: false };
+  const tes = { id: 't2', nome: 'Tesouro Selic', paga_ir: true, paga_iof: true };
+  // as regras: o próprio vence o pronto; sem o próprio, o pronto
+  assert.deepEqual([pagaIR(inv(100)), pagaIOF(inv(100))], [true, true]);
+  assert.deepEqual([pagaIR(inv(100, { tipo: 'lca' })), pagaIOF(inv(100, { tipo: 'lca' }))], [false, false]);
+  const iCra = inv(100, { tipo: 'outro', tipo_id: 't1', tipo_proprio: cra });
+  assert.deepEqual([pagaIR(iCra), pagaIOF(iCra), nomeDoTipoDe(iCra), chaveDoTipo(iCra)], [false, false, 'CRA', 'p:t1']);
+  assert.equal(nomeDoTipoDe(inv(100, { tipo: 'rdb' })), 'RDB');
+  // a conta: o CRA de 20 dias sem IR nem IOF; o Tesouro Selic com os dois
+  const pc = posicaoDoAporte(novo('2026-10-20', 1000000), iCra, [], cal, HOJE);
+  assert.ok(pc.idade < 30 && pc.rendeu > 0);
+  assert.deepEqual([pc.ir, pc.iof, pc.liquido], [0, 0, pc.vale]);
+  const pt = posicaoDoAporte(novo('2026-10-20', 1000000), inv(100, { tipo: 'outro', tipo_id: 't2', tipo_proprio: tes }), [], cal, HOJE);
+  assert.ok(pt.ir > 0 && pt.iof > 0);
+  // o campo do cadastro: p:<id> grava outro + tipo_id; voltar a um pronto manda tipo_id null; sem o próprio, nada de tipo_id
+  const orig = { id: 'x', nome: 'CRA Rumo', instituicao: 'XP', tipo: 'outro', tipo_id: 't1', tipo_proprio: cra, taxa: 100, resgate: 'vencimento', ativo: true };
+  const l = linhaDoCadastro(orig);
+  assert.equal(l.tipo, 'p:t1');
+  assert.deepEqual(diferencaDoCadastro(l), {});
+  assert.deepEqual(diferencaDoCadastro({ ...l, tipo: 'p:t2' }), { tipo_id: 't2' });
+  assert.deepEqual(diferencaDoCadastro({ ...l, tipo: 'cdb' }), { tipo_id: null, tipo: 'cdb' });
+  assert.deepEqual([dadosDoCadastro({ ...l, novo: true }).tipo, dadosDoCadastro({ ...l, novo: true }).tipo_id], ['outro', 't1']);
+  assert.equal('tipo_id' in dadosDoCadastro(linhaDoCadastro({ ...orig, tipo: 'cdb', tipo_id: null, tipo_proprio: null })), false);
+  assert.deepEqual(diferencaDoCadastro(linhaDoCadastro({ ...orig, tipo: 'cdb', tipo_id: null, tipo_proprio: null })), {});
 });

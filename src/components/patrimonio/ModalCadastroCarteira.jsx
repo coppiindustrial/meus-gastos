@@ -6,6 +6,7 @@ import Tooltip from '../Tooltip.jsx';
 import { DivisorFaixa, Trilho as TrilhoFaixa } from '../filtros/FaixaFiltros.jsx';
 import { CirculoMais, IconExpandirTudo } from '../icons.jsx';
 import { Alca, Seta } from '../PecasCadastro.jsx';
+import ModalTiposInvestimento from './ModalTiposInvestimento.jsx';
 import { CORES_INSTITUICAO } from './TabelaCarteira.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useConfirmacao } from '../../context/ConfirmContext.jsx';
@@ -64,7 +65,10 @@ const Pilula = ({ ligado, onChange, disabled, dica, children }) => (
   </Tooltip>
 );
 
-export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesPorInv = {}, hoje, com022 = true, com023 = true, com025 = true, onFechar, onSalvo }) {
+// OS TIPOS DA PESSOA (24/11/2026, migration 036): `tipos` ([] ou null sem a 036) entram no campo Tipo depois dos prontos
+// ("Seus tipos"), com o valor `p:<id>`; a ação no pé da lista, "Novo tipo / gerenciar tipos…", abre o
+// `ModalTiposInvestimento` e, salvo, `onTiposSalvos` relê a carteira (o rascunho daqui fica).
+export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesPorInv = {}, hoje, com022 = true, com023 = true, com025 = true, tipos = null, onTiposSalvos, onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
   // os grupos: cada instituição na ordem da carteira, com o nome editável (`orig` = o de antes); cada linha que já
@@ -81,6 +85,11 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
   const [fechadas, setFechadas] = useState(inicio.fechadas);
   const [erro, setErro] = useState(null);
   const [salvando, setSalvando] = useState(false);
+  const [gerirTipos, setGerirTipos] = useState(false);
+  const opcoesTipo = useMemo(() => [
+    ...TIPOS,
+    ...(tipos ?? []).map((t) => ({ value: `p:${t.id}`, label: t.nome, grupo: { nome: 'Seus tipos', cor: '#8b5cf6' } })),
+  ], [tipos]);
   const caixaRef = useRef(null);
   const nomeDoGrupo = (id) => grupos.find((g) => g.id === id)?.nome ?? '';
   const comInstituicao = (l) => ({ ...l, instituicao: nomeDoGrupo(l.grupo) || l.instituicao });
@@ -315,7 +324,8 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
             {l.novo && !linhaVaziaDoCadastro(l) && <span className="shrink-0 rounded-[4px] bg-hx-dcfce7 px-1.5 py-0.5 text-[11px] font-semibold text-hx-166534">novo</span>}
           </span>
         </td>
-        <td className={td}><SelectSimples value={l.tipo} onChange={(v) => muda(l.id, 'tipo', v)} opcoes={TIPOS} disabled={l.excluir} compacto /></td>
+        <td className={td}><SelectSimples value={l.tipo} onChange={(v) => muda(l.id, 'tipo', v)} opcoes={opcoesTipo} disabled={l.excluir} compacto grupoNoBotao={false}
+          acao={tipos ? { rotulo: () => 'Novo tipo / gerenciar tipos…', onClick: () => setGerirTipos(true) } : undefined} /></td>
         <td className={td}>
           <span className="flex items-center gap-1">
             <div className="w-[112px] shrink-0">
@@ -429,6 +439,10 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
           {salvando ? 'Salvando…' : nAlt ? `Salvar alterações (${nAlt})` : 'Salvar alterações'}
         </button>
       </div>
+      {gerirTipos && (
+        <ModalTiposInvestimento tipos={tipos ?? []} cadastro={cadastro} onFechar={() => setGerirTipos(false)}
+          onSalvo={() => { setGerirTipos(false); onTiposSalvos?.(); }} />
+      )}
     </Modal>
   );
 }

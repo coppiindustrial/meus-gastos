@@ -300,6 +300,15 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   "já estava aplicado" (`data` = o dia em que você olhou o banco, `valor_centavos` = o total nesse dia,
   `rendeu_antes_centavos`, `aplicado_em` = a data do DEPÓSITO, opcional: o IR e a conta do que já rendeu); o `vencimento` é o DIGITADO · `inv_resgates` = o que saiu
   de UM aporte (a data e o valor, ou `tudo`).
+  OS TIPOS DA PESSOA (24/11/2026, o mockup "Tipos de investimento": a opção A, o cadastro dos tipos, com a escolha da C;
+  MIGRATION 036): `inv_tipos` (nome, `paga_ir`, `paga_iof`) para o que os prontos não cobrem (CRA, CRI, Tesouro…); o
+  investimento desse tipo tem `tipo = 'outro'` e o `tipo_id`, e a `listarCarteira` junta o `tipo_proprio`. TODA conta e
+  tela pergunta por `pagaIR(inv)` / `pagaIOF(inv)` / `nomeDoTipoDe(inv)` / `chaveDoTipo(inv)` (lib/carteira.js, testadas) —
+  nunca mais pelo código do tipo. No cadastro dos investimentos o campo Tipo tem os prontos e, depois, "Seus tipos"
+  (valor `p:<id>`, que grava `outro` + `tipo_id`; `grupoNoBotao={false}` do `SelectSimples` tira o "· grupo" do botão), e a
+  ação "Novo tipo / gerenciar tipos…" abre o `ModalTiposInvestimento`: os prontos só de ler (o cadeado) e os seus com o
+  IR e o IOF numa LISTA (dois cliques, a pedido: o seletor de dois lados mudava num clique sem querer), "Salvar alterações
+  (N)", e mudar os impostos de um tipo em uso pergunta antes; o tipo em uso não sai. Sem a 036, nada aparece.
 - A ÚNICA CONTA (`lib/carteira.js`, testada em `test/carteira.test.js` com o CDI real de abr–nov/2026 em
   `test/fixtures/cdi-2026.json`): o valor de hoje = a partida × (1 + CDI do dia × taxa) em cada dia útil de [partida, hoje).
   As regras do banco, CONFERIDAS NO CENTAVO em 07 e 08/11/2026 com os números reais do Nubank e da XP — essa conferência
