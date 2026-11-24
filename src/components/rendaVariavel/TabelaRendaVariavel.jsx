@@ -268,16 +268,16 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
               </span>
             </span>
           </td>
-          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>{p.quantidade ? qtdTexto(p.quantidade) : '—'}</td>
-          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>
-            {preco(p, p.precoMedio)}
-            {p.usd && p.custoMedioReais && <span className="block text-[11px] text-gray-400">{formatBRL(Math.round(p.custoMedioReais * 100))}</span>}
+          <td className={`${td} ${numTd} font-medium text-gray-800 ${movel ? 'hidden' : ''}`}>{p.quantidade ? qtdTexto(p.quantidade) : <span className="font-normal text-gray-400">—</span>}</td>
+          <td className={`${td} ${numTd} font-medium text-gray-800 ${movel ? 'hidden' : ''}`}>
+            {p.precoMedio === null || p.precoMedio === undefined ? <span className="font-normal text-gray-400">—</span> : preco(p, p.precoMedio)}
+            {p.usd && p.custoMedioReais && <span className="block text-[11px] font-normal text-gray-400">{formatBRL(Math.round(p.custoMedioReais * 100))}</span>}
           </td>
           <td className={`${td} ${numTd}`}>
             <span className="flex items-center justify-end gap-2">
               {!movel && onGrafico && <Curvinha precos={doMes.get(p.ativo.id)} rotulo={`Ver o gráfico de ${p.ativo.ticker}`} onClick={() => onGrafico(p)} />}
               <span className="block cursor-help" onMouseMove={mover(l.id, 'cot')} onMouseLeave={balao.aoSair}>
-                <span className={`underline decoration-gray-300 decoration-dotted underline-offset-[3px] ${p.semCotacao ? 'text-gray-400' : 'text-gray-700'}`}>{preco(p, p.preco)}</span>
+                <span className={`underline decoration-gray-300 decoration-dotted underline-offset-[3px] ${p.semCotacao ? 'text-gray-400' : 'font-medium text-gray-800'}`}>{preco(p, p.preco)}</span>
                 <span className={`block text-[11px] ${p.semCotacao ? 'text-amber-700' : corDe(p.variacaoDia ?? 0)}`}>{p.semCotacao ? 'sem cotação' : `${pct(p.variacaoDia, 2)} no dia`}</span>
               </span>
             </span>
@@ -288,12 +288,12 @@ export default function TabelaRendaVariavel({ carteira, hoje, dolar, movel, acoe
           </td>
           <td className={`${td} ${numTd} ${p.usd ? 'cursor-help' : ''}`} onMouseMove={p.usd ? mover(l.id, 'res') : undefined} onMouseLeave={p.usd ? balao.aoSair : undefined}>
             {p.quantidade ? (<>
-              <span className={`${corDe(p.resultado)} ${p.usd ? 'underline decoration-gray-300 decoration-dotted underline-offset-[3px]' : ''}`}>{sinal(p.resultado)}{reais(Math.abs(p.resultado))}</span>
+              <span className={`font-medium ${corDe(p.resultado)} ${p.usd ? 'underline decoration-gray-300 decoration-dotted underline-offset-[3px]' : ''}`}>{sinal(p.resultado)}{reais(Math.abs(p.resultado))}</span>
               <span className="block text-[11.5px] text-gray-500">{pct(p.resPct)}{p.usd ? ' · câmbio' : ''}</span>
             </>) : null}
           </td>
-          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>
-            {p.proventos12 ? (<>{reais(p.proventos12)}<span className="block text-[11px] text-gray-400">{p.usd ? 'líquido' : `${((p.proventos12 / p.custoReais) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% do custo`}</span></>) : <span className="text-gray-400">—</span>}
+          <td className={`${td} ${numTd} font-medium text-gray-800 ${movel ? 'hidden' : ''}`}>
+            {p.proventos12 ? (<>{reais(p.proventos12)}<span className="block text-[11px] font-normal text-gray-400">{p.usd ? 'líquido' : `${((p.proventos12 / p.custoReais) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% do custo`}</span></>) : <span className="font-normal text-gray-400">—</span>}
           </td>
           <td className={`${td} px-3 text-gray-700 ${movel ? 'hidden' : ''}`}>{p.quantidade ? <Barrinha fracao={peso(p.valorReais)} cor={g.classe.cor} /> : null}</td>
           {acoesTd(`${td} px-2`, acoes && (

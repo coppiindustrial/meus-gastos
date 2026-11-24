@@ -445,7 +445,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   instituição e o investimento tinham quase o mesmo peso): TRÊS DEGRAUS — a faixa 15 · 700 e os números 13,5 · 700 brancos
   (`NUM_FAIXA`); o investimento 13 · 500 e os valores em reais TODOS 500 — aplicado, vale hoje, IR e líquido no mesmo cinza,
   o rendeu verde e o IOF âmbar (a pedido: o aplicado e o IR mais claros não tinham lógica); o aporte 12,5 · 400 mais
-  cinza; o Total 14 · 700. Vale também na `TabelaRendaVariavel` (a classe, o ativo, a operação). A COLUNA VENCE SEM PÍLULAS:
+  cinza; o Total 14 · 700. Vale também na `TabelaRendaVariavel` (a classe, o ativo, a operação; no ativo, a quantidade, o
+  preço médio, a cotação, o valor, o resultado e os proventos todos em 500 — o "—" de quem não tem posição, apagado). A COLUNA VENCE SEM PÍLULAS:
   a data em cima e o QUANDO embaixo ("o próximo · em 8 dias" só quando há mais de um vencimento; âmbar com o ponto até 45
   dias; "em N meses" depois; "· reaplica" no aporte que reaplica — a coluna tem 149px úteis), e "resgate diário" é texto
   quieto com o ícone (`ResgateDiario`).
