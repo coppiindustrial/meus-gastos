@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Modal from '../Modal.jsx';
 import SelectSimples from '../SelectSimples.jsx';
 import Tooltip from '../Tooltip.jsx';
@@ -14,8 +14,8 @@ import { TIPOS, ehIsento, nomeDoTipo, regraDosImpostos, semIOF } from '../../lib
 //   · SEUS TIPOS: o nome (campo quieto), o IR (tabela regressiva ou isento) e o IOF (nos 30 primeiros dias ou não paga),
 //     com a regra em palavras embaixo do nome; "Adicionar tipo"; a lixeira só no tipo sem investimento (a FK recusa).
 // Nada muda até "Salvar alterações (N)"; mudar os impostos de um tipo EM USO pergunta antes (a conta dos investimentos dele
-// é refeita). `cadastro`: para contar quantos investimentos usam cada tipo. Abre pelo "Novo tipo / gerenciar tipos…" do
-// campo Tipo no cadastro dos investimentos.
+// é refeita). `cadastro`: para contar quantos investimentos usam cada tipo. Abre pelo "Novo tipo" do cabeçalho do cadastro
+// dos investimentos (24/11/2026, a pedido: antes era a ação no pé da lista do campo Tipo).
 
 const IR = [{ value: 'sim', label: 'Tabela regressiva', cor: '#f0a33a' }, { value: 'nao', label: 'Isento', cor: '#2fb36b' }];
 const IOF = [{ value: 'sim', label: 'Nos 30 primeiros dias', cor: '#f0a33a' }, { value: 'nao', label: 'Não paga', cor: '#2fb36b' }];
@@ -25,10 +25,16 @@ const daLinha = (t) => ({ id: t.id, novo: false, excluir: false, orig: t, nome: 
 const mudou = (l) => !l.novo && !l.excluir && (l.nome.trim() !== l.orig.nome || l.paga_ir !== !!l.orig.paga_ir || l.paga_iof !== !!l.orig.paga_iof);
 const conta = (l) => !(l.novo && (l.excluir || !l.nome.trim()));
 
-export default function ModalTiposInvestimento({ tipos = [], cadastro = [], onFechar, onSalvo }) {
+export default function ModalTiposInvestimento({ tipos = [], cadastro = [], comNovo = false, onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
-  const [linhas, setLinhas] = useState(() => tipos.map(daLinha));
+  // `comNovo` (o "Novo tipo" do cabeçalho do cadastro): abre já com uma linha em branco no fim, com o cursor nela — vazia,
+  // ela não conta como alteração
+  const [linhas, setLinhas] = useState(() => [...tipos.map(daLinha),
+    ...(comNovo ? [{ id: 'novo-inicial', novo: true, excluir: false, orig: null, nome: '', paga_ir: true, paga_iof: true }] : [])]);
+  useEffect(() => {
+    if (comNovo) setTimeout(() => document.querySelector('[data-tipo="novo-inicial"]')?.focus(), 60);
+  }, [comNovo]);
   const [erro, setErro] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const uso = (id) => cadastro.filter((i) => i.tipo_id === id);

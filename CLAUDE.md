@@ -305,8 +305,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   investimento desse tipo tem `tipo = 'outro'` e o `tipo_id`, e a `listarCarteira` junta o `tipo_proprio`. TODA conta e
   tela pergunta por `pagaIR(inv)` / `pagaIOF(inv)` / `nomeDoTipoDe(inv)` / `chaveDoTipo(inv)` (lib/carteira.js, testadas) —
   nunca mais pelo código do tipo. No cadastro dos investimentos o campo Tipo tem os prontos e, depois, "Seus tipos"
-  (valor `p:<id>`, que grava `outro` + `tipo_id`; `grupoNoBotao={false}` do `SelectSimples` tira o "· grupo" do botão), e a
-  ação "Novo tipo / gerenciar tipos…" abre o `ModalTiposInvestimento`: os prontos só de ler (o cadeado) e os seus com o
+  (valor `p:<id>`, que grava `outro` + `tipo_id`; `grupoNoBotao={false}` do `SelectSimples` tira o "· grupo" do botão), e o
+  "NOVO TIPO" NO TRILHO DO CABEÇALHO do cadastro (24/11/2026, a pedido: no lugar do "Nova instituição", que segue na linha
+  do fim, e da ação no pé da lista do Tipo, que saiu) abre o `ModalTiposInvestimento` com uma linha em branco (`comNovo`): os prontos só de ler (o cadeado) e os seus com o
   IR e o IOF numa LISTA (dois cliques, a pedido: o seletor de dois lados mudava num clique sem querer), "Salvar alterações
   (N)", e mudar os impostos de um tipo em uso pergunta antes; o tipo em uso não sai. Sem a 036, nada aparece.
 - A ÚNICA CONTA (`lib/carteira.js`, testada em `test/carteira.test.js` com o CDI real de abr–nov/2026 em

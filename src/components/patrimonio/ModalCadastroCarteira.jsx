@@ -66,8 +66,8 @@ const Pilula = ({ ligado, onChange, disabled, dica, children }) => (
 );
 
 // OS TIPOS DA PESSOA (24/11/2026, migration 036): `tipos` ([] ou null sem a 036) entram no campo Tipo depois dos prontos
-// ("Seus tipos"), com o valor `p:<id>`; a ação no pé da lista, "Novo tipo / gerenciar tipos…", abre o
-// `ModalTiposInvestimento` e, salvo, `onTiposSalvos` relê a carteira (o rascunho daqui fica).
+// ("Seus tipos"), com o valor `p:<id>`; o "Novo tipo" do cabeçalho abre o `ModalTiposInvestimento` e, salvo,
+// `onTiposSalvos` relê a carteira (o rascunho daqui fica).
 export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesPorInv = {}, hoje, com022 = true, com023 = true, com025 = true, tipos = null, onTiposSalvos, onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
@@ -324,8 +324,7 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
             {l.novo && !linhaVaziaDoCadastro(l) && <span className="shrink-0 rounded-[4px] bg-hx-dcfce7 px-1.5 py-0.5 text-[11px] font-semibold text-hx-166534">novo</span>}
           </span>
         </td>
-        <td className={td}><SelectSimples value={l.tipo} onChange={(v) => muda(l.id, 'tipo', v)} opcoes={opcoesTipo} disabled={l.excluir} compacto grupoNoBotao={false}
-          acao={tipos ? { rotulo: () => 'Novo tipo / gerenciar tipos…', onClick: () => setGerirTipos(true) } : undefined} /></td>
+        <td className={td}><SelectSimples value={l.tipo} onChange={(v) => muda(l.id, 'tipo', v)} opcoes={opcoesTipo} disabled={l.excluir} compacto grupoNoBotao={false} /></td>
         <td className={td}>
           <span className="flex items-center gap-1">
             <div className="w-[112px] shrink-0">
@@ -381,25 +380,28 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
   };
 
   // O CABEÇALHO DO POP-UP NUM TRILHO SÓ, como o do cadastro das categorias (23/11/2026, a pedido: o ⇕ sozinho no trilho
-  // parecia maior que o de lá): ⇕ | Nova instituição (também na linha do fim), os segmentos de 25px.
+  // parecia maior que o de lá): ⇕ | Novo tipo (24/11/2026, a pedido: no lugar do "Nova instituição", que fica na linha do
+  // fim, e da ação no pé da lista do campo Tipo; abre os tipos com uma linha em branco; só com a 036), os segmentos de 25px.
   const SEG = 'inline-flex h-[25px] shrink-0 items-center gap-2 whitespace-nowrap rounded-[3px] px-2 text-[12.5px] transition-colors hover:bg-gray-200';
-  const acoes = (
+  const acoes = (grupos.length > 0 || tipos) && (
     <TrilhoFaixa className="mr-1 shrink-0">
       {grupos.length > 0 && (
-        <>
-          <Tooltip label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}>
-            <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}
-              onClick={() => setFechadas(tudoAberto ? new Set(grupos.map((g) => g.id)) : new Set())}
-              className={`${SEG} w-[30px] justify-center !px-0 text-gray-600 hover:text-gray-900`}>
-              <IconExpandirTudo fechar={tudoAberto} />
-            </button>
-          </Tooltip>
-          <DivisorFaixa />
-        </>
+        <Tooltip label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}>
+          <button type="button" aria-label={tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}
+            onClick={() => setFechadas(tudoAberto ? new Set(grupos.map((g) => g.id)) : new Set())}
+            className={`${SEG} w-[30px] justify-center !px-0 text-gray-600 hover:text-gray-900`}>
+            <IconExpandirTudo fechar={tudoAberto} />
+          </button>
+        </Tooltip>
       )}
-      <button type="button" onClick={novaInstituicao} className={`${SEG} font-semibold text-gray-800 hover:text-gray-900`}>
-        <CirculoMais borda="text-gray-500" />Nova instituição
-      </button>
+      {grupos.length > 0 && tipos && <DivisorFaixa />}
+      {tipos && (
+        <Tooltip label="Cadastrar um tipo (CRA, CRI, Tesouro…) com o IR e o IOF dele; aqui também se mudam e se excluem os seus tipos">
+          <button type="button" onClick={() => setGerirTipos('novo')} className={`${SEG} font-semibold text-gray-800 hover:text-gray-900`}>
+            <CirculoMais borda="text-gray-500" />Novo tipo
+          </button>
+        </Tooltip>
+      )}
     </TrilhoFaixa>
   );
 
@@ -440,7 +442,7 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
         </button>
       </div>
       {gerirTipos && (
-        <ModalTiposInvestimento tipos={tipos ?? []} cadastro={cadastro} onFechar={() => setGerirTipos(false)}
+        <ModalTiposInvestimento tipos={tipos ?? []} cadastro={cadastro} comNovo={gerirTipos === 'novo'} onFechar={() => setGerirTipos(false)}
           onSalvo={() => { setGerirTipos(false); onTiposSalvos?.(); }} />
       )}
     </Modal>
