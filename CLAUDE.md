@@ -307,7 +307,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   nunca mais pelo código do tipo. No cadastro dos investimentos o campo Tipo tem os prontos e, depois, "Seus tipos"
   (valor `p:<id>`, que grava `outro` + `tipo_id`; `grupoNoBotao={false}` do `SelectSimples` tira o "· grupo" do botão), e o
   "NOVO TIPO" NO TRILHO DO CABEÇALHO do cadastro (24/11/2026, a pedido: no lugar do "Nova instituição", que segue na linha
-  do fim, e da ação no pé da lista do Tipo, que saiu) abre o `ModalTiposInvestimento` (sem linha em branco, a pedido: a nova é do "Adicionar tipo"): os prontos só de ler (o cadeado) e os seus com o
+  do fim, e da ação no pé da lista do Tipo, que saiu) abre o `ModalTiposInvestimento` (sem linha em branco, a pedido: a nova é do "Adicionar tipo"; UMA LINHA SÓ de 40px — a
+  opção B do mockup "Tipos de investimento · alinhamento": a frase da regra no balão do nome, e o nome e o ponto do IR/IOF
+  no mesmo x em toda linha, o seletor com o recuo da caixa descontado, `SEL`): os prontos só de ler (o cadeado) e os seus com o
   IR e o IOF numa LISTA (dois cliques, a pedido: o seletor de dois lados mudava num clique sem querer), "Salvar alterações
   (N)", e mudar os impostos de um tipo em uso pergunta antes; o tipo em uso não sai. Sem a 036, nada aparece.
 - A ÚNICA CONTA (`lib/carteira.js`, testada em `test/carteira.test.js` com o CDI real de abr–nov/2026 em

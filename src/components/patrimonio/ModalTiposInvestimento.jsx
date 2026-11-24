@@ -87,10 +87,16 @@ export default function ModalTiposInvestimento({ tipos = [], cadastro = [], onFe
   };
 
   const th = 'h-8 border-b border-gray-200 bg-hx-f9fafb px-2 text-left text-[10.5px] font-semibold uppercase tracking-wide text-gray-500';
-  const td = 'border-b border-gray-100 px-2 py-1.5 align-middle';
+  // UMA LINHA SÓ (24/11/2026, a opção B do mockup "Tipos de investimento · alinhamento", a pedido: "fora de centro"): 40px,
+  // tudo centrado na mesma altura, e cada coluna começando no mesmo x em toda linha — o nome a 22px (o campo dos seus
+  // tipos com o recuo dele descontado) e o ponto do IR e do IOF a 14px (o seletor com `SEL`, que desconta a borda e o
+  // recuo da caixa: quieto, o texto fica onde está o selo dos prontos; no hover, a caixa cresce para a esquerda). A frase
+  // da regra saiu da linha (as colunas já dizem): vai no balão do nome.
+  const td = 'h-[40px] border-b border-gray-100 px-2 py-0 align-middle';
+  const SEL = 'pl-[2.5px]';
   const faixa = 'h-[34px] border-b border-gray-200 bg-hx-f3f4f6 px-3 text-[12px] font-semibold text-gray-800';
   const Selo = ({ paga, sim, nao }) => (
-    <span className="inline-flex items-center gap-2 px-2 text-[12.5px] text-gray-700">
+    <span className="flex h-8 items-center gap-2 px-2 text-[12.5px] text-gray-700">
       <i className="h-2.5 w-2.5 rounded-full" style={{ background: paga ? '#f0a33a' : '#2fb36b' }} />{paga ? sim : nao}
     </span>
   );
@@ -112,7 +118,7 @@ export default function ModalTiposInvestimento({ tipos = [], cadastro = [], onFe
         <table className="quieto w-full min-w-[820px] table-fixed border-separate border-spacing-0 text-[12.5px]">
           <colgroup><col /><col style={{ width: 210 }} /><col style={{ width: 210 }} /><col style={{ width: 80 }} /><col style={{ width: 48 }} /></colgroup>
           <thead className="sticky top-0 z-10"><tr>
-            <th className={`${th} pl-[22px]`}>Tipo</th><th className={`${th} pl-[18px]`}>Imposto de renda</th><th className={`${th} pl-[18px]`}>IOF</th>
+            <th className={`${th} pl-[22px]`}>Tipo</th><th className={`${th} pl-[14px]`}>Imposto de renda</th><th className={`${th} pl-[14px]`}>IOF</th>
             <th className={`${th} text-right`}>Em uso</th><th className={th} />
           </tr></thead>
           <tbody>
@@ -127,8 +133,7 @@ export default function ModalTiposInvestimento({ tipos = [], cadastro = [], onFe
               return (
                 <tr key={t.value}>
                   <td className={`${td} pl-[22px]`}>
-                    <span className="block font-semibold text-gray-900">{nomeDoTipo(t.value)}</span>
-                    <span className="block text-[11.5px] text-gray-500">{regraDosImpostos(ir, iof)}</span>
+                    <Tooltip label={regraDosImpostos(ir, iof)}><span className="font-semibold text-gray-900">{nomeDoTipo(t.value)}</span></Tooltip>
                   </td>
                   <td className={td}><Selo paga={ir} sim="Tabela regressiva" nao="Isento" /></td>
                   <td className={td}><Selo paga={iof} sim="Nos 30 primeiros dias" nao="Não paga" /></td>
@@ -149,10 +154,9 @@ export default function ModalTiposInvestimento({ tipos = [], cadastro = [], onFe
                         disabled={l.excluir} value={l.nome} placeholder="Nome do tipo (ex.: CRA, Tesouro Selic)" aria-label="Nome do tipo" onChange={(e) => muda(l.id, 'nome', e.target.value)} />
                       {l.novo && l.nome.trim() && <span className="shrink-0 rounded-[4px] bg-hx-dcfce7 px-1.5 py-0.5 text-[11px] font-semibold text-hx-166534">novo</span>}
                     </span>
-                    <span className="block pl-2 text-[11.5px] text-gray-500">{regraDosImpostos(l.paga_ir, l.paga_iof)}</span>
                   </td>
-                  <td className={td}><SelectSimples value={l.paga_ir ? 'sim' : 'nao'} onChange={(v) => muda(l.id, 'paga_ir', v === 'sim')} opcoes={IR} disabled={l.excluir} compacto /></td>
-                  <td className={td}><SelectSimples value={l.paga_iof ? 'sim' : 'nao'} onChange={(v) => muda(l.id, 'paga_iof', v === 'sim')} opcoes={IOF} disabled={l.excluir} compacto /></td>
+                  <td className={`${td} ${SEL}`}><SelectSimples value={l.paga_ir ? 'sim' : 'nao'} onChange={(v) => muda(l.id, 'paga_ir', v === 'sim')} opcoes={IR} disabled={l.excluir} compacto /></td>
+                  <td className={`${td} ${SEL}`}><SelectSimples value={l.paga_iof ? 'sim' : 'nao'} onChange={(v) => muda(l.id, 'paga_iof', v === 'sim')} opcoes={IOF} disabled={l.excluir} compacto /></td>
                   <td className={`${td} text-right tabular-nums text-gray-500`}>{n || '—'}</td>
                   <td className={`${td} text-right`}>
                     <Lixo marcado={l.excluir} bloqueado={n > 0 && !l.excluir}
