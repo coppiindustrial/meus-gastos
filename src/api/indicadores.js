@@ -8,13 +8,9 @@
 // vem da AwesomeAPI (pública, aberta ao navegador, sem chave; atualiza a cada ~30 s) — `cotacaoAgora`, que a tela relê a
 // cada minuto. Falhou, null: o cartão volta à PTAX.
 import { lerCotacaoAgora } from '../lib/indicadores.js';
+import { lerSgs } from './sgs.js';
 
-const SGS = (n) => `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${n}/dados`;
-const br = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
-// SEMPRE COM A DATA FINAL (06/11/2026): sem o `dataFinal`, a API do Banco Central passou a responder 304 SEM CONTEÚDO (o
-// navegador não tem o que reaproveitar e a resposta vira erro) — as taxas sumiam, o valor parava de andar pelo CDI e o
-// "Somar aos valores de depois" somou sem o rendimento. Com o `dataFinal` (hoje), ela responde 200 com os dados.
-const hojeBR = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; };
+// As séries do SGS: a leitura (e o 304 sem conteúdo que a API às vezes repete) mora em `sgs.js`.
 const menosDias = (iso, n) => new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) - n * 86400000).toISOString().slice(0, 10);
 
 // TENTA DE NOVO (10/11/2026): a API do Banco Central falha às vezes numa série e não nas outras (o CDI e o IPCA de 12 meses
@@ -28,15 +24,13 @@ async function comTentativas(ler) {
 }
 
 // [['AAAA-MM-DD', número]] desde `desde` (a Selic meta vem com datas FUTURAS — vale até a próxima reunião —: corta em `ate`)
-const serie = (n, desde, ate) => comTentativas(async () => {
-  const r = await fetch(`${SGS(n)}?formato=json&dataInicial=${br(desde)}&dataFinal=${hojeBR()}`);
-  if (!r.ok) throw new Error(`SGS ${n}: ${r.status}`);
-  const lista = await r.json();
-  if (!Array.isArray(lista)) throw new Error(`SGS ${n}: resposta sem a lista`);
+// (as tentativas, cada uma com outra data final por causa do 304 sem conteúdo, são as de `lerSgs`)
+const serie = async (n, desde, ate) => {
+  const lista = await lerSgs(n, desde);
   return lista
     .map((x) => [String(x.data).split('/').reverse().join('-'), Number(String(x.valor).replace(',', '.'))])
     .filter(([d, v]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && Number.isFinite(v) && (!ate || d <= ate));
-});
+};
 
 // As medianas da Focus (as anuais, a base de cálculo 0 = todas as instituições), as mais novas primeiro.
 const focus = () => comTentativas(async () => {

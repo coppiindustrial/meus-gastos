@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { calendario, fator, mesAMes, montarCarteira, posicaoDoAporte } from '../src/lib/carteira.js';
 import {
-  cascataDoPatrimonio, escadaDeLiquidez, filtrarCarteira, irPorAliquota, linhaDoTempoVencimentos, mesesComMovimento, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
+  cascataDoPatrimonio, escadaDeLiquidez, ganhoAcimaDoIndice, filtrarCarteira, irPorAliquota, linhaDoTempoVencimentos, mesesComMovimento, noPeriodo, opcoesDePeriodo, porInvestimento, proximasQuedas,
   textoDoPeriodo, vencimentos,
 } from '../src/lib/patrimonio.js';
 
@@ -181,4 +181,23 @@ test('a evolução em cascata: os meses com aporte, os parados num degrau, por a
   const depois = cascataDoPatrimonio(meses.slice(2));
   assert.deepEqual(depois.colunas.slice(0, 2).map((x) => `${x.tipo}:${x.de}→${x.ate}`), ['inicio:0→1010', 'parado:1010→1020']);
   assert.equal(cascataDoPatrimonio([]), null);
+});
+
+test('o ganho acima do índice: o rendeu menos o que o índice daria, só nos meses fechados com o índice', () => {
+  const meses = [
+    { competencia: '2026-07', base: 0, rendeu: null },
+    { competencia: '2026-08', base: 1000000, rendeu: 12000 },
+    { competencia: '2026-09', base: 1000000, rendeu: 9000 },
+    { competencia: '2026-10', base: 1000000, rendeu: 11000 },
+    { competencia: '2026-11', base: 1000000, rendeu: 4000 },
+  ];
+  const indice = { '2026-07': 0.01, '2026-08': 0.01, '2026-10': 0.0105, '2026-11': 0.004 };
+  const g = ganhoAcimaDoIndice(meses, indice, '2026-11');
+  assert.deepEqual(g.map((x) => x.ganho), [null, 2000, null, 500, null]);
+  // setembro sem o índice: fora da linha, e o acumulado segue de agosto
+  assert.deepEqual(g.map((x) => x.acum), [null, 2000, null, 2500, null]);
+  assert.equal(g[3].daria, 10500);
+  // rendeu menos que o índice: negativo
+  assert.equal(ganhoAcimaDoIndice([{ competencia: '2026-08', base: 1000000, rendeu: 8000 }], indice, '2026-11')[0].ganho, -2000);
+  assert.ok(ganhoAcimaDoIndice(meses, null, '2026-11').every((x) => x.ganho === null));
 });

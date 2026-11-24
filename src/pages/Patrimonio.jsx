@@ -12,7 +12,7 @@ import { CartaoKpi } from '../components/graficos/CartoesResumo.jsx';
 import { COR_ENTRADAS } from '../components/graficos/Graficos.jsx';
 import { RoscaOrigem } from '../components/graficos/GraficosVisao.jsx';
 import LegendaSeries, { useDestaqueSeries } from '../components/graficos/LegendaSeries.jsx';
-import { COR_APORTADO, COR_CDI, COR_VALORIZOU, CascataPatrimonio, ColunasPct, ColunasRendeu } from '../components/patrimonio/GraficoPatrimonio.jsx';
+import { COR_ACIMA, COR_APORTADO, COR_CDI, COR_VALORIZOU, CascataPatrimonio, ColunasPct, ColunasRendeu } from '../components/patrimonio/GraficoPatrimonio.jsx';
 import BlocoProventos from '../components/rendaVariavel/BlocoProventos.jsx';
 import useRendaVariavel from '../components/rendaVariavel/useRendaVariavel.js';
 import { CLASSES as CLASSES_RV, classeDoTipo, competenciasEntre, mesAMesRV, noFormatoDoPatrimonio, somarMeses } from '../lib/rendaVariavel.js';
@@ -58,6 +58,7 @@ import { varCor } from '../lib/varCor.js';
 const LS_OCULTAR = 'patrimonio_ocultar';
 const LS_COMPARAR = 'patrimonio_comparar';
 const LS_FORMA = 'patrimonio_rendeu_forma';
+const LS_LINHA = 'patrimonio_rendeu_linha';
 const LS_EVOLUCAO = 'patrimonio_evolucao_modo';
 const OPCOES_CLASSE = [
   { value: 'tudo', label: 'Tudo', chip: 'Classe: tudo' },
@@ -110,6 +111,9 @@ export default function Patrimonio() {
   const setComparar = (v) => { setCompararEstado(v); lsSet(LS_COMPARAR, v); };
   const [forma, setFormaEstado] = useState(() => (lsGet(LS_FORMA) === 'pct' ? 'pct' : 'reais'));
   const setForma = (v) => { setFormaEstado(v); lsSet(LS_FORMA, v); };
+  // A LINHA DO GANHO ACIMA DO ÍNDICE no "Quanto rendeu" (em reais): o de cada mês ou o acumulado
+  const [linhaGanho, setLinhaGanhoEstado] = useState(() => (lsGet(LS_LINHA) === 'acum' ? 'acum' : 'mes'));
+  const setLinhaGanho = (v) => { setLinhaGanhoEstado(v); lsSet(LS_LINHA, v); };
   // A EVOLUÇÃO EM CASCATA: por mês (só os com aporte, os parados num degrau) ou por ano
   const [modoEvo, setModoEvoEstado] = useState(() => (lsGet(LS_EVOLUCAO) === 'ano' ? 'ano' : 'mes'));
   const setModoEvo = (v) => { setModoEvoEstado(v); lsSet(LS_EVOLUCAO, v); };
@@ -281,12 +285,21 @@ export default function Patrimonio() {
               extra={<AbasPilula abas={[{ key: 'reais', label: 'Em reais' }, { key: 'pct', label: '% do mês' }]} valor={forma} onChange={setForma} variante="claro" altura={30} folga={2} />} />
             <div className="min-h-0 flex-1">
               {forma === 'pct' ? <ColunasPct meses={mesesRendeu} indice={indice ?? null} refRotulo={refRotulo} ctrl={ctrlRendeu} auto />
-                : <ColunasRendeu meses={mesesRendeu} indice={indice} refRotulo={refRotulo} ctrl={ctrlRendeu} auto />}
+                : <ColunasRendeu meses={mesesRendeu} indice={indice} refRotulo={refRotulo} ctrl={ctrlRendeu} auto linha={linhaGanho} />}
             </div>
-            <LegendaSeries ctrl={ctrlRendeu} series={[
-              { key: 'rendeu', rotulo: forma === 'pct' ? 'Rendeu no mês (%)' : 'Rendeu no mês', cor: COR_ENTRADAS },
-              ...(indice ? [{ key: 'ref', rotulo: forma === 'pct' ? `${refRotulo} do mês` : `O que o ${refRotulo} daria`, cor: COR_CDI, forma: 'tracejado' }] : []),
-            ]} />
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-gray-100 pt-2.5">
+              <LegendaSeries ctrl={ctrlRendeu} borda={false} className="" series={[
+                { key: 'rendeu', rotulo: forma === 'pct' ? 'Rendeu no mês (%)' : 'Rendeu no mês', cor: COR_ENTRADAS },
+                ...(indice ? [{ key: 'ref', rotulo: forma === 'pct' ? `${refRotulo} do mês` : `O que o ${refRotulo} daria`, cor: COR_CDI, forma: 'tracejado' }] : []),
+                ...(indice && forma === 'reais' ? [{ key: 'acima', rotulo: `Acima do ${refRotulo}${linhaGanho === 'acum' ? ' (acumulado)' : ''}`, cor: COR_ACIMA, forma: 'linha' }] : []),
+              ]} />
+              {indice && forma === 'reais' && (
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-[11px] text-gray-500">A linha:</span>
+                  <AbasPilula abas={[{ key: 'mes', label: 'No mês' }, { key: 'acum', label: 'Acumulado' }]} valor={linhaGanho} onChange={setLinhaGanho} variante="claro" altura={26} folga={2} />
+                </div>
+              )}
+            </div>
           </section>
         );
       case 'pt_onde':

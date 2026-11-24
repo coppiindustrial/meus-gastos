@@ -5,9 +5,9 @@ import { CALHA_ESQ, COR_FALTOU, GradeEsq, ReguaMeses, formatoRotulo, posRotulo }
 import { CLASSE_GUIA, COR_ROTULO } from '../../lib/coresGrafico.js';
 import { escalaLinear } from '../../lib/escala.js';
 import { varCor } from '../../lib/varCor.js';
-import { formatBRL } from '../../lib/dinheiro.js';
+import { brlCurto, formatBRL } from '../../lib/dinheiro.js';
 import { competenciaAtual, competenciaCurta, nomeCompetencia } from '../../lib/format.js';
-import { cascataDoPatrimonio } from '../../lib/patrimonio.js';
+import { cascataDoPatrimonio, ganhoAcimaDoIndice } from '../../lib/patrimonio.js';
 
 // OS GRÁFICOS DE MESES DO PATRIMÔNIO, no chrome do "Entradas × gastos" da Visão geral: o eixo à ESQUERDA (`GradeEsq`), o
 // número em cada coluna, e no hover a guia tracejada, os outros meses a 40% e o balão; a legenda embaixo (no bloco) é
@@ -112,21 +112,71 @@ export function ColunasAportado({ meses, ctrl, comMovimentos = true, auto = fals
 }
 
 // `indice`: { 'AAAA-MM': fração } do índice (o CDI ou o IPCA de cada mês) ou null (sem comparação); `refRotulo`: 'CDI' | 'IPCA'.
-export function ColunasRendeu({ meses, indice, refRotulo = 'CDI', ctrl, auto = false, onMes }) {
-  const balao = useBalao(260, 160);
+// A LINHA DO GANHO ACIMA DO ÍNDICE (24/11/2026, o mockup "Ganho acima do índice"; `linha` 'mes' | 'acum', só com o
+// índice): em cada mês fechado, o que rendeu menos o que o índice daria (`ganhoAcimaDoIndice`), em violeta, com um ponto
+// por mês e o último valor no fim. 'mes' usa o eixo da esquerda (que ganha a parte NEGATIVA quando o mês ficou abaixo do
+// índice); 'acum' soma desde o primeiro mês e tem o eixo dele à DIREITA, com o zero no mesmo lugar do da esquerda.
+export const COR_ACIMA = 'var(--serie-sobrou)';
+const CALHA_DIR_ACUM = 56;
+const comSinal = (c) => `${c < 0 ? '−' : '+'}${brlCurto(Math.abs(c))}`;
+
+// a escala de `escalaLinear` com o piso NEGATIVO no mesmo passo (min < 0), para o que fica abaixo do zero
+function escalaComPiso(max, min) {
+  const base = escalaLinear(max);
+  const passo = base.marcas.length > 1 ? base.marcas[1] - base.marcas[0] : base.teto;
+  const piso = min < 0 ? -Math.ceil(-min / passo) * passo : 0;
+  const marcas = [];
+  for (let v = piso; v <= base.teto; v += passo) marcas.push(v);
+  return { teto: base.teto, piso, passo, marcas, fracao: (v) => (v - piso) / (base.teto - piso) };
+}
+
+export function ColunasRendeu({ meses, indice, refRotulo = 'CDI', ctrl, auto = false, onMes, linha = null }) {
+  const balao = useBalao(260, 200);
   const hoje = competenciaAtual();
   // o que o índice daria no mesmo dinheiro (o capital do mês × o índice); o mês corrente, só com o índice que já saiu
   const daria = (m) => (indice && indice[m.competencia] !== undefined && m.base > 0 ? Math.round(m.base * indice[m.competencia]) : null);
+  const ganhos = useMemo(() => (indice && linha ? ganhoAcimaDoIndice(meses, indice, hoje) : null), [meses, indice, linha, hoje]);
+  const comLinha = !!ganhos?.some((g) => g.ganho !== null);
+  const acum = comLinha && linha === 'acum';
+  const opLinha = ctrl.opSerie('acima');
+
+  // as escalas em REAIS (o `escalaLinear` é de inteiros): a da esquerda pelas colunas (e a linha do mês); a da direita,
+  // a do acumulado, convertida para a da esquerda (`naEsq`) para os dois zeros caírem no mesmo lugar
   const vals = meses.flatMap((m) => [Math.max(0, m.rendeu ?? 0), ...(ctrl.opSerie('ref') > 0.2 ? [daria(m) ?? 0] : [])]);
-  const esc = escalaLinear(Math.max(1, ...vals) / 100);
+  if (comLinha && !acum) ganhos.forEach((g) => { if (g.ganho !== null) vals.push(g.ganho); });
+  const maxEsq = Math.max(1, ...vals) / 100;
+  const tetoEsq = escalaLinear(maxEsq).teto;
+  const acums = acum ? ganhos.filter((g) => g.acum !== null).map((g) => g.acum / 100) : [];
+  const dir = acum ? escalaLinear(Math.max(1, ...acums)) : null;
+  const naEsq = (reais) => (dir ? (reais * tetoEsq) / dir.teto : reais);
+  const minLinha = !comLinha ? 0 : acum ? naEsq(Math.min(0, ...acums)) : Math.min(0, ...ganhos.filter((g) => g.ganho !== null).map((g) => g.ganho / 100));
+  const esc = escalaComPiso(maxEsq, minLinha);
+  const zero = esc.fracao(0);
   const fr = (c) => esc.fracao(Math.max(0, c) / 100);
-  const rot = formatoRotulo(esc.marcas[esc.marcas.length - 1]);
+  const rot = formatoRotulo(esc.teto);
+  const direita = acum ? CALHA_DIR_ACUM : 0;
+  // as marcas da direita: as do acumulado e, abaixo do zero, no mesmo passo até o piso
+  const marcasDir = [];
+  if (dir) {
+    const passo = dir.marcas.length > 1 ? dir.marcas[1] - dir.marcas[0] : dir.teto;
+    for (let v = 0; esc.fracao(naEsq(v)) >= -0.001; v -= passo) if (v < 0) marcasDir.push(v);
+    marcasDir.push(...dir.marcas);
+  }
+
+  const n = meses.length;
+  const pts = !comLinha ? [] : ganhos.map((g, i) => (g.ganho === null ? null : {
+    i, x: ((i + 0.5) / n) * 100, y: (1 - esc.fracao(acum ? naEsq(g.acum / 100) : g.ganho / 100)) * 100, valor: acum ? g.acum : g.ganho,
+  })).filter(Boolean);
+  const ult = pts[pts.length - 1];
+  const nMeses = pts.length;
+
   const i = balao.ativo;
   const a = i !== null ? meses[i] : null;
   const dA = a ? daria(a) : null;
+  const gA = a && ganhos ? ganhos[i] : null;
   return (
-    <Caixa auto={auto} regua={<ReguaMeses meses={meses} ativo={i} />}>
-      <GradeEsq esc={esc}>
+    <Caixa auto={auto} regua={<ReguaMeses meses={meses} ativo={i} direita={direita} />}>
+      <GradeEsq esc={esc} direita={direita}>
         <Vagas meses={meses} balao={balao}>
           {(m) => {
             const neg = (m.rendeu ?? 0) < 0;
@@ -135,7 +185,7 @@ export function ColunasRendeu({ meses, indice, refRotulo = 'CDI', ctrl, auto = f
               <>
                 {m.rendeu !== null && (
                   <div className="absolute rounded-t-[2px] transition-opacity duration-150"
-                    style={{ left: '12%', right: '12%', bottom: 0, height: neg ? '3px' : frac(fr(m.rendeu)), opacity: ctrl.opSerie('rendeu'),
+                    style={{ left: '12%', right: '12%', bottom: frac(zero), height: neg ? '3px' : frac(fr(m.rendeu) - zero), opacity: ctrl.opSerie('rendeu'),
                       ...(m.competencia === hoje && !neg ? { backgroundImage: HACHURA_RENDEU, boxShadow: `inset 0 0 0 1px ${COR_ENTRADAS}` } : { background: neg ? COR_FALTOU : COR_ENTRADAS }) }} />
                 )}
                 {d !== null && (
@@ -149,6 +199,30 @@ export function ColunasRendeu({ meses, indice, refRotulo = 'CDI', ctrl, auto = f
         <Vagas meses={meses} balao={balao} extra="pointer-events-none">
           {(m) => (m.rendeu ?? 0) > 0 && numero(posRotulo(fr(m.rendeu)), rot(m.rendeu), ctrl.opSerie('rendeu') < 1)}
         </Vagas>
+        {comLinha && (
+          <div className="pointer-events-none absolute inset-0 transition-opacity duration-150" style={{ opacity: opLinha }}>
+            <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <polyline points={pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke={COR_ACIMA} strokeWidth="2.25"
+                strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            </svg>
+            {pts.map((p) => (
+              <span key={p.i} className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 bg-white ${p.i === i ? 'h-[10px] w-[10px]' : 'h-[8px] w-[8px]'}`}
+                style={{ left: `${p.x}%`, top: `${p.y}%`, borderColor: COR_ACIMA }} />
+            ))}
+            {ult && (
+              <span className="absolute hidden whitespace-nowrap rounded-[3px] bg-white px-1 text-[10.5px] font-semibold tabular-nums sm:block"
+                style={{ top: `${ult.y}%`, color: COR_ACIMA, ...(ult.i === n - 1
+                  ? { left: `calc(${ult.x}% - 8px)`, transform: 'translate(-100%, -50%)' }
+                  : { left: `calc(${ult.x}% + 8px)`, transform: 'translateY(-50%)' }) }}>
+                {comSinal(ult.valor)}{acum ? ` em ${nMeses} ${nMeses === 1 ? 'mês' : 'meses'}` : ''}
+              </span>
+            )}
+            {acum && marcasDir.map((v) => (
+              <span key={v} className="absolute ml-2 -translate-y-1/2 whitespace-nowrap text-[10px] tabular-nums"
+                style={{ left: '100%', top: `${(1 - esc.fracao(naEsq(v))) * 100}%`, color: COR_ACIMA }}>{brlCurto(v * 100)}</span>
+            ))}
+          </div>
+        )}
         {a && <div className={CLASSE_GUIA} style={{ left: `${((i + 0.5) / meses.length) * 100}%` }} />}
         <Alvos meses={meses} balao={balao} onMes={onMes} rotulo={(m) => `${nomeCompetencia(m.competencia)}: rendeu ${formatBRL(m.rendeu ?? 0)}`} />
       </GradeEsq>
@@ -157,7 +231,11 @@ export function ColunasRendeu({ meses, indice, refRotulo = 'CDI', ctrl, auto = f
           { rotulo: 'Rendeu', valor: formatBRL(a.rendeu), cor: COR_ENTRADAS },
           { rotulo: 'No mês', valor: pctTexto(a.pct) },
           ...(indice && indice[a.competencia] !== undefined ? [{ rotulo: `${refRotulo} do mês`, valor: `${pctTexto(indice[a.competencia])} · daria ${formatBRL(dA ?? 0)}`, cor: COR_CDI }] : []),
-        ]} nota={indice && indice[a.competencia] !== undefined && a.pct !== null ? `${Math.round((a.pct / indice[a.competencia]) * 100)}% do ${refRotulo}`
+          ...(gA && gA.ganho !== null ? [
+            { rotulo: `Acima do ${refRotulo}`, valor: `${gA.ganho < 0 ? '−' : '+'}${formatBRL(Math.abs(gA.ganho))}`, cor: COR_ACIMA },
+            { rotulo: 'Acumulado até aqui', valor: `${gA.acum < 0 ? '−' : '+'}${formatBRL(Math.abs(gA.acum))}` },
+          ] : []),
+        ]} nota={indice && indice[a.competencia] !== undefined && a.pct !== null ? `${Math.round((a.pct / indice[a.competencia]) * 100)}% do ${refRotulo}${a.competencia === hoje && comLinha ? ' · o mês em andamento fica fora da linha' : ''}`
           : indice ? `O ${refRotulo} do mês ainda não saiu.` : undefined} />
       )}
     </Caixa>

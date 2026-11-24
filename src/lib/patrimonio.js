@@ -233,3 +233,22 @@ export function cascataDoPatrimonio(meses, modo = 'mes') {
   const ult = meses[meses.length - 1];
   return { colunas, fim: { competencia: ult.competencia, total: ult.total, aportado: ult.aportado, rendimento: ult.rendimentoAcum } };
 }
+
+// O GANHO ACIMA DO ÍNDICE (24/11/2026, o mockup "Ganho acima do índice"): em cada mês FECHADO, quanto a carteira rendeu a
+// mais (ou a menos) do que o índice daria no mesmo dinheiro — o `rendeu` menos o `base` × o índice do mês, a mesma conta
+// do tracejado do "Quanto rendeu em cada mês" — e o ACUMULADO desde o primeiro mês com a conta. O mês em andamento e o
+// mês sem o índice publicado (ou sem dinheiro aplicado) ficam null: sem a conta, a linha não passa por eles, e o
+// acumulado segue do anterior. `indice`: { 'AAAA-MM': fração }; `hoje`: 'AAAA-MM'.
+export function ganhoAcimaDoIndice(meses, indice, hoje) {
+  let acum = 0;
+  return meses.map((m) => {
+    const f = indice?.[m.competencia];
+    if (m.competencia >= hoje || f === undefined || f === null || m.rendeu === null || m.rendeu === undefined || !(m.base > 0)) {
+      return { competencia: m.competencia, daria: null, ganho: null, acum: null };
+    }
+    const daria = Math.round(m.base * f);
+    const ganho = m.rendeu - daria;
+    acum += ganho;
+    return { competencia: m.competencia, daria, ganho, acum };
+  });
+}
