@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Modal from '../Modal.jsx';
 import SelectSimples from '../SelectSimples.jsx';
 import Tooltip from '../Tooltip.jsx';
@@ -25,16 +25,12 @@ const daLinha = (t) => ({ id: t.id, novo: false, excluir: false, orig: t, nome: 
 const mudou = (l) => !l.novo && !l.excluir && (l.nome.trim() !== l.orig.nome || l.paga_ir !== !!l.orig.paga_ir || l.paga_iof !== !!l.orig.paga_iof);
 const conta = (l) => !(l.novo && (l.excluir || !l.nome.trim()));
 
-export default function ModalTiposInvestimento({ tipos = [], cadastro = [], comNovo = false, onFechar, onSalvo }) {
+export default function ModalTiposInvestimento({ tipos = [], cadastro = [], onFechar, onSalvo }) {
   const toast = useToast();
   const confirmar = useConfirmacao();
-  // `comNovo` (o "Novo tipo" do cabeçalho do cadastro): abre já com uma linha em branco no fim, com o cursor nela — vazia,
-  // ela não conta como alteração
-  const [linhas, setLinhas] = useState(() => [...tipos.map(daLinha),
-    ...(comNovo ? [{ id: 'novo-inicial', novo: true, excluir: false, orig: null, nome: '', paga_ir: true, paga_iof: true }] : [])]);
-  useEffect(() => {
-    if (comNovo) setTimeout(() => document.querySelector('[data-tipo="novo-inicial"]')?.focus(), 60);
-  }, [comNovo]);
+  // abre só com os tipos que existem: a linha nova é do "Adicionar tipo" (24/11/2026, a pedido — abrir já com uma em branco
+  // não agradou)
+  const [linhas, setLinhas] = useState(() => tipos.map(daLinha));
   const [erro, setErro] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const uso = (id) => cadastro.filter((i) => i.tipo_id === id);

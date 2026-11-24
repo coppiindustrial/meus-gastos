@@ -381,7 +381,7 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
 
   // O CABEÇALHO DO POP-UP NUM TRILHO SÓ, como o do cadastro das categorias (23/11/2026, a pedido: o ⇕ sozinho no trilho
   // parecia maior que o de lá): ⇕ | Novo tipo (24/11/2026, a pedido: no lugar do "Nova instituição", que fica na linha do
-  // fim, e da ação no pé da lista do campo Tipo; abre os tipos com uma linha em branco; só com a 036), os segmentos de 25px.
+  // fim, e da ação no pé da lista do campo Tipo; abre os tipos, e a linha nova é do "Adicionar tipo"; só com a 036), os segmentos de 25px.
   const SEG = 'inline-flex h-[25px] shrink-0 items-center gap-2 whitespace-nowrap rounded-[3px] px-2 text-[12.5px] transition-colors hover:bg-gray-200';
   const acoes = (grupos.length > 0 || tipos) && (
     <TrilhoFaixa className="mr-1 shrink-0">
@@ -397,7 +397,7 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
       {grupos.length > 0 && tipos && <DivisorFaixa />}
       {tipos && (
         <Tooltip label="Cadastrar um tipo (CRA, CRI, Tesouro…) com o IR e o IOF dele; aqui também se mudam e se excluem os seus tipos">
-          <button type="button" onClick={() => setGerirTipos('novo')} className={`${SEG} font-semibold text-gray-800 hover:text-gray-900`}>
+          <button type="button" onClick={() => setGerirTipos(true)} className={`${SEG} font-semibold text-gray-800 hover:text-gray-900`}>
             <CirculoMais borda="text-gray-500" />Novo tipo
           </button>
         </Tooltip>
@@ -442,7 +442,7 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
         </button>
       </div>
       {gerirTipos && (
-        <ModalTiposInvestimento tipos={tipos ?? []} cadastro={cadastro} comNovo={gerirTipos === 'novo'} onFechar={() => setGerirTipos(false)}
+        <ModalTiposInvestimento tipos={tipos ?? []} cadastro={cadastro} onFechar={() => setGerirTipos(false)}
           onSalvo={() => { setGerirTipos(false); onTiposSalvos?.(); }} />
       )}
     </Modal>
