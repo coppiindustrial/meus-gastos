@@ -235,7 +235,8 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
   const numTd = 'px-3 text-right tabular-nums';
   // A HIERARQUIA (24/11/2026, a opção A do mockup "Carteira · hierarquia das fontes": antes a instituição e o investimento
   // tinham quase o mesmo peso): TRÊS DEGRAUS — a instituição 15 · 700 e os números 13,5 · 700 no mais forte; o investimento
-  // 13 · 500 e os números 400 cinza (o Vale hoje e o Líquido 500); o aporte 12,5 · 400 mais cinza; o Total 14 · 700.
+  // 13 · 500 e os valores (aplicado, vale hoje, IR, líquido) 500 num cinza só (24/11/2026, a pedido: antes o aplicado e o IR
+  // eram 400, mais claros, e a linha não tinha uma lógica); o aporte 12,5 · 400 mais cinza; o Total 14 · 700.
   const NUM_FAIXA = 'text-[13.5px] font-bold text-gray-900';
   const ir = (t) => (t.ir > 0 ? reais(t.ir) : <span className="font-normal text-gray-400">—</span>);
   const iof = (t) => (t.iof > 0 ? <span className="text-amber-700">{reais(t.iof)}</span> : <span className="font-normal text-gray-400">—</span>);
@@ -294,14 +295,14 @@ export default function TabelaCarteira({ carteira, hoje, movel, acoes, mostrarEn
               : x.proximoVencimento ? <Vence data={x.proximoVencimento} hoje={hoje} antes={x.aportes.filter((it) => it.ap.vencimento).length > 1 ? 'o próximo' : ''} />
                 : <span className="text-[12px] text-gray-500">no vencimento</span>}
           </td>
-          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>{n ? reais(x.totais.aplicado) : '—'}</td>
+          <td className={`${td} ${numTd} font-medium text-gray-800 ${movel ? 'hidden' : ''}`}>{n ? reais(x.totais.aplicado) : '—'}</td>
           <td className={`${td} ${numTd} font-medium text-gray-800`}>{n ? reais(x.totais.vale) : <span className="font-normal text-gray-400">—</span>}</td>
           <td className={`${td} ${numTd}`}>
-            {n ? (<><span className={x.totais.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}>{sinal(x.totais.rendeu)}{reais(Math.abs(x.totais.rendeu))}</span>
+            {n ? (<><span className={`font-medium ${x.totais.rendeu < 0 ? 'text-hx-c0393d' : 'text-green-700'}`}>{sinal(x.totais.rendeu)}{reais(Math.abs(x.totais.rendeu))}</span>
               <span className="block text-[11.5px] text-gray-500">{pctTexto(x.totais.aplicado ? x.totais.rendeu / x.totais.aplicado : null)}</span></>) : null}
           </td>
-          <td className={`${td} ${numTd} text-gray-600 ${movel ? 'hidden' : ''}`}>{n ? (!pagaIR(x.inv) ? <span className="text-gray-400">isento</span> : ir(x.totais)) : null}</td>
-          <td className={`${td} ${numTd} ${movel ? 'hidden' : ''}`}>{n ? iof(x.totais) : null}</td>
+          <td className={`${td} ${numTd} font-medium text-gray-800 ${movel ? 'hidden' : ''}`}>{n ? (!pagaIR(x.inv) ? <span className="text-gray-400">isento</span> : ir(x.totais)) : null}</td>
+          <td className={`${td} ${numTd} font-medium ${movel ? 'hidden' : ''}`}>{n ? iof(x.totais) : null}</td>
           <td className={`${td} ${numTd} font-medium text-gray-800 ${movel ? 'hidden' : ''}`}>{n ? reais(x.totais.liquido) : null}</td>
           {acoesTd(`${td} px-2`, acoes && (x.inv.ativo !== false || (n && x.inv.resgate === 'diaria')) && (
             <>
