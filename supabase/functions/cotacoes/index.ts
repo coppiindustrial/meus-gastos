@@ -21,6 +21,8 @@
 //     gravar: os fechamentos de 10 anos, os dividendos, os desdobramentos e a estreia (Yahoo), os resultados (Finnhub, nos EUA)
 //     e a cotação de agora. O "intradia" e o "mensal" também aceitam o ticker e o mercado no lugar do ativo_id.
 //     { "acao": "mensal", "ativo_id": "…" } um ponto por mês desde a estreia na bolsa (o "Desde o início"), sem gravar.
+//     { "acao": "ao_vivo", "simbolos": ["EUA:NVDA", "B3:PETR4", "IDX:IBOV"], "range": "1d" } os preços de VÁRIOS numa chamada
+//     só (a tela Acompanhamento, a cada minuto), sem gravar — ver `aoVivo`.
 //     { "acao": "eventos", "ativo_id": "…" } relê os EVENTOS (migration 031): os dividendos e desdobramentos do último ano
 //     (Yahoo), a estreia e, nos EUA, os resultados da Finnhub (o calendário e as surpresas). O "historico" já faz isso junto.
 // Publicar: Supabase → Edge Functions → Deploy a new function → "cotacoes", colar este arquivo, e DESLIGAR o "Verify JWT"
@@ -224,6 +226,81 @@ async function buscarNoYahoo(q: string) {
   return out.slice(0, 10);
 }
 
+// ------------------------------------------------------------ o ACOMPANHAMENTO (25/11/2026, migration 037)
+// Os preços de VÁRIAS ações e índices numa chamada só (a tela relê a cada minuto com a aba à vista e o pregão aberto: uma
+// chamada por minuto, e não uma por ativo), do Yahoo, SEM GRAVAR. A chave de cada um: "EUA:NVDA", "B3:PETR4" ou um índice
+// ("IDX:IBOV", "IDX:SPX", "IDX:NDX", "IDX:USDBRL", "IDX:IFIX"). O `range` decide os pontos: "1d" de 5 em 5 minutos (a curva do
+// dia), "5d" de 30 em 30, e "1mo", "3mo", "6mo", "ytd", "1y" um por dia (o % do período e o desempenho comparado). `desde` (só no "1d"):
+// a última hora que a tela já tem de cada um — volta só o que veio depois (a resposta de cada minuto fica pequena).
+// `perfil`: o VALOR DE MERCADO (o tamanho do mapa de calor), na moeda do ativo em milhões — a Finnhub nos EUA, a brapi na
+// B3; a tela pede uma vez por sessão.
+const INDICES: Record<string, string> = { IBOV: '^BVSP', SPX: '^GSPC', NDX: '^IXIC', USDBRL: 'BRL=X', IFIX: 'IFIX.SA' };
+const INTERVALOS: Record<string, string> = { '1d': '5m', '5d': '30m', '1mo': '1d', '3mo': '1d', '6mo': '1d', ytd: '1d', '1y': '1d' };
+const simboloYahoo = (chave: string) => {
+  const [mercado, ticker] = chave.split(':');
+  if (mercado === 'IDX') return INDICES[ticker] ?? null;
+  if (!/^[A-Z0-9.-]{1,12}$/.test(ticker ?? '')) return null;
+  return mercado === 'EUA' ? ticker : mercado === 'B3' ? `${ticker}.SA` : null;
+};
+async function serieDoYahoo(simbolo: string, range: string) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(simbolo)}?range=${range}&interval=${INTERVALOS[range]}&includePrePost=false`;
+  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`o Yahoo respondeu ${r.status}`);
+  const res = (await r.json())?.chart?.result?.[0];
+  if (!res) throw new Error('o Yahoo não tem este ticker');
+  const meta = res.meta ?? {};
+  const fechou = res.indicators?.quote?.[0]?.close ?? [];
+  const pontos: [number, number][] = [];
+  (res.timestamp ?? []).forEach((t: number, i: number) => { const c = ou(fechou[i]); if (c) pontos.push([t, c]); });
+  const regular = meta.currentTradingPeriod?.regular ?? {};
+  return {
+    preco: ou(meta.regularMarketPrice) ?? pontos[pontos.length - 1]?.[1] ?? null,
+    // no "1d", o fechamento de ontem; nos outros, o de antes do período (o % do período parte dele)
+    anterior: range === '1d' ? (ou(meta.previousClose) ?? ou(meta.chartPreviousClose)) : ou(meta.chartPreviousClose),
+    maxima: ou(meta.regularMarketDayHigh), minima: ou(meta.regularMarketDayLow),
+    volume: typeof meta.regularMarketVolume === 'number' ? meta.regularMarketVolume : null,
+    quando: meta.regularMarketTime ?? null, inicio: regular.start ?? null, fim: regular.end ?? null,
+    moeda: meta.currency ?? null, nome: String(meta.longName || meta.shortName || ''), pontos,
+  };
+}
+async function valorDeMercado(chave: string): Promise<number | null> {
+  const [mercado, ticker] = chave.split(':');
+  try {
+    if (mercado === 'EUA') {
+      const token = Deno.env.get('FINNHUB_TOKEN');
+      if (!token) return null;
+      const r = await fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(ticker)}&token=${token}`);
+      return r.ok ? ou((await r.json())?.marketCapitalization) : null; // já em milhões de dólares
+    }
+    if (mercado === 'B3') {
+      const token = Deno.env.get('BRAPI_TOKEN');
+      if (!token) return null;
+      const r = await fetch(`https://brapi.dev/api/quote/${encodeURIComponent(ticker)}?token=${token}`);
+      const cap = r.ok ? ou((await r.json())?.results?.[0]?.marketCap) : null;
+      return cap === null ? null : cap / 1e6;
+    }
+  } catch { /* sem o tamanho, o mapa usa "igual" para este */ }
+  return null;
+}
+async function aoVivo(chaves: string[], range: string, desde: Record<string, number>, perfil: boolean) {
+  const itens: Record<string, unknown> = {};
+  // de 10 em 10: o Yahoo recusa uma rajada grande de uma vez
+  for (let i = 0; i < chaves.length; i += 10) {
+    await Promise.all(chaves.slice(i, i + 10).map(async (chave) => {
+      const simbolo = simboloYahoo(chave);
+      if (!simbolo) { itens[chave] = { erro: 'ticker inválido' }; return; }
+      try {
+        const s = await serieDoYahoo(simbolo, range);
+        const corte = range === '1d' ? Number(desde?.[chave] ?? 0) : 0;
+        itens[chave] = { ...s, pontos: corte ? s.pontos.filter((p) => p[0] > corte) : s.pontos, ...(perfil && !chave.startsWith('IDX:') ? { cap: await valorDeMercado(chave) } : {}) };
+      } catch (e) {
+        itens[chave] = { erro: String((e as Error)?.message ?? e) };
+      }
+    }));
+  }
+  return { itens, range, lidoEm: new Date().toISOString(), fonte: 'yahoo' };
+}
+
 const buscar = (mercado: string, ticker: string, comNome = false) => (mercado === 'EUA' ? daFinnhub(ticker, comNome) : daBrapi(ticker));
 // o dia do pregão, no fuso da bolsa (o fechamento de "hoje" para quem olha do Brasil à noite ainda é o de hoje lá)
 const diaDoPregao = (iso: string, mercado: string) =>
@@ -259,6 +336,14 @@ Deno.serve(async (req) => {
       const q = String(corpo.q ?? '').trim().slice(0, 60);
       if (q.length < 2) return resposta({ itens: [] });
       return resposta({ itens: await buscarNoYahoo(q) });
+    }
+
+    if (corpo?.acao === 'ao_vivo') {
+      if (!usuario) return resposta({ erro: 'só com o login' }, 401);
+      const chaves = [...new Set((Array.isArray(corpo.simbolos) ? corpo.simbolos : []).map((x: unknown) => String(x).trim().toUpperCase()))].slice(0, 60) as string[];
+      const range = INTERVALOS[corpo.range] ? corpo.range : '1d';
+      if (!chaves.length) return resposta({ itens: {}, range, lidoEm: new Date().toISOString(), fonte: 'yahoo' });
+      return resposta(await aoVivo(chaves, range, corpo.desde && typeof corpo.desde === 'object' ? corpo.desde : {}, !!corpo.perfil));
     }
 
     // UMA AÇÃO FORA DO CADASTRO: o ticker e o mercado no lugar do ativo_id; nada é gravado

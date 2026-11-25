@@ -559,6 +559,37 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   o miolo `ConteudoAtivo` (remontado a cada ação; o período, a forma e as marcas são lembrados). O `Modal` aceita `rotulo`
   (o nome para o leitor de tela quando o título não é texto). Sem atalho de teclado (o Ctrl+K da busca rápida já existe).
 
+## Acompanhamento das ações (25/11/2026, o mockup aprovado "Acompanhamento das ações")
+
+- `pages/Acompanhamento.jsx` (/acompanhamento, em Análises depois da Renda variável; também no celular, só de ler): o painel do
+  MERCADO das suas ações no grid da Visão geral (`GridPersonalizavel`, escopo `acompanhamento_v1`). A LISTA = os ativos do
+  cadastro (entram sozinhos) + os que você só ACOMPANHA — `rv_acompanhamento` (MIGRATION 037), por ticker e mercado: a ação
+  de fora (nome e tipo da busca do Yahoo) ou o ativo da carteira ESCONDIDO (`aparece = false`; sem linha, aparece). O ✎ abre
+  `components/acompanhamento/ModalAcompanhar.jsx` (Da carteira: o interruptor "Aparece", que só esconde da tela | Só
+  acompanhando: procura pelo `CampoTicker`, a alça ordena, a lixeira tira; "Salvar alterações (N)" = `planoDoAcompanhamento`).
+  Sem a 037, a tela mostra a carteira inteira e o pop-up explica.
+- OS PREÇOS AO VIVO: a função `cotacoes` ganhou a ação "ao_vivo" (o Yahoo, VÁRIOS de uma vez, SEM GRAVAR; as chaves "EUA:NVDA",
+  "B3:PETR4", "IDX:IBOV|SPX|NDX|USDBRL|IFIX"; `range` 1d de 5 em 5 min, 5d, 1mo, 6mo, ytd, 1y; `desde` = só os pontos novos;
+  `perfil` = o valor de mercado, Finnhub nos EUA e brapi na B3). `useAcompanhamento` lê ao abrir e A CADA MINUTO só com a aba
+  à vista e algum pregão aberto (`pregaoAberto`: B3 10h–18h, NY 9h30–16h, + 15 min; uma chamada para todos: ~480 por dia de
+  pregão com a tela aberta, ~2% das 500 mil do plano grátis); as séries do período valem 10 min; o valor de mercado, uma vez
+  por sessão (em memória). A FUNÇÃO DE ANTES responde { atualizados } (cai no "atualizar as cotações"): a tela para de
+  chamar e pede para publicá-la de novo.
+- OS BLOCOS (`BlocosAcompanhamento.jsx`): os ÍNDICES (a curva do dia e "os seus, na média" com quantos sobem e caem; antes
+  da abertura de Nova York o S&P e o Nasdaq são do pregão de ontem, e o cartão diz "em 24/11" no lugar de "hoje" —
+  `quandoDoPregao`), o MAPA DE
+  CALOR (o treemap "squarified" de `lib/acompanhamento.js`, por classe — a área mínima de 12% —; a cor = o % do período, a
+  mesma nos dois temas, NA ESCALA DO PERÍODO — `ESCALAS`: dia ±3%, semana ±6%, mês ±12%, ano e 12 meses ±30%, a legenda em
+  terços; o tamanho = a RAIZ do valor de mercado | a sua posição | igual, `acomp_tamanho`; o balão com o preço e
+  a curva; a LEGENDA clicável acende uma faixa; o ponto vazado = só acompanhando), as ALTAS E BAIXAS, O DIA DE CADA UM (as
+  curvas pequenas, `acomp_dia_ordem`), o DESEMPENHO COMPARADO (em % do início: a média dos seus, o Ibovespa, o S&P 500 e até 6
+  escolhidos — `acomp_comparar`, só os tickers —; a legenda acende e fixa; o balão do dia), os PRÓXIMOS EVENTOS (os
+  `rv_eventos` da carteira; o resultado repetido pelo calendário que mudou de data sai — `eventosSemRepetir`) e a TABELA DE
+  COTAÇÕES (desligada). Do TRADINGVIEW (`WidgetsTradingView.jsx`, grátis, com a marca): o MAPA DO MERCADO (Ibovespa, S&P 500,
+  Nasdaq 100; `acomp_mercado`) e, desligados, a fita, as notícias e o calendário econômico. O catálogo do grid aceita
+  `desligado: true` (existe no Personalizar, começa fora). Clicar num ativo abre o `PainelAtivo`. A faixa: Lista · Mercado ·
+  Período (dia, semana = 5 pregões, mês, no ano, 12 meses). Contas testadas em `test/acompanhamento.test.js`.
+
 ## Indicadores (06/11/2026, o mockup aprovado "Indicadores e importações", opção A)
 
 - `pages/Indicadores.jsx` (/indicadores, em Análises, entre Patrimônio e Investimentos — os painéis antes da tabela, 09/11/2026): o MERCADO, à parte do seu

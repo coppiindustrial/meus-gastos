@@ -604,7 +604,9 @@ export function TrilhoAcoes({ onPersonalizar, onAtualizar, atualizando = false, 
 //   catalogo     — [{ id, titulo, tabs, area, x, y, w, h, minH, minW, minPx, alturaFixa }]
 //                  `minPx` é piso de largura em PIXELS, convertido para coluna com a largura viva;
 //                  `alturaFixa` é o número de linhas de um conteúdo de altura exata e conhecida;
-//                  `alturaMedida` liga a medição do `CardAutoAltura` para o conteúdo que reflui.
+//                  `alturaMedida` liga a medição do `CardAutoAltura` para o conteúdo que reflui;
+//                  `desligado` (25/11/2026, o Acompanhamento): o bloco existe no "Personalizar", mas começa DESLIGADO
+//                  (a disposição de fábrica e o "Restaurar" o deixam de fora).
 //   permitidos   — o subconjunto do catálogo que a permissão do usuário deixa ver.
 //   renderWidget — (id, colunas) => nó. Separadores são tratados aqui dentro. `colunas` é a
 //                  largura do item em colunas do grid, já grampeada ao breakpoint — use-a para
@@ -711,7 +713,7 @@ export default function GridPersonalizavel({
   useEffect(() => { api.get(`/dashboard/config${qs}`).then(setConfig).catch(() => {}); }, [qs]);
 
   const ativos = useMemo(() => {
-    const base = Array.isArray(config?.widgets) ? config.widgets : permitidos.map((w) => w.id);
+    const base = Array.isArray(config?.widgets) ? config.widgets : permitidos.filter((w) => !w.desligado).map((w) => w.id);
     // Separadores não estão no catálogo (não são conteúdo) — passam direto, sem checar permissão.
     return base.filter((id) => ehSeparador(id) || permitidos.some((w) => w.id === id));
   }, [config, permitidos]);
@@ -931,10 +933,11 @@ export default function GridPersonalizavel({
     mexeu.current = true;
     try {
       await api.del(`/dashboard/layout${qsLayout}`);
-      const r = await api.put(`/dashboard/config${qs}`, { widgets: permitidos.map((w) => w.id) });
+      const deFabrica = permitidos.filter((w) => !w.desligado).map((w) => w.id);
+      const r = await api.put(`/dashboard/config${qs}`, { widgets: deFabrica });
       setConfig(r);
       setColapso({});
-      setLayout(layoutPadrao(permitidos.map((w) => w.id), catalogo));
+      setLayout(layoutPadrao(deFabrica, catalogo));
     } catch { /* silencioso: o dashboard segue com o layout em memória */ }
   };
 

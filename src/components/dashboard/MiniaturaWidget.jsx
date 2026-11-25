@@ -27,6 +27,8 @@ const IGUAL_A = {
   pt_kpis: 'vg_kpis', pt_agora: 'vg_agora', pt_evolucao: 'vg_meses', pt_rendeu: 'vg_meses', pt_entrou: 'vg_saldo',
   pt_onde: 'vg_origem', pt_ir: 'vg_grupos', pt_livre: 'vg_grupos', pt_vencimentos: 'vg_meses', pt_investimentos: 'vg_tabela',
   ind_kpis: 'vg_kpis',
+  // o ACOMPANHAMENTO (25/11/2026): os índices são os números; a tabela de cotações, a tabela
+  ac_indices: 'vg_kpis', ac_tabela: 'vg_tabela',
 };
 
 export default function MiniaturaWidget({ id: idPedido }) {
@@ -210,6 +212,89 @@ export default function MiniaturaWidget({ id: idPedido }) {
           ))}
           <polyline points="14,32 27,31 39,30 52,30 64,29 77,29 89,28 102,28" fill="none" stroke={ESCURO} strokeWidth="1.3" strokeDasharray="3 2" />
           <polyline points="14,46 27,44 39,47 52,45 64,43 77,46 89,44 102,45" fill="none" stroke={AMBAR} strokeWidth="1.3" />
+        </Caixa>
+      );
+    // O MAPA DE CALOR (o seu e o do mercado): quadrados verdes, vermelhos e cinzas
+    case 'ac_mapa':
+    case 'ac_mercado':
+      return (
+        <Caixa>
+          {[[6, 6, 46, 30, VERDE, 0.85], [54, 6, 30, 30, VERMELHO, 0.75], [86, 6, 28, 16, MEDIO, 0.5], [86, 24, 28, 12, VERDE, 0.5],
+            [6, 38, 30, 20, VERMELHO, 0.5], [38, 38, 26, 20, VERDE, 0.6], [66, 38, 22, 20, MEDIO, 0.45], [90, 38, 24, 20, VERMELHO, 0.85]].map(([x, y, w, h, c, o], i) => (
+            <rect key={i} x={x} y={y} width={w} height={h} rx="1.5" fill={c} fillOpacity={id === 'ac_mercado' ? o * 0.7 : o} />
+          ))}
+        </Caixa>
+      );
+    // AS ALTAS E AS BAIXAS: barras verdes em cima, vermelhas embaixo
+    case 'ac_altas':
+      return (
+        <Caixa>
+          {[44, 34, 26].map((w, i) => <g key={`a${i}`}><rect x="8" y={8 + i * 8} width="14" height="4" rx="1" fill={CINZA} /><rect x="26" y={8 + i * 8} width={w} height="4" rx="1" fill={VERDE} /></g>)}
+          {[38, 28, 20].map((w, i) => <g key={`b${i}`}><rect x="8" y={36 + i * 8} width="14" height="4" rx="1" fill={CINZA} /><rect x="26" y={36 + i * 8} width={w} height="4" rx="1" fill={VERMELHO} /></g>)}
+        </Caixa>
+      );
+    // O DIA DE CADA UM: curvas pequenas lado a lado
+    case 'ac_dia':
+      return (
+        <Caixa>
+          {[0, 1, 2, 3, 4, 5].map((i) => {
+            const x = 6 + (i % 3) * 37; const y = 6 + Math.floor(i / 3) * 28;
+            const sobe = i % 2 === 0;
+            return (
+              <g key={i}>
+                <rect x={x} y={y} width="33" height="24" rx="2" fill={PAPEL} stroke={G} />
+                <polyline points={sobe ? `${x + 3},${y + 18} ${x + 10},${y + 14} ${x + 17},${y + 16} ${x + 24},${y + 9} ${x + 30},${y + 7}` : `${x + 3},${y + 7} ${x + 10},${y + 11} ${x + 17},${y + 9} ${x + 24},${y + 16} ${x + 30},${y + 18}`}
+                  fill="none" stroke={sobe ? VERDE : VERMELHO} strokeWidth="1.3" />
+              </g>
+            );
+          })}
+        </Caixa>
+      );
+    // O DESEMPENHO COMPARADO: linhas partindo do mesmo ponto
+    case 'ac_comparado':
+      return (
+        <Caixa>
+          <line x1="8" y1="34" x2="112" y2="34" stroke={G} strokeDasharray="2 2" />
+          <polyline points="8,34 30,30 52,26 74,22 96,16 112,12" fill="none" stroke={ESCURO} strokeWidth="1.8" />
+          <polyline points="8,34 30,28 52,30 74,20 96,18 112,8" fill="none" stroke={GAS} strokeWidth="1.3" />
+          <polyline points="8,34 30,38 52,42 74,40 96,46 112,50" fill="none" stroke={AMBAR} strokeWidth="1.3" />
+          <polyline points="8,34 30,33 52,31 74,32 96,29 112,28" fill="none" stroke={CINZA} strokeWidth="1.2" strokeDasharray="3 2" />
+        </Caixa>
+      );
+    // OS PRÓXIMOS EVENTOS: a marca E ou D e a linha do texto
+    case 'ac_eventos':
+      return (
+        <Caixa>
+          {[0, 1, 2, 3].map((i) => (
+            <g key={i}>
+              <rect x="10" y={9 + i * 12} width="12" height="4" rx="1" fill={CINZA} />
+              <rect x="26" y={7 + i * 12} width="8" height="8" rx="1.5" fill={i % 2 ? AMBAR : SOBROU} />
+              <rect x="38" y={9 + i * 12} width={[60, 48, 54, 40][i]} height="4" rx="1" fill={MEDIO} />
+            </g>
+          ))}
+        </Caixa>
+      );
+    // A FITA DE COTAÇÕES: uma faixa com os nomes e as setas
+    case 'ac_fita':
+      return (
+        <Caixa>
+          <rect x="4" y="24" width="112" height="16" rx="2" fill={PAPEL} stroke={G} />
+          {[0, 1, 2, 3].map((i) => <g key={i}><rect x={10 + i * 27} y="30" width="12" height="4" rx="1" fill={ESCURO} /><rect x={24 + i * 27} y="30" width="7" height="4" rx="1" fill={i % 2 ? VERMELHO : VERDE} /></g>)}
+        </Caixa>
+      );
+    // AS NOTÍCIAS: manchetes empilhadas
+    case 'ac_noticias':
+      return (
+        <Caixa>
+          {[0, 1, 2].map((i) => <g key={i}><rect x="8" y={8 + i * 17} width={[96, 80, 90][i]} height="5" rx="1" fill={ESCURO} /><rect x="8" y={16 + i * 17} width={[60, 70, 50][i]} height="3" rx="1" fill={CINZA} /></g>)}
+        </Caixa>
+      );
+    // O CALENDÁRIO ECONÔMICO: a grade dos dias
+    case 'ac_calendario':
+      return (
+        <Caixa>
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => <rect key={i} x={8 + (i % 4) * 27} y={10 + Math.floor(i / 4) * 24} width="23" height="20" rx="2" fill={PAPEL} stroke={G} />)}
+          <rect x="11" y="14" width="10" height="3" rx="1" fill={AMBAR} /><rect x="65" y="38" width="12" height="3" rx="1" fill={AMBAR} />
         </Caixa>
       );
     default:

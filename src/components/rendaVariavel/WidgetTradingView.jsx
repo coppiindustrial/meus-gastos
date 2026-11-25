@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 
 const SCRIPT = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
 
-function useTemaEscuro() {
+export function useTemaEscuro() {
   const ler = () => document.documentElement.getAttribute('data-tema') === 'escuro';
   const [escuro, setEscuro] = useState(ler);
   useEffect(() => {

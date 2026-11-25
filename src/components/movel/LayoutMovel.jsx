@@ -29,6 +29,7 @@ const ICONES = {
   '/investimentos': <><ellipse cx="9" cy="6.5" rx="6" ry="2.6" /><path d="M3 6.5V11c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6V6.5" /><path d="M3 11v4.5c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6V11" /></>,
   '/renda-variavel': <path d="M4 18l6-6 4 4 6-8M14 8h6v6" />,
   '/indicadores': <><path d="M19 5 5 19" /><circle cx="7" cy="7" r="2" /><circle cx="17" cy="17" r="2" /></>,
+  '/acompanhamento': <><rect x="3" y="3" width="10" height="10" rx="1.5" /><rect x="15" y="3" width="6" height="6" rx="1.5" /><rect x="15" y="11" width="6" height="10" rx="1.5" /><rect x="3" y="15" width="10" height="6" rx="1.5" /></>,
 };
 export const SECOES_MOVEL = [
   { to: '/', label: 'Visão geral' },
@@ -39,6 +40,7 @@ export const SECOES_MOVEL = [
   { to: '/investimentos', label: 'Renda fixa' },
   { to: '/renda-variavel', label: 'Renda variável' },
   { to: '/indicadores', label: 'Indicadores' },
+  { to: '/acompanhamento', label: 'Acompanhamento' },
 ];
 const Icone = ({ para }) => (
   <svg viewBox="0 0 24 24" className="h-[20px] w-[20px] shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONES[para]}</svg>

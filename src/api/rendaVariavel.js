@@ -88,6 +88,11 @@ export async function eventosDoAtivo(ativoId) {
 }
 // a função relê os eventos (o último ano do Yahoo e os resultados da Finnhub): { eventos } ou { erroEventos } ou { erro }
 export const atualizarEventos = (ativoId) => chamar({ acao: 'eventos', ativo_id: ativoId });
+// O ACOMPANHAMENTO (25/11/2026): os preços de VÁRIOS de uma vez, do Yahoo, sem gravar — as chaves "EUA:NVDA", "B3:PETR4",
+// "IDX:IBOV"; o `range` ('1d' de 5 em 5 min, '5d', '1mo', '6mo', 'ytd', '1y'); `desde` = { chave: a hora do último ponto que a
+// tela tem } (só no '1d'); `perfil` traz o valor de mercado. { itens: { chave: { preco, anterior, pontos, … } | { erro } } } ou { erro }
+export const lerAoVivo = (simbolos, range = '1d', desde = {}, perfil = false) => chamar({ acao: 'ao_vivo', simbolos, range, desde, perfil });
+
 // A BUSCA DO CADASTRO: pelo nome ou pelo ticker ("nvidia" → NVDA), nas bolsas dos EUA e na B3:
 // { itens: [{ ticker, nome, mercado, tipo, bolsa }] } ou { erro }
 export const buscarAtivos = (q) => chamar({ acao: 'buscar', q });

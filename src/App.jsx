@@ -18,6 +18,7 @@ import Patrimonio from './pages/Patrimonio.jsx';
 import Investimentos from './pages/Investimentos.jsx';
 import RendaVariavel from './pages/RendaVariavel.jsx';
 import Indicadores from './pages/Indicadores.jsx';
+import Acompanhamento from './pages/Acompanhamento.jsx';
 import Importar from './pages/Importar.jsx';
 
 function Protected({ children }) {
@@ -53,6 +54,7 @@ export default function App() {
       <Route path="/investimentos" element={<Protected><Investimentos /></Protected>} />
       <Route path="/renda-variavel" element={<Protected><RendaVariavel /></Protected>} />
       <Route path="/indicadores" element={<Protected><Indicadores /></Protected>} />
+      <Route path="/acompanhamento" element={<Protected><Acompanhamento /></Protected>} />
       <Route path="/extrato" element={<Navigate to="/importar" replace />} />
       <Route path="/importar" element={<Protected><Importar /></Protected>} />
       {/* As telas que ainda não existem: cada uma ganha a sua rota quando a fase dela chegar. */}

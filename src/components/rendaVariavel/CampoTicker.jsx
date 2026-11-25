@@ -9,7 +9,7 @@ import { nomeDoTipo } from '../../lib/rendaVariavel.js';
 // (como a do `SelectBusca`): o ticker, o nome, o tipo e a bolsa. ↑ ↓ e Enter escolhem, Esc fecha; escolher preenche o ticker,
 // o tipo e o nome (`onEscolher`). Sem escolher, o que foi escrito fica como o ticker (o de antes: conferido ao sair).
 
-export default function CampoTicker({ value, onChange, onEscolher, onBlur, disabled, autoFocus, erro = false }) {
+export default function CampoTicker({ value, onChange, onEscolher, onBlur, disabled, autoFocus, erro = false, placeholder = 'MU ou o nome (micron)' }) {
   const ref = useRef(null);
   const [aberto, setAberto] = useState(false);
   const [itens, setItens] = useState([]);
@@ -59,7 +59,7 @@ export default function CampoTicker({ value, onChange, onEscolher, onBlur, disab
   return (
     <>
       <input ref={ref} className={`input !h-8 !py-1 font-semibold uppercase placeholder:font-normal placeholder:normal-case ${erro ? '!border-red-400' : ''}`}
-        value={value} placeholder="MU ou o nome (micron)" disabled={disabled} autoFocus={autoFocus} autoComplete="off" spellCheck={false}
+        value={value} placeholder={placeholder} disabled={disabled} autoFocus={autoFocus} autoComplete="off" spellCheck={false}
         role="combobox" aria-expanded={mostrar} aria-autocomplete="list"
         onChange={(e) => { digitou.current = true; setAberto(true); onChange(e.target.value.toUpperCase()); }}
         onKeyDown={tecla} onBlur={() => { setAberto(false); onBlur?.(); }} />

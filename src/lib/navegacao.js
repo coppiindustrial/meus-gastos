@@ -49,6 +49,8 @@ export const GRUPOS = [
       // endereço /investimentos são os mesmos) e a renda variável entrou logo depois.
       { to: '/investimentos', label: 'Renda fixa' },
       { to: '/renda-variavel', label: 'Renda variável' },
+      // O ACOMPANHAMENTO DAS AÇÕES (25/11/2026, o mockup aprovado): o mercado das suas ações, a cada minuto no pregão
+      { to: '/acompanhamento', label: 'Acompanhamento' },
     ],
   },
 ];
