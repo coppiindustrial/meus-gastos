@@ -398,7 +398,7 @@ export default function ModalCadastroCarteira({ cadastro, aportes = [], aportesP
       {tipos && (
         <Tooltip label="Cadastrar um tipo (CRA, CRI, Tesouro…) com o IR e o IOF dele; aqui também se mudam e se excluem os seus tipos">
           <button type="button" onClick={() => setGerirTipos(true)} className={`${SEG} font-semibold text-gray-800 hover:text-gray-900`}>
-            <CirculoMais borda="text-gray-500" />Novo tipo
+            <CirculoMais borda="text-gray-500" subir={false} />Novo tipo
           </button>
         </Tooltip>
       )}

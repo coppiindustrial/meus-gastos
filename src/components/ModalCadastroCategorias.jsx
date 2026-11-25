@@ -297,7 +297,7 @@ export default function ModalCadastroCategorias({ grupos: gruposBanco, categoria
       </Tooltip>
       <DivisorFaixa />
       <button type="button" onClick={novoGrupo} className={`${SEG} font-semibold text-gray-800 hover:text-gray-900`}>
-        <CirculoMais borda="text-gray-500" />Novo grupo
+        <CirculoMais borda="text-gray-500" subir={false} />Novo grupo
       </button>
     </TrilhoFaixa>
   );

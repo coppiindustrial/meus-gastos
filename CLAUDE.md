@@ -992,7 +992,8 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
 - **Ícone pequeno numa caixa = PX INTEIROS** (06/11/2026): o rem do app é 14px, então `h-3`/`h-4`/`h-5` dão 10,5 / 14 /
   17,5 px, e um ícone de traço fino centrado num desses fica meio pixel fora do lugar (borrado, "esquisito"). O "+" no
   círculo tracejado é o `CirculoMais` (icons.jsx: 16 e 8 px, ou 18 e 10 no `grande`; SOBE 1PX — o texto se desenha
-  abaixo do centro da caixa dele, e centrado o círculo ficava baixo: medido nas capturas, 09/11/2026); a seta de abrir dos investimentos, o
+  abaixo do centro da caixa dele, e centrado o círculo ficava baixo: medido nas capturas, 09/11/2026; `subir={false}` na
+  ação do pé das listas e nos botões do cabeçalho dos pop-ups, "Novo tipo" e "Novo grupo", medido em 25/11/2026); a seta de abrir dos investimentos, o
   `QUADRADO_SETA` (20 e 12 px). Caixa e ícone em `h-[Npx]` com a diferença PAR.
 - **Ícone** (barras e tendência, 27/10/2026): `public/icon.svg` é a fonte, no MESMO desenho do Coppi Gains (fundo em
   degradê #343434 → #101010, símbolo branco recortado por máscara, a mesma sombra). Os PNGs, o maskable e o

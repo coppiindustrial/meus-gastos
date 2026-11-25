@@ -592,7 +592,9 @@ export const IconColar = ({ className = 'h-[15px] w-[15px]' }) => (
 // das maiúsculas e 4px abaixo da linha de base — o texto se desenha mais baixo que a caixa dele. Com o -1px, fica no
 // meio do texto (3px e 3px). Vale para todo "+" ao lado de um texto (Adicionar…, Criar categoria, aporte em…).
 // `subir`: o 1px acima (o padrão, ao lado do texto das linhas de acrescentar); `subir={false}` quando ele já fica no meio da
-// linha do texto — a ação no pé das listas (`SelectBusca`): medido em 13/11/2026, lá o círculo ficava 1px acima da letra.
+// linha do texto — a ação no pé das listas (`SelectBusca`): medido em 13/11/2026, lá o círculo ficava 1px acima da letra — e
+// os botões do CABEÇALHO DOS POP-UPS no trilho de 25px ("Novo tipo", "Novo grupo": negrito, com maiúscula), medido em
+// 25/11/2026: subindo, o círculo ficava acima do meio do texto.
 export const CirculoMais = ({ borda = 'text-gray-400', cor = '', grande = false, subir = true }) => {
   const t = grande ? 18 : 16; const m = t / 2; const p = grande ? 5 : 4;
   return (
