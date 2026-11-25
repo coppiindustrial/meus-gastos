@@ -31,7 +31,7 @@ import { CLASSES, TIPOS, classeDoTipo, ordensDosAtivos } from '../../lib/rendaVa
 // `cadastro_rv_fechadas` —, "N ativos · EUA · US$"), o tipo na linha é curto ("Ação", "ETF": a faixa diz o resto) e mudar o
 // tipo para outra classe leva a linha para a faixa dela. Os CAMPOS QUIETOS (`.quieto`), a coluna EM USO (as operações), a
 // ALÇA ⠿ que reordena DENTRO da classe (`arrastoAgrupado`; soltar noutra classe não vale — a classe é o tipo) e grava a
-// `ordem` (`ordensDosAtivos`). O cabeçalho num trilho só: a busca (ticker, nome, corretora) | Só os ativos | ⇕ | Novo ativo.
+// `ordem` (`ordensDosAtivos`). O cabeçalho num trilho só: a busca (ticker, nome, corretora) | Só os ativos | ⇕ (o ativo novo entra pelo "Adicionar em X" da classe).
 // Com busca ou "Só os ativos" a lista é parcial e a alça não arrasta.
 
 const OPCOES_TIPO = [
@@ -86,7 +86,6 @@ export default function ModalCadastroAtivos({ ativos, operacoes, tipoInicial, in
     setFechadas((s) => { if (!s.has(classe)) return s; const n = new Set(s); n.delete(classe); return n; });
     setFoco(nova.chave);
   };
-  const novoAtivo = () => { setBusca(''); setSoAtivos(false); adicionar('ext'); };
 
   // escolher na lista da busca: o ticker, o tipo (o palpite da busca) e o nome; já conferido
   const escolhidos = useRef({});
@@ -274,7 +273,7 @@ export default function ModalCadastroAtivos({ ativos, operacoes, tipoInicial, in
     );
   };
 
-  // O CABEÇALHO NUM TRILHO SÓ, o do cadastro das categorias: a busca | Só os ativos | ⇕ | Novo ativo
+  // O CABEÇALHO NUM TRILHO SÓ, o do cadastro das categorias: a busca | Só os ativos | ⇕
   const SEG = 'inline-flex h-[25px] shrink-0 items-center gap-2 whitespace-nowrap rounded-[3px] px-2 text-[12.5px] transition-colors hover:bg-gray-200';
   const acoes = (
     <TrilhoFaixa className="mr-1 shrink-0">
@@ -300,12 +299,6 @@ export default function ModalCadastroAtivos({ ativos, operacoes, tipoInicial, in
           onClick={() => setFechadas(tudoAberto ? new Set(CLASSES.map((c) => c.id)) : new Set())}
           className={`${SEG} w-[30px] justify-center !px-0 text-gray-600 hover:text-gray-900 disabled:opacity-40 disabled:hover:bg-transparent`}>
           <IconExpandirTudo fechar={tudoAberto} />
-        </button>
-      </Tooltip>
-      <DivisorFaixa />
-      <Tooltip label="Uma linha nova no Exterior: escreva o ticker ou o nome e escolha na lista — o tipo leva a linha para a classe dela">
-        <button type="button" onClick={novoAtivo} className={`${SEG} font-semibold text-gray-800 hover:text-gray-900`}>
-          <CirculoMais borda="text-gray-500" />Novo ativo
         </button>
       </Tooltip>
     </TrilhoFaixa>

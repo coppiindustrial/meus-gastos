@@ -490,7 +490,7 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   (a cor da carteira, recolhe animado, `cadastro_rv_fechadas`), o tipo curto na linha ("Ação", "ETF"; mudar para outra
   classe leva a linha para a faixa dela), campos quietos, a coluna EM USO (as operações), "Adicionar em X" no fim de cada
   classe, a ALÇA ⠿ que reordena DENTRO da classe e grava a `ordem` (`ordensDosAtivos`, testada: o `pos` é o da tela já
-  agrupada, senão só abrir contava como mexer), e o cabeçalho num trilho só: a busca | Só os ativos | ⇕ | Novo ativo; ▾ atualizar as cotações agora e o CSV; "+ Lançar operação") e o cartão com a pílula Carteira | Operações
+  agrupada, senão só abrir contava como mexer), e o cabeçalho num trilho só: a busca | Só os ativos | ⇕ (o "Novo ativo" do trilho saiu, 25/11/2026, a pedido: entrava sempre no Exterior; o novo é o "Adicionar em X" da classe); ▾ atualizar as cotações agora e o CSV; "+ Lançar operação") e o cartão com a pílula Carteira | Operações
   (`rv_aba`). A CARTEIRA (`TabelaRendaVariavel.jsx`) é a `TabelaCarteira` um nível acima: a faixa da classe com a barra da
   cor e a marca do mercado (aberto com a hora, fechado, ou âmbar "sem cotação nova há N h" no pregão), o ativo recuado e as
   OPERAÇÕES no trilho (a compra com o lote de hoje, a venda com o lucro realizado, o desdobramento; os proventos ficam na coluna deles, na aba Operações e no Patrimônio); recolhe
