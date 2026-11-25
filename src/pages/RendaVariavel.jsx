@@ -99,8 +99,9 @@ export default function RendaVariavel() {
     ]);
   };
   const abrirMais = (el) => {
-    const r = el.getBoundingClientRect();
-    setMais({ x: r.right - 280, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+    // rente à CAIXA dos botões (o pai do ▾): a borda direita do menu na dela, logo abaixo
+    const r = el.parentElement.getBoundingClientRect();
+    setMais({ direita: r.right, y: r.bottom + 4, titulo: 'Mais ações', itens: [
       { rotulo: 'Ver o gráfico de uma ação…', sub: 'na carteira ou não: pelo ticker ou pelo nome', onEscolher: () => setGrafico({ alvo: carteira.posicoes[0] ? { ativoId: carteira.posicoes[0].ativo.id } : null, abrirSeletor: true }) },
       { rotulo: d.atualizando ? 'Atualizando as cotações…' : 'Atualizar as cotações agora', sub: d.erroFuncao ? `a função não respondeu: ${d.erroFuncao}` : 'o agendamento lê a cada 15 min no pregão', desabilitado: d.atualizando || vazio, onEscolher: () => d.releer(true) },
       { rotulo: 'Exportar a carteira (CSV)', sub: 'cada ativo: quantidade, preço médio, posição, resultado', desabilitado: !nAtivos, motivo: !nAtivos ? 'nenhum ativo' : undefined, onEscolher: exportar },

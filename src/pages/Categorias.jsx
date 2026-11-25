@@ -268,8 +268,9 @@ export default function Categorias() {
   const [mais, setMais] = useState(null);
   const maisAbertoNoClique = useRef(false);
   const abrirMais = (el) => {
-    const r = el.getBoundingClientRect();
-    setMais({ x: r.right - 250, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+    // rente à CAIXA dos botões (o pai do ▾): a borda direita do menu na dela, logo abaixo
+    const r = el.parentElement.getBoundingClientRect();
+    setMais({ direita: r.right, y: r.bottom + 4, titulo: 'Mais ações', itens: [
       { rotulo: 'Novo grupo', sub: 'nome, tipo e cor', onEscolher: () => setModal({ tipo: 'grupo' }) },
       { rotulo: 'Exportar categorias (CSV)', sub: `grupo, categoria e o uso em ${textoPer}`, onEscolher: exportar },
     ] });

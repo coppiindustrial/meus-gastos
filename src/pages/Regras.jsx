@@ -278,8 +278,9 @@ export default function Regras() {
     { key: 'aviso', label: 'Aviso', map: (l) => ({ 'sem-uso': 'sem uso', escondida: 'escondida' })[uso?.get(l.id)?.aviso?.tipo] ?? '' },
   ]);
   const abrirMais = (el) => {
-    const r = el.getBoundingClientRect();
-    setMais({ x: r.right - 270, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+    // rente à CAIXA dos botões (o pai do ▾): a borda direita do menu na dela, logo abaixo
+    const r = el.parentElement.getBoundingClientRect();
+    setMais({ direita: r.right, y: r.bottom + 4, titulo: 'Mais ações', itens: [
       { rotulo: 'Aplicar nas pendências agora', sub: 'as regras gravadas classificam o que está a revisar', onEscolher: aplicarNasPendencias },
       { rotulo: 'Exportar regras (CSV)', sub: 'ordem, palavra, categoria e uso', onEscolher: exportar },
     ] });

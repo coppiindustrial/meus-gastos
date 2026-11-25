@@ -144,8 +144,9 @@ export default function Investimentos() {
     ]);
   };
   const abrirMais = (el) => {
-    const r = el.getBoundingClientRect();
-    setMais({ x: r.right - 260, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+    // rente à CAIXA dos botões (o pai do ▾): a borda direita do menu na dela, logo abaixo
+    const r = el.parentElement.getBoundingClientRect();
+    setMais({ direita: r.right, y: r.bottom + 4, titulo: 'Mais ações', itens: [
       { rotulo: 'Exportar a carteira (CSV)', sub: 'cada aporte: aplicado, vale hoje, rendeu, IR', desabilitado: !qtdAportes, motivo: !qtdAportes ? 'nenhum aporte' : undefined, onEscolher: exportar },
       { rotulo: encerrados ? 'Esconder os encerrados' : 'Mostrar os encerrados', sub: 'os que venceram ou foram resgatados inteiros', desabilitado: !carteira.encerrados.length, motivo: !carteira.encerrados.length ? 'nenhum encerrado' : undefined, onEscolher: () => setEncerrados((e) => !e) },
     ] });

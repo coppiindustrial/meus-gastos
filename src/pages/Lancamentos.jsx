@@ -310,9 +310,10 @@ export default function Lancamentos() {
   const [mais, setMais] = useState(null); // o menu (posição)
   const maisAbertoNoClique = useRef(false);
   const abrirMais = (el) => {
-    const r = el.getBoundingClientRect();
+    // rente à CAIXA dos botões (o pai do ▾): a borda direita do menu na dela, logo abaixo
+    const r = el.parentElement.getBoundingClientRect();
     const vazio = !gravadas.length;
-    setMais({ x: r.right - 250, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+    setMais({ direita: r.right, y: r.bottom + 4, titulo: 'Mais ações', itens: [
       { rotulo: noMes ? `Exportar ${nomeCompetencia(comp).toLowerCase()} (CSV)` : 'Exportar o período (CSV)', sub: 'o que está na tela, com os filtros e a ordem',
         desabilitado: vazio, motivo: vazio ? 'nada na tela' : undefined, onEscolher: exportar },
     ] });

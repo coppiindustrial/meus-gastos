@@ -921,7 +921,7 @@ ficou é o pop-up do histórico (conferir e desfazer). A gravação está no his
   Caixa nova que abre/recolhe linhas e rola por dentro: `[scrollbar-gutter:stable]`.
 - **Botões do cabeçalho = o grupo do DRE** (Fixos, Importar, Lançamentos): ícones numa caixa só, nome no tooltip,
   e o gesto do dia a dia como botão de destaque ao lado. Nos Lançamentos (30/10/2026): a caixa só com o ▾ "Mais
-  ações" (Exportar o mês em CSV) e "+ Novo lançamento" sempre à vista.
+  ações" (Exportar o mês em CSV) e "+ Novo lançamento" sempre à vista. O MENU DO ▾ ABRE RENTE À CAIXA (25/11/2026): `direita` (a borda direita do pai do ▾) e `y` = o fundo + 4 no `MenuContexto`, que mede a largura — nunca `x: r.right - 250`, que cada tela chutava.
 - **Números do menu** (30/10/2026): o que ainda pede a pessoa depois de importar — Importar (a importar), Gastos
   fixos (a lançar, do ano até hoje) e Revisar pendências (a revisar). `contador` + `dica` no item de
   `lib/navegacao.js`, contas em `lib/useContadores.js`; pílula âmbar ao lado do nome, ponto âmbar no grupo fechado e

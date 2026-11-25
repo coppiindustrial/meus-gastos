@@ -285,7 +285,8 @@ export default function Importar() {
 
   // O MENU DO ▾ (a opção B do mockup da tabela): o que falta, por mês, e "Importar arquivos…".
   const abrirMenu = (el) => {
-    const r = el.getBoundingClientRect();
+    // rente à CAIXA dos botões (o pai do ▾): a borda direita do menu na dela, logo abaixo
+    const r = el.parentElement.getBoundingClientRect();
     const itens = [];
     (agora?.linhas ?? []).filter((l) => l.faltam > 0).forEach((l) => {
       // o mês de outro ano (o dezembro de antes, em janeiro) leva o ano no nome
@@ -304,7 +305,7 @@ export default function Importar() {
     if (!itens.length) itens.push({ grupo: 'Nada falta importar' });
     itens.push({ sep: true });
     itens.push({ rotulo: agora?.faltam > 1 ? `Importar os ${agora.faltam} de uma vez…` : 'Importar arquivos…', icone: <IcoImportar />, sub: 'faturas e extrato juntos, arrastando os CSVs', onEscolher: () => setArquivos(true) });
-    setMenu({ x: r.right - 280, y: r.bottom + 4, titulo: agora?.faltam ? `${agora.faltam} ${agora.faltam === 1 ? 'importação falta' : 'importações faltam'}` : 'Importar', itens });
+    setMenu({ direita: r.right, y: r.bottom + 4, titulo: agora?.faltam ? `${agora.faltam} ${agora.faltam === 1 ? 'importação falta' : 'importações faltam'}` : 'Importar', itens });
   };
 
   // EXCLUIR uma importação. O extrato: qualquer um (antes só o último), para importar de novo o mês; o antigo (sem

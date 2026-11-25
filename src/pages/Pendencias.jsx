@@ -158,9 +158,10 @@ export default function Pendencias() {
     { key: 'valor', label: 'Valor', tipo: 'dinheiro', map: (p) => p.valor_centavos / 100 },
   ]);
   const abrirMais = (el) => {
-    const r = el.getBoundingClientRect();
+    // rente à CAIXA dos botões (o pai do ▾): a borda direita do menu na dela, logo abaixo
+    const r = el.parentElement.getBoundingClientRect();
     const vazio = !pendencias?.length;
-    setMais({ x: r.right - 250, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+    setMais({ direita: r.right, y: r.bottom + 4, titulo: 'Mais ações', itens: [
       { rotulo: 'Exportar pendências (CSV)', sub: 'data, estabelecimento, cartão e valor', desabilitado: vazio, motivo: vazio ? 'nada a revisar' : undefined, onEscolher: exportar },
     ] });
   };

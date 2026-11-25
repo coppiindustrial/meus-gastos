@@ -310,8 +310,9 @@ export default function Cartoes() {
     { key: 'parcelas', label: 'Parcelas que vêm', tipo: 'dinheiro', map: (c) => (resumo[c.id]?.parcelas ? resumo[c.id].parcelas.total / 100 : null) },
   ]);
   const abrirMais = (el) => {
-    const r = el.getBoundingClientRect();
-    setMais({ x: r.right - 250, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+    // rente à CAIXA dos botões (o pai do ▾): a borda direita do menu na dela, logo abaixo
+    const r = el.parentElement.getBoundingClientRect();
+    setMais({ direita: r.right, y: r.bottom + 4, titulo: 'Mais ações', itens: [
       { rotulo: 'Exportar cartões (CSV)', sub: 'cadastro, última fatura e parcelas', desabilitado: !ordenados.length, onEscolher: exportar },
       { rotulo: 'Importar faturas…', sub: 'a tela Importar', onEscolher: () => navigate('/importar') },
     ] });

@@ -322,11 +322,12 @@ export default function Fixos() {
     { key: 'media', label: 'Média', tipo: 'dinheiro', map: (l) => (l.media ?? 0) / 100 },
   ]);
   const abrirMais = (el) => {
-    const r = el.getBoundingClientRect();
+    // rente à CAIXA dos botões (o pai do ▾): a borda direita do menu na dela, logo abaixo
+    const r = el.parentElement.getBoundingClientRect();
     // Criar um fixo é no cadastro (✎). O `motivo` só existe com o item desabilitado: o menu o mostra no
     // lugar do `sub` sempre que vem preenchido.
     const vazio = !matriz.linhas.length;
-    setMais({ x: r.right - 230, y: r.bottom + 4, titulo: 'Mais ações', itens: [
+    setMais({ direita: r.right, y: r.bottom + 4, titulo: 'Mais ações', itens: [
       { rotulo: `Exportar ${ano} (CSV)`, sub: 'o lançado de cada fixo em cada mês', desabilitado: vazio, motivo: vazio ? 'nada no ano' : undefined, onEscolher: exportar },
     ] });
   };

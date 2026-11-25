@@ -69,7 +69,9 @@ function proximo(lista, atual, passo) {
   return atual;
 }
 
-// `menu`: `{ x, y, titulo, itens }` ou null. `x`/`y` são coordenadas de JANELA (o cursor).
+// `menu`: `{ x, y, titulo, itens }` ou null. `x`/`y` são coordenadas de JANELA (o cursor). No ▾ "Mais ações" de um
+// grupo de botões, `direita` no lugar do `x`: a borda direita do menu fica RENTE à da caixa, qualquer que seja a
+// largura dele (25/11/2026; antes cada tela chutava a largura, `r.right - 250`, e cada uma abria num lugar).
 export default function MenuContexto({ menu, onFechar }) {
   const painelRef = useRef(null);
   const subRef = useRef(null);
@@ -92,8 +94,8 @@ export default function MenuContexto({ menu, onFechar }) {
     if (!el) return;
     const w = el.offsetWidth;
     const h = el.offsetHeight;
-    let left = menu.x;
-    if (left + w > window.innerWidth - MARGEM) left = menu.x - w;
+    let left = menu.direita != null ? menu.direita - w : menu.x;
+    if (menu.direita == null && left + w > window.innerWidth - MARGEM) left = menu.x - w;
     left = Math.max(MARGEM, Math.min(left, window.innerWidth - MARGEM - w));
     let top = menu.y;
     if (top + h > window.innerHeight - MARGEM) top = Math.max(MARGEM, menu.y - h);
