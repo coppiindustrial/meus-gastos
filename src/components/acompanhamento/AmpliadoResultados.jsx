@@ -6,7 +6,7 @@ import { BuscaFaixa } from '../filtros/Segmentos.jsx';
 import BalaoGrafico, { useBalao } from '../graficos/BalaoGrafico.jsx';
 import { IconMaximize, IconMinimize } from '../icons.jsx';
 import { fechamentosDesde, listarResultados } from '../../api/acompanhamento.js';
-import { resultadosDivulgados, resultadosQueVem, resumoDosResultados } from '../../lib/acompanhamento.js';
+import { resultadosDivulgados, resultadosQueVem } from '../../lib/acompanhamento.js';
 import { semAcento } from '../../lib/buscaLancamentos.js';
 import { exportCsv } from '../../lib/exportCsv.js';
 import { corTexto, pctTxt } from './BlocosAcompanhamento.jsx';
@@ -14,8 +14,7 @@ import { corTexto, pctTxt } from './BlocosAcompanhamento.jsx';
 // OS RESULTADOS DAS EMPRESAS (25/11/2026, a opção A do mockup "Resultados divulgados · ampliado", a pedido: "quero ter como
 // avaliar"): o ⤢ dos Próximos eventos abre o painel dos ampliados (1280px/90vh, tela cheia, CSV). DIVULGADOS: o lucro por
 // ação (LPA) esperado × o divulgado, a SURPRESA (a barra para os dois lados e a pílula), a receita, COMO A AÇÃO REAGIU no
-// pregão seguinte e quanto andou desde então (a curvinha) — e em cima quantas bateram, a surpresa média, a reação média
-// (com quem bateu e mesmo assim caiu) e o próximo. PRÓXIMOS: o calendário, com o esperado e, da mesma empresa, como foi a
+// pregão seguinte e quanto andou desde então (a curvinha; a faixa dos quatro números de cima saiu, a pedido). PRÓXIMOS: o calendário, com o esperado e, da mesma empresa, como foi a
 // última. As contas em `lib/acompanhamento.js` (testadas). O LPA e a receita são da Finnhub; os preços, os fechamentos
 // guardados. Só os ativos cadastrados (os eventos chegam com o gráfico de cada um).
 
@@ -65,16 +64,6 @@ function Curvinha({ pontos, p }) {
     </svg>
   );
 }
-function Cartao({ titulo, children, sub }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-[10px] border border-gray-200 px-3.5 py-3">
-      <span className="text-[11.5px] font-semibold text-gray-500">{titulo}</span>
-      {children}
-      {sub && <span className="truncate text-[11.5px] text-gray-500" title={typeof sub === 'string' ? sub : undefined}>{sub}</span>}
-    </div>
-  );
-}
-
 export default function AmpliadoResultados({ itens, hoje, onClose, onAbrir }) {
   const [cheio, setCheio] = useState(false);
   const [aba, setAba] = useState('divulgados');
@@ -111,7 +100,6 @@ export default function AmpliadoResultados({ itens, hoje, onClose, onAbrir }) {
   const corte = periodo === 'tudo' ? '' : menosMeses(hoje, Number(periodo));
   const divulgados = todos.filter((d) => d.data >= corte && casa(d));
   const proximos = useMemo(() => (dados ? resultadosQueVem(dados.eventos, todos, hoje) : []), [dados, todos, hoje]).filter(casa);
-  const r = resumoDosResultados(divulgados);
   const tk = (e) => porAtivo.get(e.ativo_id)?.ticker ?? '?';
   const moeda = (e) => (porAtivo.get(e.ativo_id)?.mercado === 'EUA' ? 'US$' : 'R$');
   const lista = aba === 'divulgados' ? divulgados : proximos;
@@ -170,7 +158,6 @@ export default function AmpliadoResultados({ itens, hoje, onClose, onAbrir }) {
 
   const TH = 'h-[38px] whitespace-nowrap border-b border-gray-200 bg-white px-2 text-left align-bottom pb-2 text-[10.5px] font-semibold uppercase tracking-[0.05em] text-gray-500';
   const td = 'border-b border-gray-100 px-2 py-1.5 align-middle';
-  const prox = proximos[0];
 
   return (
     <Modal open onClose={onClose} title="Resultados das empresas" acoes={acoes} alturaCheia animarTamanho padding="p-0"
@@ -184,26 +171,6 @@ export default function AmpliadoResultados({ itens, hoje, onClose, onAbrir }) {
             {aba === 'divulgados' && <AbasPilula abas={PERIODOS} valor={periodo} onChange={setPeriodo} variante="claro" altura={30} folga={2} />}
             <BuscaFaixa className="w-[220px]" placeholder="Buscar empresa" value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
-          {aba === 'divulgados' && dados && (
-            <div className="grid grid-cols-2 gap-3 px-5 pb-3 lg:grid-cols-4">
-              <Cartao titulo="Bateram o esperado" sub={r.abaixo.length ? `${r.abaixo.length} ficaram abaixo: ${r.abaixo.map(tk).filter((v, k, a) => a.indexOf(v) === k).join(', ')}` : r.n ? 'nenhuma ficou abaixo' : null}>
-                <span className="text-[20px] font-semibold tabular-nums text-gray-900">{r.n ? `${r.bateram} de ${r.n}` : '—'}</span>
-                {r.n > 0 && <span className="flex h-[6px] overflow-hidden rounded-full bg-orange-200"><span className="bg-green-600" style={{ width: `${(r.bateram / r.n) * 100}%` }} /></span>}
-              </Cartao>
-              <Cartao titulo="Surpresa mediana no LPA" sub={r.maior && r.pior ? `maior: ${tk(r.maior)} ${pctTxt(r.maior.surpresa, 1)} · pior: ${tk(r.pior)} ${pctTxt(r.pior.surpresa, 1)}` : null}>
-                <span className={`text-[20px] font-semibold tabular-nums ${corTexto(r.surpresaMediana)}`}>{pctTxt(r.surpresaMediana, 1)}</span>
-              </Cartao>
-              <Cartao titulo="A ação no pregão seguinte"
-                sub={r.nReacao ? [`na média · subiu em ${r.subiram}, caiu em ${r.cairam}`, r.bateuECaiu.length ? `bateu e caiu: ${r.bateuECaiu.map(tk).join(', ')}` : null].filter(Boolean).join(' · ') : 'sem os fechamentos em volta das datas'}>
-                <span className={`text-[20px] font-semibold tabular-nums ${corTexto(r.reacaoMedia)}`}>{pctTxt(r.reacaoMedia, 1)}</span>
-              </Cartao>
-              <Cartao titulo="O próximo" sub={prox ? [prox.estimado !== null ? `esperado ${moeda(prox)} ${num(prox.estimado)}` : null, prox.anterior?.surpresa != null ? `da última vez ${prox.anterior.surpresa >= 0 ? 'bateu' : 'ficou abaixo'} (${pctTxt(prox.anterior.surpresa, 1)})` : null].filter(Boolean).join(' · ') : null}>
-                <span className="text-[20px] font-semibold text-gray-900">
-                  {prox ? <>{tk(prox)} <span className="text-[13px] font-medium text-gray-500">em {diasAte(prox.data, hoje)} dias · {dm(prox.data)}</span></> : '—'}
-                </span>
-              </Cartao>
-            </div>
-          )}
         </div>
 
         <div className="flex-1 px-5 pb-2">

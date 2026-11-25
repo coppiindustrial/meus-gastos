@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   altasEBaixas, areasDasClasses, corDaVariacao, desdeDe, emPorcentoDoInicio, eventosSemRepetir, faixaDe, faixasDaEscala, juntarLeitura, listaDoAcompanhamento,
   mediaDasSeries, planoDoAcompanhamento, pregaoAberto, quandoDoPregao, reacaoAoResultado, resultadosDivulgados, resultadosQueVem,
-  resumoDosResultados, squarify, surpresa, tamanhos, variacao, variacoesDoPeriodo,
+  squarify, surpresa, tamanhos, variacao, variacoesDoPeriodo,
 } from '../src/lib/acompanhamento.js';
 
 // Dados FICTÍCIOS.
@@ -191,7 +191,7 @@ test('reacaoAoResultado: depois do fechamento é o pregão seguinte contra o dia
   assert.equal(reacaoAoResultado(FECH, '2026-11-24', 'amc'), null); // o pregão seguinte ainda não veio
 });
 
-test('resultadosDivulgados, resultadosQueVem e resumoDosResultados', () => {
+test('resultadosDivulgados e resultadosQueVem', () => {
   const ev = [
     { ativo_id: 'a', tipo: 'resultado', data: '2026-11-19', hora: 'amc', valor: 1.3, estimado: 1.25, receita: 57, receita_estimada: 55, ano: 2027, trimestre: 3 },
     { ativo_id: 'b', tipo: 'resultado', data: '2026-11-18', hora: 'bmo', valor: 0.9, estimado: 1, ano: 2026, trimestre: 3 },
@@ -208,12 +208,4 @@ test('resultadosDivulgados, resultadosQueVem e resumoDosResultados', () => {
   const vem = resultadosQueVem(ev, div, '2026-11-25');
   assert.equal(vem.length, 1);
   assert.equal(vem[0].anterior.data, '2026-11-19');
-  const r = resumoDosResultados(div);
-  assert.equal(r.n, 3);
-  assert.equal(r.bateram, 2);
-  assert.equal(r.nReacao, 2);
-  assert.deepEqual(r.bateuECaiu.map((d) => d.ativo_id), ['a']);
-  assert.equal(r.maior.data, '2026-06-30'); // +10%: o trimestre de antes do app também conta
-  assert.equal(r.pior.ativo_id, 'b');
-  assert.equal(Math.round(r.surpresaMediana * 1000) / 1000, 0.04); // −10%, +4%, +10%: a do meio
 });

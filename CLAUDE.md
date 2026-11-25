@@ -603,10 +603,9 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   12 / 24 meses / Tudo, a busca e o CSV. Por divulgação: o LPA esperado × o real e a SURPRESA (a barra para os dois lados e
   a pílula, verde bateu / laranja abaixo), a receita, COMO A AÇÃO REAGIU no pregão seguinte (antes da abertura, o fechamento
   do dia contra a véspera; depois do fechamento ou sem a hora, o do dia seguinte contra o do dia — `reacaoAoResultado`) e o
-  "desde então" com a curvinha; o balão lê o caso ("bateu e a ação caiu: o mercado já esperava mais"). Em cima: quantas
-  bateram, a surpresa MEDIANA (a média se perdia num caso só: a SPCX com +230%), a reação média com quem bateu e caiu, e o
-  próximo. O trimestre de antes do app (`hora` 'periodo', a data do fim do trimestre) entra sem a reação. Contas em
-  `resultadosDivulgados`/`resultadosQueVem`/`resumoDosResultados` (lib/acompanhamento.js, testadas); os dados por
+  "desde então" com a curvinha; o balão lê o caso ("bateu e a ação caiu: o mercado já esperava mais"). A faixa dos quatro
+  números em cima (quantas bateram, a surpresa, a reação média, o próximo) saiu, a pedido. O trimestre de antes do app (`hora` 'periodo', a data do fim do trimestre) entra sem a reação. Contas em
+  `resultadosDivulgados`/`resultadosQueVem` (lib/acompanhamento.js, testadas); os dados por
   `listarResultados` e `fechamentosDesde` (api/acompanhamento.js)) e a TABELA DE
   COTAÇÕES (desligada). Do TRADINGVIEW (`WidgetsTradingView.jsx`, grátis, com a marca; NO ESCURO a caixa de todos vai com
   `color-scheme: normal` — o `dark` herdado do <html> fazia o navegador pintar de branco o fundo das notícias, do calendário e da fita): o MAPA DO MERCADO (Ibovespa, S&P 500,

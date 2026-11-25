@@ -334,27 +334,3 @@ export function resultadosQueVem(eventos, divulgados, hoje) {
     .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0))
     .map((e) => ({ ...e, anterior: divulgados.find((d) => d.ativo_id === e.ativo_id) ?? null }));
 }
-
-// os números de cima: quantos bateram, a surpresa MEDIANA (a média se perde num caso só: a SPCX com +230% levava a média a
-// +17%), a reação média e quem bateu e mesmo assim caiu
-export function resumoDosResultados(divulgados) {
-  const com = divulgados.filter((d) => d.surpresa !== null);
-  const bateram = com.filter((d) => d.surpresa >= 0);
-  const reag = divulgados.filter((d) => d.reacao !== null);
-  const media = (xs, f) => (xs.length ? xs.reduce((s, x) => s + f(x), 0) / xs.length : null);
-  const meio = (vs) => { if (!vs.length) return null; const o = [...vs].sort((a, b) => a - b); const k = Math.floor(o.length / 2); return o.length % 2 ? o[k] : (o[k - 1] + o[k]) / 2; };
-  const ordem = [...com].sort((a, b) => b.surpresa - a.surpresa);
-  return {
-    n: com.length,
-    bateram: bateram.length,
-    abaixo: com.filter((d) => d.surpresa < 0),
-    surpresaMediana: meio(com.map((d) => d.surpresa)),
-    maior: ordem[0] ?? null,
-    pior: ordem.length > 1 ? ordem[ordem.length - 1] : null,
-    reacaoMedia: media(reag, (d) => d.reacao),
-    nReacao: reag.length,
-    subiram: reag.filter((d) => d.reacao > 0).length,
-    cairam: reag.filter((d) => d.reacao < 0).length,
-    bateuECaiu: reag.filter((d) => d.surpresa !== null && d.surpresa >= 0 && d.reacao < 0),
-  };
-}
