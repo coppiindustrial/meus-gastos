@@ -597,12 +597,24 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   a curva; a LEGENDA clicável acende uma faixa; o ponto vazado = só acompanhando), as ALTAS E BAIXAS, O DIA DE CADA UM (as
   curvas pequenas, `acomp_dia_ordem`), o DESEMPENHO COMPARADO (em % do início: a média dos seus, o Ibovespa, o S&P 500 e até 6
   escolhidos — `acomp_comparar`, só os tickers —; a legenda acende e fixa; o balão do dia), os PRÓXIMOS EVENTOS (os
-  `rv_eventos` da carteira; o resultado repetido pelo calendário que mudou de data sai — `eventosSemRepetir`) e a TABELA DE
+  `rv_eventos` da carteira; o resultado repetido pelo calendário que mudou de data sai — `eventosSemRepetir`; o ⤢ abre
+  o AMPLIADO DOS RESULTADOS — 25/11/2026, a opção A do mockup "Resultados divulgados · ampliado", a pedido: "quero ter como
+  avaliar": `components/acompanhamento/AmpliadoResultados.jsx`, o painel dos ampliados com as abas Divulgados | Próximos,
+  12 / 24 meses / Tudo, a busca e o CSV. Por divulgação: o LPA esperado × o real e a SURPRESA (a barra para os dois lados e
+  a pílula, verde bateu / laranja abaixo), a receita, COMO A AÇÃO REAGIU no pregão seguinte (antes da abertura, o fechamento
+  do dia contra a véspera; depois do fechamento ou sem a hora, o do dia seguinte contra o do dia — `reacaoAoResultado`) e o
+  "desde então" com a curvinha; o balão lê o caso ("bateu e a ação caiu: o mercado já esperava mais"). Em cima: quantas
+  bateram, a surpresa MEDIANA (a média se perdia num caso só: a SPCX com +230%), a reação média com quem bateu e caiu, e o
+  próximo. O trimestre de antes do app (`hora` 'periodo', a data do fim do trimestre) entra sem a reação. Contas em
+  `resultadosDivulgados`/`resultadosQueVem`/`resumoDosResultados` (lib/acompanhamento.js, testadas); os dados por
+  `listarResultados` e `fechamentosDesde` (api/acompanhamento.js)) e a TABELA DE
   COTAÇÕES (desligada). Do TRADINGVIEW (`WidgetsTradingView.jsx`, grátis, com a marca; NO ESCURO a caixa de todos vai com
   `color-scheme: normal` — o `dark` herdado do <html> fazia o navegador pintar de branco o fundo das notícias, do calendário e da fita): o MAPA DO MERCADO (Ibovespa, S&P 500,
   Nasdaq 100; `acomp_mercado`) e, desligados, a fita, as notícias e o calendário econômico. O catálogo do grid aceita
   `desligado: true` (existe no Personalizar, começa fora). Clicar num ativo abre o `PainelAtivo`. A faixa: Lista · Mercado ·
   Período (dia, semana = 5 pregões, mês, no ano, 12 meses). Contas testadas em `test/acompanhamento.test.js`.
+  O ✎ "O QUE ACOMPANHAR" MORA NA PÍLULA do 👁 ↻ Personalizar (25/11/2026, a pedido), à esquerda e separado por uma linha:
+  `acoesNoTrilho` do `GridPersonalizavel` (o `antes` do `TrilhoAcoes`; só no cabeçalho, não no flutuante).
 
 ## Indicadores (06/11/2026, o mockup aprovado "Indicadores e importações", opção A)
 

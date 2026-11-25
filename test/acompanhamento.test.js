@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   altasEBaixas, areasDasClasses, corDaVariacao, desdeDe, emPorcentoDoInicio, eventosSemRepetir, faixaDe, faixasDaEscala, juntarLeitura, listaDoAcompanhamento,
-  mediaDasSeries, planoDoAcompanhamento, pregaoAberto, quandoDoPregao, squarify, tamanhos, variacao, variacoesDoPeriodo,
+  mediaDasSeries, planoDoAcompanhamento, pregaoAberto, quandoDoPregao, reacaoAoResultado, resultadosDivulgados, resultadosQueVem,
+  resumoDosResultados, squarify, surpresa, tamanhos, variacao, variacoesDoPeriodo,
 } from '../src/lib/acompanhamento.js';
 
 // Dados FICTÍCIOS.
@@ -164,4 +165,55 @@ test('planoDoAcompanhamento sem reordenar: a ordem gravada fica e o novo vai dep
   // arrastou: renumera pela lista
   const q = planoDoAcompanhamento(antes, itens.slice(0, 2), { reordenar: true });
   assert.deepEqual(q.atualizar.map((a) => [a.id, a.mudancas.ordem]), [['b', 1], ['a', 2]]);
+});
+
+// ------------------------------------------------------------ os resultados divulgados (dados FICTÍCIOS)
+const FECH = [['2026-11-17', 100], ['2026-11-18', 102], ['2026-11-19', 104], ['2026-11-20', 98], ['2026-11-21', 99], ['2026-11-24', 101]];
+
+test('surpresa: contra o esperado, o prejuízo esperado pelo módulo, null sem os dois', () => {
+  assert.equal(Math.round(surpresa(1.3, 1.25) * 1000) / 1000, 0.04);
+  assert.equal(surpresa(-0.5, -1), 0.5); // perdeu menos que o esperado: bateu
+  assert.equal(surpresa(null, 1), null);
+  assert.equal(surpresa(1, 0), null);
+});
+
+test('reacaoAoResultado: depois do fechamento é o pregão seguinte contra o dia; antes da abertura, o dia contra a véspera', () => {
+  const amc = reacaoAoResultado(FECH, '2026-11-19', 'amc');
+  assert.deepEqual([amc.antes[0], amc.depois[0]], ['2026-11-19', '2026-11-20']);
+  assert.equal(Math.round(amc.reacao * 10000) / 10000, Math.round((98 / 104 - 1) * 10000) / 10000);
+  assert.equal(Math.round(amc.desde * 10000) / 10000, Math.round((101 / 104 - 1) * 10000) / 10000);
+  const bmo = reacaoAoResultado(FECH, '2026-11-19', 'bmo');
+  assert.deepEqual([bmo.antes[0], bmo.depois[0]], ['2026-11-18', '2026-11-19']);
+  // num sábado depois do fechamento de sexta: o de sexta contra o de segunda
+  const sab = reacaoAoResultado(FECH, '2026-11-22', '');
+  assert.deepEqual([sab.antes[0], sab.depois[0]], ['2026-11-21', '2026-11-24']);
+  assert.equal(reacaoAoResultado(FECH, '2026-11-19', 'periodo'), null); // a data é o fim do trimestre
+  assert.equal(reacaoAoResultado(FECH, '2026-11-24', 'amc'), null); // o pregão seguinte ainda não veio
+});
+
+test('resultadosDivulgados, resultadosQueVem e resumoDosResultados', () => {
+  const ev = [
+    { ativo_id: 'a', tipo: 'resultado', data: '2026-11-19', hora: 'amc', valor: 1.3, estimado: 1.25, receita: 57, receita_estimada: 55, ano: 2027, trimestre: 3 },
+    { ativo_id: 'b', tipo: 'resultado', data: '2026-11-18', hora: 'bmo', valor: 0.9, estimado: 1, ano: 2026, trimestre: 3 },
+    { ativo_id: 'b', tipo: 'resultado', data: '2026-06-30', hora: 'periodo', valor: 1.1, estimado: 1, ano: 2026, trimestre: 2 },
+    { ativo_id: 'a', tipo: 'resultado', data: '2027-02-23', hora: 'amc', valor: null, estimado: 1.45, ano: 2027, trimestre: 4 },
+    { ativo_id: 'a', tipo: 'dividendo', data: '2026-12-01', valor: 0.01 },
+  ];
+  const div = resultadosDivulgados(ev, { a: FECH, b: FECH }, '2026-11-25');
+  assert.deepEqual(div.map((d) => [d.ativo_id, d.data]), [['a', '2026-11-19'], ['b', '2026-11-18'], ['b', '2026-06-30']]);
+  assert.ok(div[0].reacao < 0 && div[0].surpresa > 0);
+  assert.ok(div[1].reacao > 0 && div[1].surpresa < 0);
+  assert.equal(div[2].semData, true);
+  assert.equal(div[2].reacao, null);
+  const vem = resultadosQueVem(ev, div, '2026-11-25');
+  assert.equal(vem.length, 1);
+  assert.equal(vem[0].anterior.data, '2026-11-19');
+  const r = resumoDosResultados(div);
+  assert.equal(r.n, 3);
+  assert.equal(r.bateram, 2);
+  assert.equal(r.nReacao, 2);
+  assert.deepEqual(r.bateuECaiu.map((d) => d.ativo_id), ['a']);
+  assert.equal(r.maior.data, '2026-06-30'); // +10%: o trimestre de antes do app também conta
+  assert.equal(r.pior.ativo_id, 'b');
+  assert.equal(Math.round(r.surpresaMediana * 1000) / 1000, 0.04); // −10%, +4%, +10%: a do meio
 });

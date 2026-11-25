@@ -273,3 +273,88 @@ export function areasDasClasses(somas, caixa, minimo = 0.12) {
   pesos = pesos.map((p) => p / t2);
   return squarify(ids.map((k, i) => ({ classe: k, v: pesos[i] })), caixa).map(({ classe, x, y, w, h }) => ({ classe, x, y, w, h }));
 }
+
+// ------------------------------------------------------------ os resultados (o ampliado dos Próximos eventos)
+// OS RESULTADOS DIVULGADOS (25/11/2026, a opção A do mockup "Resultados divulgados · ampliado"): para AVALIAR cada
+// divulgação, o lucro por ação esperado × o divulgado (a SURPRESA), a receita (quando a Finnhub a deu) e COMO A AÇÃO REAGIU,
+// pelos fechamentos guardados: antes da abertura ('bmo') ou durante ('dmh'), o fechamento do dia (o 1º pregão a partir dele)
+// contra o da véspera; depois do fechamento ('amc') ou sem a hora, o do pregão seguinte contra o do dia. "Desde então" = o
+// último fechamento contra o de antes. A linha de `hora` 'periodo' (o trimestre de antes do app, com a data do FIM DO
+// TRIMESTRE) entra sem a reação: a data não é a da divulgação (`semData`).
+// `eventos`: as linhas de `rv_eventos` (tipo 'resultado'); `fechamentos`: { ativo_id: [[data, preco], …] } em ordem.
+
+// a surpresa de um número contra o esperado (o esperado negativo, o prejuízo, pelo módulo); null sem os dois
+export function surpresa(real, esperado) {
+  const r = Number(real); const e = Number(esperado);
+  if (real === null || real === undefined || esperado === null || esperado === undefined || !Number.isFinite(r) || !Number.isFinite(e) || e === 0) return null;
+  return (r - e) / Math.abs(e);
+}
+// o último fechamento ANTES de `data` (ou até ela, com `inclusive`) e o primeiro DEPOIS dela (ou a partir dela)
+function fechamentoAte(lista, data, inclusive) {
+  let achado = null;
+  for (const p of lista) { if (p[0] < data || (inclusive && p[0] === data)) achado = p; else break; }
+  return achado;
+}
+function fechamentoDesde(lista, data, inclusive) {
+  return lista.find((p) => p[0] > data || (inclusive && p[0] === data)) ?? null;
+}
+export function reacaoAoResultado(lista, data, hora) {
+  if (!lista?.length || hora === 'periodo') return null;
+  const naAbertura = hora === 'bmo' || hora === 'dmh';
+  const antes = naAbertura ? fechamentoAte(lista, data, false) : fechamentoAte(lista, data, true);
+  const depois = naAbertura ? fechamentoDesde(lista, data, true) : fechamentoDesde(lista, data, false);
+  if (!antes || !depois || !(antes[1] > 0)) return null;
+  const ultimo = lista[lista.length - 1];
+  const desde = lista.filter((p) => p[0] >= antes[0]);
+  const passo = Math.max(1, Math.ceil(desde.length / 40));
+  const curva = desde.filter((_, k) => k % passo === 0 || k === desde.length - 1).map((p) => p[1] / antes[1] - 1);
+  return { antes, depois, reacao: depois[1] / antes[1] - 1, ultimo, desde: ultimo[1] / antes[1] - 1, curva };
+}
+
+export function resultadosDivulgados(eventos, fechamentos, hoje) {
+  return eventosSemRepetir((eventos ?? []).filter((e) => e.tipo === 'resultado'))
+    .filter((e) => e.valor !== null && e.valor !== undefined && e.data <= hoje)
+    .map((e) => {
+      const semData = e.hora === 'periodo';
+      return {
+        ...e,
+        semData,
+        surpresa: surpresa(e.valor, e.estimado),
+        surpresaReceita: surpresa(e.receita, e.receita_estimada),
+        ...(reacaoAoResultado(fechamentos?.[e.ativo_id], e.data, e.hora) ?? { reacao: null, desde: null, curva: null }),
+      };
+    })
+    .sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : 0));
+}
+
+// os que vêm: a data, o esperado e, da mesma empresa, a última divulgação (a surpresa e a reação) para comparar
+export function resultadosQueVem(eventos, divulgados, hoje) {
+  return eventosSemRepetir((eventos ?? []).filter((e) => e.tipo === 'resultado'))
+    .filter((e) => (e.valor === null || e.valor === undefined) && e.data >= hoje && e.hora !== 'periodo')
+    .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0))
+    .map((e) => ({ ...e, anterior: divulgados.find((d) => d.ativo_id === e.ativo_id) ?? null }));
+}
+
+// os números de cima: quantos bateram, a surpresa MEDIANA (a média se perde num caso só: a SPCX com +230% levava a média a
+// +17%), a reação média e quem bateu e mesmo assim caiu
+export function resumoDosResultados(divulgados) {
+  const com = divulgados.filter((d) => d.surpresa !== null);
+  const bateram = com.filter((d) => d.surpresa >= 0);
+  const reag = divulgados.filter((d) => d.reacao !== null);
+  const media = (xs, f) => (xs.length ? xs.reduce((s, x) => s + f(x), 0) / xs.length : null);
+  const meio = (vs) => { if (!vs.length) return null; const o = [...vs].sort((a, b) => a - b); const k = Math.floor(o.length / 2); return o.length % 2 ? o[k] : (o[k - 1] + o[k]) / 2; };
+  const ordem = [...com].sort((a, b) => b.surpresa - a.surpresa);
+  return {
+    n: com.length,
+    bateram: bateram.length,
+    abaixo: com.filter((d) => d.surpresa < 0),
+    surpresaMediana: meio(com.map((d) => d.surpresa)),
+    maior: ordem[0] ?? null,
+    pior: ordem.length > 1 ? ordem[ordem.length - 1] : null,
+    reacaoMedia: media(reag, (d) => d.reacao),
+    nReacao: reag.length,
+    subiram: reag.filter((d) => d.reacao > 0).length,
+    cairam: reag.filter((d) => d.reacao < 0).length,
+    bateuECaiu: reag.filter((d) => d.surpresa !== null && d.surpresa >= 0 && d.reacao < 0),
+  };
+}

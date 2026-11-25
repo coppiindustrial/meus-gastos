@@ -546,7 +546,9 @@ export function PersonalizarModal({
 // O ícone gira enquanto houver busca em voo (contador do próprio hook), não por um tempo fixo.
 // O OLHO (04/11/2026, o do Gestor): `onOcultar` liga o botão de ocultar os valores, antes do Atualizar; ele pisca ao
 // alternar (`animarIcone`). Quem esconde é a página (`useMascararValores`).
-export function TrilhoAcoes({ onPersonalizar, onAtualizar, atualizando = false, flutuante = false, oculto = false, onOcultar }) {
+// `antes` (25/11/2026, o Mercado, a pedido): botões da PÁGINA dentro da mesma pílula, à esquerda e separados por uma linha
+// (o ✎ "O que acompanhar" mexe no que aparece; os de depois, na vista). Só no cabeçalho, não no flutuante.
+export function TrilhoAcoes({ onPersonalizar, onAtualizar, atualizando = false, flutuante = false, oculto = false, onOcultar, antes = null }) {
   const btn = `inline-flex items-center gap-1.5 rounded-[6px] transition-colors duration-[120ms] ${
     // 36px e não `h-9`: `h-9` é 2,25rem, que sobre a raiz de 87,5% dá 31,5 — ímpar, e num
     // `devicePixelRatio` de 1,5 cai em 47,25 pixels físicos, fora da grade. O número tem de ser
@@ -560,6 +562,12 @@ export function TrilhoAcoes({ onPersonalizar, onAtualizar, atualizando = false, 
           atenção. Quadrado nos dois estados (28 no cabeçalho, 36 flutuando), ambos pares.
           Os dois tamanhos divergem de propósito: no cabeçalho o botão divide a faixa de 60px com o
           título, e flutuando ele é o único alvo sobre os widgets — ali 32px pediam mira. */}
+      {antes && !flutuante && (
+        <>
+          {antes}
+          <span aria-hidden="true" className="mx-[3px] h-[18px] w-px bg-gray-300" />
+        </>
+      )}
       {onOcultar && (
         <Tooltip label={oculto ? 'Mostrar os valores' : 'Ocultar os valores'}>
           <button type="button" onClick={(e) => { animarIcone(e.currentTarget); onOcultar(); }} aria-pressed={oculto}
@@ -623,7 +631,7 @@ export function TrilhoAcoes({ onPersonalizar, onAtualizar, atualizando = false, 
 //   pronto       — enquanto false, o grid não desenha item nenhum (esperando os dados chegarem).
 //   abaixo       — nó renderizado entre a faixa do título e o grid (a faixa de filtros global).
 export default function GridPersonalizavel({
-  escopo = 'principal', titulo, acessorio, catalogo, permitidos, renderWidget, acoes,
+  escopo = 'principal', titulo, acessorio, catalogo, permitidos, renderWidget, acoes, acoesNoTrilho = null,
   ajustarItem, ocultar, pronto = true, abaixo = null, onAtualizar, atualizando = false, oculto = false, onOcultar,
 }) {
   const confirmar = useConfirmacao();
@@ -1104,7 +1112,7 @@ export default function GridPersonalizavel({
         acoes={!edicao && (
           <>
             {acoes}
-            <TrilhoAcoes onPersonalizar={abrirEdicao} onAtualizar={onAtualizar} atualizando={atualizando} oculto={oculto} onOcultar={onOcultar} />
+            <TrilhoAcoes onPersonalizar={abrirEdicao} onAtualizar={onAtualizar} atualizando={atualizando} oculto={oculto} onOcultar={onOcultar} antes={acoesNoTrilho} />
           </>
         )} />
       <div ref={sentinelaRef} className="h-px" aria-hidden="true" />

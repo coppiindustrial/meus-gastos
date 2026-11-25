@@ -386,11 +386,24 @@ function quando(data, hoje) {
   const n = Math.round((d - h) / 86400000);
   return n === 0 ? 'hoje' : n === 1 ? 'amanhã' : n < 7 ? SEMANA[new Date(d).getUTCDay()] : `em ${n} dias`;
 }
-export function ProximosEventos({ eventos, itens, hoje, onAbrir }) {
+// o ⤢ abre o ampliado dos resultados (`AmpliadoResultados`: o esperado × o divulgado e a reação da ação)
+const IconAmpliar = () => (
+  <svg viewBox="0 0 24 24" className="h-[15px] w-[15px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+  </svg>
+);
+export function ProximosEventos({ eventos, itens, hoje, onAbrir, onAmpliar }) {
   const porAtivo = new Map(itens.filter((i) => i.ativoId).map((i) => [i.ativoId, i]));
   const lista = eventosSemRepetir((eventos ?? []).filter((e) => porAtivo.has(e.ativo_id))).slice(0, 14);
   return (
-    <Bloco titulo="Próximos eventos" sub="resultados e datas-ex dos da carteira">
+    <Bloco titulo="Próximos eventos" sub="resultados e datas-ex dos da carteira"
+      extra={onAmpliar && (
+        <button type="button" onClick={onAmpliar} title="Ampliar: os resultados divulgados, o esperado × o real e a reação da ação"
+          aria-label="Ampliar os resultados"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-[4px] text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800">
+          <IconAmpliar />
+        </button>
+      )}>
       {eventos === undefined ? <p className="text-[12.5px] text-gray-400">Carregando…</p>
         : eventos === null ? <p className="text-[12.5px] text-gray-400">Os eventos pedem a migration 031 (a do gráfico do ativo).</p>
           : !lista.length ? <p className="text-[12.5px] leading-relaxed text-gray-400">Nenhum resultado nem data-ex à frente. Os eventos de cada ativo chegam com o gráfico dele (o histórico do Yahoo e, nos EUA, o calendário de resultados).</p>

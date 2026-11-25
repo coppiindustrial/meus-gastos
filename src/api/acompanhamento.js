@@ -1,4 +1,4 @@
-import { exigir, supabase } from './supabase.js';
+import { buscarTudo, exigir, supabase } from './supabase.js';
 
 // O ACOMPANHAMENTO DAS AÇÕES (25/11/2026, migration 037): a lista do que a pessoa acompanha fora da carteira e o que ela
 // escondeu da carteira (`rv_acompanhamento`). Sem a migration, `listarAcompanhamento` devolve null: a tela mostra a carteira
@@ -32,4 +32,25 @@ export async function proximosEventos(hoje) {
     if (semTabela(err)) return null;
     throw err;
   }
+}
+
+// O AMPLIADO DOS RESULTADOS (25/11/2026): todos os resultados guardados dos ativos cadastrados (os divulgados e os que vêm;
+// as contas em `resultadosDivulgados`/`resultadosQueVem`). Sem a 031, null.
+export async function listarResultados() {
+  try {
+    return await buscarTudo(() => supabase.from('rv_eventos').select('ativo_id, tipo, data, valor, estimado, receita, receita_estimada, hora, ano, trimestre, atualizado_em')
+      .eq('tipo', 'resultado').order('data').order('ativo_id'));
+  } catch (err) {
+    if (semTabela(err)) return null;
+    throw err;
+  }
+}
+// os fechamentos de VÁRIOS ativos desde uma data (a reação da ação a cada resultado): { ativo_id: [[data, preco], …] }
+export async function fechamentosDesde(ids, desde) {
+  if (!ids.length) return {};
+  const linhas = await buscarTudo(() => supabase.from('rv_fechamentos').select('ativo_id, data, preco')
+    .in('ativo_id', ids).gte('data', desde).order('ativo_id').order('data'));
+  const m = {};
+  for (const l of linhas) (m[l.ativo_id] ??= []).push([l.data, Number(l.preco)]);
+  return m;
 }

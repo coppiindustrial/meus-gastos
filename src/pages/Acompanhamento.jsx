@@ -9,6 +9,7 @@ import { IconLapis } from '../components/icons.jsx';
 import PainelAtivo from '../components/rendaVariavel/PainelAtivo.jsx';
 import useAcompanhamento from '../components/acompanhamento/useAcompanhamento.js';
 import ModalAcompanhar from '../components/acompanhamento/ModalAcompanhar.jsx';
+import AmpliadoResultados from '../components/acompanhamento/AmpliadoResultados.jsx';
 import {
   AltasEBaixas, Bloco, CartoesIndices, CurvasDoDia, DesempenhoComparado, MapaDeCalor, ProximosEventos, RANGES_CMP, TabelaCotacoes,
 } from '../components/acompanhamento/BlocosAcompanhamento.jsx';
@@ -59,7 +60,6 @@ const CATALOGO = [
 const BLOCOS_MOVEL = [['ac_indices', null], ['ac_mapa', 360], ['ac_altas', 380], ['ac_dia', 420], ['ac_eventos', 320], ['ac_comparado', 320]];
 const LS_OCULTAR = 'acomp_ocultar';
 const lerLista = (chave) => { try { const v = JSON.parse(lsGet(chave) || '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 6) : []; } catch { return []; } };
-const ICONE = 'flex h-9 items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200';
 const num = (v, c) => v.toLocaleString('pt-BR', { minimumFractionDigits: c, maximumFractionDigits: c });
 
 export default function Acompanhamento() {
@@ -76,6 +76,7 @@ export default function Acompanhamento() {
   const [fonte, setFonteEstado] = useState(() => (FONTES_MERCADO.some((f) => f.key === lsGet('acomp_mercado')) ? lsGet('acomp_mercado') : 'IBOV'));
   const setFonte = (v) => { setFonteEstado(v); lsSet('acomp_mercado', v); };
   const [modal, setModal] = useState(false);
+  const [resultados, setResultados] = useState(false); // o ampliado dos resultados das empresas
   const [grafico, setGrafico] = useState(null);
   const [oculto, setOcultoEstado] = useState(() => lsGet(LS_OCULTAR) === 'sim');
   const [versao, setVersao] = useState(0);
@@ -124,7 +125,7 @@ export default function Acompanhamento() {
       case 'ac_mapa': return <MapaDeCalor itens={itens} caps={d.caps} posicoes={posicoes} periodoTxt={per.txt} emDia={emDia} escala={ESCALAS[periodo]} onAbrir={abrir} />;
       case 'ac_altas': return <AltasEBaixas itens={itens} periodoTxt={per.txt} onAbrir={abrir} />;
       case 'ac_dia': return <CurvasDoDia itens={itens} onAbrir={abrir} />;
-      case 'ac_eventos': return <ProximosEventos eventos={d.eventos} itens={itens} hoje={rv.hoje} onAbrir={abrir} />;
+      case 'ac_eventos': return <ProximosEventos eventos={d.eventos} itens={itens} hoje={rv.hoje} onAbrir={abrir} onAmpliar={() => setResultados(true)} />;
       case 'ac_comparado':
         return <DesempenhoComparado itens={itens} serie={d.series[rangeCmp]?.itens ?? null} range={rangeCmp} setRange={setRangeCmp}
           escolhidos={escolhidos.filter((k) => itens.some((i) => i.chave === k))} setEscolhidos={setEscolhidos} />;
@@ -153,12 +154,15 @@ export default function Acompanhamento() {
         : d.lendo && !d.lidoEm ? 'lendo…' : lido === null ? '' : lido < 60 ? `lido há ${lido} s` : `lido há ${Math.round(lido / 60)} min`}
     </span>
   );
+  // O ✎ DENTRO DA PÍLULA do 👁 ↻ Personalizar (25/11/2026, o mockup "Resultados divulgados · ampliado", a pedido), à esquerda
+  // e separado por uma linha: ele mexe no que aparece; os outros, na vista
   const acoes = (
-    <div className="inline-flex overflow-hidden rounded-md border border-gray-300 bg-white">
-      <Tooltip label="O que acompanhar">
-        <button type="button" aria-label="O que acompanhar" onClick={() => setModal(true)} disabled={d.carregando} className={`${ICONE} w-[38px]`}><IconLapis className="h-3.5 w-3.5" /></button>
-      </Tooltip>
-    </div>
+    <Tooltip label="O que acompanhar">
+      <button type="button" aria-label="O que acompanhar" onClick={() => setModal(true)} disabled={d.carregando}
+        className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-[6px] text-gray-600 transition-colors duration-[120ms] hover:bg-gray-200 active:bg-gray-300 disabled:opacity-40">
+        <IconLapis className="h-[15px] w-[15px]" />
+      </button>
+    </Tooltip>
   );
   const filtros = (
     <FaixaProvider>
@@ -198,10 +202,12 @@ export default function Acompanhamento() {
   }
   return (
     <>
-      <GridPersonalizavel escopo="acompanhamento_v1" titulo="Mercado" acessorio={acessorio} acoes={acoes}
+      <GridPersonalizavel escopo="acompanhamento_v1" titulo="Mercado" acessorio={acessorio} acoesNoTrilho={acoes}
         catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={(id) => <Fragment key={`${id}-${versao}`}>{renderWidget(id)}</Fragment>}
         abaixo={filtros} pronto={!d.carregando} onAtualizar={d.recarregar} atualizando={d.lendo} oculto={oculto}
         onOcultar={alternarOculto} />
+      {resultados && <AmpliadoResultados itens={d.lista ?? []} hoje={rv.hoje} onClose={() => setResultados(false)}
+        onAbrir={(i) => { setResultados(false); abrir(i); }} />}
       {painel}
       {pop}
     </>
