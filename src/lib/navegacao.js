@@ -45,12 +45,13 @@ export const GRUPOS = [
       { to: '/patrimonio', label: 'Patrimônio' },
       // o do MERCADO (06/11/2026, o mockup "Indicadores e importações", opção A): Selic, CDI, IPCA, dólar, euro e a Focus
       { to: '/indicadores', label: 'Indicadores' },
+      // O MERCADO DAS SUAS AÇÕES (25/11/2026, o mockup "Acompanhamento das ações"; o nome e o lugar, logo abaixo dos
+      // Indicadores, a pedido): o mapa de calor, as cotações ao vivo e o comparativo, a cada minuto no pregão
+      { to: '/mercado', label: 'Mercado' },
       // RENDA FIXA E RENDA VARIÁVEL (13/11/2026, a pedido): o item de antes, "Investimentos", virou "Renda fixa" (a tela e o
       // endereço /investimentos são os mesmos) e a renda variável entrou logo depois.
       { to: '/investimentos', label: 'Renda fixa' },
       { to: '/renda-variavel', label: 'Renda variável' },
-      // O ACOMPANHAMENTO DAS AÇÕES (25/11/2026, o mockup aprovado): o mercado das suas ações, a cada minuto no pregão
-      { to: '/acompanhamento', label: 'Acompanhamento' },
     ],
   },
 ];

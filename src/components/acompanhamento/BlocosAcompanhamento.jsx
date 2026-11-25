@@ -3,6 +3,8 @@ import AbasPilula from '../AbasPilula.jsx';
 import MenuContexto from '../MenuContexto.jsx';
 import BalaoGrafico, { posicaoBalao } from '../graficos/BalaoGrafico.jsx';
 import { useDestaqueSeries } from '../graficos/LegendaSeries.jsx';
+import { CartaoKpi } from '../graficos/CartoesResumo.jsx';
+import { varCor } from '../../lib/varCor.js';
 import {
   altasEBaixas, areasDasClasses, corDaVariacao, emPorcentoDoInicio, eventosSemRepetir, faixaDe, faixasDaEscala, mediaDasSeries, squarify, tamanhos,
 } from '../../lib/acompanhamento.js';
@@ -74,31 +76,48 @@ export function Curva({ pontos, anterior, className = 'h-10 w-full' }) {
 }
 
 // ------------------------------------------------------------ os índices (a linha de cima)
+// OS CARTÕES DOS OUTROS PAINÉIS (25/11/2026, a pedido: "mais semelhante às de outras telas"): o `CartaoKpi compacto` dos
+// Indicadores e do Patrimônio — o ícone, a pílula da variação, o número, a curva do dia na base com a área, o fechamento
+// anterior tracejado e, no hover, o cartão que sobe, a guia, o ponto e o balão com a hora. Sobe = verde, desce = vermelho.
+const COR_SOBE = varCor('#16a34a', 'texto');
+const COR_DESCE = varCor('#c0393d', 'texto');
+const COR_NEUTRA = varCor('#9ca3af', 'texto');
+const corDoP = (p) => (p === null || p === undefined ? COR_NEUTRA : p >= 0 ? COR_SOBE : COR_DESCE);
+const pilula = (p) => (p === null || p === undefined ? null : Math.round(p * 10000) / 100);
+const horaTxt = (t) => {
+  const d = new Date(t * 1000);
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+};
+const ICONE_INDICE = { 'IDX:USDBRL': 'dolar' };
+
 export function CartoesIndices({ indices, media }) {
+  const total = media.sobem + media.caem;
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-      {indices.map((k) => (
-        <div key={k.chave} className="card flex items-center gap-3 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-[12px] text-gray-500">{k.nome}</div>
-            <div className="whitespace-nowrap text-[18px] font-bold tabular-nums text-gray-900">{k.valor}</div>
-            <div className={`text-[12px] font-semibold tabular-nums ${corTexto(k.p)}`}>{pctTxt(k.p)} <span className="font-normal text-gray-400">{k.sub}</span></div>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
+      {indices.map((k) => {
+        const pts = k.pontos ?? [];
+        const fmt = (v) => (k.unidade === 'R$' ? `R$ ${num(v, 4)}` : `${num(v, 0)} pts`);
+        return (
+          <CartaoKpi key={k.chave} compacto icone={ICONE_INDICE[k.chave] ?? 'tendencia'} cor={corDoP(k.p)} rotulo={k.nome}
+            valor={k.valor} variacao={pilula(k.p)} tituloVariacao="Contra o fechamento anterior"
+            sub={k.anterior > 0 ? `${k.sub} · antes ${fmt(k.anterior)}` : k.sub}
+            serie={pts.map(([, c]) => ({ valor: c }))} base={k.anterior > 0 ? k.anterior : null} formatar={fmt}
+            tituloBalao={(i) => horaTxt(pts[i][0])}
+            nota={(i) => (k.anterior > 0 ? `${pctTxt(pts[i][1] / k.anterior - 1)} sobre o fechamento anterior` : null)} />
+        );
+      })}
+      <CartaoKpi compacto icone="mapa" cor={corDoP(media.p)} rotulo="Os seus, na média" valor={pctTxt(media.p)}
+        corValor={corTexto(media.p)} sub={total ? `no dia · ${total} com cotação` : 'no dia'}
+        rodape={(
+          <div className="mt-auto flex items-center gap-2 px-3 pb-3 pt-2 text-[11px] tabular-nums text-gray-500">
+            <span className="text-green-700">{media.sobem} sobem</span>
+            <span className="flex h-[6px] flex-1 overflow-hidden rounded-full bg-gray-100">
+              <span className="bg-green-600" style={{ width: `${total ? (media.sobem / total) * 100 : 0}%` }} />
+              <span className="flex-1 bg-hx-c0393d" style={{ opacity: media.caem ? 1 : 0 }} />
+            </span>
+            <span className="text-hx-c0393d">{media.caem} caem</span>
           </div>
-          <Curva pontos={k.pontos} anterior={k.anterior} className="h-10 w-[84px] shrink-0" />
-        </div>
-      ))}
-      <div className="card flex flex-col justify-center px-4 py-3">
-        <div className="text-[12px] text-gray-500">Os seus, na média</div>
-        <div className={`text-[18px] font-bold tabular-nums ${corTexto(media.p)}`}>{pctTxt(media.p)}</div>
-        <div className="mt-1 flex items-center gap-2 text-[11.5px] text-gray-500">
-          <span>{media.sobem} sobem</span>
-          <span className="flex h-[6px] flex-1 overflow-hidden rounded-full bg-gray-100">
-            <span className="bg-green-600" style={{ width: `${media.sobem + media.caem ? (media.sobem / (media.sobem + media.caem)) * 100 : 0}%` }} />
-            <span className="flex-1 bg-hx-c0393d" style={{ opacity: media.caem ? 1 : 0 }} />
-          </span>
-          <span>{media.caem} caem</span>
-        </div>
-      </div>
+        )} />
     </div>
   );
 }

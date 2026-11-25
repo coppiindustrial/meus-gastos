@@ -198,7 +198,7 @@ export default function Acompanhamento() {
   }
   return (
     <>
-      <GridPersonalizavel escopo="acompanhamento_v1" titulo="Acompanhamento" acessorio={acessorio} acoes={acoes}
+      <GridPersonalizavel escopo="acompanhamento_v1" titulo="Mercado" acessorio={acessorio} acoes={acoes}
         catalogo={CATALOGO} permitidos={CATALOGO} renderWidget={(id) => <Fragment key={`${id}-${versao}`}>{renderWidget(id)}</Fragment>}
         abaixo={filtros} pronto={!d.carregando} onAtualizar={d.recarregar} atualizando={d.lendo} oculto={oculto}
         onOcultar={alternarOculto} />

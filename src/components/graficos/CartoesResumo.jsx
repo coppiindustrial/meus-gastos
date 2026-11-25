@@ -37,6 +37,8 @@ export const ICONES = {
   inflacao: <path d="M4 18l6-6 4 4 6-8M15 8h5v5" />,
   dolar: <path d="M12 3v18M16 7.5C15.3 6 13.8 5 12 5c-2.4 0-4 1.3-4 3.2s1.8 2.7 4 3.3 4 1.4 4 3.4-1.6 3.1-4 3.1c-1.9 0-3.5-1-4.2-2.5" />,
   euro: <path d="M17.5 6.5A6.5 6.5 0 1 0 17.5 17.5M4.5 10h9M4.5 14h9" />,
+  // o do Mercado (25/11/2026): os seus, na média (o mapa de calor)
+  mapa: <><rect x="3" y="3" width="10" height="10" rx="1.5" /><rect x="15" y="3" width="6" height="6" rx="1.5" /><rect x="15" y="11" width="6" height="10" rx="1.5" /><rect x="3" y="15" width="10" height="6" rx="1.5" /></>,
 };
 export const CORES_KPI = { entradas: COR_ENTRADAS, gastos: COR_GASTOS, saldo: COR_SALDO };
 // O ícone em PIXEL INTEIRO (caixa de 26, desenho de 14; 22 e 12 no compacto): com o `h-3.5` (0,875rem
@@ -52,17 +54,24 @@ export const variacaoSaldo = (atual, antes) => (antes ? Math.round(((atual - ant
 // `variacao` + `sobeBom` (+ `tituloVariacao`): a pílula. `sub`: a linha de baixo. `onClicar`: o cartão
 // inteiro; `onMes(comp)`: clicar na curva. `ativo`: o anel de "filtro ligado". `nota(i)`: rodapé do balão.
 // `itensBalao(i)`: os itens do balão daquele mês (sem ele, o rótulo e o valor).
+// O MERCADO (25/11/2026): a curva que não é de meses — `tituloBalao(i)` dá o título do balão (a hora do ponto; sem a
+// nota "sobre o mês anterior") e `base` é a referência (o fechamento anterior): a escala vai do menor ao maior dos pontos
+// e dela, não do zero, e a linha tracejada a marca. `rodape`: o que vai na base do cartão sem curva.
 export function CartaoKpi({
   icone, cor, rotulo, valor, valorCurto, corValor = 'text-gray-900', variacao: v, sobeBom = true, tituloVariacao,
   sub, serie = [], formatar = formatBRL, onClicar, onMes, ativo = false, compacto = false, titulo, nota, itensBalao,
+  tituloBalao, base = null, rodape = null,
 }) {
   const [hover, setHover] = useState(null); // { i, pos }
   const vals = serie.map((m) => m.valor);
   const temCurva = vals.length > 1;
   const [caixaIco, desenhoIco] = compacto ? ICONE.compacto : ICONE.normal;
   const H = compacto ? 34 : 54;
-  const min = Math.min(0, ...vals);
-  const max = Math.max(1, ...vals);
+  const comBase = base !== null && base !== undefined;
+  const lo = comBase ? Math.min(base, ...vals) : 0;
+  const hi = comBase ? Math.max(base, ...vals) : 0;
+  const min = comBase ? lo - (hi - lo) * 0.08 : Math.min(0, ...vals);
+  const max = comBase ? hi + (hi - lo) * 0.08 : Math.max(1, ...vals);
   const x = (i) => 6 + (i / Math.max(1, vals.length - 1)) * (W - 12);
   const y = (val) => H - 5 - ((val - min) / (max - min || 1)) * (H - (compacto ? 10 : 14));
   const pts = vals.map((val, i) => `${x(i).toFixed(1)},${y(val).toFixed(1)}`).join(' ');
@@ -79,7 +88,7 @@ export function CartaoKpi({
   };
   const mes = hover && serie[hover.i];
   const antesHover = hover && hover.i > 0 ? vals[hover.i - 1] : null;
-  const vHover = hover && antesHover !== null ? (rotulo === 'Saldo' ? variacaoSaldo(vals[hover.i], antesHover) : variacao(vals[hover.i], antesHover)) : null;
+  const vHover = hover && antesHover !== null && !tituloBalao ? (rotulo === 'Saldo' ? variacaoSaldo(vals[hover.i], antesHover) : variacao(vals[hover.i], antesHover)) : null;
 
   return (
     // O HOVER SÓ MEXE EM `transform` E `opacity` (a placa de vídeo faz sozinha): o cartão sobe 2px INTEIROS
@@ -121,6 +130,7 @@ export function CartaoKpi({
                 </linearGradient>
               </defs>
               <polygon points={`${x(0)},${H} ${pts} ${x(vals.length - 1)},${H}`} fill={`url(#${gradId})`} />
+              {comBase && <line x1="0" x2={W} y1={y(base)} y2={y(base)} stroke={varCor('#d1d5db', 'borda')} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />}
               <polyline points={pts} fill="none" stroke={cor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
               {hover && <line x1={x(hover.i)} x2={x(hover.i)} y1="0" y2={H} stroke={varCor('#d1d5db', 'borda')} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
             </svg>
@@ -135,9 +145,9 @@ export function CartaoKpi({
             </div>
           )}
         </div>
-      ) : <div className={compacto ? 'h-2.5' : 'h-3.5'} />}
+      ) : rodape ?? <div className={compacto ? 'h-2.5' : 'h-3.5'} />}
       {mes && (
-        <BalaoGrafico pos={hover.pos} largura={230} titulo={nomeCompetencia(mes.competencia)}
+        <BalaoGrafico pos={hover.pos} largura={230} titulo={tituloBalao ? tituloBalao(hover.i) : nomeCompetencia(mes.competencia)}
           itens={itensBalao?.(hover.i) ?? [{ rotulo, valor: formatar(vals[hover.i]), cor }]}
           nota={[vHover !== null && `${vHover > 0 ? '+' : ''}${vHover}% sobre ${competenciaCurta(serie[hover.i - 1].competencia)}`,
             nota?.(hover.i), onMes && 'Clique para abrir o mês'].filter(Boolean).join(' · ')} />

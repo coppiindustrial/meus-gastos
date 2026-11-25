@@ -559,9 +559,11 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   o miolo `ConteudoAtivo` (remontado a cada ação; o período, a forma e as marcas são lembrados). O `Modal` aceita `rotulo`
   (o nome para o leitor de tela quando o título não é texto). Sem atalho de teclado (o Ctrl+K da busca rápida já existe).
 
-## Acompanhamento das ações (25/11/2026, o mockup aprovado "Acompanhamento das ações")
+## Mercado — o acompanhamento das ações (25/11/2026, o mockup aprovado "Acompanhamento das ações")
 
-- `pages/Acompanhamento.jsx` (/acompanhamento, em Análises depois da Renda variável; também no celular, só de ler): o painel do
+- `pages/Acompanhamento.jsx` (/mercado, no menu "MERCADO", em Análises LOGO ABAIXO DOS INDICADORES — o nome e o lugar a pedido,
+  25/11/2026; o /acompanhamento de antes leva a ele; os arquivos, o escopo e as chaves do navegador seguem "acompanhamento";
+  também no celular, só de ler): o painel do
   MERCADO das suas ações no grid da Visão geral (`GridPersonalizavel`, escopo `acompanhamento_v1`). A LISTA = os ativos do
   cadastro (entram sozinhos) + os que você só ACOMPANHA — `rv_acompanhamento` (MIGRATION 037), por ticker e mercado: a ação
   de fora (nome e tipo da busca do Yahoo) ou o ativo da carteira ESCONDIDO (`aparece = false`; sem linha, aparece). O ✎ abre
@@ -575,7 +577,10 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   pregão com a tela aberta, ~2% das 500 mil do plano grátis); as séries do período valem 10 min; o valor de mercado, uma vez
   por sessão (em memória). A FUNÇÃO DE ANTES responde { atualizados } (cai no "atualizar as cotações"): a tela para de
   chamar e pede para publicá-la de novo.
-- OS BLOCOS (`BlocosAcompanhamento.jsx`): os ÍNDICES (a curva do dia e "os seus, na média" com quantos sobem e caem; antes
+- OS BLOCOS (`BlocosAcompanhamento.jsx`): os ÍNDICES — O `CartaoKpi compacto` DOS INDICADORES E DO PATRIMÔNIO (25/11/2026, a
+  pedido: o ícone, a pílula, a curva do dia na base com a área, o hover que sobe e o balão com a hora; o `CartaoKpi` ganhou
+  `base` — o fechamento anterior tracejado, a escala dos pontos e não do zero —, `tituloBalao` e `rodape`, a barra dos que
+  sobem e caem no "os seus, na média") (a curva do dia e "os seus, na média" com quantos sobem e caem; antes
   da abertura de Nova York o S&P e o Nasdaq são do pregão de ontem, e o cartão diz "em 24/11" no lugar de "hoje" —
   `quandoDoPregao`), o MAPA DE
   CALOR (o treemap "squarified" de `lib/acompanhamento.js`, por classe — a área mínima de 12% —; a cor = o % do período, a
@@ -585,7 +590,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   curvas pequenas, `acomp_dia_ordem`), o DESEMPENHO COMPARADO (em % do início: a média dos seus, o Ibovespa, o S&P 500 e até 6
   escolhidos — `acomp_comparar`, só os tickers —; a legenda acende e fixa; o balão do dia), os PRÓXIMOS EVENTOS (os
   `rv_eventos` da carteira; o resultado repetido pelo calendário que mudou de data sai — `eventosSemRepetir`) e a TABELA DE
-  COTAÇÕES (desligada). Do TRADINGVIEW (`WidgetsTradingView.jsx`, grátis, com a marca): o MAPA DO MERCADO (Ibovespa, S&P 500,
+  COTAÇÕES (desligada). Do TRADINGVIEW (`WidgetsTradingView.jsx`, grátis, com a marca; NO ESCURO a caixa de todos vai com
+  `color-scheme: normal` — o `dark` herdado do <html> fazia o navegador pintar de branco o fundo das notícias, do calendário e da fita): o MAPA DO MERCADO (Ibovespa, S&P 500,
   Nasdaq 100; `acomp_mercado`) e, desligados, a fita, as notícias e o calendário econômico. O catálogo do grid aceita
   `desligado: true` (existe no Personalizar, começa fora). Clicar num ativo abre o `PainelAtivo`. A faixa: Lista · Mercado ·
   Período (dia, semana = 5 pregões, mês, no ano, 12 meses). Contas testadas em `test/acompanhamento.test.js`.

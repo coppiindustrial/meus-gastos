@@ -5,6 +5,10 @@ import { simboloTradingView, useTemaEscuro } from '../rendaVariavel/WidgetTradin
 // desenhados por eles (o app não recebe os números), com a marca à vista — o link embaixo é a condição. O MAPA DO MERCADO
 // (o Ibovespa, o S&P 500 ou o Nasdaq 100 inteiros: centenas de ações que as fontes grátis do app não aguentariam cotar a cada
 // minuto), a FITA DE COTAÇÕES, as NOTÍCIAS e o CALENDÁRIO ECONÔMICO. O tema segue o do app (trocar remonta o widget).
+// O FUNDO BRANCO NO ESCURO (25/11/2026): o escuro do app põe `color-scheme: dark` no <html>, e o quadro herda; as notícias,
+// o calendário e a fita não se declaram escuros por dentro, e o navegador pinta o quadro de esquema diferente com o fundo
+// OPACO (branco) — o texto claro do tema deles ficava sobre o branco. A caixa vai com `color-scheme: normal` e o quadro volta
+// a ser transparente (testado no app, no escuro: os quatro; o mapa do mercado fica certo dos dois jeitos).
 
 const BASE = 'https://s3.tradingview.com/external-embedding/';
 
@@ -31,7 +35,7 @@ function Embutido({ script, config, link, rotulo }) {
   }, [script, json]);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div ref={ref} className="tradingview-widget-container min-h-0 flex-1" />
+      <div ref={ref} className="tradingview-widget-container min-h-0 flex-1" style={{ colorScheme: 'normal' }} />
       <div className="tradingview-widget-copyright shrink-0 pt-1.5 text-right text-[11px] text-gray-400">
         <a href={link} target="_blank" rel="noopener nofollow noreferrer" className="text-hx-2962ff hover:underline">{rotulo} por TradingView</a>
       </div>

@@ -54,7 +54,8 @@ export default function App() {
       <Route path="/investimentos" element={<Protected><Investimentos /></Protected>} />
       <Route path="/renda-variavel" element={<Protected><RendaVariavel /></Protected>} />
       <Route path="/indicadores" element={<Protected><Indicadores /></Protected>} />
-      <Route path="/acompanhamento" element={<Protected><Acompanhamento /></Protected>} />
+      <Route path="/mercado" element={<Protected><Acompanhamento /></Protected>} />
+      <Route path="/acompanhamento" element={<Navigate to="/mercado" replace />} />
       <Route path="/extrato" element={<Navigate to="/importar" replace />} />
       <Route path="/importar" element={<Protected><Importar /></Protected>} />
       {/* As telas que ainda não existem: cada uma ganha a sua rota quando a fase dela chegar. */}
