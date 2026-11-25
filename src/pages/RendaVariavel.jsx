@@ -5,7 +5,7 @@ import MenuContexto from '../components/MenuContexto.jsx';
 import ListaVazia from '../components/ListaVazia.jsx';
 import AbasPilula from '../components/AbasPilula.jsx';
 import { PageLoading } from '../components/Spinner.jsx';
-import { IconLapis, IconMais, IconSeta } from '../components/icons.jsx';
+import { IconAtualizar, IconLapis, IconMais, IconSeta } from '../components/icons.jsx';
 import TabelaRendaVariavel from '../components/rendaVariavel/TabelaRendaVariavel.jsx';
 import ListaOperacoes from '../components/rendaVariavel/ListaOperacoes.jsx';
 import ModalOperacao from '../components/rendaVariavel/ModalOperacao.jsx';
@@ -103,7 +103,6 @@ export default function RendaVariavel() {
     const r = el.parentElement.getBoundingClientRect();
     setMais({ direita: r.right, y: r.bottom + 4, titulo: 'Mais ações', itens: [
       { rotulo: 'Ver o gráfico de uma ação…', sub: 'na carteira ou não: pelo ticker ou pelo nome', onEscolher: () => setGrafico({ alvo: carteira.posicoes[0] ? { ativoId: carteira.posicoes[0].ativo.id } : null, abrirSeletor: true }) },
-      { rotulo: d.atualizando ? 'Atualizando as cotações…' : 'Atualizar as cotações agora', sub: d.erroFuncao ? `a função não respondeu: ${d.erroFuncao}` : 'o agendamento lê a cada 15 min no pregão', desabilitado: d.atualizando || vazio, onEscolher: () => d.releer(true) },
       { rotulo: 'Exportar a carteira (CSV)', sub: 'cada ativo: quantidade, preço médio, posição, resultado', desabilitado: !nAtivos, motivo: !nAtivos ? 'nenhum ativo' : undefined, onEscolher: exportar },
     ] });
   };
@@ -116,8 +115,15 @@ export default function RendaVariavel() {
         acessorio={!vazio && <span className="text-sm text-gray-500">{nAtivos} {nAtivos === 1 ? 'ativo' : 'ativos'} · {formatBRL(carteira.total.valor)}</span>}
         acoes={!movel && <>
           <div className="inline-flex overflow-hidden rounded-md border border-gray-300 bg-white">
+            {/* ATUALIZAR AS COTAÇÕES À VISTA (25/11/2026, a pedido; antes, no ▾), antes do ✎; gira enquanto lê */}
+            <Tooltip label={d.atualizando ? 'Atualizando as cotações…' : d.erroFuncao ? `Atualizar as cotações agora · a função não respondeu: ${d.erroFuncao}` : 'Atualizar as cotações agora · o agendamento lê a cada 15 min no pregão'}>
+              <button type="button" aria-label="Atualizar as cotações agora" disabled={d.atualizando || vazio} onClick={() => d.releer(true)}
+                className={`${ICONE} w-[38px] disabled:cursor-default disabled:opacity-50`}>
+                <IconAtualizar className={`h-[15px] w-[15px] ${d.atualizando ? 'animate-spin motion-reduce:animate-none' : ''}`} />
+              </button>
+            </Tooltip>
             <Tooltip label="Cadastro dos ativos">
-              <button type="button" aria-label="Cadastro dos ativos" onClick={() => setCadastro({})} className={`${ICONE} w-[38px]`}><IconLapis className="h-3.5 w-3.5" /></button>
+              <button type="button" aria-label="Cadastro dos ativos" onClick={() => setCadastro({})} className={`${ICONE} w-[38px] border-l border-gray-200`}><IconLapis className="h-3.5 w-3.5" /></button>
             </Tooltip>
             <Tooltip label="Mais ações">
               <button type="button" aria-label="Mais ações" aria-haspopup="menu" aria-expanded={!!mais}
