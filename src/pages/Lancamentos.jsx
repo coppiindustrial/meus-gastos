@@ -444,11 +444,13 @@ export default function Lancamentos() {
         acoes={(
           <>
             {/* O GRUPO DO DRE (o mesmo dos Gastos fixos e do Importar): a caixa com o ▾ "Mais ações" (o exportar).
+                As MESMAS medidas das outras telas (25/11/2026): o ícone 38px, o ▾ 28px com a linha clara à esquerda, e o
+                ⤢ sem fundo aceso quando ampliada (o desenho dele já troca para ⤡).
                 Abre e fecha no mesmo botão: o mousedown anota se o menu estava aberto (ver Fixos.jsx). */}
             <div className="hidden overflow-hidden rounded-md border border-gray-300 bg-white md:inline-flex">
               <Tooltip label={ampliada ? 'Voltar ao resumo' : 'Ampliar a tabela'}>
                 <button type="button" aria-label={ampliada ? 'Voltar ao resumo' : 'Ampliar a tabela'} aria-pressed={ampliada} onClick={() => setAmpliada(!ampliada)}
-                  className={`flex h-9 w-[34px] items-center justify-center border-r border-gray-300 transition-colors hover:bg-gray-50 active:bg-gray-200 ${ampliada ? 'bg-gray-100 text-gray-900' : 'text-gray-600'}`}>
+                  className="flex h-9 w-[38px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200">
                   <IcoAmpliar reduzir={ampliada} />
                 </button>
               </Tooltip>
@@ -456,7 +458,7 @@ export default function Lancamentos() {
                 <button type="button" aria-label="Mais ações" aria-haspopup="menu" aria-expanded={!!mais}
                   onMouseDown={() => { maisAbertoNoClique.current = !!mais; }}
                   onClick={(e) => { if (maisAbertoNoClique.current || mais) { maisAbertoNoClique.current = false; setMais(null); } else abrirMais(e.currentTarget); }}
-                  className={`flex h-9 w-[34px] items-center justify-center text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200 ${mais ? 'bg-gray-100' : ''}`}>
+                  className={`flex h-9 w-[28px] items-center justify-center border-l border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 active:bg-gray-200 ${mais ? 'bg-gray-100' : ''}`}>
                   <IconSeta className={`transition-transform duration-200 ease-out ${mais ? 'rotate-180' : ''}`} />
                 </button>
               </Tooltip>
