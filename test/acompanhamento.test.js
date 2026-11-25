@@ -149,3 +149,19 @@ test('as áreas das classes: proporcionais, com um mínimo para a pequena', () =
   const fii = r.find((a) => a.classe === 'fii');
   assert.ok(Math.abs(fii.w * fii.h - 10000 * (0.2 / 1.18)) < 1e-6);
 });
+
+test('planoDoAcompanhamento sem reordenar: a ordem gravada fica e o novo vai depois da maior', () => {
+  const antes = [
+    { chave: 'B3:ITUB4', ticker: 'ITUB4', mercado: 'B3', deCarteira: false, aparece: true, linhaId: 'a', ordem: 1 },
+    { chave: 'EUA:GOOGL', ticker: 'GOOGL', mercado: 'EUA', deCarteira: false, aparece: true, linhaId: 'b', ordem: 2 },
+  ];
+  // a tela agrupada põe o exterior antes da B3: a lista sai noutra ordem
+  const itens = [antes[1], antes[0], { chave: 'EUA:MSFT', ticker: 'MSFT', mercado: 'EUA', nome: 'Microsoft', tipo: 'acao_eua', deCarteira: false, aparece: true, linhaId: null }];
+  const p = planoDoAcompanhamento(antes, itens, { reordenar: false });
+  assert.deepEqual(p.atualizar, []);
+  assert.equal(p.criar.length, 1);
+  assert.equal(p.criar[0].ordem, 3);
+  // arrastou: renumera pela lista
+  const q = planoDoAcompanhamento(antes, itens.slice(0, 2), { reordenar: true });
+  assert.deepEqual(q.atualizar.map((a) => [a.id, a.mudancas.ordem]), [['b', 1], ['a', 2]]);
+});

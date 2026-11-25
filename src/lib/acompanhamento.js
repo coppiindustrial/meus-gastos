@@ -51,12 +51,19 @@ export function listaDoAcompanhamento(ativos = [], linhas = []) {
 //  · da carteira: escondeu → cria (ou atualiza) a linha com `aparece: false`; voltou a mostrar → apaga a linha (sem linha,
 //    aparece);
 //  · de fora: novo → cria; mudou o aparece ou a ordem → atualiza; tirado → apaga.
-export function planoDoAcompanhamento(antes, itens) {
+// `reordenar` (25/11/2026, o pop-up agrupado pela classe): só quando a pessoa ARRASTOU a ordem vira a da lista (1, 2, 3…);
+// sem isso, a de cada um fica como estava e o novo vai depois da maior — a lista agrupada pode sair noutra ordem que a
+// gravada, e só abrir o pop-up não pode contar como alteração.
+export function planoDoAcompanhamento(antes, itens, { reordenar = true } = {}) {
   const criar = []; const atualizar = []; const apagar = [];
   const era = new Map(antes.map((i) => [i.chave, i]));
   let ordem = 0;
+  let fim = Math.max(0, ...antes.filter((i) => !i.deCarteira).map((i) => Number(i.ordem) || 0));
   for (const i of itens) {
-    if (!i.deCarteira && !i.tirar) ordem += 1;
+    if (!i.deCarteira && !i.tirar) {
+      if (reordenar) ordem += 1;
+      else ordem = i.linhaId && era.has(i.chave) ? era.get(i.chave).ordem : (fim += 1);
+    }
     const a = era.get(i.chave);
     if (i.deCarteira) {
       if (!a || a.aparece === i.aparece) continue;

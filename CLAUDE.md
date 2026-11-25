@@ -569,6 +569,14 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   de fora (nome e tipo da busca do Yahoo) ou o ativo da carteira ESCONDIDO (`aparece = false`; sem linha, aparece). O ✎ abre
   `components/acompanhamento/ModalAcompanhar.jsx` (Da carteira: o interruptor "Aparece", que só esconde da tela | Só
   acompanhando: procura pelo `CampoTicker`, a alça ordena, a lixeira tira; "Salvar alterações (N)" = `planoDoAcompanhamento`).
+  EM TRÊS NÍVEIS (25/11/2026, a opção B do mockup "O que acompanhar · hierarquia", a pedido: "a mesma coisa das outras
+  listas"): a faixa (Da carteira · Só acompanhando) › a CLASSE (Exterior · FIIs · Ações da B3, só as que têm algum) › os
+  ativos, recolhendo animado (`acomp_fechadas`); o "Aparece" também na faixa e na classe (liga ou desliga todos; `misto` com
+  alguns). ACOMPANHAR É A LINHA "+ Acompanhar uma ação" no fim de "Só acompanhando" (o campo do cabeçalho saiu): abre o
+  `CampoTicker` na própria linha (Esc cancela) e a escolhida vai para a classe dela. O cabeçalho é o trilho dos cadastros
+  (filtrar | Só os que aparecem | ⇕). A alça ordena só dentro da classe (`arrastoAgrupado`), e A ORDEM SÓ MUDA SE ARRASTAR
+  (`reordenar` do `planoDoAcompanhamento`, testada: a lista agrupada pode sair noutra ordem que a gravada; o novo vai depois
+  da maior).
   Sem a 037, a tela mostra a carteira inteira e o pop-up explica.
 - OS PREÇOS AO VIVO: a função `cotacoes` ganhou a ação "ao_vivo" (o Yahoo, VÁRIOS de uma vez, SEM GRAVAR; as chaves "EUA:NVDA",
   "B3:PETR4", "IDX:IBOV|SPX|NDX|USDBRL|IFIX"; `range` 1d de 5 em 5 min, 5d, 1mo, 6mo, ytd, 1y; `desde` = só os pontos novos;
