@@ -604,7 +604,8 @@ Supabase: projeto `abofajutoxukbvrfisem`. URL e chave **publishable** em `.env.l
   a pílula, verde bateu / laranja abaixo), a receita, COMO A AÇÃO REAGIU no pregão seguinte (antes da abertura, o fechamento
   do dia contra a véspera; depois do fechamento ou sem a hora, o do dia seguinte contra o do dia — `reacaoAoResultado`) e o
   "desde então" com a curvinha; o balão lê o caso ("bateu e a ação caiu: o mercado já esperava mais"). A faixa dos quatro
-  números em cima (quantas bateram, a surpresa, a reação média, o próximo) saiu, a pedido. O trimestre de antes do app (`hora` 'periodo', a data do fim do trimestre) entra sem a reação. Contas em
+  números em cima (quantas bateram, a surpresa, a reação média, o próximo) saiu, a pedido. Clicar numa linha abre o
+  gráfico POR CIMA e o ampliado fica aberto (26/11/2026, a pedido: fechar o gráfico volta à tabela). O trimestre de antes do app (`hora` 'periodo', a data do fim do trimestre) entra sem a reação. Contas em
   `resultadosDivulgados`/`resultadosQueVem` (lib/acompanhamento.js, testadas); os dados por
   `listarResultados` e `fechamentosDesde` (api/acompanhamento.js)) e a TABELA DE
   COTAÇÕES (desligada). Do TRADINGVIEW (`WidgetsTradingView.jsx`, grátis, com a marca; NO ESCURO a caixa de todos vai com

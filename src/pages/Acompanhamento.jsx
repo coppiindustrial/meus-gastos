@@ -207,7 +207,7 @@ export default function Acompanhamento() {
         abaixo={filtros} pronto={!d.carregando} onAtualizar={d.recarregar} atualizando={d.lendo} oculto={oculto}
         onOcultar={alternarOculto} />
       {resultados && <AmpliadoResultados itens={d.lista ?? []} hoje={rv.hoje} onClose={() => setResultados(false)}
-        onAbrir={(i) => { setResultados(false); abrir(i); }} />}
+        onAbrir={abrir} />}{/* o gráfico abre POR CIMA e o ampliado fica (fechar o gráfico volta a ele) */}
       {painel}
       {pop}
     </>
