@@ -38,14 +38,15 @@ const tri = (e) => (e.trimestre && e.ano ? `T${e.trimestre} · ${e.ano}` : '—'
 function Surpresa({ p }) {
   if (p === null) return <span className="text-gray-400">—</span>;
   const bate = p >= 0;
-  const w = Math.max(2, Math.min(48, (Math.abs(p) / 0.12) * 48));
+  // a barra de 72px (36 para cada lado) e a pílula NUMA LINHA: com 96px, o "▲ 230,6%" não cabia nos 180 da coluna e quebrava
+  const w = Math.max(2, Math.min(36, (Math.abs(p) / 0.12) * 36));
   return (
-    <span className="flex items-center gap-2">
-      <span className="relative h-[14px] w-[96px] shrink-0">
-        <span className="absolute inset-y-0 left-[48px] w-px bg-gray-300" />
-        <span className={`absolute top-[3px] h-[8px] rounded-[2px] ${bate ? 'bg-green-600' : 'bg-orange-500'}`} style={{ left: bate ? 48 : 48 - w, width: w }} />
+    <span className="flex items-center gap-2 whitespace-nowrap">
+      <span className="relative h-[14px] w-[72px] shrink-0">
+        <span className="absolute inset-y-0 left-[36px] w-px bg-gray-300" />
+        <span className={`absolute top-[3px] h-[8px] rounded-[2px] ${bate ? 'bg-green-600' : 'bg-orange-500'}`} style={{ left: bate ? 36 : 36 - w, width: w }} />
       </span>
-      <span className={`inline-flex h-[20px] items-center rounded-full px-[7px] text-[11px] font-semibold tabular-nums ${bate ? 'bg-hx-dcfce7 text-hx-166534' : 'bg-orange-100 text-orange-800'}`}>
+      <span className={`inline-flex h-[20px] shrink-0 items-center whitespace-nowrap rounded-full px-[7px] text-[11px] font-semibold tabular-nums ${bate ? 'bg-hx-dcfce7 text-hx-166534' : 'bg-orange-100 text-orange-800'}`}>
         {bate ? '▲' : '▼'} {pctTxt(Math.abs(p), 1).replace(/^[+−]/, '')}
       </span>
     </span>
